@@ -84,9 +84,7 @@ namespace VRMultiplayer
             var go = new GameObject("Join Panel");
             go.transform.localScale = Vector3.one * 0.16f;
             statusLabel = go.AddComponent<TextMesh>();
-            // The version tag proves which build the headset is actually running — if the tag
-            // is missing on the join screen, the APK on the device is stale.
-            statusLabel.text = "OYUNA KATILMAK ICIN\nB TUSUNA BAS\n\nsurum: ATES-1";
+            statusLabel.text = "OYUNA KATILMAK ICIN\nB TUSUNA BAS";
             statusLabel.characterSize = 0.1f;
             statusLabel.fontSize = 60;
             statusLabel.anchor = TextAnchor.MiddleCenter;

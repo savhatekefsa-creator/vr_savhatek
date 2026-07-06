@@ -23,18 +23,14 @@ namespace VRMultiplayer
         [Tooltip("Namlu ucu noktasi (ates izi buradan, bakis yonunde cikar). Bos birakilirsa 'Muzzle' adli cocuk aranir, o da yoksa otomatik hesaplanir.")]
         public Transform muzzle;
 
-        [Tooltip("GECICI teshis paneli — sorun cozulunce kaldirilacak.")]
-        public bool debugHud = true;
+        [Tooltip("Bir oyuncuya isabetin verdigi hasar.")]
+        public int damage = 25;
 
         GrabbableObject _grab;
         Vector3 _muzzleLocal;
         Vector3 _barrelLocal = Vector3.forward;
         float _nextFire;
         bool _prevTrigger;
-
-        // debug
-        TextMesh _dbg;
-        int _shotsSent, _fxShown;
 
         // Effects (created once, reused per shot)
         LineRenderer _tracer;
@@ -53,7 +49,6 @@ namespace VRMultiplayer
         void Update()
         {
             if (_fxOffAt > 0f && Time.time > _fxOffAt) HideFx();
-            if (debugHud) UpdateDebugHud();
 
             if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; return; }
             if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId) return;
@@ -83,7 +78,6 @@ namespace VRMultiplayer
                     origin = transform.TransformPoint(_muzzleLocal);
                     dir = (transform.rotation * _barrelLocal).normalized;
                 }
-                _shotsSent++;
                 FireServerRpc(origin, dir);
 
                 if (firedDev.isValid)
@@ -109,18 +103,47 @@ namespace VRMultiplayer
             if (dir.sqrMagnitude < 0.5f) return;
             dir.Normalize();
 
-            // Authoritative hit: first thing the ray touches that is not the weapon itself.
+            // Authoritative hit: nearest thing the ray touches that is neither the weapon nor
+            // the shooter's own body. Player hitboxes are triggers, so include triggers.
+            ulong shooter = _grab.HolderClientId;
+            byte shooterTeam = TeamOf(shooter);
+
             Vector3 end = origin + dir * range;
             var hits = Physics.RaycastAll(origin + dir * 0.03f, dir, range,
-                Physics.AllLayers, QueryTriggerInteraction.Ignore);
-            float best = float.MaxValue;
+                Physics.AllLayers, QueryTriggerInteraction.Collide);
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
             foreach (var h in hits)
             {
-                if (h.collider.transform.IsChildOf(transform)) continue; // skip own body
-                if (h.distance < best) { best = h.distance; end = h.point; }
+                if (h.collider.transform.IsChildOf(transform)) continue; // own weapon
+
+                var hitbox = h.collider.GetComponent<PlayerHitbox>();
+                if (hitbox != null && hitbox.health != null)
+                {
+                    // Never hit yourself; friendly fire off (same non-zero team).
+                    if (hitbox.health.OwnerClientId == shooter) continue;
+                    byte t = hitbox.health.TeamValue;
+                    if (t != 0 && t == shooterTeam) { end = h.point; break; } // block, no damage
+                    hitbox.health.ServerApplyDamage(damage, shooter);
+                }
+
+                end = h.point; // first solid/valid hit stops the ray
+                break;
             }
 
             FireFxClientRpc(origin, end);
+        }
+
+        byte TeamOf(ulong clientId)
+        {
+            if (NetworkManager != null &&
+                NetworkManager.ConnectedClients.TryGetValue(clientId, out var c) &&
+                c.PlayerObject != null)
+            {
+                var id = c.PlayerObject.GetComponent<PlayerIdentity>();
+                if (id != null) return id.Team.Value;
+            }
+            return 0;
         }
 
         [Rpc(SendTo.Everyone)]
@@ -212,7 +235,6 @@ namespace VRMultiplayer
 
         void ShowShot(Vector3 origin, Vector3 end)
         {
-            _fxShown++;
             if (_tracer != null)
             {
                 _tracer.SetPosition(0, origin);
@@ -238,45 +260,6 @@ namespace VRMultiplayer
             if (_tracer != null) _tracer.enabled = false;
             if (_flash != null) _flash.enabled = false;
             if (_impact != null) _impact.gameObject.SetActive(false);
-        }
-
-        // ------------------------------------------------------------- debug (GECICI)
-
-        void UpdateDebugHud()
-        {
-            if (NetworkManager == null || !NetworkManager.IsClient) return; // not on the PC server
-            if (_dbg == null)
-            {
-                var go = new GameObject("Weapon Debug HUD");
-                go.transform.localScale = Vector3.one * 0.16f;
-                _dbg = go.AddComponent<TextMesh>();
-                _dbg.characterSize = 0.06f;
-                _dbg.fontSize = 60;
-                _dbg.anchor = TextAnchor.UpperLeft;
-                _dbg.alignment = TextAlignment.Left;
-                _dbg.color = new Color(1f, 0.85f, 0.3f);
-            }
-
-            bool rt = ReadTrigger(XRNode.RightHand, out _);
-            bool lt = ReadTrigger(XRNode.LeftHand, out _);
-            InputDevices.GetDeviceAtXRNode(XRNode.RightHand).TryGetFeatureValue(CommonUsages.trigger, out float ra);
-            InputDevices.GetDeviceAtXRNode(XRNode.LeftHand).TryGetFeatureValue(CommonUsages.trigger, out float la);
-            bool mine = _grab != null && _grab.HolderClientId == NetworkManager.LocalClientId;
-
-            _dbg.text =
-                $"SILAH: spawn={IsSpawned} held={(_grab != null && _grab.IsHeld)} bende={mine} el={(_grab != null ? _grab.HolderHand : 255)}\n" +
-                $"tetik SAG={rt}({ra:0.0}) SOL={lt}({la:0.0})\n" +
-                $"gonderilen atis={_shotsSent}  gosterilen efekt={_fxShown}";
-
-            var rig = XRRigReference.Instance;
-            if (rig != null && rig.head != null)
-            {
-                Vector3 fwd = rig.head.forward; fwd.y = 0f;
-                if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
-                fwd.Normalize();
-                _dbg.transform.position = rig.head.position + fwd * 1.2f + Vector3.up * 0.35f;
-                _dbg.transform.rotation = Quaternion.LookRotation(fwd);
-            }
         }
     }
 }

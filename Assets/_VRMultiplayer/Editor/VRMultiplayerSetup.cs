@@ -993,6 +993,61 @@ namespace VRMultiplayer.EditorTools
                 "Sahneyi kaydet (Ctrl+S) ve 3 gozluge YENIDEN build al.", "Tamam");
         }
 
+        // Adds the combat layer (health + damage + HUD) to the player prefab: PlayerHealth,
+        // PlayerHUD and a capsule-trigger Hitbox child wired to the networked Head carrier.
+        [MenuItem("Tools/VR Multiplayer/18. Setup Combat (can/hasar)")]
+        public static void SetupCombat()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                EditorUtility.DisplayDialog("VR Multiplayer",
+                    "Bu menu Play modunda calistirilamaz. Once Play'i durdur.", "Tamam");
+                return;
+            }
+
+            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            try
+            {
+                var health = root.GetComponent<PlayerHealth>();
+                if (health == null) health = root.AddComponent<PlayerHealth>();
+                if (root.GetComponent<PlayerHUD>() == null) root.AddComponent<PlayerHUD>();
+
+                var headCarrier = root.transform.Find("Head");
+
+                var hitboxT = root.transform.Find("Hitbox");
+                GameObject hitbox = hitboxT != null ? hitboxT.gameObject : null;
+                if (hitbox == null)
+                {
+                    hitbox = new GameObject("Hitbox");
+                    hitbox.transform.SetParent(root.transform, false);
+                }
+                if (hitbox.GetComponent<CapsuleCollider>() == null)
+                    hitbox.AddComponent<CapsuleCollider>();
+                var hb = hitbox.GetComponent<PlayerHitbox>();
+                if (hb == null) hb = hitbox.AddComponent<PlayerHitbox>();
+
+                var so = new SerializedObject(hb);
+                so.FindProperty("health").objectReferenceValue = health;
+                so.FindProperty("head").objectReferenceValue = headCarrier;
+                so.ApplyModifiedPropertiesWithoutUndo();
+
+                PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+
+            EditorUtility.DisplayDialog("VR Multiplayer",
+                "Savas sistemi eklendi (oyuncu prefabina):\n\n" +
+                "• Can: 100 — vurulunca 25 duser (silahta ayarlanir)\n" +
+                "• Takim arkadasina ates HASAR VERMEZ (A/B)\n" +
+                "• Can bitince ELENIR, 4 sn sonra tam canla yeniden dogar\n" +
+                "• Kendi caniniz gozunuzun altinda bir CAN cubugunda\n" +
+                "• Vurulunca kirmizi flas + kumanda titresimi\n\n" +
+                "Gozluklere YENIDEN build al (prefab degisti).", "Tamam");
+        }
+
         // ---------------------------------------------------------------- Helpers
         static void ConfigureNetworkTransform(NetworkTransform t)
         {

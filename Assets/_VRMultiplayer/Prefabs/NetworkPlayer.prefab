@@ -1598,6 +1598,8 @@ GameObject:
   - component: {fileID: 1316491334253135425}
   - component: {fileID: 7679664726765636442}
   - component: {fileID: 1455032696690629462}
+  - component: {fileID: 7316377061070769038}
+  - component: {fileID: 165688490942211547}
   m_Layer: 0
   m_Name: NetworkPlayer
   m_TagString: Untagged
@@ -1622,6 +1624,7 @@ Transform:
   - {fileID: 1418947192942783369}
   - {fileID: 5851630593541469558}
   - {fileID: 5139705210254444269}
+  - {fileID: 7733303767728325505}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4872831292113927969
@@ -1779,6 +1782,44 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 69d44bd192723fb4ab409406eaec2afc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.RoomScanSync
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &7316377061070769038
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5293397041292697250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65af1681c3bca9943abb8b630f17cd8b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.PlayerHealth
+  ShowTopMostFoldoutHeaderGroup: 1
+  respawnDelay: 4
+  reviveInvuln: 2
+  Health:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 100
+  Dead:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+--- !u!114 &165688490942211547
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5293397041292697250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 185b7e06ee8dac74c80e24f40320e3ae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.PlayerHUD
   ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &5483191940650409047
 GameObject:
@@ -2331,6 +2372,78 @@ Transform:
   - {fileID: 744288587961687642}
   m_Father: {fileID: 6443792483421150926}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &6854722546405704007
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7733303767728325505}
+  - component: {fileID: 1600108065897662454}
+  - component: {fileID: 2058111663380842172}
+  m_Layer: 0
+  m_Name: Hitbox
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7733303767728325505
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6854722546405704007}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 191974204712202111}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &1600108065897662454
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6854722546405704007}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.5
+  m_Height: 1
+  m_Direction: 1
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &2058111663380842172
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6854722546405704007}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f00f293263b17d547b3a06d9491451e6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.PlayerHitbox
+  health: {fileID: 7316377061070769038}
+  head: {fileID: 5776368456349678063}
+  radius: 0.28
+  headMargin: 0.12
 --- !u!1 &7150258838913919736
 GameObject:
   m_ObjectHideFlags: 0
