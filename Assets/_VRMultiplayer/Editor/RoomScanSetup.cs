@@ -288,38 +288,125 @@ namespace VRMultiplayer.EditorTools
             var mapRoot = GameObject.Find(MapRootName);
             if (mapRoot == null) mapRoot = new GameObject(MapRootName);
 
-            var wallMat = SavedMat("RoomWall", new Color(0.55f, 0.5f, 0.42f));      // warm stone
-            var floorMat = SavedMat("RoomFloor", new Color(0.42f, 0.62f, 0.38f));   // grass tone
-            var tableMat = SavedMat("RoomTable", new Color(0.52f, 0.36f, 0.2f));    // wood
-            var sofaMat = SavedMat("RoomSofa", new Color(0.3f, 0.42f, 0.32f));      // muted green
-            var stuffMat = SavedMat("RoomStuff", new Color(0.45f, 0.45f, 0.5f));    // gray
+            BuildRoomFromPlan(plan, mapRoot.transform, Vector2.zero, Vector2.zero, "",
+                out int doorEdge, out int tables);
 
-            // ---- walls along the boundary polygon ----
-            var oldWalls = mapRoot.transform.Find("Walls");
-            if (oldWalls != null) Object.DestroyImmediate(oldWalls.gameObject);
-            var walls = new GameObject("Walls");
-            walls.transform.SetParent(mapRoot.transform, false);
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorUtility.DisplayDialog("VR Multiplayer",
+                "Oda insa edildi (RoomMap altinda, build'e girer):\n" +
+                "• Oda zemini (cim tonu, collider'li)\n" +
+                "• " + plan.floorPolygon.Length + " duz duvar (ic yuzu gercek duvar hizasinda)\n" +
+                (doorEdge >= 0
+                    ? "• A/B noktasindaki gercek kapiya CIKIS boslugu acildi\n"
+                    : "• UYARI: kapi icin uygun kenar bulunamadi\n") +
+                "• " + plan.furniture.Length + " esya karsiligi (" + tables + " masa)\n\n" +
+                "Istedigini sil/boya/tasi, Ctrl+S ile kaydet ve 3 gozluge YENIDEN build al.", "Tamam");
+        }
 
-            var pts = plan.floorPolygon;
-            float wallH = Mathf.Clamp(plan.ceilingY - plan.floorY, 2f, 3.2f);
-            const float thickness = 0.12f;
-            const float doorWidth = 1.1f;   // real door ~0.9 m + margin
-            const float doorHeight = 2.05f;
+        // ------------------------------------------------------------- menu 17
+        // Places the SECOND room (RoomPlan_yeni_oda.json) right next to the active room:
+        // flush against the wall that holds the active room's exit door, with the two door
+        // openings aligned — walking through the real door leads into the big virtual room.
+        [MenuItem("Tools/VR Multiplayer/17. Add Second Room (yanyana)")]
+        public static void AddSecondRoom()
+        {
+            var planA = LoadPlan();
+            var planB = LoadPlan("Assets/_VRMultiplayer/RoomPlans/RoomPlan_yeni_oda.json");
+            if (planA == null || planB == null) return;
 
-            // The A/B tape points sit at the real door, and A = shared origin (0,0). Find the
-            // boundary edge closest to the origin — that's where the exit opening goes.
+            // Active room's door edge (nearest to the shared origin) and its outward normal.
+            var ptsA = planA.floorPolygon;
+            int edgeA = NearestDoorEdge(ptsA, Vector2.zero, out float doorAtA);
+            if (edgeA < 0)
+            {
+                EditorUtility.DisplayDialog("VR Multiplayer", "Aktif odada kapi kenari bulunamadi.", "Tamam");
+                return;
+            }
+            Vector2 ea = ptsA[edgeA], eb = ptsA[(edgeA + 1) % ptsA.Length];
+            Vector2 dirA = (eb - ea).normalized;
+            Vector2 nA = new Vector2(-dirA.y, dirA.x);
+            Vector2 midA = (ea + eb) * 0.5f;
+            if (PointInPolygon(midA + nA * 0.1f, ptsA)) nA = -nA; // outward
+            Vector2 doorA = ea + dirA * doorAtA;
+
+            // Slide room B just beyond that wall, its bulk centered on the door line.
+            float maxA = float.MinValue;
+            foreach (var p in ptsA) maxA = Mathf.Max(maxA, Vector2.Dot(p, nA));
+            float minB = float.MaxValue;
+            Vector2 centroidB = Vector2.zero;
+            foreach (var p in planB.floorPolygon)
+            {
+                minB = Mathf.Min(minB, Vector2.Dot(p, nA));
+                centroidB += p;
+            }
+            centroidB /= planB.floorPolygon.Length;
+            Vector2 tA = new Vector2(-nA.y, nA.x);
+            Vector2 offset = nA * ((maxA + 0.05f) - minB)
+                           + tA * (Vector2.Dot(doorA, tA) - Vector2.Dot(centroidB, tA));
+
+            var mapRoot = GameObject.Find(MapRootName);
+            if (mapRoot == null) mapRoot = new GameObject(MapRootName);
+
+            // Room B's own door gets carved on the edge facing room A's exit -> a passage.
+            BuildRoomFromPlan(planB, mapRoot.transform, offset, doorA + nA * 0.4f, "2",
+                out int doorEdgeB, out _);
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            EditorUtility.DisplayDialog("VR Multiplayer",
+                "Ikinci oda (" + planB.floorPolygon.Length + " koseli buyuk oda) aktif odanin " +
+                "kapisinin acildigi tarafa bitisik kuruldu (RoomMap/Walls2 + Zemin2).\n" +
+                (doorEdgeB >= 0
+                    ? "Iki kapi hizalandi: gercek kapidan gecince sanal buyuk odaya girersiniz.\n"
+                    : "UYARI: ikinci odada kapi kenari bulunamadi.\n") +
+                "\nKaldirmak istersen RoomMap altindaki Walls2/Zemin2/Furniture2'yi sil.\n" +
+                "Ctrl+S ile kaydet ve gozluklere YENIDEN build al.", "Tamam");
+        }
+
+        static int NearestDoorEdge(Vector2[] pts, Vector2 anchor, out float doorAt)
+        {
+            const float doorWidth = 1.1f;
             int doorEdge = -1;
-            float doorAt = 0f, bestDoorDist = float.MaxValue;
+            doorAt = 0f;
+            float best = float.MaxValue;
             for (int i = 0; i < pts.Length; i++)
             {
                 Vector2 a2 = pts[i], b2 = pts[(i + 1) % pts.Length];
                 Vector2 e = b2 - a2;
                 float len = e.magnitude;
                 if (len < doorWidth + 0.3f) continue; // edge too short to host a door
-                float t = Mathf.Clamp(Vector2.Dot(-a2, e / len), 0f, len); // project origin
-                float d = (a2 + e / len * t).magnitude;
-                if (d < bestDoorDist) { bestDoorDist = d; doorEdge = i; doorAt = t; }
+                float t = Mathf.Clamp(Vector2.Dot(anchor - a2, e / len), 0f, len);
+                float d = (a2 + e / len * t - anchor).magnitude;
+                if (d < best) { best = d; doorEdge = i; doorAt = t; }
             }
+            return doorEdge;
+        }
+
+        // Shared room builder: walls with a door opening (nearest edge to doorAnchor), floor
+        // slab and furniture stand-ins, all shifted by `offset`, children named with `suffix`.
+        static void BuildRoomFromPlan(RoomPlan plan, Transform mapRoot, Vector2 offset,
+            Vector2 doorAnchor, string suffix, out int doorEdge, out int tables)
+        {
+            var wallMat = SavedMat("RoomWall", new Color(0.55f, 0.5f, 0.42f));      // warm stone
+            var floorMat = SavedMat("RoomFloor", new Color(0.42f, 0.62f, 0.38f));   // grass tone
+            var tableMat = SavedMat("RoomTable", new Color(0.52f, 0.36f, 0.2f));    // wood
+            var sofaMat = SavedMat("RoomSofa", new Color(0.3f, 0.42f, 0.32f));      // muted green
+            var stuffMat = SavedMat("RoomStuff", new Color(0.45f, 0.45f, 0.5f));    // gray
+
+            // ---- walls along the (offset) boundary polygon ----
+            var oldWalls = mapRoot.Find("Walls" + suffix);
+            if (oldWalls != null) Object.DestroyImmediate(oldWalls.gameObject);
+            var walls = new GameObject("Walls" + suffix);
+            walls.transform.SetParent(mapRoot, false);
+
+            var pts = new Vector2[plan.floorPolygon.Length];
+            for (int i = 0; i < pts.Length; i++) pts[i] = plan.floorPolygon[i] + offset;
+
+            float wallH = Mathf.Clamp(plan.ceilingY - plan.floorY, 2f, 3.2f);
+            const float thickness = 0.12f;
+            const float doorWidth = 1.1f;   // real door ~0.9 m + margin
+            const float doorHeight = 2.05f;
+
+            doorEdge = NearestDoorEdge(pts, doorAnchor, out float doorAt);
 
             for (int i = 0; i < pts.Length; i++)
             {
@@ -358,7 +445,7 @@ namespace VRMultiplayer.EditorTools
 
                 // Green EXIT sign facing into the room, right above the opening.
                 Vector2 doorMid2 = a2 + dir2 * ((t0 + t1) * 0.5f);
-                var sign = new GameObject("CIKIS Tabelasi");
+                var sign = new GameObject("CIKIS Tabelasi" + suffix);
                 sign.transform.SetParent(walls.transform, false);
                 sign.transform.position = new Vector3(
                     doorMid2.x - n2.x * 0.10f,
@@ -377,34 +464,35 @@ namespace VRMultiplayer.EditorTools
 
             // ---- floor slab inside the polygon (its own mesh, saved as an asset so it
             //      survives scene reloads and ships in the build) ----
-            var oldFloor = mapRoot.transform.Find("Zemin");
+            var oldFloor = mapRoot.Find("Zemin" + suffix);
             if (oldFloor != null) Object.DestroyImmediate(oldFloor.gameObject);
             var floorMesh = TriangulatePolygon(pts, plan.floorY + 0.02f);
             if (floorMesh != null)
             {
-                string meshPath = "Assets/_VRMultiplayer/RoomPlans/RoomFloorMesh.asset";
+                string meshPath = "Assets/_VRMultiplayer/RoomPlans/RoomFloorMesh" + suffix + ".asset";
                 AssetDatabase.DeleteAsset(meshPath);
                 AssetDatabase.CreateAsset(floorMesh, meshPath);
-                var floorGo = new GameObject("Zemin");
-                floorGo.transform.SetParent(mapRoot.transform, false);
+                var floorGo = new GameObject("Zemin" + suffix);
+                floorGo.transform.SetParent(mapRoot, false);
                 floorGo.AddComponent<MeshFilter>().sharedMesh = floorMesh;
                 floorGo.AddComponent<MeshRenderer>().sharedMaterial = floorMat;
                 floorGo.AddComponent<MeshCollider>().sharedMesh = floorMesh;
             }
 
             // ---- furniture stand-ins from the scan ----
-            var oldFurniture = mapRoot.transform.Find("Furniture");
+            var oldFurniture = mapRoot.Find("Furniture" + suffix);
             if (oldFurniture != null) Object.DestroyImmediate(oldFurniture.gameObject);
-            var furniture = new GameObject("Furniture");
-            furniture.transform.SetParent(mapRoot.transform, false);
+            var furniture = new GameObject("Furniture" + suffix);
+            furniture.transform.SetParent(mapRoot, false);
 
-            int tables = 0;
+            tables = 0;
             foreach (var b in plan.furniture)
             {
                 string label = b.label ?? "";
                 var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 box.transform.SetParent(furniture.transform, false);
-                box.transform.SetPositionAndRotation(b.center, b.rotation);
+                box.transform.SetPositionAndRotation(
+                    b.center + new Vector3(offset.x, 0f, offset.y), b.rotation);
                 box.transform.localScale = b.size;
 
                 if (label.Contains("Table"))
@@ -424,17 +512,6 @@ namespace VRMultiplayer.EditorTools
                     box.GetComponent<MeshRenderer>().sharedMaterial = stuffMat;
                 }
             }
-
-            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-            EditorUtility.DisplayDialog("VR Multiplayer",
-                "Oda insa edildi (RoomMap altinda, build'e girer):\n" +
-                "• Oda zemini (cim tonu, collider'li)\n" +
-                "• " + pts.Length + " duz duvar (" + wallH.ToString("0.0") + " m, ic yuzu gercek duvar hizasinda)\n" +
-                (doorEdge >= 0
-                    ? "• A/B noktasindaki gercek kapiya CIKIS boslugu acildi (1.1 m, yesil tabelali)\n"
-                    : "• UYARI: kapi icin uygun kenar bulunamadi, cikis acilamadi\n") +
-                "• " + plan.furniture.Length + " esya karsiligi (" + tables + " masa — ahsap, ustune tas konabilir)\n\n" +
-                "Istedigini sil/boya/tasi, Ctrl+S ile kaydet ve 3 gozluge YENIDEN build al.", "Tamam");
         }
 
         static void WallBox(Transform parent, string name, Vector2 from2, Vector2 to2, Vector2 outN,
@@ -481,13 +558,13 @@ namespace VRMultiplayer.EditorTools
         }
 
         // ------------------------------------------------------------- helpers
-        static RoomPlan LoadPlan()
+        static RoomPlan LoadPlan(string path = PlanPath)
         {
-            string full = Path.GetFullPath(PlanPath);
+            string full = Path.GetFullPath(path);
             if (!File.Exists(full))
             {
                 EditorUtility.DisplayDialog("VR Multiplayer",
-                    "Oda plani bulunamadi:\n" + PlanPath + "\n\n" +
+                    "Oda plani bulunamadi:\n" + path + "\n\n" +
                     "Once gozlukte kalibre olup SOL X ile taramayi PC'ye gonder\n" +
                     "(sunucu Play modunda calisirken).", "Tamam");
                 return null;
