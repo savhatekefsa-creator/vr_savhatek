@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 5375c189d275328488b7333680f3bfd0
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 248990
+  packageName: PAINTBALL SERIES | Environment + Gun Maker Customizable
+  packageVersion: 1.0
+  assetPath: Assets/P A I N T B A L L S E R I ES MK/Content/PaintBall_Gun/Scripts/Scripts/CustomizableGroup.cs
+  uploadId: 581394

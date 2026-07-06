@@ -1,0 +1,48 @@
+﻿LOKIT - Tiny Forest Low Poly Nature Pack
+
+Create charming, stylized forest environments with this lightweight low-poly asset pack. Perfect for cozy games, mobile projects, prototypes, RPGs, adventure games, and environmental storytelling.
+
+Package Contents
+
+* FBX format models
+* Game-ready assets optimized for Unity
+* Shared texture palette
+* Clean low-poly art style
+* Consistent scale and design
+
+Features
+
+* Extremely low poly count for excellent performance
+* Optimized for mobile, VR, and lightweight projects
+* Stylized visual design suitable for cozy and cartoon-inspired games
+* Easy to place and combine into unique forest environments
+* Lightweight texture usage for efficient rendering
+
+Ideal For
+
+* Cozy games
+* RPGs
+* Adventure games
+* Survival games
+* Mobile games
+* Prototypes and game jams
+* Stylized environment creation
+
+Technical Details
+
+* Format: FBX
+* Texture Resolution: 512 × 512
+* Shared texture atlas for optimized performance
+* Low-poly optimized meshes
+* Ready for immediate use in Unity
+* Render Pipeline: Universal Render Pipeline (URP)
+* Version: 1.0
+
+Support
+
+Contact: [standoutseven+ahelp@gmail.com](mailto:standoutseven+ahelp@gmail.com)
+
+Publisher Store:
+https://assetstore.unity.com/publishers/122440
+
+Build beautiful forests quickly and efficiently with this collection of stylized low-poly nature assets.

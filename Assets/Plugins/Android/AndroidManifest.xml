@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- LAN multiplayer discovery (UDP broadcast) needs these on Quest/Android.
+         INTERNET is usually auto-added, the two WiFi ones are not. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!-- Room scan (Space Setup / Scene Model) access for the room-plan transfer feature.
+         Runtime permission is requested by RoomScanSync before reading. -->
+    <uses-permission android:name="com.oculus.permission.USE_SCENE" />
+
+    <application>
+        <!-- Application Entry Point = GameActivity (ProjectSettings androidApplicationEntry: 2).
+             The OpenXR / Meta Quest feature injects the VR (immersive HMD) manifest entries
+             during manifest merging, so they are not listed here manually. -->
+        <activity android:name="com.unity3d.player.UnityPlayerGameActivity"
+                  android:theme="@style/BaseUnityGameActivityTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
+            <meta-data android:name="android.app.lib_name" android:value="game" />
+        </activity>
+    </application>
+</manifest>

@@ -1,0 +1,40 @@
+# ============ Unity'nin otomatik urettigi klasorler (ASLA depoya girmez) ============
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]serSettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+.utmp/
+
+# ============ IDE / editor dosyalari ============
+.vs/
+.idea/
+.vscode/
+*.csproj
+*.sln
+*.slnx
+*.user
+*.pidb
+*.booproj
+*.svd
+
+# ============ Plastic SCM kalintilari ============
+.plastic/
+ignore.conf
+
+# ============ Isletim sistemi coplugu ============
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============ Crash / gecici ============
+sysinfo.txt
+*.stackdump
+crashlytics-build.properties
+*.apk
+*.aab
+*.unitypackage

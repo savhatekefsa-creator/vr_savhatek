@@ -1,0 +1,124 @@
+using Unity.Netcode;
+using UnityEngine;
+using UnityEngine.XR;
+
+namespace VRMultiplayer
+{
+    /// <summary>
+    /// After the LOCAL player joins, shows a floating panel in front of them asking which team
+    /// to join: A button (right controller) = Team A, B button = Team B. The choice is sent to
+    /// the server via <see cref="PlayerIdentity.JoinTeamServerRpc"/> and replicated to everyone.
+    ///
+    /// The buttons are free at this point: LanBootstrap only uses A/B before a session starts.
+    /// We still wait for both buttons to be RELEASED once before accepting input, so the press
+    /// that started the host/join can never leak into the team choice.
+    /// </summary>
+    public class TeamSelector : NetworkBehaviour
+    {
+        PlayerIdentity _identity;
+        TextMesh _panel;
+        bool _armed;   // becomes true once A and B are both seen released
+        bool _done;
+        bool _prevA, _prevB;
+
+        public override void OnNetworkSpawn()
+        {
+            _identity = GetComponent<PlayerIdentity>();
+            if (!IsOwner || _identity == null)
+            {
+                enabled = false;
+                return;
+            }
+
+            if (_identity.Team.Value != 0) // already on a team (e.g. reconnect)
+            {
+                _done = true;
+                enabled = false;
+                return;
+            }
+
+            CreatePanel();
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            if (_panel != null) Destroy(_panel.gameObject);
+        }
+
+        void CreatePanel()
+        {
+            var go = new GameObject("Team Select Panel");
+            go.transform.localScale = Vector3.one * 0.16f;
+            _panel = go.AddComponent<TextMesh>();
+            _panel.text = "TAKIM SEC\n\nA tusu = A TAKIMI (mavi)\nB tusu = B TAKIMI (kirmizi)";
+            _panel.characterSize = 0.1f;
+            _panel.fontSize = 60;
+            _panel.anchor = TextAnchor.MiddleCenter;
+            _panel.alignment = TextAlignment.Center;
+            _panel.color = Color.yellow;
+        }
+
+        void Update()
+        {
+            if (_done) return;
+
+            // Keep the panel floating in front of the player's face.
+            var rig = XRRigReference.Instance;
+            if (_panel != null && rig != null && rig.head != null)
+            {
+                Vector3 fwd = rig.head.forward;
+                fwd.y = 0f;
+                if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
+                fwd.Normalize();
+                _panel.transform.position = rig.head.position + fwd * 1.4f;
+                _panel.transform.rotation = Quaternion.LookRotation(fwd);
+            }
+
+            var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+            bool a = false, b = false;
+            if (right.isValid)
+            {
+                right.TryGetFeatureValue(CommonUsages.primaryButton, out a);
+                right.TryGetFeatureValue(CommonUsages.secondaryButton, out b);
+            }
+
+            if (!_armed)
+            {
+                if (!a && !b) _armed = true; // require a clean release first
+            }
+            else
+            {
+                if (a && !_prevA) Choose(1);
+                else if (b && !_prevB) Choose(2);
+            }
+
+            _prevA = a;
+            _prevB = b;
+        }
+
+        void Choose(byte team)
+        {
+            _done = true;
+            _identity.JoinTeamServerRpc(team);
+            if (_panel != null) Destroy(_panel.gameObject);
+            enabled = false;
+
+            // Next onboarding step: calibrate the shared physical space.
+            var cal = Object.FindFirstObjectByType<CalibrationManager>();
+            if (cal != null) cal.Begin();
+        }
+
+        // Editor / desktop fallback so the flow can be tested without a headset.
+        void OnGUI()
+        {
+            if (_done || !IsOwner) return;
+            GUILayout.BeginArea(new Rect(20, 290, 260, 80), GUI.skin.box);
+            GUILayout.Label("Takim sec");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("A Takimi")) Choose(1);
+            if (GUILayout.Button("B Takimi")) Choose(2);
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
+        }
+    }
+}
