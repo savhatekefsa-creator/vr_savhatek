@@ -10,6 +10,16 @@
 [Rr]ecordings/
 .utmp/
 
+# ============ HDRP / IAP / Google resolver COPLERI (asset importlarinin surukledigi) ============
+# Bunlar projeye gerekmez; HDRP URP ile cakisir. Import edilse bile depoya GIRMESIN.
+[Aa]ssets/HDRPDefaultResources/
+[Aa]ssets/HDRPDefaultResources.meta
+[Aa]ssets/MobileDependencyResolver/
+[Aa]ssets/MobileDependencyResolver.meta
+[Aa]ssets/Resources/BillingMode.json*
+ProjectSettings/AndroidResolverDependencies.xml
+ProjectSettings/GvhProjectSettings.xml
+
 # ============ IDE / editor dosyalari ============
 .vs/
 .idea/
