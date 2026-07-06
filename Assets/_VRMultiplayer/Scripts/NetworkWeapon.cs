@@ -20,6 +20,9 @@ namespace VRMultiplayer
         [Tooltip("Isinin maksimum menzili (metre).")]
         public float range = 60f;
 
+        [Tooltip("Namlu ucu noktasi (ates izi buradan, bakis yonunde cikar). Bos birakilirsa 'Muzzle' adli cocuk aranir, o da yoksa otomatik hesaplanir.")]
+        public Transform muzzle;
+
         [Tooltip("GECICI teshis paneli — sorun cozulunce kaldirilacak.")]
         public bool debugHud = true;
 
@@ -42,6 +45,7 @@ namespace VRMultiplayer
         void Awake()
         {
             _grab = GetComponent<GrabbableObject>();
+            if (muzzle == null) muzzle = transform.Find("Muzzle");
             ComputeBarrel();
             CreateFx();
         }
@@ -67,8 +71,18 @@ namespace VRMultiplayer
             if (trig && !_prevTrigger && Time.time >= _nextFire)
             {
                 _nextFire = Time.time + fireInterval;
-                Vector3 origin = transform.TransformPoint(_muzzleLocal);
-                Vector3 dir = (transform.rotation * _barrelLocal).normalized;
+                Vector3 origin;
+                Vector3 dir;
+                if (muzzle != null)
+                {
+                    origin = muzzle.position;   // precise barrel tip placed in the editor
+                    dir = muzzle.forward;
+                }
+                else
+                {
+                    origin = transform.TransformPoint(_muzzleLocal);
+                    dir = (transform.rotation * _barrelLocal).normalized;
+                }
                 _shotsSent++;
                 FireServerRpc(origin, dir);
 
@@ -149,6 +163,17 @@ namespace VRMultiplayer
 
         // ------------------------------------------------------------- effects
 
+        // Runtime-created materials need a shader that is guaranteed to be IN the build.
+        // URP/Unlit may get stripped (nothing in the scene references it); URP/Lit always
+        // ships because the room materials use it.
+        static Shader FindShaderSafe()
+        {
+            var s = Shader.Find("Universal Render Pipeline/Unlit");
+            if (s == null) s = Shader.Find("Universal Render Pipeline/Lit");
+            if (s == null) s = Shader.Find("Unlit/Color");
+            return s;
+        }
+
         void CreateFx()
         {
             var tracerGo = new GameObject("Tracer");
@@ -157,8 +182,9 @@ namespace VRMultiplayer
             _tracer.useWorldSpace = true;
             _tracer.positionCount = 2;
             _tracer.widthMultiplier = 0.01f;
-            var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-            mat.SetColor("_BaseColor", new Color(1f, 0.9f, 0.4f));
+            var mat = new Material(FindShaderSafe());
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(1f, 0.9f, 0.4f));
+            else mat.color = new Color(1f, 0.9f, 0.4f);
             _tracer.material = mat;
             _tracer.enabled = false;
 
@@ -176,8 +202,9 @@ namespace VRMultiplayer
             Destroy(impactGo.GetComponent<Collider>());
             impactGo.transform.SetParent(transform, false);
             impactGo.transform.localScale = Vector3.one * 0.06f;
-            var imat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-            imat.SetColor("_BaseColor", new Color(1f, 0.55f, 0.15f));
+            var imat = new Material(FindShaderSafe());
+            if (imat.HasProperty("_BaseColor")) imat.SetColor("_BaseColor", new Color(1f, 0.55f, 0.15f));
+            else imat.color = new Color(1f, 0.55f, 0.15f);
             impactGo.GetComponent<MeshRenderer>().sharedMaterial = imat;
             _impact = impactGo.transform;
             impactGo.SetActive(false);

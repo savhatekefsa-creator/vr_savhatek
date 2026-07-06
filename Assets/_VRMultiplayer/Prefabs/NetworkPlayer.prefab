@@ -1893,7 +1893,7 @@ MonoBehaviour:
   groundProbeUp: 2
   groundProbeDown: 12
   fitToPlayerHeight: 1
-  headForwardOffset: 0.07
+  headForwardOffset: 0.12
   fitLerpSpeed: 8
   minScale: 0.6
   maxScale: 1.6

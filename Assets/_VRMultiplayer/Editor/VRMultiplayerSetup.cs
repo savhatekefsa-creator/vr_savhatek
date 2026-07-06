@@ -928,13 +928,68 @@ namespace VRMultiplayer.EditorTools
             }
 
             if (target.GetComponent<NetworkWeapon>() == null) target.AddComponent<NetworkWeapon>();
+
+            // Precise muzzle point: average the mesh vertices in the last few percent of the
+            // barrel axis — that slab contains only the barrel tip, so its centroid IS the
+            // muzzle (bounding-box math alone lands below the barrel because the grip and
+            // magazine drag the box's center down).
+            var muzzleT = target.transform.Find("Muzzle");
+            if (muzzleT == null)
+            {
+                var mgo = new GameObject("Muzzle");
+                muzzleT = mgo.transform;
+                muzzleT.SetParent(target.transform, false);
+            }
+
+            MeshFilter biggest = null;
+            float biggestSize = 0f;
+            foreach (var mf in target.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                float s = Vector3.Scale(mf.sharedMesh.bounds.size, mf.transform.lossyScale).sqrMagnitude;
+                if (s > biggestSize) { biggestSize = s; biggest = mf; }
+            }
+            if (biggest != null)
+            {
+                var mesh = biggest.sharedMesh;
+                Bounds mb = mesh.bounds;
+                Vector3 size = Vector3.Scale(mb.size, biggest.transform.lossyScale);
+                Vector3 axis = Vector3.right;
+                float len = Mathf.Abs(size.x);
+                if (Mathf.Abs(size.y) > len) { axis = Vector3.up; len = Mathf.Abs(size.y); }
+                if (Mathf.Abs(size.z) > len) axis = Vector3.forward;
+                float sign = Mathf.Sign(Vector3.Dot(mb.center, axis));
+                if (sign == 0f) sign = 1f;
+                Vector3 a = axis * sign;
+
+                var verts = mesh.vertices;
+                float maxD = float.MinValue;
+                foreach (var v in verts) maxD = Mathf.Max(maxD, Vector3.Dot(v, a));
+                float axisLen = Mathf.Abs(Vector3.Dot(mb.size, a));
+                float slab = maxD - axisLen * 0.03f;
+
+                Vector3 sum = Vector3.zero;
+                int n = 0;
+                foreach (var v in verts)
+                    if (Vector3.Dot(v, a) >= slab) { sum += v; n++; }
+                if (n > 0)
+                {
+                    muzzleT.position = biggest.transform.TransformPoint(sum / n);
+                    muzzleT.rotation = Quaternion.LookRotation((biggest.transform.rotation * a).normalized);
+                }
+            }
+
+            var wso = new SerializedObject(target.GetComponent<NetworkWeapon>());
+            wso.FindProperty("muzzle").objectReferenceValue = muzzleT;
+            wso.ApplyModifiedPropertiesWithoutUndo();
+
             EditorUtility.SetDirty(target);
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorUtility.DisplayDialog("VR Multiplayer",
-                "'" + target.name + "' artik ates edebiliyor:\n\n" +
-                "• Silahi GRIP ile tut, TETIK ile ates et (tutan elin tetigi)\n" +
-                "• Namludan isin cikar; iz cizgisi + alev + isabet kivilcimini HERKES gorur\n" +
-                "• Atis hizi: " + "0.18 sn" + " (Inspector'dan ayarlanir)\n\n" +
+                "'" + target.name + "' ates kurulumu tamam:\n\n" +
+                "• Namlu ucu ('Muzzle' cocugu) mesh noktalarindan hassas hesaplandi\n" +
+                "  — iz artik tam namlunun ucundan cikar. Gerekirse Muzzle'i elle tasi.\n" +
+                "• GRIP ile tut, TETIK ile ates et (iki elin tetigi de calisir)\n\n" +
                 "Sahneyi kaydet (Ctrl+S) ve 3 gozluge YENIDEN build al.", "Tamam");
         }
 
