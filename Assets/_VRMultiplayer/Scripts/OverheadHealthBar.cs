@@ -25,6 +25,8 @@ namespace VRMultiplayer
         Transform _root, _fill;
         TextMesh _name;
         MeshRenderer _fillMr;
+        int _shownHp = int.MinValue;   // last value pushed to the bar
+        bool _shownDead;
 
         public override void OnNetworkSpawn()
         {
@@ -36,9 +38,6 @@ namespace VRMultiplayer
             if (IsOwner) { enabled = false; return; }
 
             Build();
-            _health.Health.OnValueChanged += (_, n) => Refresh(n);
-            _health.Dead.OnValueChanged += (_, __) => Refresh(_health.Health.Value);
-            Refresh(_health.Health.Value);
         }
 
         public override void OnNetworkDespawn()
@@ -48,7 +47,18 @@ namespace VRMultiplayer
 
         void LateUpdate()
         {
-            if (_root == null || head == null) return;
+            if (_root == null || head == null || _health == null) return;
+
+            // Poll the networked health every frame — never depends on an event firing, so the
+            // enemy's bar always mirrors their true (server-authoritative) health.
+            int hp = _health.Health.Value;
+            bool dead = _health.Dead.Value;
+            if (hp != _shownHp || dead != _shownDead)
+            {
+                _shownHp = hp;
+                _shownDead = dead;
+                Refresh(hp);
+            }
 
             _root.position = head.position + Vector3.up * heightAbove;
 
