@@ -75,9 +75,12 @@ namespace VRMultiplayer
                 Vector3 fwd = rig.head.forward; fwd.y = 0f;
                 if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
                 fwd.Normalize();
-                // Lower-center of view so it never blocks aim.
-                _root.position = rig.head.position + fwd * 1.5f - Vector3.up * 0.55f;
-                _root.rotation = Quaternion.LookRotation(fwd);
+                Vector3 right = rig.head.right; right.y = 0f;
+                if (right.sqrMagnitude < 0.01f) right = Vector3.right;
+                right.Normalize();
+                // Bottom-RIGHT of view so it never blocks aim.
+                _root.position = rig.head.position + fwd * 1.1f + right * 0.55f - Vector3.up * 0.42f;
+                _root.rotation = Quaternion.LookRotation(_root.position - rig.head.position);
 
                 if (_flash != null && _flashUntil > 0f && rig.head != null)
                     _flash.transform.SetPositionAndRotation(

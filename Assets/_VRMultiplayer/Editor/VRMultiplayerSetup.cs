@@ -1014,6 +1014,13 @@ namespace VRMultiplayer.EditorTools
 
                 var headCarrier = root.transform.Find("Head");
 
+                // Over-head health bar that OTHER players see above this player's head.
+                var ohb = root.GetComponent<OverheadHealthBar>();
+                if (ohb == null) ohb = root.AddComponent<OverheadHealthBar>();
+                var ohbSo = new SerializedObject(ohb);
+                ohbSo.FindProperty("head").objectReferenceValue = headCarrier;
+                ohbSo.ApplyModifiedPropertiesWithoutUndo();
+
                 var hitboxT = root.transform.Find("Hitbox");
                 GameObject hitbox = hitboxT != null ? hitboxT.gameObject : null;
                 if (hitbox == null)
@@ -1043,7 +1050,8 @@ namespace VRMultiplayer.EditorTools
                 "• Can: 100 — vurulunca 25 duser (silahta ayarlanir)\n" +
                 "• Takim arkadasina ates HASAR VERMEZ (A/B)\n" +
                 "• Can bitince ELENIR, 4 sn sonra tam canla yeniden dogar\n" +
-                "• Kendi caniniz gozunuzun altinda bir CAN cubugunda\n" +
+                "• Kendi caniniz SAG ALTTA bir CAN cubugunda\n" +
+                "• Rakiplerin cani KAFALARININ USTUNDE gorunur\n" +
                 "• Vurulunca kirmizi flas + kumanda titresimi\n\n" +
                 "Gozluklere YENIDEN build al (prefab degisti).", "Tamam");
         }

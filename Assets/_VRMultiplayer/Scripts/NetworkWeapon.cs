@@ -113,6 +113,7 @@ namespace VRMultiplayer
                 Physics.AllLayers, QueryTriggerInteraction.Collide);
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
 
+            int hitboxesSeen = 0;
             foreach (var h in hits)
             {
                 if (h.collider.transform.IsChildOf(transform)) continue; // own weapon
@@ -120,16 +121,26 @@ namespace VRMultiplayer
                 var hitbox = h.collider.GetComponent<PlayerHitbox>();
                 if (hitbox != null && hitbox.health != null)
                 {
-                    // Never hit yourself; friendly fire off (same non-zero team).
+                    // Never hit yourself; keep going past your own body.
                     if (hitbox.health.OwnerClientId == shooter) continue;
+                    hitboxesSeen++;
                     byte t = hitbox.health.TeamValue;
-                    if (t != 0 && t == shooterTeam) { end = h.point; break; } // block, no damage
+                    if (t != 0 && t == shooterTeam)
+                    {
+                        Debug.Log($"[Silah] Isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {hitbox.health.OwnerClientId}");
+                        end = h.point; break; // block, no damage (friendly fire off)
+                    }
+                    Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {hitbox.health.OwnerClientId} (takim {t}), {damage} hasar. Kalan: {Mathf.Max(0, hitbox.health.Health.Value - damage)}");
                     hitbox.health.ServerApplyDamage(damage, shooter);
+                    end = h.point; break;
                 }
 
-                end = h.point; // first solid/valid hit stops the ray
+                end = h.point; // first solid/non-player hit stops the ray
                 break;
             }
+
+            if (hitboxesSeen == 0)
+                Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi. Toplam collider: {hits.Length}. Ilk carpan: {(hits.Length > 0 ? hits[0].collider.name : "hicbir sey")}");
 
             FireFxClientRpc(origin, end);
         }
