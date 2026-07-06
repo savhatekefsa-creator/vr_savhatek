@@ -52,7 +52,7 @@ namespace VRMultiplayer
             if (now < prev)
             {
                 // Took damage: red flash + rumble both controllers.
-                _flashUntil = Time.time + 0.25f;
+                _flashUntil = Time.time + 0.18f;
                 Rumble();
             }
             _lastHealth = now;
@@ -135,9 +135,9 @@ namespace VRMultiplayer
             _barFill = MakeQuad(_root, "BarFill", Color.green);
             _barFill.localScale = new Vector3(BarWidth, 0.05f, 1f);
 
-            var flashGo = MakeQuad(_root, "Damage Flash", new Color(1f, 0f, 0f, 0.35f));
+            var flashGo = MakeQuad(_root, "Damage Flash", new Color(0.9f, 0.05f, 0.05f, 1f));
             flashGo.SetParent(null, true);
-            flashGo.localScale = new Vector3(3f, 3f, 1f);
+            flashGo.localScale = new Vector3(1.4f, 1.4f, 1f);
             _flash = flashGo.GetComponent<MeshRenderer>();
             _flash.enabled = false;
         }
@@ -170,19 +170,16 @@ namespace VRMultiplayer
             return q.transform;
         }
 
+        // OPAQUE URP/Lit only. The room materials already use this shader, so it (and its
+        // opaque variant) is guaranteed to ship in the build — no magenta. Transparent /
+        // Unlit variants get stripped from the build when nothing else references them, which
+        // is exactly what turned the HUD quads pink.
         static Material MakeMat(Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null) shader = Shader.Find("Unlit/Color");
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
             var m = new Material(shader);
-            if (color.a < 1f)
-            {
-                m.SetFloat("_Surface", 1f);
-                m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                m.SetInt("_ZWrite", 0);
-                m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            }
+            m.SetFloat("_Smoothness", 0f);
             SetColor(m, color);
             return m;
         }
