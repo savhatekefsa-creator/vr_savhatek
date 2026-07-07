@@ -234,6 +234,10 @@ namespace VRMultiplayer.EditorTools
                 ik.headBone = head;
                 ik.feetOffset = feetOffsetValue; // measured above; keeps feet on the floor
 
+                // --- Procedural finger curl (grip/trigger -> fist), if the rig has fingers ---
+                if (animGo.GetComponent<ProceduralFingerPoser>() == null)
+                    animGo.AddComponent<ProceduralFingerPoser>();
+
                 // --- Name tag ---
                 var tagGo = new GameObject("NameTag");
                 tagGo.transform.SetParent(animGo.transform, false);
@@ -1054,6 +1058,114 @@ namespace VRMultiplayer.EditorTools
                 "• Rakiplerin cani KAFALARININ USTUNDE gorunur\n" +
                 "• Vurulunca kirmizi flas + kumanda titresimi\n\n" +
                 "Gozluklere YENIDEN build al (prefab degisti).", "Tamam");
+        }
+
+        // Adds the procedural finger poser to the CURRENT prefab's avatar (for an avatar that was
+        // set up before this feature existed). Idempotent.
+        [MenuItem("Tools/VR Multiplayer/19. Add Finger Poser (mevcut avatara)")]
+        public static void AddFingerPoser()
+        {
+            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            try
+            {
+                var avatar = root.transform.Find("Avatar");
+                var animator = avatar != null ? avatar.GetComponentInChildren<Animator>() : null;
+                if (animator == null || animator.avatar == null || !animator.avatar.isHuman)
+                {
+                    EditorUtility.DisplayDialog("VR Multiplayer",
+                        "Prefabda Humanoid Avatar bulunamadi. Once menu 3 ile avatari ekle.", "Tamam");
+                    return;
+                }
+                if (animator.gameObject.GetComponent<ProceduralFingerPoser>() == null)
+                    animator.gameObject.AddComponent<ProceduralFingerPoser>();
+                PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+
+            EditorUtility.DisplayDialog("VR Multiplayer",
+                "Parmak poz sistemi avatara eklendi.\n\n" +
+                "• Grip -> orta/yuzuk/serce parmak buker\n" +
+                "• Tetik -> isaret parmagi\n" +
+                "• Herkes (ag uzerinden) parmak hareketini gorur\n\n" +
+                "Play/Build'de test et. Parmaklar TERS bukuluyorsa avatardaki\n" +
+                "ProceduralFingerPoser'da 'Invert Curl' isaretle.", "Tamam");
+        }
+
+        // Strips the modular soldier's unnecessary gear meshes (flags, extra pouches, magazines,
+        // glasses, spare helmets/beards, radios...) down to a core body set so the avatar is
+        // Quest-viable. Deletes ONLY leaf SkinnedMeshRenderer GameObjects that match a junk name
+        // pattern — never touches the skeleton (bones have no SMR and are never leaves here).
+        [MenuItem("Tools/VR Multiplayer/20. Strip Soldier Gear (ayikla)")]
+        public static void StripSoldierGear()
+        {
+            // Junk name fragments (lowercase, substring match). Carefully avoids the core parts
+            // (Heads, Eye, Glove, Jaket, Pants, boots, Necck, Belt, Bodyarmour).
+            string[] junk =
+            {
+                "flag", "headphone", "bagmag", "maga", "magazine", "bagbullet", "bullet",
+                "bag1", "bag2", "bag3", "bag4", "bag22", "bagakum", "backpack", "dumppouch",
+                "pounch", "pouch", "pistolpouch", "kobur", "holster", "glass", "night", "nigt",
+                "cap", "hat", "boonie", "helmet", "gasmask", "mask", "balaclava", "eyegas",
+                "radio", "racio", "ptt", "antenna", "phone", "logoarm", "shevron", "logohelmet",
+                "watch", "scissors", "tourniquet", "pain", "m18", "armbelt", "beard", "kit",
+                // Redundant with our own Rifle_HK416 + leftover junk parts:
+                "carabine", "gun", "camera", "kopyto", "kjjj", "gofra", "cord", "cylinder",
+            };
+
+            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            try
+            {
+                var avatar = root.transform.Find("Avatar");
+                if (avatar == null)
+                {
+                    EditorUtility.DisplayDialog("VR Multiplayer", "Prefabda Avatar yok.", "Tamam");
+                    return;
+                }
+
+                var smrs = avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                var toDelete = new System.Collections.Generic.List<GameObject>();
+                var keptNames = new System.Collections.Generic.List<string>();
+
+                foreach (var smr in smrs)
+                {
+                    string n = smr.gameObject.name.ToLowerInvariant();
+                    bool strip = false;
+                    foreach (var j in junk)
+                        if (n.Contains(j)) { strip = true; break; }
+
+                    // Safety: only delete leaf mesh nodes (no children) so a bone chain is never
+                    // removed accidentally.
+                    if (strip && smr.transform.childCount == 0)
+                        toDelete.Add(smr.gameObject);
+                    else
+                        keptNames.Add(smr.gameObject.name);
+                }
+
+                foreach (var go in toDelete)
+                    Object.DestroyImmediate(go);
+
+                PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
+
+                string keptList = keptNames.Count <= 25
+                    ? string.Join(", ", keptNames)
+                    : string.Join(", ", keptNames.GetRange(0, 25)) + " ...";
+
+                EditorUtility.DisplayDialog("VR Multiplayer",
+                    "Asker ayiklandi:\n\n" +
+                    "• Silinen gereksiz parca: " + toDelete.Count + "\n" +
+                    "• Kalan gorsel parca: " + keptNames.Count + "\n\n" +
+                    "Kalanlar: " + keptList + "\n\n" +
+                    "Iskelet (kemikler + parmaklar) DOKUNULMADI — IK ve parmaklar calisir.\n" +
+                    "Beklenmeyen bir sey silindiyse Ctrl+Z; ya da junk listesinden cikar.\n\n" +
+                    "Sonra dokulari ASTC'ye sikistir, sonra build al.", "Tamam");
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
         }
 
         // ---------------------------------------------------------------- Helpers

@@ -1,3 +1,9 @@
+# ============ AGIR 3B PAKETLER (git'e sigmaz — 15GB) ============
+# Soldiers-Pack ~15GB: GitHub'a gonderilemez. Yerelde kalir; kirpilip kucultulunce
+# gerekli tek varyant ayri, kucuk bir klasore tasinip o zaman commit'lenir.
+Assets/Soldiers-Pack/
+Assets/Soldiers-Pack.meta
+
 # ============ Unity'nin otomatik urettigi klasorler (ASLA depoya girmez) ============
 [Ll]ibrary/
 [Tt]emp/

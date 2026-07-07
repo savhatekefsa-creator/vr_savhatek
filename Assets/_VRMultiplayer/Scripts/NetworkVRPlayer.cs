@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.XR;
 
 namespace VRMultiplayer
 {
@@ -10,7 +11,8 @@ namespace VRMultiplayer
     /// children replicate the motion to everyone; remote clients see it interpolated.
     ///
     /// Visibility model:
-    ///  - You (owner) see simple hand cubes; you do NOT see your own humanoid body/head.
+    ///  - Everyone — including you — sees the full humanoid body (first-person embodiment);
+    ///    only your own head is hidden so the camera isn't inside it.
     ///  - Others see your full humanoid avatar (driven by <see cref="AvatarIKController"/>).
     /// </summary>
     public class NetworkVRPlayer : NetworkBehaviour
@@ -32,6 +34,23 @@ namespace VRMultiplayer
 
         [Header("Spawn")]
         [SerializeField] float spawnRingRadius = 0.9f;
+
+        // Hand analog inputs, owner-written and replicated to everyone, so ProceduralFingerPoser
+        // can curl each player's fingers on ALL clients. byte = 0..255 quantized grip/trigger;
+        // one byte each, cheap. Owner writes directly (no RPC — the player owns this object).
+        readonly NetworkVariable<byte> _leftGrip = new NetworkVariable<byte>(
+            0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        readonly NetworkVariable<byte> _rightGrip = new NetworkVariable<byte>(
+            0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        readonly NetworkVariable<byte> _leftTrig = new NetworkVariable<byte>(
+            0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        readonly NetworkVariable<byte> _rightTrig = new NetworkVariable<byte>(
+            0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        public float LeftGrip01 => _leftGrip.Value / 255f;
+        public float RightGrip01 => _rightGrip.Value / 255f;
+        public float LeftTrigger01 => _leftTrig.Value / 255f;
+        public float RightTrigger01 => _rightTrig.Value / 255f;
 
         Transform _srcHead, _srcLeft, _srcRight;
         bool _bound;
@@ -108,6 +127,27 @@ namespace VRMultiplayer
                 leftHand.SetPositionAndRotation(_srcLeft.position, _srcLeft.rotation);
             if (_srcRight != null && rightHand != null)
                 rightHand.SetPositionAndRotation(_srcRight.position, _srcRight.rotation);
+
+            // Publish the analog grip/trigger for both hands so everyone's finger poser matches.
+            WriteInput(XRNode.LeftHand, _leftGrip, _leftTrig);
+            WriteInput(XRNode.RightHand, _rightGrip, _rightTrig);
+        }
+
+        static void WriteInput(XRNode node, NetworkVariable<byte> grip, NetworkVariable<byte> trig)
+        {
+            var dev = InputDevices.GetDeviceAtXRNode(node);
+            if (!dev.isValid) return;
+
+            dev.TryGetFeatureValue(CommonUsages.grip, out float g);
+            if (g <= 0f && dev.TryGetFeatureValue(CommonUsages.gripButton, out bool gb) && gb) g = 1f;
+            dev.TryGetFeatureValue(CommonUsages.trigger, out float t);
+            if (t <= 0f && dev.TryGetFeatureValue(CommonUsages.triggerButton, out bool tb) && tb) t = 1f;
+
+            byte gb2 = (byte)Mathf.RoundToInt(Mathf.Clamp01(g) * 255f);
+            byte tb2 = (byte)Mathf.RoundToInt(Mathf.Clamp01(t) * 255f);
+            // Deadband: only replicate when it actually moves, to avoid per-frame dirtying.
+            if (Mathf.Abs(gb2 - grip.Value) > 3) grip.Value = gb2;
+            if (Mathf.Abs(tb2 - trig.Value) > 3) trig.Value = tb2;
         }
     }
 }

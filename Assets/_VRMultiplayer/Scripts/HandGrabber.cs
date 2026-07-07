@@ -40,6 +40,12 @@ namespace VRMultiplayer
 
         HandState Other(HandState h) => h == _left ? _right : _left;
 
+        /// <summary>True while that hand is holding a grabbable (used by the finger poser to
+        /// firm up the grip). Non-owner instances never run grab logic, so these stay false —
+        /// the finger poser falls back to the networked grip value, which is what we want.</summary>
+        public bool HoldingLeft => _left != null && _left.held != null;
+        public bool HoldingRight => _right != null && _right.held != null;
+
         public override void OnNetworkSpawn()
         {
             if (!IsOwner) { enabled = false; return; }
