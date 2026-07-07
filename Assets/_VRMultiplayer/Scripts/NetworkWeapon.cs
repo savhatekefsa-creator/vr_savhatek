@@ -118,20 +118,26 @@ namespace VRMultiplayer
             {
                 if (h.collider.transform.IsChildOf(transform)) continue; // own weapon
 
-                var hitbox = h.collider.GetComponent<PlayerHitbox>();
-                if (hitbox != null && hitbox.health != null)
+                // Regional damage: the ray hits a HitZone (head/torso/arm/leg), each with its own
+                // multiplier. GetComponentInParent reaches the zone whether the collider carries it
+                // directly or on a child. The final amount is computed on the SERVER (clients can't
+                // send a multiplier — security).
+                var zone = h.collider.GetComponentInParent<HitZone>();
+                if (zone != null && zone.health != null)
                 {
+                    var health = zone.health;
                     // Never hit yourself; keep going past your own body.
-                    if (hitbox.health.OwnerClientId == shooter) continue;
+                    if (health.OwnerClientId == shooter) continue;
                     hitboxesSeen++;
-                    byte t = hitbox.health.TeamValue;
+                    byte t = health.TeamValue;
                     if (t != 0 && t == shooterTeam)
                     {
-                        Debug.Log($"[Silah] Isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {hitbox.health.OwnerClientId}");
+                        Debug.Log($"[Silah] Isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {health.OwnerClientId}");
                         end = h.point; break; // block, no damage (friendly fire off)
                     }
-                    Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {hitbox.health.OwnerClientId} (takim {t}), {damage} hasar. Kalan: {Mathf.Max(0, hitbox.health.Health.Value - damage)}");
-                    hitbox.health.ServerApplyDamage(damage, shooter);
+                    int dmg = Mathf.RoundToInt(damage * zone.damageMultiplier);
+                    Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {health.OwnerClientId} (takim {t}), bolge {zone.zoneName}, {dmg} hasar. Kalan: {Mathf.Max(0, health.Health.Value - dmg)}");
+                    health.ServerApplyDamage(dmg, shooter);
                     end = h.point; break;
                 }
 
