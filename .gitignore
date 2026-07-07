@@ -20,6 +20,11 @@
 ProjectSettings/AndroidResolverDependencies.xml
 ProjectSettings/GvhProjectSettings.xml
 
+# ============ Unity build ciktilari (build klasorunun yanina dusen copler) ============
+# IL2CPP sembol yedekleri + Burst debug bilgisi; makineye ozel, depoya girmez.
+*_BackUpThisFolder_ButDontShipItWithYourGame/
+*_BurstDebugInformation_DoNotShip/
+
 # ============ IDE / editor dosyalari ============
 .vs/
 .idea/
