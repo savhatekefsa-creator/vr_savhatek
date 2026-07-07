@@ -26,6 +26,11 @@ Assets/Soldiers-Pack.meta
 ProjectSettings/AndroidResolverDependencies.xml
 ProjectSettings/GvhProjectSettings.xml
 
+# ============ Unity build ciktilari (build klasorunun yanina dusen copler) ============
+# IL2CPP sembol yedekleri + Burst debug bilgisi; makineye ozel, depoya girmez.
+*_BackUpThisFolder_ButDontShipItWithYourGame/
+*_BurstDebugInformation_DoNotShip/
+
 # ============ IDE / editor dosyalari ============
 .vs/
 .idea/
@@ -46,6 +51,9 @@ ignore.conf
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ============ Unity AI Assistant / MCP (yerel gelistirme araci — depoya girmez) ============
+ProjectSettings/Packages/
 
 # ============ Crash / gecici ============
 sysinfo.txt
