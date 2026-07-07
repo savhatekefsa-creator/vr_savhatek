@@ -46,6 +46,9 @@ ignore.conf
 Thumbs.db
 desktop.ini
 
+# ============ Unity AI Assistant / MCP (yerel gelistirme araci — depoya girmez) ============
+ProjectSettings/Packages/
+
 # ============ Crash / gecici ============
 sysinfo.txt
 *.stackdump
