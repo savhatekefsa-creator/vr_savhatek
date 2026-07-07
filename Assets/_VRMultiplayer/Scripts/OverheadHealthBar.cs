@@ -1,5 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
+using VRMultiplayer.UI;
+using System.Collections;
 
 namespace VRMultiplayer
 {
@@ -27,6 +29,7 @@ namespace VRMultiplayer
         MeshRenderer _fillMr;
         int _shownHp = int.MinValue;   // last value pushed to the bar
         bool _shownDead;
+        Coroutine _respawnCountdown;
 
         public override void OnNetworkSpawn()
         {
@@ -43,6 +46,7 @@ namespace VRMultiplayer
         public override void OnNetworkDespawn()
         {
             if (_root != null) Destroy(_root.gameObject);
+            if (_respawnCountdown != null) StopCoroutine(_respawnCountdown);
         }
 
         void LateUpdate()
@@ -85,13 +89,34 @@ namespace VRMultiplayer
                 _fill.localPosition = new Vector3(-BarWidth * 0.5f + BarWidth * ratio * 0.5f, 0f, 0.001f);
                 if (_fillMr != null)
                 {
-                    Color c = ratio > 0.5f ? Color.Lerp(Color.yellow, Color.green, (ratio - 0.5f) * 2f)
-                                           : Color.Lerp(Color.red, Color.yellow, ratio * 2f);
-                    SetColor(_fillMr.material, c);
+                    Color c = UITheme.GetHealthColor(ratio);
+                    UITheme.SetMaterialColor(_fillMr.material, c);
                 }
             }
             if (_name != null)
-                _name.text = dead ? "ELENDI" : (_identity != null ? _identity.DisplayName : "");
+            {
+                if (dead && !_shownDead) // Oyuncu yeni elendi
+                {
+                    if (_respawnCountdown != null) StopCoroutine(_respawnCountdown);
+                    _respawnCountdown = StartCoroutine(RespawnCountdownRoutine());
+                }
+                else if (!dead && _shownDead) // Oyuncu yeni doğdu
+                {
+                    if (_respawnCountdown != null) StopCoroutine(_respawnCountdown);
+                    _respawnCountdown = null;
+                    _name.text = _identity != null ? _identity.DisplayName : "";
+                }
+            }
+        }
+
+        IEnumerator RespawnCountdownRoutine()
+        {
+            float endTime = Time.time + _health.respawnDelay;
+            while (Time.time < endTime)
+            {
+                _name.text = $"Yeniden doguyor: {Mathf.CeilToInt(endTime - Time.time)}";
+                yield return new WaitForSeconds(0.2f);
+            }
         }
 
         void Build()
@@ -101,23 +126,22 @@ namespace VRMultiplayer
             var name = new GameObject("Name");
             name.transform.SetParent(_root, false);
             name.transform.localPosition = new Vector3(0f, 0.06f, 0f);
-            name.transform.localScale = Vector3.one * 0.13f;
+            name.transform.localScale = Vector3.one * 0.13f; // This scale seems to work well with the font settings
             _name = name.AddComponent<TextMesh>();
-            _name.characterSize = 0.06f;
-            _name.fontSize = 60;
+            _name.characterSize = UITheme.NameCharacterSize;
+            _name.fontSize = UITheme.NameFontSize;
             _name.anchor = TextAnchor.MiddleCenter;
             _name.alignment = TextAlignment.Center;
-            _name.color = Color.white;
+            _name.color = UITheme.Text;
 
-            var bg = MakeQuad(_root, "Bg", new Color(0.08f, 0.08f, 0.08f, 1f));
+            var bg = MakeQuad(_root, "Bg", UITheme.Background);
             bg.localScale = new Vector3(BarWidth + 0.02f, 0.07f, 1f);
 
-            _fill = MakeQuad(_root, "Fill", Color.green);
+            _fill = MakeQuad(_root, "Fill", UITheme.HealthFull);
             _fill.localScale = new Vector3(BarWidth, 0.05f, 1f);
             _fillMr = _fill.GetComponent<MeshRenderer>();
         }
 
-        // OPAQUE URP/Lit — guaranteed in the build (room uses it), so no magenta.
         static Transform MakeQuad(Transform parent, string name, Color color)
         {
             var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -125,19 +149,8 @@ namespace VRMultiplayer
             var col = q.GetComponent<Collider>();
             if (col != null) Destroy(col);
             q.transform.SetParent(parent, false);
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null) shader = Shader.Find("Sprites/Default");
-            var m = new Material(shader);
-            m.SetFloat("_Smoothness", 0f);
-            SetColor(m, color);
-            q.GetComponent<MeshRenderer>().sharedMaterial = m;
+            q.GetComponent<MeshRenderer>().sharedMaterial = UITheme.CreateLitMaterial(color);
             return q.transform;
-        }
-
-        static void SetColor(Material m, Color c)
-        {
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
-            if (m.HasProperty("_Color")) m.SetColor("_Color", c);
         }
     }
 }
