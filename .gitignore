@@ -10,6 +10,10 @@
 [Rr]ecordings/
 .utmp/
 
+# Unity build/paket yedegi ve Burst derleyici ciktisi (adi zaten "DoNotShip")
+*_BackUpThisFolder_ButDontShipItWithYourGame/
+*_BurstDebugInformation_DoNotShip/
+
 # ============ HDRP / IAP / Google resolver COPLERI (asset importlarinin surukledigi) ============
 # Bunlar projeye gerekmez; HDRP URP ile cakisir. Import edilse bile depoya GIRMESIN.
 [Aa]ssets/HDRPDefaultResources/
@@ -48,3 +52,6 @@ crashlytics-build.properties
 *.apk
 *.aab
 *.unitypackage
+
+# ============ Unity AI Assistant / MCP (yerel gelistirme araci — depoya girmez) ============
+ProjectSettings/Packages/
