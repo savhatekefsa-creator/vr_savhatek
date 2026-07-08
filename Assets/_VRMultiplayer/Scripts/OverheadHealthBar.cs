@@ -19,6 +19,12 @@ namespace VRMultiplayer
         public Transform head;
         [Tooltip("Kafanin ne kadar ustunde dursun (metre).")]
         public float heightAbove = 0.35f;
+        [Tooltip("Can barinin yeni degere kayma hizi (bar boyu / saniye).")]
+        public float barSlideSpeed = 1.2f;
+        [Tooltip("Bu mesafeden uzaktaki oyuncunun bari tamamen gizlenir (metre).")]
+        public float visibleDistance = 5f;
+        [Tooltip("Gizlenmeden once bar bu mesafe araliginda kuculerek kaybolur (metre).")]
+        public float fadeRange = 2f;
 
         const float BarWidth = 0.34f;
 
@@ -29,6 +35,8 @@ namespace VRMultiplayer
         MeshRenderer _fillMr;
         int _shownHp = int.MinValue;   // last value pushed to the bar
         bool _shownDead;
+        float _targetRatio = 1f;
+        float _displayedRatio = -1f;   // -1: ilk deger henuz uygulanmadi (animasyonsuz atanir)
         Coroutine _respawnCountdown;
 
         public override void OnNetworkSpawn()
@@ -64,6 +72,10 @@ namespace VRMultiplayer
                 Refresh(hp);
             }
 
+            // Bar, hedef degere dogru surgu gibi yumusakca kayar.
+            if (_displayedRatio >= 0f && _displayedRatio != _targetRatio)
+                ApplyBarRatio(Mathf.MoveTowards(_displayedRatio, _targetRatio, barSlideSpeed * Time.deltaTime));
+
             _root.position = head.position + Vector3.up * heightAbove;
 
             // Billboard toward the local camera.
@@ -75,24 +87,25 @@ namespace VRMultiplayer
                 Vector3 to = _root.position - cam.position; to.y = 0f;
                 if (to.sqrMagnitude > 0.0001f)
                     _root.rotation = Quaternion.LookRotation(to.normalized);
+
+                // Uzaktaki oyuncunun bari gorunmesin: mesafe arttikca kuculerek kaybolur.
+                float dist = Vector3.Distance(cam.position, _root.position);
+                float t = Mathf.InverseLerp(visibleDistance, visibleDistance - Mathf.Max(fadeRange, 0.01f), dist);
+                _root.localScale = Vector3.one * t;
+                bool visible = t > 0f;
+                if (_root.gameObject.activeSelf != visible)
+                    _root.gameObject.SetActive(visible);
             }
         }
 
         void Refresh(int hp)
         {
-            float ratio = Mathf.Clamp01((float)hp / PlayerHealth.MaxHealth);
+            _targetRatio = Mathf.Clamp01((float)hp / PlayerHealth.MaxHealth);
             bool dead = _health != null && _health.Dead.Value;
 
-            if (_fill != null)
-            {
-                _fill.localScale = new Vector3(BarWidth * ratio, 0.05f, 1f);
-                _fill.localPosition = new Vector3(-BarWidth * 0.5f + BarWidth * ratio * 0.5f, 0f, 0.001f);
-                if (_fillMr != null)
-                {
-                    Color c = UITheme.GetHealthColor(ratio);
-                    UITheme.SetMaterialColor(_fillMr.material, c);
-                }
-            }
+            // Ilk deger animasyonsuz uygulanir; sonrakiler LateUpdate icinde surgu gibi kayar.
+            if (_displayedRatio < 0f)
+                ApplyBarRatio(_targetRatio);
             if (_name != null)
             {
                 if (dead && !_shownDead) // Oyuncu yeni elendi
@@ -107,6 +120,16 @@ namespace VRMultiplayer
                     _name.text = _identity != null ? _identity.DisplayName : "";
                 }
             }
+        }
+
+        void ApplyBarRatio(float ratio)
+        {
+            _displayedRatio = ratio;
+            if (_fill == null) return;
+            _fill.localScale = new Vector3(BarWidth * ratio, 0.05f, 1f);
+            _fill.localPosition = new Vector3(-BarWidth * 0.5f + BarWidth * ratio * 0.5f, 0f, -0.001f);
+            if (_fillMr != null)
+                UITheme.SetGradientFill(_fillMr.sharedMaterial, ratio);
         }
 
         IEnumerator RespawnCountdownRoutine()
@@ -136,10 +159,13 @@ namespace VRMultiplayer
 
             var bg = MakeQuad(_root, "Bg", UITheme.Background);
             bg.localScale = new Vector3(BarWidth + 0.02f, 0.07f, 1f);
+            // Siyah zemin yerine degradenin karartilmis hali: bos kisim soluk kirmizi-yesil gorunur.
+            bg.GetComponent<MeshRenderer>().sharedMaterial = UITheme.CreateHealthBarMaterial(0.35f);
 
             _fill = MakeQuad(_root, "Fill", UITheme.HealthFull);
             _fill.localScale = new Vector3(BarWidth, 0.05f, 1f);
             _fillMr = _fill.GetComponent<MeshRenderer>();
+            _fillMr.sharedMaterial = UITheme.CreateHealthBarMaterial();
         }
 
         static Transform MakeQuad(Transform parent, string name, Color color)
