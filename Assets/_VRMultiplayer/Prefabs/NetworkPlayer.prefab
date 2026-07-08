@@ -4860,6 +4860,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.PlayerHUD
   ShowTopMostFoldoutHeaderGroup: 1
+  countdownFont: {fileID: 0}
 --- !u!114 &4202541801050995821
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5933,7 +5934,6 @@ GameObject:
   - component: {fileID: 525870818729087815}
   - component: {fileID: 6239180518136603340}
   - component: {fileID: 240035335416653996}
-  - component: {fileID: 1269614565334480264}
   m_Layer: 0
   m_Name: Avatar
   m_TagString: Untagged
@@ -6060,25 +6060,6 @@ MonoBehaviour:
   crouchStartRatio: 0.92
   crouchFullRatio: 0.65
   crouchSmoothing: 8
---- !u!114 &1269614565334480264
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6550407322837635975}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dc09f0931e0d08343a4d3c046e0ddf90, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.ProceduralFingerPoser
-  proximalCurl: 55
-  intermediateCurl: 80
-  distalCurl: 55
-  thumbCurl: 34
-  invertCurl: 0
-  smoothing: 14
-  heldGripMin: 0.85
 --- !u!1 &6581320160952356041
 GameObject:
   m_ObjectHideFlags: 0
@@ -6368,6 +6349,14 @@ MonoBehaviour:
   head: {fileID: 5776368456349678063}
   radius: 0.28
   headMargin: 0.12
+  headMultiplier: 2
+  torsoMultiplier: 1
+  armMultiplier: 0.6
+  legMultiplier: 0.6
+  headRadius: 0.16
+  torsoRadius: 0.2
+  armRadius: 0.13
+  legRadius: 0.16
 --- !u!1 &6858357592702413712
 GameObject:
   m_ObjectHideFlags: 0

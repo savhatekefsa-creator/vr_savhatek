@@ -1,8 +1,17 @@
-# ============ AGIR 3B PAKETLER (git'e sigmaz — 15GB) ============
+# ============ AGIR 3B PAKETLER (git'e sigmaz) ============
 # Soldiers-Pack ~15GB: GitHub'a gonderilemez. Yerelde kalir; kirpilip kucultulunce
 # gerekli tek varyant ayri, kucuk bir klasore tasinip o zaman commit'lenir.
 Assets/Soldiers-Pack/
 Assets/Soldiers-Pack.meta
+
+# FPS Gun Pack 4K ~1.6GB (262 tane 4K doku): GitHub LFS kotasini (1GB) patlatir. Yerelde kalir;
+# ekip ayni paketi Asset Store'dan import eder (GUID'ler eslesir), prefab/sahne GUID ile bulur.
+Assets/FPS Gun Pack 4K/
+Assets/FPS Gun Pack 4K.meta
+
+# Eski avatar denemesi kalintisi (kullanilmiyor, depoya girmesin)
+Assets/_VRMultiplayer/Y Bot.fbx
+Assets/_VRMultiplayer/Y Bot.fbx.meta
 
 # ============ Unity'nin otomatik urettigi klasorler (ASLA depoya girmez) ============
 [Ll]ibrary/

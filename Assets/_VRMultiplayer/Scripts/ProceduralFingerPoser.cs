@@ -23,8 +23,10 @@ namespace VRMultiplayer
         public float thumbCurl = 40f;
 
         [Header("Palm orientation")]
-        [Tooltip("El bileklerini yuvarlar (avuc ici avatar ONUNE/ICE baksin). 0 = kapali. Negatif = ters yon.")]
+        [Tooltip("SOL el bilek yuvarlamasi (avuc ici avatar ONUNE/ICE baksin). 0 = kapali. Negatif = ters yon.")]
         public float palmRollDegrees = 16f;
+        [Tooltip("SAG el bilek yuvarlamasi. Sag avuc sola uymuyorsa BUNU oynat: negatif, 0 veya daha buyuk dene; sol el ile ayni gorunene kadar ayarla.")]
+        public float palmRollDegreesRight = 16f;
 
         [Tooltip("Parmaklar hala ters gelirse isaretle (tum yonu tersine cevirir).")]
         public bool invertCurl = false;
@@ -84,12 +86,8 @@ namespace VRMultiplayer
             Vector3 minus = Quaternion.AngleAxis(-10f, fingersDir) * palmNormal;
             rollSignOut = Vector3.Dot(plus, fwd) >= Vector3.Dot(minus, fwd) ? 1f : -1f;
 
-            Vector3 thumbTarget = (idxP.position + midP.position) * 0.5f; // across the palm
-
-            AddFinger(outList, left, thumbTarget, false,
-                HumanBodyBones.LeftThumbProximal, HumanBodyBones.LeftThumbIntermediate, HumanBodyBones.LeftThumbDistal,
-                HumanBodyBones.RightThumbProximal, HumanBodyBones.RightThumbIntermediate, HumanBodyBones.RightThumbDistal,
-                thumbCurl, thumbCurl, thumbCurl * 0.8f);
+            // Thumb intentionally NOT curled — only the 4 fingers close on grip (the thumb stays
+            // out, resting along the weapon). Reads more natural and matches the request.
             AddFinger(outList, left, wrist.position, true,
                 HumanBodyBones.LeftIndexProximal, HumanBodyBones.LeftIndexIntermediate, HumanBodyBones.LeftIndexDistal,
                 HumanBodyBones.RightIndexProximal, HumanBodyBones.RightIndexIntermediate, HumanBodyBones.RightIndexDistal,
@@ -171,8 +169,8 @@ namespace VRMultiplayer
 
             if (_wristL != null && Mathf.Abs(palmRollDegrees) > 0.01f)
                 _wristL.localRotation = _wristL.localRotation * Quaternion.AngleAxis(palmRollDegrees * _rollSignL, _rollAxisL);
-            if (_wristR != null && Mathf.Abs(palmRollDegrees) > 0.01f)
-                _wristR.localRotation = _wristR.localRotation * Quaternion.AngleAxis(palmRollDegrees * _rollSignR, _rollAxisR);
+            if (_wristR != null && Mathf.Abs(palmRollDegreesRight) > 0.01f)
+                _wristR.localRotation = _wristR.localRotation * Quaternion.AngleAxis(palmRollDegreesRight * _rollSignR, _rollAxisR);
 
             float k = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
             _gL = Mathf.Lerp(_gL, gL, k); _gR = Mathf.Lerp(_gR, gR, k);

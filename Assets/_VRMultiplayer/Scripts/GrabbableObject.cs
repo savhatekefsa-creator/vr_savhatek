@@ -20,8 +20,11 @@ namespace VRMultiplayer
         [Tooltip("Tutunca obje avucun icine cekilir (silah gibi). Kapaliysa yakalandigi mesafe/acida kalir (tas gibi).")]
         public bool snapToHand = true;
 
-        [Tooltip("Elde tutus acisi duzeltmesi (derece). Sifir birakilirsa namlu ekseni otomatik bulunur ve bakilan yone hizalanir.")]
+        [Tooltip("Elde tutus acisi duzeltmesi (derece). Sifir birakilirsa namlu ekseni otomatik bulunur ve bakilan yone hizalanir. gripAnchor atanmissa YOK SAYILIR.")]
         public Vector3 gripRotationEuler;
+
+        [Tooltip("Elin tutacagi nokta (KABZA). Atanirsa silah, bu nokta tam avuca gelecek ve bu noktanin +Z ekseni (mavi ok) namlu yonune bakacak sekilde tutulur. Bos ise silahin koku ele snap olur (kabza icine gomulme sorunu). Menu 22 otomatik olusturur.")]
+        public Transform gripAnchor;
 
         readonly NetworkVariable<ulong> _holder = new NetworkVariable<ulong>(NoHolder);
         readonly NetworkVariable<byte> _holderHand = new NetworkVariable<byte>(0); // 0=L 1=R

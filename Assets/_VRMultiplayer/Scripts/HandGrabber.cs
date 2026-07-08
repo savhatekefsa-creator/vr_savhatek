@@ -185,9 +185,22 @@ namespace VRMultiplayer
             h.held = best;
             h.requestedAt = Time.time;
             h.confirmed = false;
-            if (best.snapToHand)
+            if (best.snapToHand && best.gripAnchor != null)
             {
-                // Pull it into the palm, barrel aligned with where the controller points.
+                // Grip point defined: put the KABZA in the palm. The barrel orientation still
+                // auto-aligns to where the controller points (SnapRotOffset — or gripRotationEuler
+                // if set), so the user only has to POSITION the grip point, not orient it. The grip
+                // offset is captured in the root's frame, so it is pose-independent.
+                h.rotOffset = SnapRotOffset(best);
+                Vector3 gripOff = Quaternion.Inverse(best.transform.rotation) *
+                                  (best.gripAnchor.position - best.transform.position);
+                h.posOffset = -(h.rotOffset * gripOff);
+            }
+            else if (best.snapToHand)
+            {
+                // No grip point: pull the ROOT into the palm, barrel aligned to where the
+                // controller points. (Hand ends up at the weapon pivot — may sink into the grip
+                // if the pivot isn't the handle; add a gripAnchor via menu 22 to fix that.)
                 h.posOffset = Vector3.zero;
                 h.rotOffset = SnapRotOffset(best);
             }
