@@ -28,6 +28,10 @@ namespace VRMultiplayer.EditorTools
         const string AvatarFolder = Root + "/Avatar";
         const string PrefabPath = PrefabFolder + "/NetworkPlayer.prefab";
 
+        // When true, AddHumanoidAvatar skips the modal success dialog so it can run head-less
+        // (e.g. driven from the "21. Swap Avatar" wrapper via MCP).
+        public static bool SilentSetup;
+
         // ---------------------------------------------------------------- Prefab
         [MenuItem("Tools/VR Multiplayer/1. Create NetworkPlayer Prefab")]
         public static GameObject CreateNetworkPlayerPrefab()
@@ -282,13 +286,39 @@ namespace VRMultiplayer.EditorTools
 
                 PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
                 Debug.Log("[VRMultiplayerSetup] Humanoid avatar added to NetworkPlayer prefab.");
-                EditorUtility.DisplayDialog("VR Multiplayer",
-                    "Humanoid avatar eklendi!\n\n• Kollar IK ile kumandaları takip eder\n• Diğerleri seni insansı görür; sen kendi küp ellerini görürsün\n• Her oyuncuya otomatik renk + isim\n\nPlay/Build'de test et. Eller ters/kayıksa AvatarIKController'daki Grip Offset'leri, dirsek ters bükülürse ElbowHint konumlarını ayarla.", "Tamam");
+                if (!SilentSetup)
+                    EditorUtility.DisplayDialog("VR Multiplayer",
+                        "Humanoid avatar eklendi!\n\n• Kollar IK ile kumandaları takip eder\n• Diğerleri seni insansı görür; sen kendi küp ellerini görürsün\n• Her oyuncuya otomatik renk + isim\n\nPlay/Build'de test et. Eller ters/kayıksa AvatarIKController'daki Grip Offset'leri, dirsek ters bükülürse ElbowHint konumlarını ayarla.", "Tamam");
             }
             finally
             {
                 PrefabUtility.UnloadPrefabContents(root);
             }
+        }
+
+        // Rebuilds the player avatar from the new colored soldier FBX using the proven "3. Add
+        // Humanoid Avatar" pipeline, but head-less (loads + selects the model, suppresses dialogs).
+        [MenuItem("Tools/VR Multiplayer/21. Swap Avatar To Colored Soldier")]
+        public static void SwapAvatarToColoredSoldier()
+        {
+            const string coloredPath = "Assets/Soldiers-Pack/Mesh/US-Soldier-Colored.fbx";
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(coloredPath);
+            if (model == null)
+            {
+                Debug.LogError("[VRMultiplayerSetup] " + coloredPath + " bulunamadi.");
+                return;
+            }
+            var anim = model.GetComponentInChildren<Animator>();
+            if (anim == null || anim.avatar == null || !anim.avatar.isHuman)
+            {
+                Debug.LogError("[VRMultiplayerSetup] Colored FBX Humanoid degil. Rig > Animation Type = Humanoid > Apply yapip tekrar dene.");
+                return;
+            }
+            Selection.activeObject = model;
+            SilentSetup = true;
+            try { AddHumanoidAvatar(); }
+            finally { SilentSetup = false; }
+            Debug.Log("[VRMultiplayerSetup] Colored soldier avatarina gecildi (rig + IK + finger poser yeniden kuruldu).");
         }
 
         static Transform CreateChild(Transform parent, string name, Vector3 worldPos, Quaternion worldRot)
