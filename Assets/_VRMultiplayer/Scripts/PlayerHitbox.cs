@@ -27,12 +27,6 @@ namespace VRMultiplayer
         [Tooltip("Head'in ustune ne kadar cikilsin (kafa vurusu payi, metre).")]
         public float headMargin = 0.12f;
 
-        [Header("Bolge hasar carpanlari")]
-        public float headMultiplier = 2.0f;
-        public float torsoMultiplier = 1.0f;
-        public float armMultiplier = 0.6f;
-        public float legMultiplier = 0.6f;
-
         [Header("Bolge yaricaplari (metre)")]
         public float headRadius = 0.16f;
         public float torsoRadius = 0.20f;
@@ -79,27 +73,27 @@ namespace VRMultiplayer
 
         void BuildZones()
         {
-            AddSphereZone("Kafa", Follow.Head, headRadius, headMultiplier);
-            AddCapsuleZone("Govde", Follow.TorsoColumn, torsoRadius, torsoMultiplier);
-            AddSphereZone("SolKol", Follow.LeftHand, armRadius, armMultiplier);
-            AddSphereZone("SagKol", Follow.RightHand, armRadius, armMultiplier);
-            AddCapsuleZone("Bacak", Follow.LegColumn, legRadius, legMultiplier);
+            AddSphereZone("Kafa", Follow.Head, headRadius, ZoneType.Head);
+            AddCapsuleZone("Govde", Follow.TorsoColumn, torsoRadius, ZoneType.Torso);
+            AddSphereZone("SolKol", Follow.LeftHand, armRadius, ZoneType.Arm);
+            AddSphereZone("SagKol", Follow.RightHand, armRadius, ZoneType.Arm);
+            AddCapsuleZone("Bacak", Follow.LegColumn, legRadius, ZoneType.Leg);
         }
 
-        Zone NewZoneObject(string name, Follow follow, float multiplier)
+        Zone NewZoneObject(string name, Follow follow, ZoneType zoneType)
         {
             var go = new GameObject("HitZone_" + name);
             go.transform.SetParent(transform, false);
             var hz = go.AddComponent<HitZone>();
             hz.health = health;
-            hz.damageMultiplier = multiplier;
+            hz.zoneType = zoneType;
             hz.zoneName = name;
             return new Zone { follow = follow, tf = go.transform };
         }
 
-        void AddSphereZone(string name, Follow follow, float r, float multiplier)
+        void AddSphereZone(string name, Follow follow, float r, ZoneType zoneType)
         {
-            var z = NewZoneObject(name, follow, multiplier);
+            var z = NewZoneObject(name, follow, zoneType);
             var sc = z.tf.gameObject.AddComponent<SphereCollider>();
             sc.isTrigger = true;
             sc.radius = r;
@@ -107,9 +101,9 @@ namespace VRMultiplayer
             _zones.Add(z);
         }
 
-        void AddCapsuleZone(string name, Follow follow, float r, float multiplier)
+        void AddCapsuleZone(string name, Follow follow, float r, ZoneType zoneType)
         {
-            var z = NewZoneObject(name, follow, multiplier);
+            var z = NewZoneObject(name, follow, zoneType);
             var cc = z.tf.gameObject.AddComponent<CapsuleCollider>();
             cc.isTrigger = true;
             cc.direction = 1; // Y axis

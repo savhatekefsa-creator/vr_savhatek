@@ -15,6 +15,23 @@
    ```
 5. Projeyi Unity Hub'dan aç (ilk açılış Library'yi üretir, 10-20 dk sürebilir — normal).
 
+## ⚠️ ÖNEMLİ: Asker avatarı (Soldiers-Pack) — git'e girmiyor
+Oyuncu avatarı **US-Soldier** modelini kullanıyor. Bu paket ~15 GB olduğu için depoya
+KOYULMADI (`.gitignore`'da). Prefab askeri **GUID ile** referans veriyor; paket sende
+yoksa avatar **görünmez/bozuk** gelir. Düzeltmek için (bir kez):
+
+1. **Soldiers-Pack'i içe aktar:** Ekipten aldığın `Soldiers-Pack.unitypackage`'ı
+   (ya da orijinal Asset Store paketini — HERKES AYNI SÜRÜMÜ kullanmalı ki GUID'ler eşleşsin)
+   `Assets/` altına import et.
+2. **Materyalleri URP'ye çevir:** Window > Rendering > Render Pipeline Converter >
+   "Built-in to URP" > sadece **"Material Upgrade"** > Initialize > Convert Assets.
+   (Yoksa asker **magenta/pembe** görünür.)
+3. **Quest için dokuları küçült (build alacaksan):** `Assets/Soldiers-Pack/Textures`
+   klasörünü seç > Inspector > Android sekmesi > Max Size **1024** > ASTC 6x6 > Apply.
+   (4K dokular Quest'te FPS'i çökertir.)
+
+Bu adımlardan sonra prefab avatarı düzgün gelir. Parmak sistemi (grip → yumruk) otomatik çalışır.
+
 ## Günlük çalışma akışı
 - Çalışmaya başlamadan önce: `git pull`
 - İş bitince: `git add -A && git commit -m "ne yaptigini yaz" && git push`

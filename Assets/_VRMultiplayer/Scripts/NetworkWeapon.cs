@@ -23,9 +23,6 @@ namespace VRMultiplayer
         [Tooltip("Namlu ucu noktasi (ates izi buradan, bakis yonunde cikar). Bos birakilirsa 'Muzzle' adli cocuk aranir, o da yoksa otomatik hesaplanir.")]
         public Transform muzzle;
 
-        [Tooltip("Bir oyuncuya isabetin verdigi hasar.")]
-        public int damage = 25;
-
         GrabbableObject _grab;
         Vector3 _muzzleLocal;
         Vector3 _barrelLocal = Vector3.forward;
@@ -118,10 +115,10 @@ namespace VRMultiplayer
             {
                 if (h.collider.transform.IsChildOf(transform)) continue; // own weapon
 
-                // Regional damage: the ray hits a HitZone (head/torso/arm/leg), each with its own
-                // multiplier. GetComponentInParent reaches the zone whether the collider carries it
-                // directly or on a child. The final amount is computed on the SERVER (clients can't
-                // send a multiplier — security).
+                // Regional damage: the ray hits a HitZone (head/torso/arm/leg); the per-region
+                // amount is looked up in CombatConfig. GetComponentInParent reaches the zone whether
+                // the collider carries it directly or on a child. The amount is resolved on the
+                // SERVER (clients can't send damage values — security).
                 var zone = h.collider.GetComponentInParent<HitZone>();
                 if (zone != null && zone.health != null)
                 {
@@ -135,7 +132,7 @@ namespace VRMultiplayer
                         Debug.Log($"[Silah] Isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {health.OwnerClientId}");
                         end = h.point; break; // block, no damage (friendly fire off)
                     }
-                    int dmg = Mathf.RoundToInt(damage * zone.damageMultiplier);
+                    int dmg = CombatConfig.Instance.DamageFor(zone.zoneType);
                     Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {health.OwnerClientId} (takim {t}), bolge {zone.zoneName}, {dmg} hasar. Kalan: {Mathf.Max(0, health.Health.Value - dmg)}");
                     health.ServerApplyDamage(dmg, shooter);
                     end = h.point; break;

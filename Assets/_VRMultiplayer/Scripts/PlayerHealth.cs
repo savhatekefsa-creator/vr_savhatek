@@ -27,6 +27,8 @@ namespace VRMultiplayer
 
         PlayerIdentity _identity;
         float _invulnUntil;
+        float _lastDamageTime;      // son hasar ani — regen bekleme suresi buradan sayilir
+        float _regenAccumulator;    // kesirli yenilenmeyi biriktirir (Health int oldugu icin)
 
         public bool IsDead => Dead.Value;
         public byte TeamValue => _identity != null ? _identity.Team.Value : (byte)0;
@@ -38,6 +40,7 @@ namespace VRMultiplayer
             {
                 Health.Value = MaxHealth;
                 Dead.Value = false;
+                _lastDamageTime = Time.time;
             }
         }
 
@@ -48,10 +51,35 @@ namespace VRMultiplayer
             if (Time.time < _invulnUntil) return; // just revived — brief grace
 
             Health.Value = Mathf.Max(0, Health.Value - amount);
+            _lastDamageTime = Time.time;   // regen bekleme suresini sifirla
+            _regenAccumulator = 0f;
             if (Health.Value <= 0)
             {
                 Dead.Value = true;
                 StartCoroutine(RespawnAfter());
+            }
+        }
+
+        // Server-only. After a lull with no damage (CombatConfig.regenDelay), health climbs back up
+        // at regenPerSecond toward regenTargetHealth. Health is a NetworkVariable so the bars follow
+        // automatically; raising it never triggers the HUD damage flash (that fires only on a drop).
+        void Update()
+        {
+            if (!IsSpawned || !IsServer || Dead.Value) return;
+
+            var cfg = CombatConfig.Instance;
+            if (cfg == null || !cfg.regenEnabled) return;
+
+            int target = Mathf.Min(cfg.regenTargetHealth, MaxHealth);
+            if (Health.Value >= target) { _regenAccumulator = 0f; return; }
+            if (Time.time - _lastDamageTime < cfg.regenDelay) return;
+
+            _regenAccumulator += cfg.regenPerSecond * Time.deltaTime;
+            if (_regenAccumulator >= 1f)
+            {
+                int add = Mathf.FloorToInt(_regenAccumulator);
+                _regenAccumulator -= add;
+                Health.Value = Mathf.Min(target, Health.Value + add);
             }
         }
 
