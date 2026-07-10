@@ -1551,9 +1551,9 @@ MonoBehaviour:
   headEulerOffset: {x: 0, y: 0, z: 0}
   hideHead: 0
   leftGripPositionOffset: {x: 0, y: 0, z: 0}
-  leftGripEulerOffset: {x: 0, y: 0, z: 0}
+  leftGripEulerOffset: {x: -2.67, y: -70.2, z: -1.51}
   rightGripPositionOffset: {x: 0, y: 0, z: 0}
-  rightGripEulerOffset: {x: 0, y: 0, z: 0}
+  rightGripEulerOffset: {x: -4.68, y: 150.77, z: -8.6}
   palmOffset: 0.09
   armReachRemap: 1
   feetOffset: 0.021316923
