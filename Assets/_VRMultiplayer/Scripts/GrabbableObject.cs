@@ -16,6 +16,7 @@ namespace VRMultiplayer
     public class GrabbableObject : NetworkBehaviour
     {
         public const ulong NoHolder = ulong.MaxValue;
+        public const byte NoHand = byte.MaxValue;
 
         [Tooltip("Tutunca obje avucun icine cekilir (silah gibi). Kapaliysa yakalandigi mesafe/acida kalir (tas gibi).")]
         public bool snapToHand = true;
@@ -26,6 +27,13 @@ namespace VRMultiplayer
         readonly NetworkVariable<ulong> _holder = new NetworkVariable<ulong>(NoHolder);
         readonly NetworkVariable<byte> _holderHand = new NetworkVariable<byte>(0); // 0=L 1=R
 
+        // Two-handed carry: which of the holder's hands is clamped on the handguard as SUPPORT
+        // (0=L, 1=R, NoHand=none). Owner-written like the weapon's transform itself; consumers
+        // must gate on IsHeld — after a disconnect the server cannot clear an owner-permission
+        // variable, so a stale value may linger on an unheld weapon.
+        readonly NetworkVariable<byte> _supportHand = new NetworkVariable<byte>(NoHand,
+            NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
         Rigidbody _rb;
         Vector3 _homePos;
         Quaternion _homeRot;
@@ -34,6 +42,24 @@ namespace VRMultiplayer
         public ulong HolderClientId => _holder.Value;
         public byte HolderHand => _holderHand.Value;
         public bool IsHeld => _holder.Value != NoHolder;
+        public byte SupportHand => _supportHand.Value;
+
+        /// <summary>Raised whenever holder / holder-hand / support-hand state replicates —
+        /// possibly several times in one frame and in any delta order. Consumers should only
+        /// set a dirty flag here and evaluate once in LateUpdate.</summary>
+        public event System.Action StateDirty;
+
+        /// <summary>Fired on every client when a grabbable finishes its network spawn. The
+        /// weapon-grip binder attaches per-weapon visual components through this hook, so
+        /// prefabs and scene objects need no manual component edits.</summary>
+        public static event System.Action<GrabbableObject> AnySpawned;
+
+        /// <summary>Owner-side: publish which hand steadies the weapon (0=L, 1=R, NoHand).</summary>
+        public void SetSupportHandOwner(byte hand)
+        {
+            if (IsOwner && _supportHand.Value != hand)
+                _supportHand.Value = hand;
+        }
 
         void Awake()
         {
@@ -53,16 +79,26 @@ namespace VRMultiplayer
         public override void OnNetworkSpawn()
         {
             _holder.OnValueChanged += OnHolderChanged;
+            _holder.OnValueChanged += OnStateChanged;
+            _holderHand.OnValueChanged += OnStateChanged;
+            _supportHand.OnValueChanged += OnStateChanged;
             if (IsServer)
                 NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
+            AnySpawned?.Invoke(this);
         }
 
         public override void OnNetworkDespawn()
         {
             _holder.OnValueChanged -= OnHolderChanged;
+            _holder.OnValueChanged -= OnStateChanged;
+            _holderHand.OnValueChanged -= OnStateChanged;
+            _supportHand.OnValueChanged -= OnStateChanged;
             if (IsServer && NetworkManager != null)
                 NetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
         }
+
+        void OnStateChanged(ulong _, ulong __) => StateDirty?.Invoke();
+        void OnStateChanged(byte _, byte __) => StateDirty?.Invoke();
 
         void OnClientDisconnected(ulong clientId)
         {
