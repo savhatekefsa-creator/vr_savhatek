@@ -88,27 +88,48 @@ namespace VRMultiplayer
             if (remoteAvatar != null)
             {
                 remoteAvatar.SetActive(true);
+
+                // IK can pull the hands far outside each piece's authored bounds (arms raised
+                // overhead). With stale bounds Unity frustum-culls the piece while it is plainly
+                // on screen — hands vanish when lifted. Live bounds keep them visible.
+                foreach (var r in remoteAvatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    r.updateWhenOffscreen = true;
+
                 if (IsOwner)
                 {
-                    // Hide your own head by disabling its renderers. The bone-shrink trick
-                    // (hideHead) collapsed head-weighted collar verts and stretched them into
-                    // giant triangles right in front of the camera when you looked down.
-                    bool hidHeadRenderer = false;
-                    foreach (var r in remoteAvatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    // FIRST-PERSON BODY: you see only your own hands (glove + watch pieces) —
+                    // no head in the camera, no torso/legs blocking the view, and the jacket's
+                    // distorting cuff is gone with the jacket. Remote players still see the
+                    // full soldier. Models without a glove piece fall back to hiding just the
+                    // head/eye/neck renderers ("nec" also catches this model's "Necck" typo).
+                    var renderers = remoteAvatar.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                    bool hasHands = false;
+                    foreach (var r in renderers)
+                        if (r.name.ToLowerInvariant().Contains("glove")) { hasHands = true; break; }
+
+                    bool hidAny = false;
+                    foreach (var r in renderers)
                     {
                         string rn = r.name.ToLowerInvariant();
-                        // "nec" also catches this model's misspelled "Necck" — the collar-plug
-                        // mesh that reads as a floating white sheet once the head is hidden.
-                        if (rn.Contains("head") || rn.Contains("eye") || rn.Contains("nec"))
+                        bool hide = hasHands
+                            ? !(rn.Contains("glove") || rn.Contains("watch"))
+                            : rn.Contains("head") || rn.Contains("eye") || rn.Contains("nec");
+                        if (hide) { r.enabled = false; hidAny = true; continue; }
+
+                        if (hasHands)
                         {
-                            r.enabled = false;
-                            hidHeadRenderer = true;
+                            // The cuff is an open mesh; single-sided it reads as a hole when you
+                            // look into it. Draw both faces so the glove looks solid.
+                            foreach (var m in r.materials)
+                                m.SetFloat("_Cull", 0f); // 0 = CullMode.Off
                         }
                     }
 
-                    var ik = remoteAvatar.GetComponentInChildren<AvatarIKController>();
-                    if (!hidHeadRenderer && ik != null)
-                        ik.hideHead = true; // model has no separate head mesh — fall back to the bone trick
+                    if (!hasHands && !hidAny)
+                    {
+                        var ik = remoteAvatar.GetComponentInChildren<AvatarIKController>();
+                        if (ik != null) ik.hideHead = true; // no separate head mesh — bone trick
+                    }
 
                     // Don't show your own floating name tag either.
                     foreach (var tm in remoteAvatar.GetComponentsInChildren<TextMesh>(true))
