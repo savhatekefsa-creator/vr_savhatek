@@ -32,6 +32,13 @@ namespace VRMultiplayer
         [Tooltip("Silah tutarken avucun tam kapanmasi icin grip bu degere clamp'lenir.")]
         public float heldGripMin = 0.85f;
 
+        [Tooltip("Bilek roll yonu: 0 = otomatik, +1/-1 = elle sabitle (bir el ters donuyorsa degistir).")]
+        public int rollSignOverrideLeft = 0;
+        public int rollSignOverrideRight = 0;
+
+        [Tooltip("Eksen/poz yakalamasini bu kadar kare ertele ki idle animasyonu + kol IK'si otursun.")]
+        public int captureDelayFrames = 3;
+
         Animator _anim;
         NetworkVRPlayer _net;
         HandGrabber _grab;
@@ -45,10 +52,12 @@ namespace VRMultiplayer
 
         readonly List<Phalanx> _left = new List<Phalanx>();
         readonly List<Phalanx> _right = new List<Phalanx>();
+        readonly Dictionary<Transform, Quaternion> _restPose = new Dictionary<Transform, Quaternion>();
         Transform _wristL, _wristR;
         Vector3 _rollAxisL, _rollAxisR;
         float _rollSignL = 1f, _rollSignR = 1f;
         float _gL, _gR, _tL, _tR;
+        int _framesUntilBuild;
 
         void Start()
         {
@@ -58,8 +67,25 @@ namespace VRMultiplayer
             _grab = GetComponentInParent<HandGrabber>();
             if (_anim == null || !_anim.isHuman) { enabled = false; return; }
 
-            BuildHand(true, _left, ref _wristL, ref _rollAxisL, ref _rollSignL);
-            BuildHand(false, _right, ref _wristR, ref _rollAxisR, ref _rollSignR);
+            // TWO-PHASE capture. Phase 1 (now, before the first animation eval): snapshot every
+            // finger bone's REST local rotation — the FBX T-pose, straight and mirror-symmetric.
+            // The idle clip poses fingers asymmetrically (right hand half-curled), so a live
+            // snapshot must never be used as the "open hand".
+            foreach (HumanBodyBones b in FingerBones())
+            {
+                var t = Bone(b);
+                if (t != null) _restPose[t] = t.localRotation;
+            }
+
+            // Phase 2 is DEFERRED to LateUpdate: hinge axes / roll signs need the SETTLED pose
+            // (idle + arm IK), because on the spawn frame the geometry can still be contorted.
+            _framesUntilBuild = Mathf.Max(1, captureDelayFrames);
+        }
+
+        static IEnumerable<HumanBodyBones> FingerBones()
+        {
+            for (var b = HumanBodyBones.LeftThumbProximal; b <= HumanBodyBones.RightLittleDistal; b++)
+                yield return b;
         }
 
         void BuildHand(bool left, List<Phalanx> outList, ref Transform wristOut,
@@ -77,12 +103,15 @@ namespace VRMultiplayer
 
             // Palm roll about the finger-pointing axis; sign chosen so the palm tilts toward the
             // avatar's forward (reads as "inward"), the same visual way on both hands.
+            // Analytic: Dot(fingersDir x palmNormal, fwd) is the derivative of that tilt, so unlike
+            // the old ±10° sampling a near-perpendicular pose can't flip one hand's sign. If even
+            // the derivative is degenerate, use the mirror pair; a per-hand override beats both.
             wristOut = wrist;
             rollAxisOut = wrist.InverseTransformDirection(fingersDir).normalized;
-            Vector3 fwd = transform.forward;
-            Vector3 plus = Quaternion.AngleAxis(10f, fingersDir) * palmNormal;
-            Vector3 minus = Quaternion.AngleAxis(-10f, fingersDir) * palmNormal;
-            rollSignOut = Vector3.Dot(plus, fwd) >= Vector3.Dot(minus, fwd) ? 1f : -1f;
+            float toward = Vector3.Dot(Vector3.Cross(fingersDir, palmNormal), transform.forward);
+            rollSignOut = Mathf.Abs(toward) > 0.05f ? Mathf.Sign(toward) : (left ? 1f : -1f);
+            int overrideSign = left ? rollSignOverrideLeft : rollSignOverrideRight;
+            if (overrideSign != 0) rollSignOut = Mathf.Sign(overrideSign);
 
             Vector3 thumbTarget = (idxP.position + midP.position) * 0.5f; // across the palm
 
@@ -142,11 +171,14 @@ namespace VRMultiplayer
             Vector3 axisParent = bone.parent.InverseTransformDirection(hinge.normalized).normalized;
 
             float deg = curlDeg * (invertCurl ? -1f : 1f);
+            // Open pose = the REST snapshot (T-pose), not the live pose: by capture time the idle
+            // clip has already curled some fingers and that curl must not leak into "open".
+            Quaternion open = _restPose.TryGetValue(bone, out var rest) ? rest : bone.localRotation;
             outList.Add(new Phalanx
             {
                 t = bone,
-                open = bone.localRotation,
-                closed = Quaternion.AngleAxis(deg, axisParent) * bone.localRotation,
+                open = open,
+                closed = Quaternion.AngleAxis(deg, axisParent) * open,
                 useTrigger = useTrigger,
             });
         }
@@ -155,6 +187,13 @@ namespace VRMultiplayer
 
         void LateUpdate()
         {
+            // Runs after AvatarIKController (execution order 100), so on the capture frame the
+            // idle pose + arm IK of this frame are already final — a sane pose to measure from.
+            if (_framesUntilBuild > 0 && --_framesUntilBuild == 0)
+            {
+                BuildHand(true, _left, ref _wristL, ref _rollAxisL, ref _rollSignL);
+                BuildHand(false, _right, ref _wristR, ref _rollAxisR, ref _rollSignR);
+            }
             if (_left.Count == 0 && _right.Count == 0) return;
 
             float gL = 0f, gR = 0f, tL = 0f, tR = 0f;
