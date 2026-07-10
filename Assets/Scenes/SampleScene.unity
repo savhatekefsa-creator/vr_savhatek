@@ -3521,6 +3521,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   snapToHand: 1
   gripRotationEuler: {x: 0, y: 0, z: 0}
+  gripAnchor: {fileID: 0}
 --- !u!114 &230993926
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3583,7 +3584,6 @@ MonoBehaviour:
   fireInterval: 0.18
   range: 60
   muzzle: {fileID: 879734080}
-  damage: 25
 --- !u!4 &230993933 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7974943901506784399, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
@@ -4191,7 +4191,6 @@ MonoBehaviour:
   fireInterval: 0.18
   range: 60
   muzzle: {fileID: 1075458114}
-  damage: 25
 --- !u!114 &278127197
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4207,6 +4206,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   snapToHand: 1
   gripRotationEuler: {x: 0, y: 0, z: 0}
+  gripAnchor: {fileID: 0}
 --- !u!114 &278127198
 MonoBehaviour:
   m_ObjectHideFlags: 0
