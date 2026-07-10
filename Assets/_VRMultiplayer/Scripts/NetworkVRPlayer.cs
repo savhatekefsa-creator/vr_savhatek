@@ -90,8 +90,25 @@ namespace VRMultiplayer
                 remoteAvatar.SetActive(true);
                 if (IsOwner)
                 {
+                    // Hide your own head by disabling its renderers. The bone-shrink trick
+                    // (hideHead) collapsed head-weighted collar verts and stretched them into
+                    // giant triangles right in front of the camera when you looked down.
+                    bool hidHeadRenderer = false;
+                    foreach (var r in remoteAvatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    {
+                        string rn = r.name.ToLowerInvariant();
+                        // "nec" also catches this model's misspelled "Necck" — the collar-plug
+                        // mesh that reads as a floating white sheet once the head is hidden.
+                        if (rn.Contains("head") || rn.Contains("eye") || rn.Contains("nec"))
+                        {
+                            r.enabled = false;
+                            hidHeadRenderer = true;
+                        }
+                    }
+
                     var ik = remoteAvatar.GetComponentInChildren<AvatarIKController>();
-                    if (ik != null) ik.hideHead = true; // don't show your own head from inside
+                    if (!hidHeadRenderer && ik != null)
+                        ik.hideHead = true; // model has no separate head mesh — fall back to the bone trick
 
                     // Don't show your own floating name tag either.
                     foreach (var tm in remoteAvatar.GetComponentsInChildren<TextMesh>(true))
