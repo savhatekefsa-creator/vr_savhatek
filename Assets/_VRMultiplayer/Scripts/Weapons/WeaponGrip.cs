@@ -24,9 +24,12 @@ namespace VRMultiplayer.Weapons
         System.Action _markDirty;
         bool _dirty;
 
-        // The avatar the profile is currently applied to (cleared when the holder changes).
-        ProceduralFingerPoser _poser;
-        WeaponHandWeld _weld;
+        // The avatar + exact hands THIS grip currently drives. A grip only ever clears the
+        // (avatar, hand) slots it applied itself, so dual-wielding two profiled weapons — each
+        // driving one hand on the shared per-avatar poser/weld — never wipes the other's hand.
+        ProceduralFingerPoser _appPoser;
+        WeaponHandWeld _appWeld;
+        bool _appLeft, _appRight;
 
         public WeaponGripProfile Profile => _profile;
 
@@ -55,7 +58,7 @@ namespace VRMultiplayer.Weapons
 
             // Late join: the weapon's initial "held" state can replicate before the holder's
             // player object spawns — keep looking for the avatar until it appears.
-            if (!_dirty && !(_grab.IsHeld && _poser == null)) return;
+            if (!_dirty && !(_grab.IsHeld && _appPoser == null)) return;
             _dirty = false;
             Evaluate();
         }
@@ -64,6 +67,7 @@ namespace VRMultiplayer.Weapons
         {
             ProceduralFingerPoser poser = null;
             WeaponHandWeld weld = null;
+            bool wantLeft = false, wantRight = false, mainLeft = false, mirrored = false;
 
             if (_grab.IsHeld)
             {
@@ -75,61 +79,55 @@ namespace VRMultiplayer.Weapons
                     {
                         weld = poser.GetComponent<WeaponHandWeld>();
                         if (weld == null) weld = poser.gameObject.AddComponent<WeaponHandWeld>();
+
+                        mainLeft = _grab.HolderHand == 0;
+                        mirrored = mainLeft; // authored main=RIGHT/support=LEFT; swapped -> mirror
+                        bool otherLeft = !mainLeft;
+                        byte sup = _grab.SupportHand;
+                        bool hasSupport = sup != GrabbableObject.NoHand && (sup == 0) == otherLeft;
+                        wantLeft = mainLeft || (hasSupport && otherLeft);
+                        wantRight = !mainLeft || (hasSupport && !otherLeft);
                     }
                 }
             }
 
-            // Holder changed / released / disconnected -> fully release the previous avatar.
-            if (_poser != null && _poser != poser)
-            {
-                _poser.ClearHandOverride(true);
-                _poser.ClearHandOverride(false);
-            }
-            if (_weld != null && _weld != weld)
-            {
-                _weld.ClearHand(true);
-                _weld.ClearHand(false);
-            }
-            _poser = poser;
-            _weld = weld;
+            // Release ONLY the (avatar, hand) slots THIS grip previously drove that are no
+            // longer wanted — or that now live on a different avatar (holder change / release /
+            // disconnect). A hand another weapon owns is never touched.
+            bool avatarChanged = _appPoser != poser || _appWeld != weld;
+            ReleaseSlot(ref _appLeft, true, avatarChanged || !wantLeft);
+            ReleaseSlot(ref _appRight, false, avatarChanged || !wantRight);
+
+            _appPoser = poser;
+            _appWeld = weld;
             if (poser == null || weld == null) return;
 
-            bool mainLeft = _grab.HolderHand == 0;
-            byte sup = _grab.SupportHand;
-            bool otherLeft = !mainLeft;
-            // Poses are authored main=RIGHT / support=LEFT; swapped roles mirror the data.
-            bool mirrored = mainLeft;
+            if (wantLeft) ApplySlot(ref _appLeft, poser, weld, true, true != mainLeft, mirrored);
+            if (wantRight) ApplySlot(ref _appRight, poser, weld, false, false != mainLeft, mirrored);
+        }
 
-            poser.SetHandOverride(mainLeft, _profile, false);
-            weld.SetHand(mainLeft, transform, _profile, false, mirrored);
+        void ReleaseSlot(ref bool applied, bool left, bool shouldRelease)
+        {
+            if (!applied || !shouldRelease) return;
+            if (_appPoser != null) _appPoser.ClearHandOverride(left);
+            if (_appWeld != null) _appWeld.ClearHand(left);
+            applied = false;
+        }
 
-            bool hasSupport = sup != GrabbableObject.NoHand && (sup == 0) == otherLeft;
-            if (hasSupport)
-            {
-                poser.SetHandOverride(otherLeft, _profile, true);
-                weld.SetHand(otherLeft, transform, _profile, true, mirrored);
-            }
-            else
-            {
-                poser.ClearHandOverride(otherLeft);
-                weld.ClearHand(otherLeft);
-            }
+        void ApplySlot(ref bool applied, ProceduralFingerPoser poser, WeaponHandWeld weld,
+            bool left, bool isSupport, bool mirrored)
+        {
+            poser.SetHandOverride(left, _profile, isSupport);
+            weld.SetHand(left, transform, _profile, isSupport, mirrored);
+            applied = true;
         }
 
         void ClearApplied()
         {
-            if (_poser != null)
-            {
-                _poser.ClearHandOverride(true);
-                _poser.ClearHandOverride(false);
-                _poser = null;
-            }
-            if (_weld != null)
-            {
-                _weld.ClearHand(true);
-                _weld.ClearHand(false);
-                _weld = null;
-            }
+            ReleaseSlot(ref _appLeft, true, true);
+            ReleaseSlot(ref _appRight, false, true);
+            _appPoser = null;
+            _appWeld = null;
         }
 
         // Client-safe holder lookup: PlayerObjects lists every player object visible to this
