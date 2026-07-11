@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b37255edf5b63a8408ec2f907e179ba4, type: 3}
+  m_Name: HK416_GripProfile
+  m_EditorClassIdentifier:
+  weaponNameEquals:
+  weaponNameContains: Rifle_HK416
+  gripLocalPosition: {x: 0, y: -0.05, z: 0}
+  gripLocalEuler: {x: 0, y: 270, z: 0}
+  mainHand:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    thumbCurl: 0
+    indexCurl: 0.55
+    middleCurl: 0.75
+    ringCurl: 0.8
+    pinkyCurl: 0.85
+    indexFollowsTrigger: 1
+  supportRailLocalStart: {x: -0.06, y: -0.02, z: 0}
+  supportRailLocalEnd: {x: -0.18, y: -0.02, z: 0}
+  supportBreakDistance: 0.3
+  supportHand:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    thumbCurl: 0
+    indexCurl: 0.6
+    middleCurl: 0.75
+    ringCurl: 0.8
+    pinkyCurl: 0.85
+    indexFollowsTrigger: 0
+  aimDeadzoneDegrees: 0.75
+  aimSoftKneeDegrees: 1.5
+  aimHalfLifeMs: 45
+  overrideFire: 0
+  fireInterval: 0.18
+  range: 60
+  createMuzzleIfMissing: 0
+  muzzleLocalPosition: {x: 0, y: 0, z: 0}
+  simpleColliders: []
