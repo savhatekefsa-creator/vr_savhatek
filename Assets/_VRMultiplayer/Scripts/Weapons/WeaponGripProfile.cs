@@ -18,11 +18,14 @@ namespace VRMultiplayer.Weapons
         [Tooltip("Silah GameObject adi bunu ICERIYORSA eslesir (Equals eslesmezse bakilir).")]
         public string weaponNameContains = "";
 
-        [Header("Kabza cipasi (silah-lokal; +Z = namlu, +Y = ust ray)")]
+        [Header("Kabza cipasi (silah-lokal kumanda pozu — yakalama araciyla uretilir)")]
         [Tooltip("Ana elin kavradigi nokta, silah-lokal.")]
         public Vector3 gripLocalPosition;
-        [Tooltip("Kabza cipasinin silah-lokal yonelimi (euler).")]
+        [Tooltip("Kabza cipasinin silah-lokal yonelimi (euler). Kumandanin GERCEK tutus egimi — namluya paralel olmak zorunda degil.")]
         public Vector3 gripLocalEuler;
+
+        [Tooltip("Namlunun silah-LOKAL yonu (Muzzle forward). Iki elli nisan BU ekseni hedefe hizalar; kabza cipasi egik yakalanmis olsa bile namlu dogru doner.")]
+        public Vector3 barrelLocalDirection = Vector3.forward;
 
         [Header("Ana el (kabza)")]
         public HandPose mainHand = HandPose.Defaults(true);
@@ -70,8 +73,11 @@ namespace VRMultiplayer.Weapons
             [Range(0f, 1f)] public float ringCurl;
             [Range(0f, 1f)] public float pinkyCurl;
 
-            [Tooltip("Isaret parmagi Free: tetik 0..1, indexCurl'den tam kapaliya surer.")]
+            [Tooltip("Isaret parmagi Free: tetik 0..1, indexCurl'den indexTriggerMaxCurl'e surer.")]
             public bool indexFollowsTrigger;
+
+            [Tooltip("Tetik TAM cekiliyken isaret parmaginin kivrim tavani (0..1). Tetik cekisi kucuk bir harekettir — 1.0 tam yumruk yapar. 0 birakilirsa 1 sayilir (eski assetler).")]
+            [Range(0f, 1f)] public float indexTriggerMaxCurl;
 
             /// <summary>Curl by finger id: 0 thumb, 1 index, 2 middle, 3 ring, 4 pinky.</summary>
             public float Curl(int finger)
@@ -96,6 +102,7 @@ namespace VRMultiplayer.Weapons
                 ringCurl = 0.8f,
                 pinkyCurl = 0.85f,
                 indexFollowsTrigger = indexFollowsTrigger,
+                indexTriggerMaxCurl = 1f,
             };
         }
 

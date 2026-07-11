@@ -199,12 +199,19 @@ namespace VRMultiplayer
             // Publish the support hand to everyone (owner-authoritative, like the transform).
             h.held.SetSupportHandOwner(hasSupport ? sup.index : GrabbableObject.NoHand);
 
+            Quaternion oneHandRot = h.anchor.rotation * Quaternion.Inverse(gripLocalRot);
             Quaternion weaponRot;
             if (hasSupport)
             {
+                // Grip anchors are captured from the controller's REAL grip rake, so the barrel
+                // is NOT the anchor's +Z — aim along the profile's weapon-local barrel axis.
+                Vector3 barrelLocal = profile.barrelLocalDirection.sqrMagnitude > 1e-6f
+                    ? profile.barrelLocalDirection.normalized
+                    : Vector3.forward;
+
                 // The barrel direction the grip hand ALONE would produce — the two-hand aim only
                 // REFINES this, it never swings the muzzle wildly (e.g. back toward the player).
-                Vector3 oneHandBarrel = (h.anchor.rotation * Quaternion.Inverse(gripLocalRot)) * Vector3.forward;
+                Vector3 oneHandBarrel = oneHandRot * barrelLocal;
                 if (h.aimDir.sqrMagnitude < 1e-6f)
                     h.aimDir = oneHandBarrel; // engage seed = current one-hand barrel -> no pop
 
@@ -219,12 +226,15 @@ namespace VRMultiplayer
                     h.aimDir, raw,
                     profile.aimDeadzoneDegrees, profile.aimSoftKneeDegrees,
                     profile.aimHalfLifeMs, Time.deltaTime);
-                weaponRot = Quaternion.LookRotation(h.aimDir, h.anchor.up);
+
+                // Minimal rotation from the one-hand pose that puts the barrel on the aim line —
+                // roll stays 1:1 with the grip hand, no up-vector guessing.
+                weaponRot = Quaternion.FromToRotation(oneHandBarrel, h.aimDir) * oneHandRot;
             }
             else
             {
                 h.aimDir = Vector3.zero; // next engage re-seeds
-                weaponRot = h.anchor.rotation * Quaternion.Inverse(gripLocalRot);
+                weaponRot = oneHandRot;
             }
 
             Vector3 weaponPos = h.anchor.position

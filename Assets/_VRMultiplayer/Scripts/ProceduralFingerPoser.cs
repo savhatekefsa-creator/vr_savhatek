@@ -161,29 +161,34 @@ namespace VRMultiplayer
 
             Vector3 thumbTarget = (idxP.position + midP.position) * 0.5f; // across the palm
 
-            AddFinger(outList, left, thumbTarget, 0, false,
+            // Palm-FACING direction for the curl planes. sideDir (index→little) makes the raw
+            // cross face out of the right palm but out of the LEFT hand's back — flip it there.
+            Vector3 curlPlaneNormal = left ? -palmNormal : palmNormal;
+
+            AddFinger(outList, left, thumbTarget, 0, false, null,
                 HumanBodyBones.LeftThumbProximal, HumanBodyBones.LeftThumbIntermediate, HumanBodyBones.LeftThumbDistal,
                 HumanBodyBones.RightThumbProximal, HumanBodyBones.RightThumbIntermediate, HumanBodyBones.RightThumbDistal,
                 thumbCurl, thumbCurl, thumbCurl * 0.8f);
-            AddFinger(outList, left, wrist.position, 1, true,
+            AddFinger(outList, left, wrist.position, 1, true, curlPlaneNormal,
                 HumanBodyBones.LeftIndexProximal, HumanBodyBones.LeftIndexIntermediate, HumanBodyBones.LeftIndexDistal,
                 HumanBodyBones.RightIndexProximal, HumanBodyBones.RightIndexIntermediate, HumanBodyBones.RightIndexDistal,
                 proximalCurl, intermediateCurl, distalCurl);
-            AddFinger(outList, left, wrist.position, 2, false,
+            AddFinger(outList, left, wrist.position, 2, false, curlPlaneNormal,
                 HumanBodyBones.LeftMiddleProximal, HumanBodyBones.LeftMiddleIntermediate, HumanBodyBones.LeftMiddleDistal,
                 HumanBodyBones.RightMiddleProximal, HumanBodyBones.RightMiddleIntermediate, HumanBodyBones.RightMiddleDistal,
                 proximalCurl, intermediateCurl, distalCurl);
-            AddFinger(outList, left, wrist.position, 3, false,
+            AddFinger(outList, left, wrist.position, 3, false, curlPlaneNormal,
                 HumanBodyBones.LeftRingProximal, HumanBodyBones.LeftRingIntermediate, HumanBodyBones.LeftRingDistal,
                 HumanBodyBones.RightRingProximal, HumanBodyBones.RightRingIntermediate, HumanBodyBones.RightRingDistal,
                 proximalCurl, intermediateCurl, distalCurl);
-            AddFinger(outList, left, wrist.position, 4, false,
+            AddFinger(outList, left, wrist.position, 4, false, curlPlaneNormal,
                 HumanBodyBones.LeftLittleProximal, HumanBodyBones.LeftLittleIntermediate, HumanBodyBones.LeftLittleDistal,
                 HumanBodyBones.RightLittleProximal, HumanBodyBones.RightLittleIntermediate, HumanBodyBones.RightLittleDistal,
                 proximalCurl, intermediateCurl, distalCurl);
         }
 
         void AddFinger(List<Phalanx> outList, bool left, Vector3 target, int finger, bool useTrigger,
+            Vector3? planeNormal,
             HumanBodyBones lP, HumanBodyBones lI, HumanBodyBones lD,
             HumanBodyBones rP, HumanBodyBones rI, HumanBodyBones rD,
             float cP, float cI, float cD)
@@ -194,25 +199,29 @@ namespace VRMultiplayer
             if (p == null) return;
 
             Vector3 pExt = i != null ? (i.position - p.position) : p.forward;
-            AddPhalanx(outList, p, pExt, target, cP, finger, useTrigger);
+            AddPhalanx(outList, p, pExt, target, cP, finger, useTrigger, planeNormal);
             if (i != null)
             {
                 Vector3 iExt = d != null ? (d.position - i.position) : pExt;
-                AddPhalanx(outList, i, iExt, target, cI, finger, useTrigger);
+                AddPhalanx(outList, i, iExt, target, cI, finger, useTrigger, planeNormal);
                 if (d != null)
-                    AddPhalanx(outList, d, iExt, target, cD, finger, useTrigger);
+                    AddPhalanx(outList, d, iExt, target, cD, finger, useTrigger, planeNormal);
             }
         }
 
         void AddPhalanx(List<Phalanx> outList, Transform bone, Vector3 extWorld, Vector3 target,
-            float curlDeg, int finger, bool useTrigger)
+            float curlDeg, int finger, bool useTrigger, Vector3? planeNormal)
         {
             if (bone == null || bone.parent == null) return;
 
-            // Rotate around Cross(extension, toTarget): a POSITIVE angle bends the tip straight
-            // toward the target. No sign guessing — correct for both hands and the thumb.
-            Vector3 toTarget = (target - bone.position).normalized;
-            Vector3 hinge = Vector3.Cross(extWorld.normalized, toTarget);
+            // FOUR FINGERS (planeNormal set): hinge = Cross(extension, palm normal) — every
+            // finger folds parallel in its OWN plane like a real fist. Curling them toward one
+            // shared point made the fingers converge into the palm centre and clip.
+            // THUMB (planeNormal null): hinge = Cross(extension, toTarget) — a positive angle
+            // bends it straight toward the target, sweeping ACROSS the palm.
+            Vector3 hinge = planeNormal.HasValue
+                ? Vector3.Cross(extWorld.normalized, planeNormal.Value)
+                : Vector3.Cross(extWorld.normalized, (target - bone.position).normalized);
             if (hinge.sqrMagnitude < 1e-6f) return;
             Vector3 axisParent = bone.parent.InverseTransformDirection(hinge.normalized).normalized;
 
@@ -283,7 +292,13 @@ namespace VRMultiplayer
             {
                 float target = pose.Curl(f);
                 if (f == 1 && pose.indexFollowsTrigger)
-                    target = Mathf.Lerp(target, 1f, trigger);
+                {
+                    // Trigger pull is a SMALL travel — cap the full-pull curl so the finger
+                    // squeezes the trigger instead of balling into a fist. 0 = legacy asset
+                    // without the field -> behave like 1 (uncapped).
+                    float max = pose.indexTriggerMaxCurl > 0f ? pose.indexTriggerMaxCurl : 1f;
+                    target = Mathf.Lerp(target, Mathf.Max(target, max), trigger);
+                }
                 fingers[f] = Mathf.Lerp(fingers[f], target, k);
             }
         }
