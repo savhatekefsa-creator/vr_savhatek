@@ -135,15 +135,26 @@ namespace VRMultiplayer
             }
 
             string ip = GetLocalIPv4();
-            utp.SetConnectionData(ip, port, "0.0.0.0"); // listen on all interfaces
-            nm.StartServer();
+            // A socket leaked from a previous play session can still hold the default port
+            // (half-finished UTP teardown) — bind-test upward and take the first FREE port.
+            // Clients learn the real port from the discovery reply, so drifting is harmless.
+            ushort serverPort = FindFreePort(port);
+            utp.SetConnectionData(ip, serverPort, "0.0.0.0"); // listen on all interfaces
+            if (!nm.StartServer())
+            {
+                // Without this check the label used to claim the server was up while Netcode
+                // had already shut down on a transport bind failure.
+                SetStatus("SUNUCU BASLATILAMADI!\nSoket/port hatasi — Console'a bakin.");
+                _busy = false;
+                return;
+            }
 
             if (discovery != null)
             {
-                discovery.gamePort = port;
+                discovery.gamePort = serverPort;
                 discovery.StartAdvertising();
             }
-            SetStatus("SUNUCU AKTIF (PC)\nIP: " + ip + "\nGözlükler B ile katılsın");
+            SetStatus("SUNUCU AKTIF (PC)\nIP: " + ip + "  port: " + serverPort + "\nGözlükler B ile katılsın");
 
             var view = FindFirstObjectByType<ServerView>();
             if (view != null) view.Activate();
@@ -165,13 +176,14 @@ namespace VRMultiplayer
             SetStatus("Sunucu araniyor...");
 
             string ip = null;
+            ushort hostPort = 0; // ADVERTISED game port (0 = unknown -> fall back to `port`)
             if (discovery != null)
             {
                 discovery.StartClientDiscovery();
                 float t = discoveryTimeout;
                 while (t > 0f)
                 {
-                    if (discovery.TryGetFoundHost(out ip)) break;
+                    if (discovery.TryGetFoundHost(out ip, out hostPort)) break;
                     t -= Time.deltaTime;
                     yield return null;
                 }
@@ -197,16 +209,38 @@ namespace VRMultiplayer
                 yield break;
             }
 
-            utp.SetConnectionData(ip, port);
+            // Use the port the server ADVERTISED (it may have drifted off the default when a
+            // leaked socket held it); the fixed default only covers the manual-IP fallback.
+            ushort connectPort = hostPort != 0 ? hostPort : port;
+            utp.SetConnectionData(ip, connectPort);
             nm.StartClient();
             _clientStarted = true;
-            SetStatus("Baglaniliyor: " + ip);
+            SetStatus("Baglaniliyor: " + ip + ":" + connectPort);
         }
 
         void SetStatus(string s)
         {
             if (statusLabel != null) statusLabel.text = s;
             Debug.Log("[LanBootstrap] " + s);
+        }
+
+        // First port from `preferred` upward that can actually be BOUND — never lands on a
+        // port a leaked/foreign socket is squatting on.
+        static ushort FindFreePort(ushort preferred)
+        {
+            for (ushort p = preferred; p < (ushort)(preferred + 20); p++)
+            {
+                try
+                {
+                    using (var probe = new UdpClient())
+                    {
+                        probe.Client.Bind(new IPEndPoint(IPAddress.Any, p));
+                        return p;
+                    }
+                }
+                catch { /* dolu — siradakini dene */ }
+            }
+            return preferred;
         }
 
         public static string GetLocalIPv4()
