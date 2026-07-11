@@ -106,18 +106,18 @@ namespace VRMultiplayer.Weapons
             var localPlayer = nm != null && nm.IsListening
                 ? nm.SpawnManager?.GetLocalPlayerObject()
                 : null;
-            if (localPlayer == null) { Set(left, "HATA: bu makinede oyuncu yok (once host/join)"); return; }
+            if (localPlayer == null) { Fail(left, "HATA: bu makinede oyuncu yok (once host/join)"); return; }
 
             var grab = localPlayer.GetComponent<HandGrabber>();
             var anim = localPlayer.GetComponentInChildren<Animator>();
-            if (grab == null || anim == null || !anim.isHuman) { Set(left, "HATA: HandGrabber/Animator yok"); return; }
+            if (grab == null || anim == null || !anim.isHuman) { Fail(left, "HATA: HandGrabber/Animator yok"); return; }
 
             Transform anchor = left ? grab.LeftAnchor : grab.RightAnchor;               // controller carrier
             Transform bone = anim.GetBoneTransform(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
-            if (anchor == null || bone == null) { Set(left, "HATA: anchor/bone bulunamadi"); return; }
+            if (anchor == null || bone == null) { Fail(left, "HATA: anchor/bone bulunamadi"); return; }
 
             var weapon = NearestWeapon(bone.position);
-            if (weapon == null) { Set(left, "HATA: yakinda silah yok (silahi elinin yanina birak)"); return; }
+            if (weapon == null) { Fail(left, "HATA: yakinda silah yok (silahi elinin yanina birak)"); return; }
             Transform wt = weapon.transform;
 
             // Anchor (controller) in weapon-local space.
@@ -137,14 +137,39 @@ namespace VRMultiplayer.Weapons
             string report = sb.ToString();
             Set(left, report);
             Debug.Log("[GripCapture] " + report);
+            SendToServer(report);
+            Buzz(left, 2); // double pulse = SUCCESS, felt inside the headset
+        }
 
-            // Headset client: ship the report to the server so it shows on the PC.
-            if (nm.IsClient && !nm.IsServer && nm.CustomMessagingManager != null)
-            {
-                using var writer = new FastBufferWriter(2048, Allocator.Temp);
-                writer.WriteValueSafe(report);
-                nm.CustomMessagingManager.SendNamedMessage(Msg, NetworkManager.ServerClientId, writer);
-            }
+        // Errors are also felt (single short pulse) and shipped to the PC — the headset has no
+        // screen for OnGUI/logs, so without this a failed capture is indistinguishable from a
+        // dead button.
+        void Fail(bool left, string message)
+        {
+            string tagged = $"[{(left ? "SOL" : "SAG")}] {message}";
+            Set(left, tagged);
+            Debug.Log("[GripCapture] " + tagged);
+            SendToServer(tagged);
+            Buzz(left, 1);
+        }
+
+        static void SendToServer(string report)
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsListening || nm.IsServer || nm.CustomMessagingManager == null)
+                return;
+            using var writer = new FastBufferWriter(2048, Allocator.Temp);
+            writer.WriteValueSafe(report);
+            nm.CustomMessagingManager.SendNamedMessage(Msg, NetworkManager.ServerClientId, writer);
+        }
+
+        static void Buzz(bool left, int pulses)
+        {
+            var dev = InputDevices.GetDeviceAtXRNode(left ? XRNode.LeftHand : XRNode.RightHand);
+            if (!dev.isValid) return;
+            // Two immediate impulses read as one long+strong buzz vs the short single error blip.
+            for (int i = 0; i < pulses; i++)
+                dev.SendHapticImpulse(0, i == 0 ? 0.8f : 1f, pulses > 1 ? 0.25f : 0.08f);
         }
 
         GrabbableObject NearestWeapon(Vector3 p)
