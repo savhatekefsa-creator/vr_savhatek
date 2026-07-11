@@ -16,6 +16,7 @@ MonoBehaviour:
   weaponNameContains:
   gripLocalPosition: {x: -0.02, y: -0.06, z: 0}
   gripLocalEuler: {x: 0, y: 90, z: 0}
+  barrelLocalDirection: {x: 1, y: 0, z: 0}
   mainHand:
     wristLocalPosition: {x: 0, y: 0, z: 0}
     wristLocalEuler: {x: 0, y: 0, z: 0}
@@ -25,8 +26,9 @@ MonoBehaviour:
     ringCurl: 0.85
     pinkyCurl: 0.9
     indexFollowsTrigger: 1
-  supportRailLocalStart: {x: 0.1, y: -0.02, z: 0}
-  supportRailLocalEnd: {x: 0.2, y: -0.02, z: 0}
+    indexTriggerMaxCurl: 0.7
+  supportRailLocalStart: {x: 0.15, y: -0.02, z: 0}
+  supportRailLocalEnd: {x: 0.15, y: -0.02, z: 0}
   supportBreakDistance: 0.3
   supportHand:
     wristLocalPosition: {x: 0, y: 0, z: 0}
@@ -37,6 +39,7 @@ MonoBehaviour:
     ringCurl: 0.85
     pinkyCurl: 0.9
     indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 1
   aimDeadzoneDegrees: 0.75
   aimSoftKneeDegrees: 1.5
   aimHalfLifeMs: 45
