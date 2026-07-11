@@ -34,6 +34,7 @@ namespace VRMultiplayer
             public WeaponGrip supportGrip;     // cached profile component of `supporting` (null = legacy)
             public WeaponGrip grip;            // cached profile component of `held` (null = legacy path)
             public Vector3 aimDir;             // filtered two-hand aim direction (zero = not engaged)
+            public float supportSince;         // time the support grip engaged (grace before auto-release)
             public float requestedAt;       // when the grab RPC was sent
             public bool confirmed;          // server confirmed WE hold it
             public Vector3 posOffset;       // grab-moment offset, hand-local
@@ -103,25 +104,26 @@ namespace VRMultiplayer
                 h.supportGrip = null;
             }
 
-            // Profiled weapons: if this support hand strays too far from the handguard rail,
-            // let go automatically — the visual hand is clamped to the rail, and past the break
-            // distance the arm pose would stretch absurdly.
+            // Profiled weapons: auto-release the support hand only when it truly LEAVES the
+            // weapon. Measure against the weapon COLLIDER (same metric support was grabbed with),
+            // NOT the thin rail segment — the hand can sit validly beside the rail while still on
+            // the weapon, and the two-hand aim rotates the weapon (moving a rail-relative point)
+            // right after engage. A short grace period lets that aim settle before we judge.
             if (h.supporting != null && h.supportGrip != null && h.supportGrip.Profile != null)
             {
                 var p = h.supportGrip.Profile;
-                Vector3 rs = p.supportRailLocalStart, re = p.supportRailLocalEnd;
-                if (h.supporting.HolderHand == 0) // grip in the LEFT hand -> rail data mirrored
+                if (Time.time - h.supportSince > 0.4f)
                 {
-                    rs = WeaponGripMath.MirrorX(rs);
-                    re = WeaponGripMath.MirrorX(re);
-                }
-                Transform wt = h.supporting.transform;
-                Vector3 sW = wt.TransformPoint(rs), eW = wt.TransformPoint(re);
-                Vector3 closest = Vector3.Lerp(sW, eW, WeaponGripMath.RailClosestT(sW, eW, h.anchor.position));
-                if (Vector3.Distance(h.anchor.position, closest) > p.supportBreakDistance)
-                {
-                    h.supporting = null;
-                    h.supportGrip = null;
+                    var wc = h.supporting.GetComponentInChildren<Collider>();
+                    float d = wc != null
+                        ? Vector3.Distance(h.anchor.position, wc.ClosestPointOnBounds(h.anchor.position))
+                        : 0f;
+                    // Break threshold is at least the grab reach so grabbing can't instantly undo.
+                    if (d > Mathf.Max(p.supportBreakDistance, grabRadius * 1.5f))
+                    {
+                        h.supporting = null;
+                        h.supportGrip = null;
+                    }
                 }
             }
 
@@ -200,12 +202,21 @@ namespace VRMultiplayer
             Quaternion weaponRot;
             if (hasSupport)
             {
+                // The barrel direction the grip hand ALONE would produce — the two-hand aim only
+                // REFINES this, it never swings the muzzle wildly (e.g. back toward the player).
+                Vector3 oneHandBarrel = (h.anchor.rotation * Quaternion.Inverse(gripLocalRot)) * Vector3.forward;
                 if (h.aimDir.sqrMagnitude < 1e-6f)
-                    // Engage seed = the weapon's ACTUAL barrel (+Z) this frame, not anchor.forward
-                    // (which differs by the grip rake) — so the first support frame never pops.
-                    h.aimDir = h.held.transform.rotation * Vector3.forward;
+                    h.aimDir = oneHandBarrel; // engage seed = current one-hand barrel -> no pop
+
+                Vector3 raw = sup.anchor.position - h.anchor.position;
+                // Clamp the raw two-hand line to a cone around the one-hand barrel so a bad hand
+                // placement can't rotate the weapon to face the shooter.
+                const float maxDeviation = 45f;
+                if (raw.sqrMagnitude > 1e-6f && Vector3.Angle(oneHandBarrel, raw) > maxDeviation)
+                    raw = Vector3.RotateTowards(oneHandBarrel, raw.normalized, maxDeviation * Mathf.Deg2Rad, 0f);
+
                 h.aimDir = WeaponGripMath.FilterAim(
-                    h.aimDir, sup.anchor.position - h.anchor.position,
+                    h.aimDir, raw,
                     profile.aimDeadzoneDegrees, profile.aimSoftKneeDegrees,
                     profile.aimHalfLifeMs, Time.deltaTime);
                 weaponRot = Quaternion.LookRotation(h.aimDir, h.anchor.up);
@@ -253,6 +264,7 @@ namespace VRMultiplayer
                 {
                     h.supporting = o.held;
                     h.supportGrip = o.grip; // null for legacy weapons — rail logic then stays off
+                    h.supportSince = Time.time;
                     return;
                 }
             }
