@@ -1,6 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.XR;
+using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer
 {
@@ -39,8 +40,33 @@ namespace VRMultiplayer
         {
             _grab = GetComponent<GrabbableObject>();
             if (muzzle == null) muzzle = transform.Find("Muzzle");
+            ApplyProfile();
             ComputeBarrel();
             CreateFx();
+        }
+
+        // Optional data-driven overrides from the same profile the grip system uses. Only the
+        // firing NUMBERS and an optional muzzle spawn come from here — the FireServerRpc path,
+        // hitscan and damage stay exactly as authored. A weapon with no profile is untouched.
+        void ApplyProfile()
+        {
+            var profile = WeaponGripBinder.FindProfile(name);
+            if (profile == null) return;
+
+            if (profile.overrideFire)
+            {
+                fireInterval = profile.fireInterval;
+                range = profile.range;
+            }
+
+            if (muzzle == null && profile.createMuzzleIfMissing)
+            {
+                var m = new GameObject("Muzzle").transform;
+                m.SetParent(transform, false);
+                m.localPosition = profile.muzzleLocalPosition;
+                m.localRotation = Quaternion.identity; // +Z = barrel by convention
+                muzzle = m;
+            }
         }
 
         void Update()
