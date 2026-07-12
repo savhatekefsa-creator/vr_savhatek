@@ -97,11 +97,16 @@ namespace VRMultiplayer
 
                 if (IsOwner)
                 {
-                    // FIRST-PERSON BODY: you see only your own hands (glove + watch pieces) —
-                    // no head in the camera, no torso/legs blocking the view, and the jacket's
-                    // distorting cuff is gone with the jacket. Remote players still see the
-                    // full soldier. Models without a glove piece fall back to hiding just the
-                    // head/eye/neck renderers ("nec" also catches this model's "Necck" typo).
+                    // FIRST-PERSON BODY: prefer the dedicated FP_Hands model (capped wrists,
+                    // weights locked to the hand bones — no cuff stretching). When it attaches,
+                    // hide EVERY avatar piece incl. glove|watch and show only the FP renderers.
+                    // If the asset is missing the old glove|watch path below still works.
+                    var fpHands = FirstPersonHands.TryAttach(remoteAvatar);
+
+                    // You see only your own hands — no head in the camera, no torso/legs
+                    // blocking the view. Remote players still see the full soldier. Models
+                    // without a glove piece fall back to hiding just the head/eye/neck
+                    // renderers ("nec" also catches this model's "Necck" typo).
                     var renderers = remoteAvatar.GetComponentsInChildren<SkinnedMeshRenderer>(true);
                     bool hasHands = false;
                     foreach (var r in renderers)
@@ -110,6 +115,13 @@ namespace VRMultiplayer
                     bool hidAny = false;
                     foreach (var r in renderers)
                     {
+                        if (fpHands != null)
+                        {
+                            r.enabled = r.transform.IsChildOf(fpHands.transform);
+                            hidAny = true;
+                            continue;
+                        }
+
                         string rn = r.name.ToLowerInvariant();
                         bool hide = hasHands
                             ? !(rn.Contains("glove") || rn.Contains("watch"))
