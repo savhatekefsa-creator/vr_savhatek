@@ -7,26 +7,32 @@ namespace VRMultiplayer.UI
 {
     /// <summary>
     /// Yerel silah envanteri: yerel oyuncunun bu oturumda TOPLADIGI her farkli silahi, alis
-    /// sirasiyla hatirlar. Silah secici (carousel) bu listeyi gosterir.
+    /// sirasiyla hatirlar. Her silah icin bir GORSEL onizleme kopyasi (mesh+materyal, script/
+    /// fizik/ag YOK) uretir — silah secici galerisi (<see cref="WeaponSelectorUI"/>) bunlari
+    /// gosterir.
     ///
-    /// Tamamen YEREL (kendi goruntun) — ag gerekmez; secilen silahi ele koyma (equip) ileride
-    /// normal tutma yolundan gecer. Her kare (kismacil) elde tutulan grabbable'lari tarar, bu
-    /// yuzden HandGrabber / GrabbableObject'e HIC dokunmaz; sahneye/prefaba da elle bir sey
-    /// eklemek gerekmez (kendini otomatik olusturur).
+    /// Tamamen YEREL (kendi goruntun), ag yok. Her ~0.3sn elde tuttugun grabbable'lari tarar,
+    /// bu yuzden HandGrabber / GrabbableObject'e HIC dokunmaz (sadece public alanlari okur) ve
+    /// kendini otomatik olusturur.
     /// </summary>
     public class WeaponInventory : MonoBehaviour
     {
         public static WeaponInventory Instance { get; private set; }
 
-        // Toplanan farkli silah "tur anahtarlari", alis sirasiyla.
-        readonly List<string> _collected = new List<string>();
+        public class Entry
+        {
+            public string Key;         // tur anahtari (dedup + ileride equip icin)
+            public GameObject Preview;  // gorsel-only klon (galeride gosterilir), pasif baslar
+        }
+
+        readonly List<Entry> _entries = new List<Entry>();
         readonly HashSet<string> _seen = new HashSet<string>();
         float _nextScan;
 
-        /// <summary>Simdiye kadar toplanan silahlar (tur anahtari), alis sirasiyla.</summary>
-        public IReadOnlyList<string> Collected => _collected;
+        /// <summary>Toplanan silahlar (anahtar + onizleme), alis sirasiyla.</summary>
+        public IReadOnlyList<Entry> Entries => _entries;
 
-        /// <summary>Envanter degisince (yeni silah eklenince) tetiklenir — UI bunu dinleyebilir.</summary>
+        /// <summary>Yeni silah eklenince tetiklenir.</summary>
         public event System.Action Changed;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -41,7 +47,6 @@ namespace VRMultiplayer.UI
 
         void Update()
         {
-            // Sik sik FindObjects cagirmamak icin saniyede ~3 kez tara (silah kapma bundan yavas).
             if (Time.time < _nextScan) return;
             _nextScan = Time.time + 0.3f;
 
@@ -55,23 +60,48 @@ namespace VRMultiplayer.UI
                 string key = TypeKey(g);
                 if (_seen.Add(key))
                 {
-                    _collected.Add(key);
-                    Debug.Log($"[WeaponInventory] Yeni silah toplandi: {key}  (toplam {_collected.Count})");
+                    _entries.Add(new Entry { Key = key, Preview = BuildPreview(g, transform) });
+                    Debug.Log($"[WeaponInventory] Yeni silah: {key}  (toplam {_entries.Count})");
                     Changed?.Invoke();
                 }
             }
         }
 
-        // Silahin "tur"u: varsa tutuş profili adi (her silah turunun tek profili var), yoksa
-        // obje adinin klon/kopya gurultusu temizlenmis hali. Ayni tur iki kez alinirsa tek kayit.
+        // Silahin "tur"u: varsa tutuş profili adi (her tur tek profil), yoksa obje adinin
+        // klon/kopya gurultusu temizlenmis hali. Ayni tur iki kez alinirsa tek kayit.
         static string TypeKey(GrabbableObject g)
         {
             var grip = g.GetComponent<WeaponGrip>();
             if (grip != null && grip.Profile != null) return grip.Profile.name;
-
             string n = g.name.Replace("(Clone)", "").Trim();
             int paren = n.IndexOf(" (");
             return paren > 0 ? n.Substring(0, paren) : n;
+        }
+
+        // Silahin SADECE gorsel kopyasi (mesh + materyal). Her mesh, silah kokune GORE
+        // yerlestirilir (ic ice olceklere dayanikli), boylece galeride tek parca gibi durur.
+        static GameObject BuildPreview(GrabbableObject src, Transform parent)
+        {
+            var root = new GameObject("Preview_" + TypeKey(src));
+            root.transform.SetParent(parent, false);
+
+            foreach (var mf in src.GetComponentsInChildren<MeshFilter>())
+            {
+                var mr = mf.GetComponent<MeshRenderer>();
+                if (mr == null || mf.sharedMesh == null) continue;
+
+                var child = new GameObject(mf.name);
+                child.transform.SetParent(root.transform, false);
+                Matrix4x4 rel = src.transform.worldToLocalMatrix * mf.transform.localToWorldMatrix;
+                child.transform.localPosition = rel.GetColumn(3);
+                child.transform.localRotation = rel.rotation;
+                child.transform.localScale = rel.lossyScale;
+                child.AddComponent<MeshFilter>().sharedMesh = mf.sharedMesh;
+                child.AddComponent<MeshRenderer>().sharedMaterials = mr.sharedMaterials;
+            }
+
+            root.SetActive(false); // galeri acilana kadar gizli
+            return root;
         }
     }
 }
