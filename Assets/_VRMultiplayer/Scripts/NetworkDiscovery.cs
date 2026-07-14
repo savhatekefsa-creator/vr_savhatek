@@ -42,6 +42,7 @@ namespace VRMultiplayer
         CancellationTokenSource _cts;
         readonly object _lock = new object();
         string _foundHostIp;
+        ushort _foundHostPort;
 
         string Query => "SAVHATEKS_DISCOVER:" + appId;
         string ReplyPrefix => "SAVHATEKS_HOST:" + appId;
@@ -97,7 +98,7 @@ namespace VRMultiplayer
         {
             StopDiscovery();
             AcquireMulticastLock();
-            lock (_lock) { _foundHostIp = null; }
+            lock (_lock) { _foundHostIp = null; _foundHostPort = 0; }
             _cts = new CancellationTokenSource();
 
             _queryUdp = NewBroadcastClient(0); // ephemeral port
@@ -141,8 +142,18 @@ namespace VRMultiplayer
                     string msg = Encoding.UTF8.GetString(res.Buffer);
                     if (msg.StartsWith(ReplyPrefix))
                     {
-                        lock (_lock) { _foundHostIp = res.RemoteEndPoint.Address.ToString(); }
-                        Debug.Log("[NetworkDiscovery] Found server at " + _foundHostIp);
+                        // Reply is "SAVHATEKS_HOST:<appId>:<gamePort>". The PORT matters: a
+                        // leaked socket can push the server off the default port, and clients
+                        // must follow it there — connecting to a fixed 7777 hangs forever.
+                        ushort advertised = 0;
+                        int colon = msg.LastIndexOf(':');
+                        if (colon >= 0) ushort.TryParse(msg.Substring(colon + 1), out advertised);
+                        lock (_lock)
+                        {
+                            _foundHostIp = res.RemoteEndPoint.Address.ToString();
+                            _foundHostPort = advertised;
+                        }
+                        Debug.Log("[NetworkDiscovery] Found server at " + _foundHostIp + ":" + advertised);
                         return;
                     }
                 }
@@ -203,6 +214,13 @@ namespace VRMultiplayer
         public bool TryGetFoundHost(out string ip)
         {
             lock (_lock) { ip = _foundHostIp; }
+            return !string.IsNullOrEmpty(ip);
+        }
+
+        /// <summary>Found host ip + the ADVERTISED game port (0 if the reply carried none).</summary>
+        public bool TryGetFoundHost(out string ip, out ushort gamePort)
+        {
+            lock (_lock) { ip = _foundHostIp; gamePort = _foundHostPort; }
             return !string.IsNullOrEmpty(ip);
         }
 

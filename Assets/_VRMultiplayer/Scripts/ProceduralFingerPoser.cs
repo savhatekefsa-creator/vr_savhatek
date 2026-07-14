@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer
 {
@@ -12,6 +13,11 @@ namespace VRMultiplayer
     /// ALWAYS bends the tip toward its target, so there is no left/right or per-model sign guess.
     /// Fingers target the wrist (into the palm); the thumb targets the index/middle base (it comes
     /// across the palm). A palm roll (auto-signed so both palms face the same way) tilts the wrist.
+    ///
+    /// Weapon holds can OVERRIDE a hand with a <see cref="WeaponGripProfile"/> hand pose (ISDK
+    /// "Fingers Freedom" equivalent): thumb/middle/ring/pinky lock to the authored curls, the
+    /// index finger optionally stays Free and follows the networked trigger axis. With no
+    /// override set the behaviour is exactly the legacy grip-driven curl.
     /// </summary>
     [DefaultExecutionOrder(100)]
     public class ProceduralFingerPoser : MonoBehaviour
@@ -48,6 +54,7 @@ namespace VRMultiplayer
             public Transform t;
             public Quaternion open, closed;
             public bool useTrigger;
+            public int finger;              // 0 thumb, 1 index, 2 middle, 3 ring, 4 pinky
         }
 
         readonly List<Phalanx> _left = new List<Phalanx>();
@@ -58,6 +65,12 @@ namespace VRMultiplayer
         float _rollSignL = 1f, _rollSignR = 1f;
         float _gL, _gR, _tL, _tR;
         int _framesUntilBuild;
+
+        // Weapon-hold overrides (per hand). Store-only setters: safe to call before Start.
+        WeaponGripProfile _ovrProfileL, _ovrProfileR;
+        bool _ovrSupportL, _ovrSupportR;
+        readonly float[] _fingersL = new float[5];
+        readonly float[] _fingersR = new float[5];
 
         void Start()
         {
@@ -88,6 +101,39 @@ namespace VRMultiplayer
                 yield return b;
         }
 
+        /// <summary>Lock this hand's fingers to the profile's static curls (main grip or support
+        /// rail set). The index finger keeps following the networked trigger when the profile
+        /// says so. Passing a null profile is the same as <see cref="ClearHandOverride"/>.</summary>
+        public void SetHandOverride(bool leftHand, WeaponGripProfile profile, bool isSupportHand)
+        {
+            if (leftHand)
+            {
+                _ovrProfileL = profile;
+                _ovrSupportL = isSupportHand;
+                SeedFingers(_fingersL, _gL, _tL);
+            }
+            else
+            {
+                _ovrProfileR = profile;
+                _ovrSupportR = isSupportHand;
+                SeedFingers(_fingersR, _gR, _tR);
+            }
+        }
+
+        /// <summary>Back to the grip-driven procedural curl for that hand.</summary>
+        public void ClearHandOverride(bool leftHand)
+        {
+            if (leftHand) _ovrProfileL = null;
+            else _ovrProfileR = null;
+        }
+
+        // Start the override blend from the hand's current curl so the transition is continuous.
+        static void SeedFingers(float[] fingers, float grip, float trigger)
+        {
+            for (int i = 0; i < fingers.Length; i++)
+                fingers[i] = i == 1 ? Mathf.Max(grip, trigger) : grip;
+        }
+
         void BuildHand(bool left, List<Phalanx> outList, ref Transform wristOut,
             ref Vector3 rollAxisOut, ref float rollSignOut)
         {
@@ -115,29 +161,34 @@ namespace VRMultiplayer
 
             Vector3 thumbTarget = (idxP.position + midP.position) * 0.5f; // across the palm
 
-            AddFinger(outList, left, thumbTarget, false,
+            // Palm-FACING direction for the curl planes. sideDir (index→little) makes the raw
+            // cross face out of the right palm but out of the LEFT hand's back — flip it there.
+            Vector3 curlPlaneNormal = left ? -palmNormal : palmNormal;
+
+            AddFinger(outList, left, thumbTarget, 0, false, null,
                 HumanBodyBones.LeftThumbProximal, HumanBodyBones.LeftThumbIntermediate, HumanBodyBones.LeftThumbDistal,
                 HumanBodyBones.RightThumbProximal, HumanBodyBones.RightThumbIntermediate, HumanBodyBones.RightThumbDistal,
                 thumbCurl, thumbCurl, thumbCurl * 0.8f);
-            AddFinger(outList, left, wrist.position, true,
+            AddFinger(outList, left, wrist.position, 1, true, curlPlaneNormal,
                 HumanBodyBones.LeftIndexProximal, HumanBodyBones.LeftIndexIntermediate, HumanBodyBones.LeftIndexDistal,
                 HumanBodyBones.RightIndexProximal, HumanBodyBones.RightIndexIntermediate, HumanBodyBones.RightIndexDistal,
                 proximalCurl, intermediateCurl, distalCurl);
-            AddFinger(outList, left, wrist.position, false,
+            AddFinger(outList, left, wrist.position, 2, false, curlPlaneNormal,
                 HumanBodyBones.LeftMiddleProximal, HumanBodyBones.LeftMiddleIntermediate, HumanBodyBones.LeftMiddleDistal,
                 HumanBodyBones.RightMiddleProximal, HumanBodyBones.RightMiddleIntermediate, HumanBodyBones.RightMiddleDistal,
                 proximalCurl, intermediateCurl, distalCurl);
-            AddFinger(outList, left, wrist.position, false,
+            AddFinger(outList, left, wrist.position, 3, false, curlPlaneNormal,
                 HumanBodyBones.LeftRingProximal, HumanBodyBones.LeftRingIntermediate, HumanBodyBones.LeftRingDistal,
                 HumanBodyBones.RightRingProximal, HumanBodyBones.RightRingIntermediate, HumanBodyBones.RightRingDistal,
                 proximalCurl, intermediateCurl, distalCurl);
-            AddFinger(outList, left, wrist.position, false,
+            AddFinger(outList, left, wrist.position, 4, false, curlPlaneNormal,
                 HumanBodyBones.LeftLittleProximal, HumanBodyBones.LeftLittleIntermediate, HumanBodyBones.LeftLittleDistal,
                 HumanBodyBones.RightLittleProximal, HumanBodyBones.RightLittleIntermediate, HumanBodyBones.RightLittleDistal,
                 proximalCurl, intermediateCurl, distalCurl);
         }
 
-        void AddFinger(List<Phalanx> outList, bool left, Vector3 target, bool useTrigger,
+        void AddFinger(List<Phalanx> outList, bool left, Vector3 target, int finger, bool useTrigger,
+            Vector3? planeNormal,
             HumanBodyBones lP, HumanBodyBones lI, HumanBodyBones lD,
             HumanBodyBones rP, HumanBodyBones rI, HumanBodyBones rD,
             float cP, float cI, float cD)
@@ -148,25 +199,29 @@ namespace VRMultiplayer
             if (p == null) return;
 
             Vector3 pExt = i != null ? (i.position - p.position) : p.forward;
-            AddPhalanx(outList, p, pExt, target, cP, useTrigger);
+            AddPhalanx(outList, p, pExt, target, cP, finger, useTrigger, planeNormal);
             if (i != null)
             {
                 Vector3 iExt = d != null ? (d.position - i.position) : pExt;
-                AddPhalanx(outList, i, iExt, target, cI, useTrigger);
+                AddPhalanx(outList, i, iExt, target, cI, finger, useTrigger, planeNormal);
                 if (d != null)
-                    AddPhalanx(outList, d, iExt, target, cD, useTrigger);
+                    AddPhalanx(outList, d, iExt, target, cD, finger, useTrigger, planeNormal);
             }
         }
 
         void AddPhalanx(List<Phalanx> outList, Transform bone, Vector3 extWorld, Vector3 target,
-            float curlDeg, bool useTrigger)
+            float curlDeg, int finger, bool useTrigger, Vector3? planeNormal)
         {
             if (bone == null || bone.parent == null) return;
 
-            // Rotate around Cross(extension, toTarget): a POSITIVE angle bends the tip straight
-            // toward the target. No sign guessing — correct for both hands and the thumb.
-            Vector3 toTarget = (target - bone.position).normalized;
-            Vector3 hinge = Vector3.Cross(extWorld.normalized, toTarget);
+            // FOUR FINGERS (planeNormal set): hinge = Cross(extension, palm normal) — every
+            // finger folds parallel in its OWN plane like a real fist. Curling them toward one
+            // shared point made the fingers converge into the palm centre and clip.
+            // THUMB (planeNormal null): hinge = Cross(extension, toTarget) — a positive angle
+            // bends it straight toward the target, sweeping ACROSS the palm.
+            Vector3 hinge = planeNormal.HasValue
+                ? Vector3.Cross(extWorld.normalized, planeNormal.Value)
+                : Vector3.Cross(extWorld.normalized, (target - bone.position).normalized);
             if (hinge.sqrMagnitude < 1e-6f) return;
             Vector3 axisParent = bone.parent.InverseTransformDirection(hinge.normalized).normalized;
 
@@ -180,6 +235,7 @@ namespace VRMultiplayer
                 open = open,
                 closed = Quaternion.AngleAxis(deg, axisParent) * open,
                 useTrigger = useTrigger,
+                finger = finger,
             });
         }
 
@@ -217,17 +273,45 @@ namespace VRMultiplayer
             _gL = Mathf.Lerp(_gL, gL, k); _gR = Mathf.Lerp(_gR, gR, k);
             _tL = Mathf.Lerp(_tL, tL, k); _tR = Mathf.Lerp(_tR, tR, k);
 
-            Apply(_left, _gL, _tL);
-            Apply(_right, _gR, _tR);
+            UpdateFingerTargets(_fingersL, _ovrProfileL, _ovrSupportL, _tL, k);
+            UpdateFingerTargets(_fingersR, _ovrProfileR, _ovrSupportR, _tR, k);
+
+            Apply(_left, _gL, _tL, _ovrProfileL != null, _fingersL);
+            Apply(_right, _gR, _tR, _ovrProfileR != null, _fingersR);
         }
 
-        void Apply(List<Phalanx> hand, float grip, float trigger)
+        // Ease each overridden finger toward its authored curl; the index finger optionally
+        // follows the (already network-replicated) trigger axis, so remote players see the
+        // trigger finger move too.
+        static void UpdateFingerTargets(float[] fingers, WeaponGripProfile profile, bool isSupport,
+            float trigger, float k)
+        {
+            if (profile == null) return;
+            var pose = isSupport ? profile.supportHand : profile.mainHand;
+            for (int f = 0; f < 5; f++)
+            {
+                float target = pose.Curl(f);
+                if (f == 1 && pose.indexFollowsTrigger)
+                {
+                    // Trigger pull is a SMALL travel — cap the full-pull curl so the finger
+                    // squeezes the trigger instead of balling into a fist. 0 = legacy asset
+                    // without the field -> behave like 1 (uncapped).
+                    float max = pose.indexTriggerMaxCurl > 0f ? pose.indexTriggerMaxCurl : 1f;
+                    target = Mathf.Lerp(target, Mathf.Max(target, max), trigger);
+                }
+                fingers[f] = Mathf.Lerp(fingers[f], target, k);
+            }
+        }
+
+        void Apply(List<Phalanx> hand, float grip, float trigger, bool overridden, float[] fingers)
         {
             for (int i = 0; i < hand.Count; i++)
             {
                 var ph = hand[i];
                 if (ph.t == null) continue;
-                float raw = ph.useTrigger ? Mathf.Max(grip, trigger) : grip;
+                float raw = overridden
+                    ? fingers[ph.finger]
+                    : (ph.useTrigger ? Mathf.Max(grip, trigger) : grip);
                 ph.t.localRotation = Quaternion.Slerp(ph.open, ph.closed, Mathf.SmoothStep(0f, 1f, raw));
             }
         }

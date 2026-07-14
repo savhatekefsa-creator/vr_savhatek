@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.XR;
+using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer
 {
@@ -13,6 +14,7 @@ namespace VRMultiplayer
     /// Lives on the NetworkPlayer root; uses the networked hand children so what you hold
     /// matches what others see in your avatar's hand.
     /// </summary>
+    [DefaultExecutionOrder(10)] // NetworkVRPlayer (0) writes the hand carriers; read them same-frame
     public class HandGrabber : NetworkBehaviour
     {
         [SerializeField] Transform leftHand;
@@ -29,6 +31,10 @@ namespace VRMultiplayer
             public bool prevGrip;
             public GrabbableObject held;
             public GrabbableObject supporting; // two-hand aim: this hand steadies the OTHER hand's weapon
+            public WeaponGrip supportGrip;     // cached profile component of `supporting` (null = legacy)
+            public WeaponGrip grip;            // cached profile component of `held` (null = legacy path)
+            public Vector3 aimDir;             // filtered two-hand aim direction (zero = not engaged)
+            public float supportSince;         // time the support grip engaged (grace before auto-release)
             public float requestedAt;       // when the grab RPC was sent
             public bool confirmed;          // server confirmed WE hold it
             public Vector3 posOffset;       // grab-moment offset, hand-local
@@ -45,6 +51,11 @@ namespace VRMultiplayer
         /// the finger poser falls back to the networked grip value, which is what we want.</summary>
         public bool HoldingLeft => _left != null && _left.held != null;
         public bool HoldingRight => _right != null && _right.held != null;
+
+        /// <summary>Networked hand anchor transforms (read-only; the weapon-grip system solves
+        /// the held weapon's pose from these).</summary>
+        public Transform LeftAnchor => leftHand;
+        public Transform RightAnchor => rightHand;
 
         public override void OnNetworkSpawn()
         {
@@ -88,7 +99,33 @@ namespace VRMultiplayer
 
             // Two-hand support is only valid while the other hand truly holds that object.
             if (h.supporting != null && h.supporting.HolderClientId != NetworkManager.LocalClientId)
+            {
                 h.supporting = null;
+                h.supportGrip = null;
+            }
+
+            // Profiled weapons: auto-release the support hand only when it truly LEAVES the
+            // weapon. Measure against the weapon COLLIDER (same metric support was grabbed with),
+            // NOT the thin rail segment — the hand can sit validly beside the rail while still on
+            // the weapon, and the two-hand aim rotates the weapon (moving a rail-relative point)
+            // right after engage. A short grace period lets that aim settle before we judge.
+            if (h.supporting != null && h.supportGrip != null && h.supportGrip.Profile != null)
+            {
+                var p = h.supportGrip.Profile;
+                if (Time.time - h.supportSince > 0.4f)
+                {
+                    var wc = h.supporting.GetComponentInChildren<Collider>();
+                    float d = wc != null
+                        ? Vector3.Distance(h.anchor.position, wc.ClosestPointOnBounds(h.anchor.position))
+                        : 0f;
+                    // Break threshold is at least the grab reach so grabbing can't instantly undo.
+                    if (d > Mathf.Max(p.supportBreakDistance, grabRadius * 1.5f))
+                    {
+                        h.supporting = null;
+                        h.supportGrip = null;
+                    }
+                }
+            }
 
             // Follow. IMPORTANT: between our grab request and the server's reply (~1 RTT) the
             // object still LOOKS unheld — we must keep waiting, not give up instantly (the old
@@ -101,21 +138,29 @@ namespace VRMultiplayer
                 {
                     h.confirmed = true;
 
-                    // Two-handed aim: grip hand anchors the weapon, and if the OTHER hand is
-                    // clamped on it, the barrel points along the line between the two hands.
-                    var sup = Other(h);
-                    Vector3 aim = sup != null && sup.supporting == h.held
-                        ? sup.anchor.position - h.anchor.position
-                        : Vector3.zero;
-
-                    if (aim.sqrMagnitude > 0.0025f)
-                        h.held.transform.SetPositionAndRotation(
-                            h.anchor.TransformPoint(h.posOffset),
-                            Quaternion.LookRotation(aim.normalized, h.anchor.up) * h.rotOffset);
+                    if (h.grip != null && h.grip.Profile != null)
+                    {
+                        // Data-driven pose: authored grip anchor + filtered two-hand aim.
+                        FollowProfiled(h, h.grip.Profile);
+                    }
                     else
-                        h.held.transform.SetPositionAndRotation(
-                            h.anchor.TransformPoint(h.posOffset),
-                            h.anchor.rotation * h.rotOffset);
+                    {
+                        // Two-handed aim: grip hand anchors the weapon, and if the OTHER hand is
+                        // clamped on it, the barrel points along the line between the two hands.
+                        var sup = Other(h);
+                        Vector3 aim = sup != null && sup.supporting == h.held
+                            ? sup.anchor.position - h.anchor.position
+                            : Vector3.zero;
+
+                        if (aim.sqrMagnitude > 0.0025f)
+                            h.held.transform.SetPositionAndRotation(
+                                h.anchor.TransformPoint(h.posOffset),
+                                Quaternion.LookRotation(aim.normalized, h.anchor.up) * h.rotOffset);
+                        else
+                            h.held.transform.SetPositionAndRotation(
+                                h.anchor.TransformPoint(h.posOffset),
+                                h.anchor.rotation * h.rotOffset);
+                    }
                 }
                 else if (h.confirmed && !h.held.IsHeld)
                 {
@@ -131,6 +176,70 @@ namespace VRMultiplayer
                     h.held = null;             // request lost in transit; reconcile will clean up
                 }
             }
+        }
+
+        // Data-driven follow for profiled weapons: the weapon is posed so its authored grip
+        // anchor sits exactly on the hand anchor (scale-safe), instead of pivot-snapping.
+        // With a support hand the barrel follows the FILTERED two-hand line: rock solid inside
+        // the deadzone, half-life smoothed outside, seeded from the one-hand barrel direction
+        // so engaging support never pops. Roll stays 1:1 with the grip hand (up = hand up).
+        void FollowProfiled(HandState h, WeaponGripProfile profile)
+        {
+            Vector3 gripLocal = profile.gripLocalPosition;
+            Quaternion gripLocalRot = profile.GripLocalRotation;
+            if (h.index == 0) // grip in the LEFT hand -> mirror the right-hand authored anchor
+            {
+                gripLocal = WeaponGripMath.MirrorX(gripLocal);
+                gripLocalRot = WeaponGripMath.MirrorX(gripLocalRot);
+            }
+
+            var sup = Other(h);
+            bool hasSupport = sup != null && sup.supporting == h.held;
+
+            // Publish the support hand to everyone (owner-authoritative, like the transform).
+            h.held.SetSupportHandOwner(hasSupport ? sup.index : GrabbableObject.NoHand);
+
+            Quaternion oneHandRot = h.anchor.rotation * Quaternion.Inverse(gripLocalRot);
+            Quaternion weaponRot;
+            if (hasSupport)
+            {
+                // Grip anchors are captured from the controller's REAL grip rake, so the barrel
+                // is NOT the anchor's +Z — aim along the profile's weapon-local barrel axis.
+                Vector3 barrelLocal = profile.barrelLocalDirection.sqrMagnitude > 1e-6f
+                    ? profile.barrelLocalDirection.normalized
+                    : Vector3.forward;
+
+                // The barrel direction the grip hand ALONE would produce — the two-hand aim only
+                // REFINES this, it never swings the muzzle wildly (e.g. back toward the player).
+                Vector3 oneHandBarrel = oneHandRot * barrelLocal;
+                if (h.aimDir.sqrMagnitude < 1e-6f)
+                    h.aimDir = oneHandBarrel; // engage seed = current one-hand barrel -> no pop
+
+                Vector3 raw = sup.anchor.position - h.anchor.position;
+                // Clamp the raw two-hand line to a cone around the one-hand barrel so a bad hand
+                // placement can't rotate the weapon to face the shooter.
+                const float maxDeviation = 45f;
+                if (raw.sqrMagnitude > 1e-6f && Vector3.Angle(oneHandBarrel, raw) > maxDeviation)
+                    raw = Vector3.RotateTowards(oneHandBarrel, raw.normalized, maxDeviation * Mathf.Deg2Rad, 0f);
+
+                h.aimDir = WeaponGripMath.FilterAim(
+                    h.aimDir, raw,
+                    profile.aimDeadzoneDegrees, profile.aimSoftKneeDegrees,
+                    profile.aimHalfLifeMs, Time.deltaTime);
+
+                // Minimal rotation from the one-hand pose that puts the barrel on the aim line —
+                // roll stays 1:1 with the grip hand, no up-vector guessing.
+                weaponRot = Quaternion.FromToRotation(oneHandBarrel, h.aimDir) * oneHandRot;
+            }
+            else
+            {
+                h.aimDir = Vector3.zero; // next engage re-seeds
+                weaponRot = oneHandRot;
+            }
+
+            Vector3 weaponPos = h.anchor.position
+                - weaponRot * Vector3.Scale(h.held.transform.lossyScale, gripLocal);
+            h.held.transform.SetPositionAndRotation(weaponPos, weaponRot);
         }
 
         // Self-heal: if the server thinks WE hold something that neither hand is actually
@@ -164,6 +273,8 @@ namespace VRMultiplayer
                     Vector3.Distance(h.anchor.position, wc.ClosestPoint(h.anchor.position)) < grabRadius * 1.5f)
                 {
                     h.supporting = o.held;
+                    h.supportGrip = o.grip; // null for legacy weapons — rail logic then stays off
+                    h.supportSince = Time.time;
                     return;
                 }
             }
@@ -185,6 +296,11 @@ namespace VRMultiplayer
             h.held = best;
             h.requestedAt = Time.time;
             h.confirmed = false;
+            // Grab-moment lookup only (the binder attached WeaponGrip at spawn); a weapon
+            // without a profile keeps the legacy pivot-snap path bit-for-bit.
+            h.grip = best.GetComponent<WeaponGrip>();
+            if (h.grip != null && h.grip.Profile == null) h.grip = null;
+            h.aimDir = Vector3.zero;
             if (best.snapToHand)
             {
                 // Pull it into the palm, barrel aligned with where the controller points.
@@ -206,16 +322,27 @@ namespace VRMultiplayer
             if (h.supporting != null)
             {
                 h.supporting = null;
+                h.supportGrip = null;
                 return;
             }
 
             if (h.held == null) return;
 
             var g = h.held;
+            bool profiled = h.grip != null;
             h.held = null;
+            h.grip = null;
+            h.aimDir = Vector3.zero;
             var o = Other(h);
-            if (o != null && o.supporting == g) o.supporting = null; // dropped: support ends too
+            if (o != null && o.supporting == g)
+            {
+                o.supporting = null; // dropped: support ends too
+                o.supportGrip = null;
+            }
             if (g.HolderClientId != NetworkManager.LocalClientId) return;
+
+            if (profiled)
+                g.SetSupportHandOwner(GrabbableObject.NoHand); // clear while we still own it
 
             g.ApplyThrow(HandVelocity(h), Vector3.zero);
             g.ReleaseServerRpc();
