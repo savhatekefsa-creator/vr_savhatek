@@ -1,8 +1,8 @@
 fileFormatVersion: 2
-guid: a6560a915ef98420e9faacc1c7438823
+guid: ab04adbff2c67d34687c25e3ceeda989
 NativeFormatImporter:
   externalObjects: {}
-  mainObjectFileID: 0
+  mainObjectFileID: 2100000
   userData: 
   assetBundleName: 
   assetBundleVariant: 
@@ -11,5 +11,5 @@ AssetOrigin:
   productId: 251803
   packageName: Defense Line Vol3 - Barrier Breaker (FREE)
   packageVersion: 1.0
-  assetPath: Assets/Settings/SampleSceneProfile.asset
+  assetPath: Assets/RSG/HDRP/Materials/M_rsg_military_sandbox_01.mat
   uploadId: 583158

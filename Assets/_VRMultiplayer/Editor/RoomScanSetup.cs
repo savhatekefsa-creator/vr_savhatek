@@ -362,6 +362,72 @@ namespace VRMultiplayer.EditorTools
                 "Ctrl+S ile kaydet ve gozluklere YENIDEN build al.", "Tamam");
         }
 
+        // ------------------------------------------------------------- menu 22
+        // Adds planar (top-down) UVs to floor meshes IN PLACE so a texture can actually wrap
+        // onto them. Fixes the "only the flat color shows" symptom on floors that were built
+        // before UVs were generated — geometry is untouched, so the room stays exactly where
+        // it is (no rebuild). Targets the current selection's mesh(es), or every "Zemin*"
+        // under RoomMap if nothing is selected. The floor mesh is a saved .asset, so the UVs
+        // are written back to disk and survive scene reloads / ship in the build.
+        [MenuItem("Tools/VR Multiplayer/22. Zemine UV Ekle (texture bindir)")]
+        public static void AddFloorUVs()
+        {
+            var filters = new List<MeshFilter>();
+
+            // 1) Explicit selection wins (any picked object that carries a mesh).
+            foreach (var go in Selection.gameObjects)
+            {
+                var mf = go.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) filters.Add(mf);
+            }
+
+            // 2) Otherwise auto-target the room floors (Zemin, Zemin2, ...).
+            if (filters.Count == 0)
+            {
+                var mapRoot = GameObject.Find(MapRootName);
+                if (mapRoot != null)
+                    foreach (var mf in mapRoot.GetComponentsInChildren<MeshFilter>(true))
+                        if (mf.sharedMesh != null && mf.name.StartsWith("Zemin"))
+                            filters.Add(mf);
+            }
+
+            if (filters.Count == 0)
+            {
+                EditorUtility.DisplayDialog("VR Multiplayer",
+                    "UV eklenecek zemin bulunamadi.\n\n" +
+                    "Zemin objesini (orn. RoomMap/Zemin) sec ve tekrar dene, ya da sahnede " +
+                    "RoomMap altinda 'Zemin' isimli bir mesh oldugundan emin ol.", "Tamam");
+                return;
+            }
+
+            int done = 0, skipped = 0;
+            foreach (var mf in filters)
+            {
+                var mesh = mf.sharedMesh;
+                // Unity'nin built-in primitifleri (Plane/Quad) "Library/..." yolundan gelir;
+                // zaten UV'lidirler ve PAYLASILI olduklari icin dokunmak projeyi bozar — atla.
+                string assetPath = AssetDatabase.GetAssetPath(mesh);
+                if (!string.IsNullOrEmpty(assetPath) && !assetPath.StartsWith("Assets/"))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                mesh.uv = PlanarFloorUVs(mesh.vertices);
+                EditorUtility.SetDirty(mesh);   // saved .asset ise diske de yazilsin
+                done++;
+            }
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+
+            EditorUtility.DisplayDialog("VR Multiplayer",
+                done + " zemin mesh'ine planar UV yazildi (geometri degismedi, oda yerinde).\n" +
+                (skipped > 0 ? skipped + " built-in mesh atlandi (zaten UV'li).\n" : "") +
+                "\nArtik zemin materyaline bir Base Map (texture) atadiginda desen gorunur.\n" +
+                "Texture cok buyuk/kucuk gelirse materyalin Tiling degerini ayarla ya da " +
+                "koddaki FloorUVScale sabitini degistir (su an " + FloorUVScale + ").", "Tamam");
+        }
+
         static int NearestDoorEdge(Vector2[] pts, Vector2 anchor, out float doorAt)
         {
             const float doorWidth = 1.1f;
@@ -628,6 +694,22 @@ namespace VRMultiplayer.EditorTools
         }
 
         // Ear-clipping triangulation of the (possibly concave) room polygon.
+        // Zemin texture'lari icin tiling: 1 texture tekrari ~ 1/FloorUVScale metre.
+        // 0.5 => texture her 2 metrede bir tekrarlanir. Cok buyuk/kucuk gelirse degistir.
+        internal const float FloorUVScale = 0.5f;
+
+        // Zemin mesh'ine yukaridan-asagi (top-down) planar UV uretir. Texture'in zemine
+        // sarilabilmesi icin UV sart; UV yoksa shader texture'i orneklemez ve sadece
+        // materyalin duz rengi gorunur. Vertex'lerin dunya X/Z konumu kullanildigindan
+        // yan yana odalarin zemin dokusu da hizali/kesintisiz olur.
+        static Vector2[] PlanarFloorUVs(Vector3[] verts)
+        {
+            var uv = new Vector2[verts.Length];
+            for (int i = 0; i < verts.Length; i++)
+                uv[i] = new Vector2(verts[i].x, verts[i].z) * FloorUVScale;
+            return uv;
+        }
+
         static Mesh TriangulatePolygon(Vector2[] poly, float y)
         {
             if (poly == null || poly.Length < 3) return null;
@@ -696,6 +778,7 @@ namespace VRMultiplayer.EditorTools
             var mesh = new Mesh { name = "RoomFloor" };
             mesh.vertices = verts;
             mesh.triangles = tris;
+            mesh.uv = PlanarFloorUVs(verts);   // texture bindirilebilsin diye planar UV
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
