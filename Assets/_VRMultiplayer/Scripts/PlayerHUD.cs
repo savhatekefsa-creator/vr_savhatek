@@ -277,19 +277,8 @@ namespace VRMultiplayer
             _label.gameObject.SetActive(false);
             _initialLabelScale = _label.transform.localScale;
 
-            var bg = MakeQuad(_root, "BarBg", UITheme.Background);
-            bg.localScale = new Vector3(BarWidth + 0.02f, 0.07f, 1f);
-            bg.localPosition = Vector3.zero;
-
-            _barFill = MakeQuad(_root, "BarFill", UITheme.HealthFull);
-            _barFill.localScale = new Vector3(BarWidth, 0.05f, 1f);
-            _barFillMr = _barFill.GetComponent<MeshRenderer>();
-            _barFillMr.sharedMaterial = UITheme.CreateHealthBarMaterial();
-            if (_barFill == null)
-            {
-                Debug.LogError("[PlayerHUD] HATA: _barFill objesi olusturulamadi!");
-                return;
-            }
+            // Yuzen can bari kaldirildi (can artik kol saati ekraninda gosteriliyor).
+            // _root bos bir tasiyici olarak kalir; olum ekrani/flas/vignette ondan bagimsizdir.
 
             // Hasar yonu flasi: vurulunca hasarin geldigi tarafta kisa bir kenar parlamasi.
             _dirFlash = new GameObject("Damage Direction Flash").AddComponent<DamageDirectionFlash>();
