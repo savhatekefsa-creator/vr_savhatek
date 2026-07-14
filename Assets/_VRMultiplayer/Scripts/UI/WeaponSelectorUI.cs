@@ -2,38 +2,47 @@ using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
+// Not: UnityEngine.XR'i "using" yapMIYORUZ — InputSystem ile ayni isimde (InputDevice)
+// tipleri var, cakisir. XR tiplerini tam adiyla (UnityEngine.XR.*) yaziyoruz.
 
 namespace VRMultiplayer.UI
 {
     /// <summary>
     /// Silah secici GALERI: toplanan silahlarin gercek 3B modellerini kameranin onunde yatay bir
-    /// sirada gosterir; secili olan biraz buyur ve yavas doner. TEST: TAB basili tutunca acilir,
-    /// Sol/Sag ok ile kaydirilir. Ileride: Adim 3 = sag joystick, Adim 4 = birakinca secilen
-    /// silah equip edilir.
+    /// sirada gosterir; secili olan biraz buyur ve yavas doner.
     ///
-    /// Onizleme modellerini <see cref="WeaponInventory"/> uretir; bu script sadece onlari
-    /// konumlandirir. Olcek/aci/aralik degerleri Inspector'dan CANLI ayarlanir (saat gibi).
+    /// GIRIS:
+    ///  - VR: SAG kumanda thumbstick'i yana itilince galeri acilir; sag/sol itince silahlar
+    ///    gecer (birakinca merkeze donunce SECIM onaylanir).
+    ///  - PC (gozluksuz test): TAB basili = ac, Sol/Sag ok = kaydir.
+    ///
+    /// Onizleme modellerini <see cref="WeaponInventory"/> uretir. Olcek/aci/aralik Inspector'dan
+    /// CANLI ayarlanir. Adim 4: onay aninda secilen silah ele equip edilecek (su an sadece log).
     /// </summary>
     public class WeaponSelectorUI : MonoBehaviour
     {
         [Header("Galeri yerlesimi (kameraya gore — gozle ayarla)")]
-        [Tooltip("Galeri kameranin kac metre onunde dursun.")]
         public float distance = 1.0f;
-        [Tooltip("Silahlar arasi yatay aralik (metre).")]
         public float spacing = 0.32f;
-        [Tooltip("Onizleme modellerinin genel olcegi. Silah cok buyuk/kucuk gelirse ayarla.")]
         public float previewScale = 0.3f;
-        [Tooltip("Secili silah bu kat kadar buyur.")]
         public float selectedBoost = 1.4f;
-        [Tooltip("Onizlemelerin duruş acisi (silahin yani kameraya baksin diye — genelde Y=90).")]
+        [Tooltip("Onizlemelerin duruş acisi (silahin yani kameraya baksin — genelde Y=90).")]
         public Vector3 previewEuler = new Vector3(0f, 90f, 0f);
-        [Tooltip("Secili silahin donme hizi (derece/sn, 0 = donmez).")]
         public float selectedSpin = 40f;
+
+        [Header("Joystick")]
+        [Tooltip("Galeri bu esigin uzerinde thumbstick yana itilince acilir.")]
+        public float openThreshold = 0.4f;
+        [Tooltip("Silah gecisi icin gereken itme miktari.")]
+        public float stepThreshold = 0.65f;
+        [Tooltip("Iki gecis arasi bekleme (sn) — basili tutunca cok hizli gecmesin.")]
+        public float stepCooldown = 0.28f;
 
         int _selected;
         bool _open;
+        float _nextStep;
+        UnityEngine.XR.InputDevice _rightHand;
 
-        /// <summary>Su an vurgulanan silahin envanterdeki indeksi (Adim 4 equip icin okunacak).</summary>
         public int SelectedIndex => _selected;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -48,29 +57,61 @@ namespace VRMultiplayer.UI
         {
             var inv = WeaponInventory.Instance;
             int n = inv != null ? inv.Entries.Count : 0;
+            if (n == 0) { if (_open) { _open = false; ShowPreviews(false); } return; }
 
-            // TEST girisi: TAB basili = galeri acik, Sol/Sag = kaydir.
-            // Adim 3'te bu blok yerine sag kumanda thumbstick'i gelecek.
             bool wantOpen = false;
+            int dir = 0;
+
+            // --- VR: SAG thumbstick ---
+            float x = RightStickX();
+            if (Mathf.Abs(x) > openThreshold)
+            {
+                wantOpen = true;
+                if (Mathf.Abs(x) > stepThreshold && Time.time >= _nextStep)
+                {
+                    dir = x > 0f ? +1 : -1;
+                    _nextStep = Time.time + stepCooldown;
+                }
+            }
+
+            // --- PC yedek: TAB + oklar (gozluksuz test) ---
 #if ENABLE_INPUT_SYSTEM
             var kb = Keyboard.current;
-            if (kb != null && n > 0)
+            if (kb != null && kb.tabKey.isPressed)
             {
-                wantOpen = kb.tabKey.isPressed;
-                if (wantOpen)
-                {
-                    if (kb.leftArrowKey.wasPressedThisFrame)  _selected = (_selected - 1 + n) % n;
-                    if (kb.rightArrowKey.wasPressedThisFrame) _selected = (_selected + 1) % n;
-                }
+                wantOpen = true;
+                if (kb.leftArrowKey.wasPressedThisFrame)  dir = -1;
+                if (kb.rightArrowKey.wasPressedThisFrame) dir = +1;
             }
 #endif
 
-            if (wantOpen != _open) { _open = wantOpen; ShowPreviews(_open); }
-            if (_open)
+            if (dir != 0) _selected = (_selected + dir + n) % n;
+
+            if (wantOpen != _open)
             {
-                _selected = Mathf.Clamp(_selected, 0, n - 1);
-                Layout();
+                _open = wantOpen;
+                ShowPreviews(_open);
+                if (!_open) Confirm(); // galeri kapandi -> secimi onayla
             }
+            if (_open) { _selected = Mathf.Clamp(_selected, 0, n - 1); Layout(); }
+        }
+
+        float RightStickX()
+        {
+            if (!_rightHand.isValid)
+                _rightHand = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
+            if (_rightHand.isValid &&
+                _rightHand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primary2DAxis, out Vector2 axis))
+                return axis.x;
+            return 0f;
+        }
+
+        void Confirm()
+        {
+            var inv = WeaponInventory.Instance;
+            if (inv == null || _selected < 0 || _selected >= inv.Entries.Count) return;
+            // ADIM 4: burada secilen silah ele equip edilecek. Simdilik sadece log.
+            Debug.Log($"[WeaponSelector] Secim onaylandi (equip Adim 4): {inv.Entries[_selected].Key}");
         }
 
         void ShowPreviews(bool visible)
@@ -98,8 +139,7 @@ namespace VRMultiplayer.UI
                 if (p == null) continue;
                 bool sel = i == _selected;
 
-                Vector3 pos = center + right * ((i - _selected) * spacing) - fwd * (sel ? 0.12f : 0f);
-                p.transform.position = pos;
+                p.transform.position = center + right * ((i - _selected) * spacing) - fwd * (sel ? 0.12f : 0f);
                 p.transform.rotation = sel
                     ? face * Quaternion.Euler(0f, Time.time * selectedSpin, 0f)
                     : face;
