@@ -21,8 +21,11 @@ namespace VRMultiplayer.UI
 
         public class Entry
         {
-            public string Key;         // tur anahtari (dedup + ileride equip icin)
+            public string Key;         // tur anahtari (dedup + equip icin)
             public GameObject Preview;  // gorsel-only klon (galeride gosterilir), pasif baslar
+            public GameObject Prefab;   // Resources/WeaponPrefabs'taki kalip; secilince BUNDAN
+                                        // yeni bir tane uretilir. null = bu silah spawn edilemez
+                                        // (kalibi yok) -> galeride durur ama equip edilemez.
         }
 
         readonly List<Entry> _entries = new List<Entry>();
@@ -60,16 +63,38 @@ namespace VRMultiplayer.UI
                 string key = TypeKey(g);
                 if (_seen.Add(key))
                 {
-                    _entries.Add(new Entry { Key = key, Preview = BuildPreview(g, transform) });
+                    _entries.Add(new Entry
+                    {
+                        Key = key,
+                        Preview = BuildPreview(g, transform),
+                        Prefab = FindPrefabFor(key),
+                    });
                     Debug.Log($"[WeaponInventory] Yeni silah: {key}  (toplam {_entries.Count})");
                     Changed?.Invoke();
                 }
             }
         }
 
+        // Bu turden yeni bir tane uretecek kalibi bul: Resources/WeaponPrefabs'taki her prefabin
+        // tutuş profili isim eslesmesiyle bulunur (WeaponGripBinder ile AYNI kural), profili bu
+        // turun anahtariyla ayni olan prefab bizim kalibimizdir. Boylece silaha ozel kod yok:
+        // klasore yeni silah konunca burasi da kendiliginden calisir.
+        static GameObject FindPrefabFor(string key)
+        {
+            var prefabs = WeaponPrefabRegistrar.Prefabs;
+            if (prefabs == null) return null;
+            foreach (var p in prefabs)
+            {
+                if (p == null) continue;
+                var prof = WeaponGripBinder.FindProfile(p.name);
+                if (prof != null && prof.name == key) return p;
+            }
+            return null;
+        }
+
         // Silahin "tur"u: varsa tutuş profili adi (her tur tek profil), yoksa obje adinin
         // klon/kopya gurultusu temizlenmis hali. Ayni tur iki kez alinirsa tek kayit.
-        static string TypeKey(GrabbableObject g)
+        public static string TypeKey(GrabbableObject g)
         {
             var grip = g.GetComponent<WeaponGrip>();
             if (grip != null && grip.Profile != null) return grip.Profile.name;

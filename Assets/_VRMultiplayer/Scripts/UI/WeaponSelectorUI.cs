@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -17,7 +18,12 @@ namespace VRMultiplayer.UI
     ///  - PC (gozluksuz test): TAB basili = ac, Sol/Sag ok = kaydir.
     ///
     /// Onizleme modellerini <see cref="WeaponInventory"/> uretir. Olcek/aci/aralik Inspector'dan
-    /// CANLI ayarlanir. Adim 4: onay aninda secilen silah ele equip edilecek (su an sadece log).
+    /// CANLI ayarlanir.
+    ///
+    /// ONAY -> EQUIP: elindeki silah yok olur (despawn = "cantaya girdi"), secilen turden TAZE bir
+    /// tane sunucuda uretilip eline verilir (HandGrabber.RequestWeaponSwap). Silahlar rafta
+    /// sinirsiz oldugu icin cantanin belirli bir NESNEYI saklamasi gerekmez — tur yeter.
+    /// Mermi sistemi gelirse buraya eklenecek tek sey Entry'de bir mermi sayisi olacak.
     /// </summary>
     public class WeaponSelectorUI : MonoBehaviour
     {
@@ -106,12 +112,52 @@ namespace VRMultiplayer.UI
             return 0f;
         }
 
+        HandGrabber _grabber;
+
+        HandGrabber LocalGrabber()
+        {
+            if (_grabber != null) return _grabber;
+            foreach (var hg in FindObjectsByType<HandGrabber>(FindObjectsSortMode.None))
+                if (hg.IsOwner) { _grabber = hg; break; }
+            return _grabber;
+        }
+
+        // Su an tuttugum silah, SUNUCUNUN gercegine gore. HandGrabber'in ic durumuna bilerek
+        // bakmiyoruz: PC test araci silahi HandGrabber KAPALIYKEN tasiyor, tek ortak dogru
+        // "holder benim mi" sorusu.
+        static GrabbableObject MyWeapon()
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !(nm.IsServer || nm.IsConnectedClient)) return null;
+            foreach (var g in FindObjectsByType<GrabbableObject>(FindObjectsSortMode.None))
+                if (g.HolderClientId == nm.LocalClientId) return g;
+            return null;
+        }
+
         void Confirm()
         {
             var inv = WeaponInventory.Instance;
             if (inv == null || _selected < 0 || _selected >= inv.Entries.Count) return;
-            // ADIM 4: burada secilen silah ele equip edilecek. Simdilik sadece log.
-            Debug.Log($"[WeaponSelector] Secim onaylandi (equip Adim 4): {inv.Entries[_selected].Key}");
+            var e = inv.Entries[_selected];
+
+            var grabber = LocalGrabber();
+            if (grabber == null) return;
+
+            // Elindeki silahi tekrar secmek bos islem — ayni silah geri gelirdi. Mermi sistemi
+            // gelince bu ayni zamanda bir ACIK olurdu (galeriyi acip kapamak = bedava sarjor,
+            // kol hareketiyle reload'dan hizli), o yuzden simdiden kapali.
+            var cur = MyWeapon();
+            if (cur != null && WeaponInventory.TypeKey(cur) == e.Key) return;
+
+            if (e.Prefab == null)
+            {
+                Debug.LogWarning($"[WeaponSelector] '{e.Key}' equip edilemez: Resources/WeaponPrefabs " +
+                                 "altinda kalibi yok (Tools > VR Multiplayer > 31 ile uretilebilir).");
+                return;
+            }
+
+            Debug.Log($"[WeaponSelector] Equip: {e.Key}  (eski: {(cur != null ? cur.name : "yok")})");
+            grabber.RequestWeaponSwap(cur, e.Prefab);
         }
 
         void ShowPreviews(bool visible)
