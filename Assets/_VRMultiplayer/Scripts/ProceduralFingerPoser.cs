@@ -35,6 +35,8 @@ namespace VRMultiplayer
         [Tooltip("Parmaklar hala ters gelirse isaretle (tum yonu tersine cevirir).")]
         public bool invertCurl = false;
         public float smoothing = 14f;
+        [Tooltip("Tetik parmagi icin AYRI (cok daha hizli) yumusatma. Tetik cekisi anlik hissedilmeli; genel poz yumusatmasi (smoothing) burada gecikme yaratir. Yalnizca authored pozda kullanilir.")]
+        public float triggerSmoothing = 60f;
         [Tooltip("Silah tutarken avucun tam kapanmasi icin grip bu degere clamp'lenir.")]
         public float heldGripMin = 0.85f;
 
@@ -71,6 +73,15 @@ namespace VRMultiplayer
         bool _ovrSupportL, _ovrSupportR;
         readonly float[] _fingersL = new float[5];
         readonly float[] _fingersR = new float[5];
+
+        // Authored pozun CANLI durumu. Kemikten okumak yerine burada tutulmasi sart: Animator
+        // (idle klibi) her kare parmak kemiklerine kendi pozunu yaziyor, dolayisiyla
+        // "Slerp(bone.localRotation, hedef, k)" her kare animatorun pozundan yeniden basliyor,
+        // birikmiyor ve hedefe HIC varmiyor (parmaklar titrer ve duz kalir). Durumu kendimiz
+        // tutup kemige MUTLAK yazinca animatorun yazdigi degerin onemi kalmaz.
+        readonly Quaternion[] _authL = new Quaternion[HandPoseBones.JointCount];
+        readonly Quaternion[] _authR = new Quaternion[HandPoseBones.JointCount];
+        bool _authSeededL, _authSeededR;
 
         void Start()
         {
@@ -111,20 +122,22 @@ namespace VRMultiplayer
                 _ovrProfileL = profile;
                 _ovrSupportL = isSupportHand;
                 SeedFingers(_fingersL, _gL, _tL);
+                _authSeededL = false; // yeni tutus -> authored blend mevcut pozdan yeniden basla
             }
             else
             {
                 _ovrProfileR = profile;
                 _ovrSupportR = isSupportHand;
                 SeedFingers(_fingersR, _gR, _tR);
+                _authSeededR = false;
             }
         }
 
         /// <summary>Back to the grip-driven procedural curl for that hand.</summary>
         public void ClearHandOverride(bool leftHand)
         {
-            if (leftHand) _ovrProfileL = null;
-            else _ovrProfileR = null;
+            if (leftHand) { _ovrProfileL = null; _authSeededL = false; }
+            else { _ovrProfileR = null; _authSeededR = false; }
         }
 
         // Start the override blend from the hand's current curl so the transition is continuous.
@@ -132,6 +145,30 @@ namespace VRMultiplayer
         {
             for (int i = 0; i < fingers.Length; i++)
                 fingers[i] = i == 1 ? Mathf.Max(grip, trigger) : grip;
+        }
+
+        // Eksenler T-POSE'dan olculur, canli pozdan DEGIL. Bu kritik: olcum karesine gelindiginde
+        // idle klibi parmaklari coktan kivirmis oluyor (sag el yariya kadar), ve kivrik bir
+        // parmakta uzama yonu (i.position - p.position) T-pose'dakinden bambaska bir yeri
+        // gosteriyor. Menteşe ekseni oradan turetilince capraz cikiyor, ama `open` T-pose'dan
+        // geliyor — yani T-pose'u YANLIS eksen etrafinda donduruyorduk ve parmak yana/asagi
+        // capraz kapaniyordu. Kemikleri gecici olarak rest rotasyonuna alip olcuyoruz; geri
+        // koymak da bedava, Apply() hemen ardindan localRotation'lari zaten yeniden yaziyor.
+        void BuildHands()
+        {
+            var live = new Dictionary<Transform, Quaternion>(_restPose.Count);
+            foreach (var kv in _restPose)
+            {
+                if (kv.Key == null) continue;
+                live[kv.Key] = kv.Key.localRotation;
+                kv.Key.localRotation = kv.Value;
+            }
+
+            BuildHand(true, _left, ref _wristL, ref _rollAxisL, ref _rollSignL);
+            BuildHand(false, _right, ref _wristR, ref _rollAxisR, ref _rollSignR);
+
+            foreach (var kv in live)
+                if (kv.Key != null) kv.Key.localRotation = kv.Value;
         }
 
         void BuildHand(bool left, List<Phalanx> outList, ref Transform wristOut,
@@ -245,11 +282,7 @@ namespace VRMultiplayer
         {
             // Runs after AvatarIKController (execution order 100), so on the capture frame the
             // idle pose + arm IK of this frame are already final — a sane pose to measure from.
-            if (_framesUntilBuild > 0 && --_framesUntilBuild == 0)
-            {
-                BuildHand(true, _left, ref _wristL, ref _rollAxisL, ref _rollSignL);
-                BuildHand(false, _right, ref _wristR, ref _rollAxisR, ref _rollSignR);
-            }
+            if (_framesUntilBuild > 0 && --_framesUntilBuild == 0) BuildHands();
             if (_left.Count == 0 && _right.Count == 0) return;
 
             float gL = 0f, gR = 0f, tL = 0f, tR = 0f;
@@ -270,14 +303,70 @@ namespace VRMultiplayer
                 _wristR.localRotation = _wristR.localRotation * Quaternion.AngleAxis(palmRollDegrees * _rollSignR, _rollAxisR);
 
             float k = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
+            // Tetik ekseni cok daha hizli takip edilir: parmak tetikle birlikte ANLIK hareket
+            // etmeli. Sifir yumusatma da olmaz — ag uzerinden gelen deger adim adim geliyor ve
+            // uzaktaki oyuncularda zipliyor; bu kadari adimlari yutar ama gecikme hissettirmez.
+            float kTrig = 1f - Mathf.Exp(-Mathf.Max(smoothing, triggerSmoothing) * Time.deltaTime);
             _gL = Mathf.Lerp(_gL, gL, k); _gR = Mathf.Lerp(_gR, gR, k);
-            _tL = Mathf.Lerp(_tL, tL, k); _tR = Mathf.Lerp(_tR, tR, k);
+            _tL = Mathf.Lerp(_tL, tL, kTrig); _tR = Mathf.Lerp(_tR, tR, kTrig);
 
             UpdateFingerTargets(_fingersL, _ovrProfileL, _ovrSupportL, _tL, k);
             UpdateFingerTargets(_fingersR, _ovrProfileR, _ovrSupportR, _tR, k);
 
-            Apply(_left, _gL, _tL, _ovrProfileL != null, _fingersL);
-            Apply(_right, _gR, _tR, _ovrProfileR != null, _fingersR);
+            ApplyHand(true, _left, _gL, _tL, _ovrProfileL, _ovrSupportL, _fingersL, k);
+            ApplyHand(false, _right, _gR, _tR, _ovrProfileR, _ovrSupportR, _fingersR, k);
+        }
+
+        // Profilde bu EL icin authored poz varsa o kazanir; yoksa eski prosedurel curl.
+        void ApplyHand(bool left, List<Phalanx> hand, float grip, float trigger,
+            WeaponGripProfile profile, bool isSupport, float[] fingers, float k)
+        {
+            if (profile != null)
+            {
+                var pose = isSupport ? profile.supportHand : profile.mainHand;
+                var fp = pose.Fingers(left);
+                if (fp.HasPose) { ApplyAuthored(left, fp, pose.indexFollowsTrigger, trigger, k); return; }
+            }
+            Apply(hand, grip, trigger, profile != null, fingers);
+        }
+
+        // Kaydedilmis lokal rotasyonlari yazar — eksen turetme, curl, tahmin YOK.
+        // Yumusatma kendi durumumuz uzerinde yapilir, kemikten OKUYARAK degil (bkz. _authL/_authR):
+        // animator her kare kemige kendi pozunu yazdigi icin geri-okuma hedefe hic ulasmaz.
+        void ApplyAuthored(bool left, WeaponGripProfile.FingerPose fp, bool indexFollowsTrigger,
+            float trigger, float k)
+        {
+            var cur = left ? _authL : _authR;
+            bool seeded = left ? _authSeededL : _authSeededR;
+            bool pulled = indexFollowsTrigger && fp.HasIndexPulled;
+
+            for (int j = 0; j < HandPoseBones.JointCount; j++)
+            {
+                var t = Bone(HandPoseBones.Bone(j, left));
+                if (t == null) continue;
+
+                Quaternion target = fp.joints[j];
+
+                // Isaret parmagi: birakili poz -> cekili poz arasi, ag uzerinden gelen tetik
+                // ekseniyle. Uzaktakiler de tetik parmaginin hareketini gorur.
+                if (pulled && HandPoseBones.IsIndex(j))
+                {
+                    target = Quaternion.Slerp(target, fp.indexPulled[j - HandPoseBones.IndexFirst], trigger);
+                    // Poz yumusatmasini ATLA ve dogrudan yaz: tetik ekseni zaten kendi hizli
+                    // filtresinden geciyor, uzerine bir de poz yumusatmasi binince tetik cekisi
+                    // gecikmeli hissediliyor. Parmak tetikle ayni anda hareket etmeli.
+                    cur[j] = target;
+                    t.localRotation = target;
+                    continue;
+                }
+
+                // Ilk kare: animatorun o anki pozundan tohumla ki silahi kavrarken pop olmasin.
+                if (!seeded) cur[j] = t.localRotation;
+                cur[j] = Quaternion.Slerp(cur[j], target, k);
+                t.localRotation = cur[j];
+            }
+
+            if (left) _authSeededL = true; else _authSeededR = true;
         }
 
         // Ease each overridden finger toward its authored curl; the index finger optionally

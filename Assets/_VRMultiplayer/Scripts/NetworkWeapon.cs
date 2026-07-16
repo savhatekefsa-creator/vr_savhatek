@@ -25,16 +25,58 @@ namespace VRMultiplayer
         public Transform muzzle;
 
         GrabbableObject _grab;
+        WeaponGripProfile _profile;
+        WeaponRecoil _recoil;
         Vector3 _muzzleLocal;
         Vector3 _barrelLocal = Vector3.forward;
         float _nextFire;
+        float _srvNextFire;
+        float _lastFire = float.NegativeInfinity;
+        float _bloom;   // birikmis sapma (derece), owner-lokal
         bool _prevTrigger;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>Dev harness kancasi (yalnizca editor/development build). PC'de hicbir XR
+        /// kumandasi gecerli olmadigi icin <see cref="ReadTrigger"/> hep false doner ve Update
+        /// ates edemez. Harness bunu doldurunca tetik SIMULE edilir ve Update'in gercek yolu
+        /// calisir: Semi/Auto ayrimi, kadans, sapma, tepme, hepsi uretim koduyla test edilir.
+        /// Silah basina cagrilir; argument = tetigi sorulan silah.</summary>
+        public static System.Func<NetworkWeapon, bool> DevTriggerOverride;
+#endif
+
+        // Profilsiz silah = bugunku sabitler; her erisim profili varsa oradan okur.
+        bool IsAuto => _profile != null && _profile.fireMode == FireMode.Auto;
+        float HapticAmplitude => _profile != null ? _profile.hapticAmplitude : 0.7f;
+        float HapticDuration => _profile != null ? _profile.hapticDuration : 0.08f;
+        float SupportHapticAmplitude => _profile != null ? _profile.supportHapticAmplitude : 0f;
 
         // Effects (created once, reused per shot)
         LineRenderer _tracer;
         Light _flash;
-        Transform _impact;
-        float _fxOffAt = -1f;
+
+        // Mermi izleri: silahin ALTINDA DEGIL, dunya kokunde duran bir havuz. Silahin cocugu
+        // olsalardi silah her dondugunde izler de suruklenirdi. Havuz dolunca en eski iz geri
+        // donusur — sinirsiz GameObject birikmez.
+        const int DecalCount = 48;
+        Transform _decalRoot;
+        Transform[] _decals;
+        int _decalNext;
+
+        // Ucan ates izi: atis dunya uzayinda saklanir, her kare ilerletilir.
+        Vector3 _shotOrigin, _shotDir, _shotEnd, _shotNormal;
+        float _shotDist;
+        float _shotFiredAt;
+        bool _shotFlying;
+        bool _impactShown;
+        float _flashOffAt = -1f;
+
+        Color TracerColor => _profile != null ? _profile.tracerColor : new Color(1f, 0.45f, 0.12f);
+        float TracerSpeed => _profile != null ? _profile.tracerSpeed : 260f;
+        float TracerLength => _profile != null ? _profile.tracerLength : 2.5f;
+        float TracerWidth => _profile != null ? _profile.tracerWidth : 0.03f;
+        float FlashDuration => _profile != null ? _profile.flashDuration : 0.035f;
+        Color ImpactColor => _profile != null ? _profile.impactColor : new Color(0.03f, 0.03f, 0.04f, 1f);
+        float ImpactSize => _profile != null ? _profile.impactSize : 0.022f;
 
         void Awake()
         {
@@ -52,6 +94,7 @@ namespace VRMultiplayer
         {
             var profile = WeaponGripBinder.FindProfile(name);
             if (profile == null) return;
+            _profile = profile;
 
             if (profile.overrideFire)
             {
@@ -67,46 +110,128 @@ namespace VRMultiplayer
                 m.localRotation = Quaternion.identity; // +Z = barrel by convention
                 muzzle = m;
             }
+
+            // Tepme bileseni yalnizca profil gercekten kick istiyorsa takilir: dokunulmamis
+            // (sifir kick) bir profil hicbir sey almaz, LateUpdate maliyeti bile olusmaz.
+            if (profile.kickPitchPerShot != 0f || profile.kickYawJitter != 0f || profile.kickBackMeters != 0f)
+            {
+                _recoil = gameObject.AddComponent<WeaponRecoil>();
+                _recoil.Init(_grab, profile);
+            }
         }
 
         void Update()
         {
-            if (_fxOffAt > 0f && Time.time > _fxOffAt) HideFx();
+            UpdateFx(); // herkeste, silah elde olmasa da: ucan iz sahibi birakinca da tamamlanir
 
-            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; return; }
+            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; return; }
             if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId) return;
+
+            // Ates kesilince koni daralir.
+            if (_profile != null && _bloom > 0f)
+                _bloom *= Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, _profile.spreadDecayHalfLife));
 
             // EITHER controller's trigger fires while you hold the weapon — grip hand or
             // support hand, so two-handed players can use their front-hand trigger too.
             bool trig = ReadTrigger(XRNode.RightHand, out var rDev);
             var firedDev = rDev;
+            var firedNode = XRNode.RightHand;
             if (!trig)
             {
                 trig = ReadTrigger(XRNode.LeftHand, out var lDev);
                 firedDev = lDev;
+                firedNode = XRNode.LeftHand;
             }
 
-            if (trig && !_prevTrigger && Time.time >= _nextFire)
-            {
-                _nextFire = Time.time + fireInterval;
-                Vector3 origin;
-                Vector3 dir;
-                if (muzzle != null)
-                {
-                    origin = muzzle.position;   // precise barrel tip placed in the editor
-                    dir = muzzle.forward;
-                }
-                else
-                {
-                    origin = transform.TransformPoint(_muzzleLocal);
-                    dir = (transform.rotation * _barrelLocal).normalized;
-                }
-                FireServerRpc(origin, dir);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (DevTriggerOverride != null) trig = DevTriggerOverride(this);
+#endif
 
-                if (firedDev.isValid)
-                    firedDev.SendHapticImpulse(0, 0.7f, 0.08f);
+            // Semi: her atis tetigin yeniden cekilmesini ister. Auto: basili tutuldukca tarar.
+            bool wantsFire = IsAuto ? trig : (trig && !_prevTrigger);
+            if (wantsFire && Time.time >= _nextFire)
+            {
+                // Kadans kareye degil saate baglanir: taramada frame quantization birikip
+                // atis hizini dusurmez. Uzun aradan sonra ise tam bir aralik beklenir —
+                // yoksa geride kalmis _nextFire bir sonraki karede bedava ikinci atis verir.
+                _nextFire += fireInterval;
+                if (_nextFire < Time.time) _nextFire = Time.time + fireInterval;
+                Fire(firedDev, firedNode);
             }
             _prevTrigger = trig;
+
+            // Tarama sonerken tepme yavas dinsin, tetik kesilince hizla toparlansin.
+            if (_recoil != null)
+                _recoil.SetSustainedFire(trig && Time.time - _lastFire < fireInterval * 2f);
+        }
+
+        void Fire(InputDevice firedDev, XRNode firedNode)
+        {
+            _lastFire = Time.time;
+
+            Vector3 origin;
+            Vector3 dir;
+            if (muzzle != null)
+            {
+                origin = muzzle.position;   // precise barrel tip placed in the editor
+                dir = muzzle.forward;
+            }
+            else
+            {
+                origin = transform.TransformPoint(_muzzleLocal);
+                dir = (transform.rotation * _barrelLocal).normalized;
+            }
+
+            // Sacilim owner'da uygulanir ve RPC'ye SACILMIS yon girer: tracer, sunucu isabeti
+            // ve hasar hepsi ayni yonu paylasir, ayrica bir senkron gerekmez.
+            if (_profile != null)
+            {
+                float mult = _grab.SupportHand != GrabbableObject.NoHand
+                    ? _profile.supportRecoilMultiplier
+                    : 1f;
+                dir = ApplySpread(dir, Mathf.Min(_profile.spreadBase + _bloom, _profile.spreadMax));
+                _bloom = Mathf.Min(_bloom + _profile.spreadPerShot * mult, _profile.spreadMax);
+            }
+
+            FireServerRpc(origin, dir);
+
+            // Yon YUKARIDA okundu: bu atis mevcut (onceki karenin tepmis) pozunu kullanir,
+            // yeni kick bir sonraki atisi kaldirir.
+            if (_recoil != null) _recoil.AddKick();
+
+            if (firedDev.isValid)
+                firedDev.SendHapticImpulse(0, HapticAmplitude, HapticDuration);
+
+            // Destek eli de silahta: ona da hafif bir vurus. Tetigi ceken el tam siddeti
+            // zaten aldi — ayni kumandayi ikinci kez titretme.
+            byte sup = _grab.SupportHand;
+            if (sup != GrabbableObject.NoHand && SupportHapticAmplitude > 0f)
+            {
+                XRNode supNode = sup == 0 ? XRNode.LeftHand : XRNode.RightHand;
+                if (supNode != firedNode)
+                {
+                    var supDev = InputDevices.GetDeviceAtXRNode(supNode);
+                    if (supDev.isValid)
+                        supDev.SendHapticImpulse(0, SupportHapticAmplitude, HapticDuration);
+                }
+            }
+        }
+
+        /// <summary>Yonu, yari-acisi `degrees` olan koninin icinde rastgele bir yone kaydirir.
+        /// insideUnitCircle teget duzlemde duzgun dagilir, yani atislar koni icinde kumelenmeden
+        /// esit yayilir.</summary>
+        static Vector3 ApplySpread(Vector3 dir, float degrees)
+        {
+            if (degrees <= 0f) return dir;
+            dir.Normalize();
+
+            Vector3 right = Vector3.Cross(dir, Vector3.up);
+            if (right.sqrMagnitude < 1e-4f) right = Vector3.Cross(dir, Vector3.right); // namlu dike yakin
+            right.Normalize();
+            Vector3 up = Vector3.Cross(right, dir);
+
+            Vector2 d = Random.insideUnitCircle * Mathf.Tan(degrees * Mathf.Deg2Rad);
+            return (dir + right * d.x + up * d.y).normalized;
         }
 
         static bool ReadTrigger(XRNode node, out InputDevice dev)
@@ -124,6 +249,13 @@ namespace VRMultiplayer
         {
             if (p.Receive.SenderClientId != _grab.HolderClientId) return; // only the holder fires
             if (dir.sqrMagnitude < 0.5f) return;
+
+            // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
+            // FireServerRpc'yi her karede cagirsa da atis hizi profilin uzerine cikamaz.
+            // %15 tolerans, ag jitter'inda mesru atisin dusmesini onler.
+            if (Time.time < _srvNextFire) return;
+            _srvNextFire = Time.time + fireInterval * 0.85f;
+
             dir.Normalize();
 
             // Authoritative hit: nearest thing the ray touches that is neither the weapon nor
@@ -132,6 +264,9 @@ namespace VRMultiplayer
             byte shooterTeam = TeamOf(shooter);
 
             Vector3 end = origin + dir * range;
+            // Sifir = mermi izi birakma. YALNIZCA sabit geometri normal doner: hareketli bir
+            // oyuncuya dunya-uzayi izi cakarsak oyuncu yurudugunde iz havada asili kalirdi.
+            Vector3 hitNormal = Vector3.zero;
             var hits = Physics.RaycastAll(origin + dir * 0.03f, dir, range,
                 Physics.AllLayers, QueryTriggerInteraction.Collide);
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
@@ -165,13 +300,14 @@ namespace VRMultiplayer
                 }
 
                 end = h.point; // first solid/non-player hit stops the ray
+                hitNormal = h.normal;
                 break;
             }
 
             if (hitboxesSeen == 0)
                 Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi. Toplam collider: {hits.Length}. Ilk carpan: {(hits.Length > 0 ? hits[0].collider.name : "hicbir sey")}");
 
-            FireFxClientRpc(origin, end);
+            FireFxClientRpc(origin, end, hitNormal);
         }
 
         byte TeamOf(ulong clientId)
@@ -187,9 +323,9 @@ namespace VRMultiplayer
         }
 
         [Rpc(SendTo.Everyone)]
-        void FireFxClientRpc(Vector3 origin, Vector3 end)
+        void FireFxClientRpc(Vector3 origin, Vector3 end, Vector3 hitNormal)
         {
-            ShowShot(origin, end);
+            ShowShot(origin, end, hitNormal);
         }
 
         // ------------------------------------------------------------- barrel
@@ -244,10 +380,11 @@ namespace VRMultiplayer
             _tracer = tracerGo.AddComponent<LineRenderer>();
             _tracer.useWorldSpace = true;
             _tracer.positionCount = 2;
-            _tracer.widthMultiplier = 0.01f;
+            _tracer.widthMultiplier = TracerWidth;
             var mat = new Material(FindShaderSafe());
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(1f, 0.9f, 0.4f));
-            else mat.color = new Color(1f, 0.9f, 0.4f);
+            Color tc = TracerColor;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tc);
+            else mat.color = tc;
             _tracer.material = mat;
             _tracer.enabled = false;
 
@@ -260,46 +397,135 @@ namespace VRMultiplayer
             _flash.range = 4f;
             _flash.enabled = false;
 
-            var impactGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            impactGo.name = "Impact Spark";
-            Destroy(impactGo.GetComponent<Collider>());
-            impactGo.transform.SetParent(transform, false);
-            impactGo.transform.localScale = Vector3.one * 0.06f;
+            if (ImpactSize <= 0f) return; // iz istenmiyorsa havuzu hic kurma
+
             var imat = new Material(FindShaderSafe());
-            if (imat.HasProperty("_BaseColor")) imat.SetColor("_BaseColor", new Color(1f, 0.55f, 0.15f));
-            else imat.color = new Color(1f, 0.55f, 0.15f);
-            impactGo.GetComponent<MeshRenderer>().sharedMaterial = imat;
-            _impact = impactGo.transform;
-            impactGo.SetActive(false);
+            Color ic = ImpactColor;
+            if (imat.HasProperty("_BaseColor")) imat.SetColor("_BaseColor", ic);
+            else imat.color = ic;
+
+            // Kok seviyesinde: silahla birlikte tasinmamalilar.
+            _decalRoot = new GameObject(name + " Bullet Holes").transform;
+            _decals = new Transform[DecalCount];
+            for (int i = 0; i < DecalCount; i++)
+            {
+                // Yassilastirilmis SILINDIR = yuvarlak disk (kursun deligi kare degil yuvarlak).
+                // Silindir de kup gibi simetrik, yani normalin isareti yanlis olsa bile gorunmez
+                // yuze donmez (Quad'in tek yuzu var, ters donerse hic cizilmez).
+                var d = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                d.name = "Bullet Hole";
+                Destroy(d.GetComponent<Collider>());
+                d.GetComponent<MeshRenderer>().sharedMaterial = imat;
+                d.transform.SetParent(_decalRoot, false);
+                d.SetActive(false);
+                _decals[i] = d.transform;
+            }
         }
 
-        void ShowShot(Vector3 origin, Vector3 end)
+        public override void OnDestroy()
         {
-            if (_tracer != null)
-            {
-                _tracer.SetPosition(0, origin);
-                _tracer.SetPosition(1, end);
-                _tracer.enabled = true;
-            }
+            // Havuz silahin cocugu olmadigi icin onunla birlikte yok olmaz — elle temizle.
+            if (_decalRoot != null) Destroy(_decalRoot.gameObject);
+            base.OnDestroy();
+        }
+
+        void ShowShot(Vector3 origin, Vector3 end, Vector3 hitNormal)
+        {
+            _shotOrigin = origin;
+            _shotEnd = end;
+            _shotNormal = hitNormal;
+            Vector3 d = end - origin;
+            _shotDist = d.magnitude;
+            _shotDir = _shotDist > 1e-4f ? d / _shotDist : transform.forward;
+            _shotFiredAt = Time.time;
+            _shotFlying = true;
+            _impactShown = false;
+
+            // Namlu alevi silahin cocugu: dunya noktasi bir kez yazilir, sonra silahla birlikte
+            // hareket eder — namludan ayrilmaz.
             if (_flash != null)
             {
                 _flash.transform.position = origin;
                 _flash.enabled = true;
+                _flashOffAt = Time.time + FlashDuration;
             }
-            if (_impact != null)
-            {
-                _impact.position = end;
-                _impact.gameObject.SetActive(true);
-            }
-            _fxOffAt = Time.time + 0.07f;
+
+            UpdateFx(); // ilk kareyi hemen ciz: bir kare gecikmeyle baslamasin
         }
 
-        void HideFx()
+        // Izi namludan hedefe dogru UCURUR. Eskiden tam boy cizgi aninda cizilip 70 ms duruyordu:
+        // silahi cevirirken donuk cizgi namludan kopuk kaliyor ve atis sapmis gibi gorunuyordu.
+        void UpdateFx()
         {
-            _fxOffAt = -1f;
-            if (_tracer != null) _tracer.enabled = false;
-            if (_flash != null) _flash.enabled = false;
-            if (_impact != null) _impact.gameObject.SetActive(false);
+            if (_flashOffAt > 0f && Time.time > _flashOffAt)
+            {
+                _flashOffAt = -1f;
+                if (_flash != null) _flash.enabled = false;
+            }
+
+            if (!_shotFlying) return;
+
+            float speed = TracerSpeed;
+            if (speed <= 0f)
+            {
+                // Hiz 0 = eski davranis: aninda tam boy cizgi.
+                if (_tracer != null)
+                {
+                    _tracer.SetPosition(0, _shotOrigin);
+                    _tracer.SetPosition(1, _shotEnd);
+                    _tracer.enabled = true;
+                }
+                ShowImpact();
+                if (Time.time - _shotFiredAt > 0.07f)
+                {
+                    _shotFlying = false;
+                    if (_tracer != null) _tracer.enabled = false;
+                }
+                return;
+            }
+
+            float travelled = (Time.time - _shotFiredAt) * speed;
+            float head = Mathf.Min(travelled, _shotDist);
+            float tail = Mathf.Max(0f, travelled - Mathf.Max(0.1f, TracerLength));
+
+            // Kivilcim izin ucu hedefe VARDIGINDA parlar, atisla ayni anda degil.
+            if (travelled >= _shotDist) ShowImpact();
+
+            if (tail >= _shotDist)
+            {
+                _shotFlying = false;
+                if (_tracer != null) _tracer.enabled = false;
+                return;
+            }
+
+            if (_tracer != null)
+            {
+                _tracer.SetPosition(0, _shotOrigin + _shotDir * tail);
+                _tracer.SetPosition(1, _shotOrigin + _shotDir * head);
+                _tracer.enabled = true;
+            }
+        }
+
+        // Carptigi yerde KALICI bir iz birakir. Havuzdaki en eski iz geri donusur.
+        void ShowImpact()
+        {
+            if (_impactShown) return;
+            _impactShown = true;
+
+            // Normal sifir = hicbir seye carpmadi ya da bir OYUNCUYA carpti: iz birakma.
+            // Yuruyen bir oyuncuya cakilan dunya-uzayi izi havada asili kalirdi.
+            if (_decals == null || _shotNormal.sqrMagnitude < 0.5f) return;
+
+            var d = _decals[_decalNext];
+            _decalNext = (_decalNext + 1) % _decals.Length;
+
+            // Silindirin ekseni LOKAL Y; onu yuzey normaline hizala. Olcek: mesh yaricapi 0.5
+            // (yani cap = scale.x) ve yuksekligi 2 (yani kalinlik = 2 * scale.y).
+            float s = ImpactSize;
+            d.SetPositionAndRotation(_shotEnd + _shotNormal * 0.001f,
+                Quaternion.FromToRotation(Vector3.up, _shotNormal));
+            d.localScale = new Vector3(s, 0.0015f, s); // kalinlik 3 mm: yuzeye gomulu dursun
+            d.gameObject.SetActive(true);
         }
     }
 }

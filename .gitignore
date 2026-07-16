@@ -4,6 +4,14 @@
 Assets/Soldiers-Pack/
 Assets/Soldiers-Pack.meta
 
+# FPS Gun Pack 4K ~1.6GB: ucretli Asset Store paketi — hem boyut hem lisans (yeniden
+# dagitim) nedeniyle depoya GIRMEZ.
+# DIKKAT: Weapon_Pistol prefab'i bu paketin "Pistol 2" mesh + materyallerine baglidir.
+# Projeyi klonlayan herkes paketi kendi Asset Store hesabindan import etmeli — GUID'ler
+# ayni oldugu icin pistol sorunsuz calisir. Import edilmezse pistol mesh'siz/dokusuz gelir.
+Assets/FPS Gun Pack 4K/
+Assets/FPS Gun Pack 4K.meta
+
 # ============ Unity'nin otomatik urettigi klasorler (ASLA depoya girmez) ============
 [Ll]ibrary/
 [Tt]emp/
