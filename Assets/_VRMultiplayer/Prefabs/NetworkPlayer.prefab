@@ -1551,11 +1551,11 @@ MonoBehaviour:
   headEulerOffset: {x: 0, y: 0, z: 0}
   hideHead: 0
   leftGripPositionOffset: {x: 0, y: 0, z: 0}
-  leftGripEulerOffset: {x: -12.72, y: -84.1, z: 30.1}
+  leftGripEulerOffset: {x: -12.72, y: -76.3, z: 38.8}
   rightGripPositionOffset: {x: 0, y: 0, z: 0}
-  rightGripEulerOffset: {x: -7.99, y: 161.4, z: -37.57}
+  rightGripEulerOffset: {x: -7.99, y: 150, z: -50.6}
   palmOffset: 0.09
-  armReachRemap: 1
+  armReachRemap: 0
   feetOffset: 0.021316923
   groundY: 0
   bodyHeightOffset: 0
@@ -2683,7 +2683,6 @@ GameObject:
   - component: {fileID: 1455032696690629462}
   - component: {fileID: 7316377061070769038}
   - component: {fileID: 165688490942211547}
-  - component: {fileID: 4202541801050995821}
   m_Layer: 0
   m_Name: NetworkPlayer
   m_TagString: Untagged
@@ -2909,24 +2908,6 @@ MonoBehaviour:
   barSlideSpeed: 1.2
   showDuration: 4
   alwaysShowBelow: 0.35
---- !u!114 &4202541801050995821
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5293397041292697250}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6278eb75e7a82c349873a62983638a5e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.OverheadHealthBar
-  ShowTopMostFoldoutHeaderGroup: 1
-  head: {fileID: 5776368456349678063}
-  heightAbove: 0.35
-  barSlideSpeed: 1.2
-  visibleDistance: 5
-  fadeRange: 2
 --- !u!1 &5518199563869288857
 GameObject:
   m_ObjectHideFlags: 0
