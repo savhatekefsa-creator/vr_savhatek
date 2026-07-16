@@ -103,9 +103,15 @@ namespace VRMultiplayer.Weapons
         [Tooltip("Ucan iz parcasinin uzunlugu (m).")]
         public float tracerLength = 2.5f;
         [Tooltip("Iz cizgisinin kalinligi (m).")]
-        public float tracerWidth = 0.012f;
+        public float tracerWidth = 0.03f;
         [Tooltip("Namlu alevinin parlama suresi (s).")]
         public float flashDuration = 0.035f;
+
+        [Header("Mermi izi (carptigi yerde kalan delik)")]
+        [Tooltip("Izin rengi. Koyu = kursun deligi; parlak renk = boya lekesi.")]
+        public Color impactColor = new Color(0.03f, 0.03f, 0.04f, 1f);
+        [Tooltip("Izin capi (m). 0 = hic iz birakma.")]
+        public float impactSize = 0.06f;
 
         [Header("Haptik")]
         [Tooltip("Atis aninda ates eden kumandanin titresim siddeti (0..1).")]

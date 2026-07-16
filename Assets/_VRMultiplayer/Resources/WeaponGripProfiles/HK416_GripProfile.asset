@@ -63,9 +63,11 @@ MonoBehaviour:
   spreadDecayHalfLife: 0.15
   tracerColor: {r: 1, g: 0.42, b: 0.1, a: 1}
   tracerSpeed: 330
-  tracerLength: 3
-  tracerWidth: 0.012
+  tracerLength: 5
+  tracerWidth: 0.032
   flashDuration: 0.03
+  impactColor: {r: 0.03, g: 0.03, b: 0.04, a: 1}
+  impactSize: 0.07
   hapticAmplitude: 0.7
   hapticDuration: 0.08
   supportHapticAmplitude: 0.35

@@ -66,6 +66,8 @@ MonoBehaviour:
   tracerLength: 2.5
   tracerWidth: 0.01
   flashDuration: 0.07
+  impactColor: {r: 0.75, g: 0.95, b: 0.2, a: 1}
+  impactSize: 0.09
   hapticAmplitude: 0.7
   hapticDuration: 0.08
   supportHapticAmplitude: 0.35

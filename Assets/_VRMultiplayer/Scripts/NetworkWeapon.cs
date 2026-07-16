@@ -35,6 +35,15 @@ namespace VRMultiplayer
         float _bloom;   // birikmis sapma (derece), owner-lokal
         bool _prevTrigger;
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>Dev harness kancasi (yalnizca editor/development build). PC'de hicbir XR
+        /// kumandasi gecerli olmadigi icin <see cref="ReadTrigger"/> hep false doner ve Update
+        /// ates edemez. Harness bunu doldurunca tetik SIMULE edilir ve Update'in gercek yolu
+        /// calisir: Semi/Auto ayrimi, kadans, sapma, tepme, hepsi uretim koduyla test edilir.
+        /// Silah basina cagrilir; argument = tetigi sorulan silah.</summary>
+        public static System.Func<NetworkWeapon, bool> DevTriggerOverride;
+#endif
+
         // Profilsiz silah = bugunku sabitler; her erisim profili varsa oradan okur.
         bool IsAuto => _profile != null && _profile.fireMode == FireMode.Auto;
         float HapticAmplitude => _profile != null ? _profile.hapticAmplitude : 0.7f;
@@ -44,22 +53,30 @@ namespace VRMultiplayer
         // Effects (created once, reused per shot)
         LineRenderer _tracer;
         Light _flash;
-        Transform _impact;
+
+        // Mermi izleri: silahin ALTINDA DEGIL, dunya kokunde duran bir havuz. Silahin cocugu
+        // olsalardi silah her dondugunde izler de suruklenirdi. Havuz dolunca en eski iz geri
+        // donusur — sinirsiz GameObject birikmez.
+        const int DecalCount = 48;
+        Transform _decalRoot;
+        Transform[] _decals;
+        int _decalNext;
 
         // Ucan ates izi: atis dunya uzayinda saklanir, her kare ilerletilir.
-        Vector3 _shotOrigin, _shotDir, _shotEnd;
+        Vector3 _shotOrigin, _shotDir, _shotEnd, _shotNormal;
         float _shotDist;
         float _shotFiredAt;
         bool _shotFlying;
         bool _impactShown;
         float _flashOffAt = -1f;
-        float _impactOffAt = -1f;
 
         Color TracerColor => _profile != null ? _profile.tracerColor : new Color(1f, 0.45f, 0.12f);
         float TracerSpeed => _profile != null ? _profile.tracerSpeed : 260f;
         float TracerLength => _profile != null ? _profile.tracerLength : 2.5f;
-        float TracerWidth => _profile != null ? _profile.tracerWidth : 0.012f;
+        float TracerWidth => _profile != null ? _profile.tracerWidth : 0.03f;
         float FlashDuration => _profile != null ? _profile.flashDuration : 0.035f;
+        Color ImpactColor => _profile != null ? _profile.impactColor : new Color(0.03f, 0.03f, 0.04f, 1f);
+        float ImpactSize => _profile != null ? _profile.impactSize : 0.06f;
 
         void Awake()
         {
@@ -125,6 +142,10 @@ namespace VRMultiplayer
                 firedDev = lDev;
                 firedNode = XRNode.LeftHand;
             }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (DevTriggerOverride != null) trig = DevTriggerOverride(this);
+#endif
 
             // Semi: her atis tetigin yeniden cekilmesini ister. Auto: basili tutuldukca tarar.
             bool wantsFire = IsAuto ? trig : (trig && !_prevTrigger);
@@ -243,6 +264,9 @@ namespace VRMultiplayer
             byte shooterTeam = TeamOf(shooter);
 
             Vector3 end = origin + dir * range;
+            // Sifir = mermi izi birakma. YALNIZCA sabit geometri normal doner: hareketli bir
+            // oyuncuya dunya-uzayi izi cakarsak oyuncu yurudugunde iz havada asili kalirdi.
+            Vector3 hitNormal = Vector3.zero;
             var hits = Physics.RaycastAll(origin + dir * 0.03f, dir, range,
                 Physics.AllLayers, QueryTriggerInteraction.Collide);
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
@@ -276,13 +300,14 @@ namespace VRMultiplayer
                 }
 
                 end = h.point; // first solid/non-player hit stops the ray
+                hitNormal = h.normal;
                 break;
             }
 
             if (hitboxesSeen == 0)
                 Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi. Toplam collider: {hits.Length}. Ilk carpan: {(hits.Length > 0 ? hits[0].collider.name : "hicbir sey")}");
 
-            FireFxClientRpc(origin, end);
+            FireFxClientRpc(origin, end, hitNormal);
         }
 
         byte TeamOf(ulong clientId)
@@ -298,9 +323,9 @@ namespace VRMultiplayer
         }
 
         [Rpc(SendTo.Everyone)]
-        void FireFxClientRpc(Vector3 origin, Vector3 end)
+        void FireFxClientRpc(Vector3 origin, Vector3 end, Vector3 hitNormal)
         {
-            ShowShot(origin, end);
+            ShowShot(origin, end, hitNormal);
         }
 
         // ------------------------------------------------------------- barrel
@@ -372,23 +397,43 @@ namespace VRMultiplayer
             _flash.range = 4f;
             _flash.enabled = false;
 
-            var impactGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            impactGo.name = "Impact Spark";
-            Destroy(impactGo.GetComponent<Collider>());
-            impactGo.transform.SetParent(transform, false);
-            impactGo.transform.localScale = Vector3.one * 0.06f;
+            if (ImpactSize <= 0f) return; // iz istenmiyorsa havuzu hic kurma
+
             var imat = new Material(FindShaderSafe());
-            if (imat.HasProperty("_BaseColor")) imat.SetColor("_BaseColor", new Color(1f, 0.55f, 0.15f));
-            else imat.color = new Color(1f, 0.55f, 0.15f);
-            impactGo.GetComponent<MeshRenderer>().sharedMaterial = imat;
-            _impact = impactGo.transform;
-            impactGo.SetActive(false);
+            Color ic = ImpactColor;
+            if (imat.HasProperty("_BaseColor")) imat.SetColor("_BaseColor", ic);
+            else imat.color = ic;
+
+            // Kok seviyesinde: silahla birlikte tasinmamalilar.
+            _decalRoot = new GameObject(name + " Bullet Holes").transform;
+            _decals = new Transform[DecalCount];
+            for (int i = 0; i < DecalCount; i++)
+            {
+                // Yassilastirilmis kup: yuzeye gomulu koyu bir yama = delik. Kup simetrik
+                // oldugu icin normalin isareti yanlis olsa bile gorunmez yuze donmez
+                // (Quad'in tek yuzu var, ters donerse hic cizilmez).
+                var d = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                d.name = "Bullet Hole";
+                Destroy(d.GetComponent<Collider>());
+                d.GetComponent<MeshRenderer>().sharedMaterial = imat;
+                d.transform.SetParent(_decalRoot, false);
+                d.SetActive(false);
+                _decals[i] = d.transform;
+            }
         }
 
-        void ShowShot(Vector3 origin, Vector3 end)
+        public override void OnDestroy()
+        {
+            // Havuz silahin cocugu olmadigi icin onunla birlikte yok olmaz — elle temizle.
+            if (_decalRoot != null) Destroy(_decalRoot.gameObject);
+            base.OnDestroy();
+        }
+
+        void ShowShot(Vector3 origin, Vector3 end, Vector3 hitNormal)
         {
             _shotOrigin = origin;
             _shotEnd = end;
+            _shotNormal = hitNormal;
             Vector3 d = end - origin;
             _shotDist = d.magnitude;
             _shotDir = _shotDist > 1e-4f ? d / _shotDist : transform.forward;
@@ -416,19 +461,6 @@ namespace VRMultiplayer
             {
                 _flashOffAt = -1f;
                 if (_flash != null) _flash.enabled = false;
-            }
-
-            // Carpma kivilcimi silahin cocugu, ama DUNYA noktasinda durmali: konumu her kare
-            // yeniden yaziyoruz, yoksa silah donunce kivilcim de onunla suruklenir (60 m'de
-            // birkac derece metrelerce kayma demek).
-            if (_impactOffAt > 0f)
-            {
-                if (_impact != null) _impact.position = _shotEnd;
-                if (Time.time > _impactOffAt)
-                {
-                    _impactOffAt = -1f;
-                    if (_impact != null) _impact.gameObject.SetActive(false);
-                }
             }
 
             if (!_shotFlying) return;
@@ -474,16 +506,26 @@ namespace VRMultiplayer
             }
         }
 
+        // Carptigi yerde KALICI bir iz birakir. Havuzdaki en eski iz geri donusur.
         void ShowImpact()
         {
             if (_impactShown) return;
             _impactShown = true;
-            if (_impact != null)
-            {
-                _impact.position = _shotEnd;
-                _impact.gameObject.SetActive(true);
-            }
-            _impactOffAt = Time.time + 0.06f;
+
+            // Normal sifir = hicbir seye carpmadi ya da bir OYUNCUYA carpti: iz birakma.
+            // Yuruyen bir oyuncuya cakilan dunya-uzayi izi havada asili kalirdi.
+            if (_decals == null || _shotNormal.sqrMagnitude < 0.5f) return;
+
+            var d = _decals[_decalNext];
+            _decalNext = (_decalNext + 1) % _decals.Length;
+
+            float s = ImpactSize;
+            // Ince eksen (lokal Z) normal boyunca; yuzeyin biraz icine gomulu dursun ki
+            // z-fighting olmadan "delik" gibi otursun.
+            d.SetPositionAndRotation(_shotEnd + _shotNormal * 0.002f,
+                Quaternion.LookRotation(_shotNormal));
+            d.localScale = new Vector3(s, s, 0.006f);
+            d.gameObject.SetActive(true);
         }
     }
 }
