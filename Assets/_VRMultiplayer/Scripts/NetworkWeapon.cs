@@ -25,10 +25,18 @@ namespace VRMultiplayer
         public Transform muzzle;
 
         GrabbableObject _grab;
+        WeaponGripProfile _profile;
         Vector3 _muzzleLocal;
         Vector3 _barrelLocal = Vector3.forward;
         float _nextFire;
+        float _srvNextFire;
         bool _prevTrigger;
+
+        // Profilsiz silah = bugunku sabitler; her erisim profili varsa oradan okur.
+        bool IsAuto => _profile != null && _profile.fireMode == FireMode.Auto;
+        float HapticAmplitude => _profile != null ? _profile.hapticAmplitude : 0.7f;
+        float HapticDuration => _profile != null ? _profile.hapticDuration : 0.08f;
+        float SupportHapticAmplitude => _profile != null ? _profile.supportHapticAmplitude : 0f;
 
         // Effects (created once, reused per shot)
         LineRenderer _tracer;
@@ -52,6 +60,7 @@ namespace VRMultiplayer
         {
             var profile = WeaponGripBinder.FindProfile(name);
             if (profile == null) return;
+            _profile = profile;
 
             if (profile.overrideFire)
             {
@@ -80,33 +89,60 @@ namespace VRMultiplayer
             // support hand, so two-handed players can use their front-hand trigger too.
             bool trig = ReadTrigger(XRNode.RightHand, out var rDev);
             var firedDev = rDev;
+            var firedNode = XRNode.RightHand;
             if (!trig)
             {
                 trig = ReadTrigger(XRNode.LeftHand, out var lDev);
                 firedDev = lDev;
+                firedNode = XRNode.LeftHand;
             }
 
-            if (trig && !_prevTrigger && Time.time >= _nextFire)
+            // Semi: her atis tetigin yeniden cekilmesini ister. Auto: basili tutuldukca tarar.
+            bool wantsFire = IsAuto ? trig : (trig && !_prevTrigger);
+            if (wantsFire && Time.time >= _nextFire)
             {
-                _nextFire = Time.time + fireInterval;
-                Vector3 origin;
-                Vector3 dir;
-                if (muzzle != null)
-                {
-                    origin = muzzle.position;   // precise barrel tip placed in the editor
-                    dir = muzzle.forward;
-                }
-                else
-                {
-                    origin = transform.TransformPoint(_muzzleLocal);
-                    dir = (transform.rotation * _barrelLocal).normalized;
-                }
-                FireServerRpc(origin, dir);
-
-                if (firedDev.isValid)
-                    firedDev.SendHapticImpulse(0, 0.7f, 0.08f);
+                // Kadans kareye degil saate baglanir: taramada frame quantization birikip
+                // atis hizini dusurmez. Uzun aradan sonra ise tam bir aralik beklenir —
+                // yoksa geride kalmis _nextFire bir sonraki karede bedava ikinci atis verir.
+                _nextFire += fireInterval;
+                if (_nextFire < Time.time) _nextFire = Time.time + fireInterval;
+                Fire(firedDev, firedNode);
             }
             _prevTrigger = trig;
+        }
+
+        void Fire(InputDevice firedDev, XRNode firedNode)
+        {
+            Vector3 origin;
+            Vector3 dir;
+            if (muzzle != null)
+            {
+                origin = muzzle.position;   // precise barrel tip placed in the editor
+                dir = muzzle.forward;
+            }
+            else
+            {
+                origin = transform.TransformPoint(_muzzleLocal);
+                dir = (transform.rotation * _barrelLocal).normalized;
+            }
+            FireServerRpc(origin, dir);
+
+            if (firedDev.isValid)
+                firedDev.SendHapticImpulse(0, HapticAmplitude, HapticDuration);
+
+            // Destek eli de silahta: ona da hafif bir vurus. Tetigi ceken el tam siddeti
+            // zaten aldi — ayni kumandayi ikinci kez titretme.
+            byte sup = _grab.SupportHand;
+            if (sup != GrabbableObject.NoHand && SupportHapticAmplitude > 0f)
+            {
+                XRNode supNode = sup == 0 ? XRNode.LeftHand : XRNode.RightHand;
+                if (supNode != firedNode)
+                {
+                    var supDev = InputDevices.GetDeviceAtXRNode(supNode);
+                    if (supDev.isValid)
+                        supDev.SendHapticImpulse(0, SupportHapticAmplitude, HapticDuration);
+                }
+            }
         }
 
         static bool ReadTrigger(XRNode node, out InputDevice dev)
@@ -124,6 +160,13 @@ namespace VRMultiplayer
         {
             if (p.Receive.SenderClientId != _grab.HolderClientId) return; // only the holder fires
             if (dir.sqrMagnitude < 0.5f) return;
+
+            // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
+            // FireServerRpc'yi her karede cagirsa da atis hizi profilin uzerine cikamaz.
+            // %15 tolerans, ag jitter'inda mesru atisin dusmesini onler.
+            if (Time.time < _srvNextFire) return;
+            _srvNextFire = Time.time + fireInterval * 0.85f;
+
             dir.Normalize();
 
             // Authoritative hit: nearest thing the ray touches that is neither the weapon nor
