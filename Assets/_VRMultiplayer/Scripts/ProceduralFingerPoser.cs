@@ -35,6 +35,8 @@ namespace VRMultiplayer
         [Tooltip("Parmaklar hala ters gelirse isaretle (tum yonu tersine cevirir).")]
         public bool invertCurl = false;
         public float smoothing = 14f;
+        [Tooltip("Tetik parmagi icin AYRI (cok daha hizli) yumusatma. Tetik cekisi anlik hissedilmeli; genel poz yumusatmasi (smoothing) burada gecikme yaratir. Yalnizca authored pozda kullanilir.")]
+        public float triggerSmoothing = 60f;
         [Tooltip("Silah tutarken avucun tam kapanmasi icin grip bu degere clamp'lenir.")]
         public float heldGripMin = 0.85f;
 
@@ -301,8 +303,12 @@ namespace VRMultiplayer
                 _wristR.localRotation = _wristR.localRotation * Quaternion.AngleAxis(palmRollDegrees * _rollSignR, _rollAxisR);
 
             float k = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
+            // Tetik ekseni cok daha hizli takip edilir: parmak tetikle birlikte ANLIK hareket
+            // etmeli. Sifir yumusatma da olmaz — ag uzerinden gelen deger adim adim geliyor ve
+            // uzaktaki oyuncularda zipliyor; bu kadari adimlari yutar ama gecikme hissettirmez.
+            float kTrig = 1f - Mathf.Exp(-Mathf.Max(smoothing, triggerSmoothing) * Time.deltaTime);
             _gL = Mathf.Lerp(_gL, gL, k); _gR = Mathf.Lerp(_gR, gR, k);
-            _tL = Mathf.Lerp(_tL, tL, k); _tR = Mathf.Lerp(_tR, tR, k);
+            _tL = Mathf.Lerp(_tL, tL, kTrig); _tR = Mathf.Lerp(_tR, tR, kTrig);
 
             UpdateFingerTargets(_fingersL, _ovrProfileL, _ovrSupportL, _tL, k);
             UpdateFingerTargets(_fingersR, _ovrProfileR, _ovrSupportR, _tR, k);
@@ -340,10 +346,19 @@ namespace VRMultiplayer
                 if (t == null) continue;
 
                 Quaternion target = fp.joints[j];
+
                 // Isaret parmagi: birakili poz -> cekili poz arasi, ag uzerinden gelen tetik
                 // ekseniyle. Uzaktakiler de tetik parmaginin hareketini gorur.
                 if (pulled && HandPoseBones.IsIndex(j))
+                {
                     target = Quaternion.Slerp(target, fp.indexPulled[j - HandPoseBones.IndexFirst], trigger);
+                    // Poz yumusatmasini ATLA ve dogrudan yaz: tetik ekseni zaten kendi hizli
+                    // filtresinden geciyor, uzerine bir de poz yumusatmasi binince tetik cekisi
+                    // gecikmeli hissediliyor. Parmak tetikle ayni anda hareket etmeli.
+                    cur[j] = target;
+                    t.localRotation = target;
+                    continue;
+                }
 
                 // Ilk kare: animatorun o anki pozundan tohumla ki silahi kavrarken pop olmasin.
                 if (!seeded) cur[j] = t.localRotation;
