@@ -134,6 +134,30 @@ namespace VRMultiplayer
                 fingers[i] = i == 1 ? Mathf.Max(grip, trigger) : grip;
         }
 
+        // Eksenler T-POSE'dan olculur, canli pozdan DEGIL. Bu kritik: olcum karesine gelindiginde
+        // idle klibi parmaklari coktan kivirmis oluyor (sag el yariya kadar), ve kivrik bir
+        // parmakta uzama yonu (i.position - p.position) T-pose'dakinden bambaska bir yeri
+        // gosteriyor. Menteşe ekseni oradan turetilince capraz cikiyor, ama `open` T-pose'dan
+        // geliyor — yani T-pose'u YANLIS eksen etrafinda donduruyorduk ve parmak yana/asagi
+        // capraz kapaniyordu. Kemikleri gecici olarak rest rotasyonuna alip olcuyoruz; geri
+        // koymak da bedava, Apply() hemen ardindan localRotation'lari zaten yeniden yaziyor.
+        void BuildHands()
+        {
+            var live = new Dictionary<Transform, Quaternion>(_restPose.Count);
+            foreach (var kv in _restPose)
+            {
+                if (kv.Key == null) continue;
+                live[kv.Key] = kv.Key.localRotation;
+                kv.Key.localRotation = kv.Value;
+            }
+
+            BuildHand(true, _left, ref _wristL, ref _rollAxisL, ref _rollSignL);
+            BuildHand(false, _right, ref _wristR, ref _rollAxisR, ref _rollSignR);
+
+            foreach (var kv in live)
+                if (kv.Key != null) kv.Key.localRotation = kv.Value;
+        }
+
         void BuildHand(bool left, List<Phalanx> outList, ref Transform wristOut,
             ref Vector3 rollAxisOut, ref float rollSignOut)
         {
@@ -245,11 +269,7 @@ namespace VRMultiplayer
         {
             // Runs after AvatarIKController (execution order 100), so on the capture frame the
             // idle pose + arm IK of this frame are already final — a sane pose to measure from.
-            if (_framesUntilBuild > 0 && --_framesUntilBuild == 0)
-            {
-                BuildHand(true, _left, ref _wristL, ref _rollAxisL, ref _rollSignL);
-                BuildHand(false, _right, ref _wristR, ref _rollAxisR, ref _rollSignR);
-            }
+            if (_framesUntilBuild > 0 && --_framesUntilBuild == 0) BuildHands();
             if (_left.Count == 0 && _right.Count == 0) return;
 
             float gL = 0f, gR = 0f, tL = 0f, tR = 0f;
