@@ -110,8 +110,8 @@ namespace VRMultiplayer.Weapons
         [Header("Mermi izi (carptigi yerde kalan delik)")]
         [Tooltip("Izin rengi. Koyu = kursun deligi; parlak renk = boya lekesi.")]
         public Color impactColor = new Color(0.03f, 0.03f, 0.04f, 1f);
-        [Tooltip("Izin capi (m). 0 = hic iz birakma.")]
-        public float impactSize = 0.06f;
+        [Tooltip("Izin capi (m) — yuvarlak disk. Kursun deligi kucuk olmali; iz cizgisi kalinligi civari iyi bir taban. 0 = hic iz birakma.")]
+        public float impactSize = 0.022f;
 
         [Header("Haptik")]
         [Tooltip("Atis aninda ates eden kumandanin titresim siddeti (0..1).")]

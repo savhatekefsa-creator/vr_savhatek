@@ -76,7 +76,7 @@ namespace VRMultiplayer
         float TracerWidth => _profile != null ? _profile.tracerWidth : 0.03f;
         float FlashDuration => _profile != null ? _profile.flashDuration : 0.035f;
         Color ImpactColor => _profile != null ? _profile.impactColor : new Color(0.03f, 0.03f, 0.04f, 1f);
-        float ImpactSize => _profile != null ? _profile.impactSize : 0.06f;
+        float ImpactSize => _profile != null ? _profile.impactSize : 0.022f;
 
         void Awake()
         {
@@ -409,10 +409,10 @@ namespace VRMultiplayer
             _decals = new Transform[DecalCount];
             for (int i = 0; i < DecalCount; i++)
             {
-                // Yassilastirilmis kup: yuzeye gomulu koyu bir yama = delik. Kup simetrik
-                // oldugu icin normalin isareti yanlis olsa bile gorunmez yuze donmez
-                // (Quad'in tek yuzu var, ters donerse hic cizilmez).
-                var d = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                // Yassilastirilmis SILINDIR = yuvarlak disk (kursun deligi kare degil yuvarlak).
+                // Silindir de kup gibi simetrik, yani normalin isareti yanlis olsa bile gorunmez
+                // yuze donmez (Quad'in tek yuzu var, ters donerse hic cizilmez).
+                var d = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 d.name = "Bullet Hole";
                 Destroy(d.GetComponent<Collider>());
                 d.GetComponent<MeshRenderer>().sharedMaterial = imat;
@@ -519,12 +519,12 @@ namespace VRMultiplayer
             var d = _decals[_decalNext];
             _decalNext = (_decalNext + 1) % _decals.Length;
 
+            // Silindirin ekseni LOKAL Y; onu yuzey normaline hizala. Olcek: mesh yaricapi 0.5
+            // (yani cap = scale.x) ve yuksekligi 2 (yani kalinlik = 2 * scale.y).
             float s = ImpactSize;
-            // Ince eksen (lokal Z) normal boyunca; yuzeyin biraz icine gomulu dursun ki
-            // z-fighting olmadan "delik" gibi otursun.
-            d.SetPositionAndRotation(_shotEnd + _shotNormal * 0.002f,
-                Quaternion.LookRotation(_shotNormal));
-            d.localScale = new Vector3(s, s, 0.006f);
+            d.SetPositionAndRotation(_shotEnd + _shotNormal * 0.001f,
+                Quaternion.FromToRotation(Vector3.up, _shotNormal));
+            d.localScale = new Vector3(s, 0.0015f, s); // kalinlik 3 mm: yuzeye gomulu dursun
             d.gameObject.SetActive(true);
         }
     }
