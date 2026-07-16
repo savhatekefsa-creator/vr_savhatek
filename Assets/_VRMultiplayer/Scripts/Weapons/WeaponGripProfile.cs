@@ -22,7 +22,7 @@ namespace VRMultiplayer.Weapons
         [Header("Eslestirme (Equals > Contains; ikisi de bossa profil hic eslesmez)")]
         [Tooltip("Silah GameObject adi TAM olarak buysa eslesir (oncelikli).")]
         public string weaponNameEquals = "";
-        [Tooltip("Silah GameObject adi bunu ICERIYORSA eslesir (Equals eslesmezse bakilir).")]
+        [Tooltip("Silah GameObject adi bunu ICERIYORSA eslesir (Equals eslesmezse bakilir). BUNU DOLDUR: yalnizca Equals kullanirsan silahin sahnedeki kopyalari (\"Weapon_Pistol (1)\") profille ESLESMEZ ve sessizce eski pivot-snap davranisina duser — poz, tepme, ates modu hicbiri calismaz.")]
         public string weaponNameContains = "";
 
         [Header("Kabza cipasi (silah-lokal kumanda pozu — yakalama araciyla uretilir)")]
