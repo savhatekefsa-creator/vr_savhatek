@@ -11,9 +11,9 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b37255edf5b63a8408ec2f907e179ba4, type: 3}
   m_Name: Pistol_GripProfile
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   weaponNameEquals: Weapon_Pistol
-  weaponNameContains:
+  weaponNameContains: 
   gripLocalPosition: {x: -0.0278, y: 0.0844, z: -0.0059}
   gripLocalEuler: {x: 300.6761, y: 232.6344, z: 333.0594}
   barrelLocalDirection: {x: 0, y: 0, z: -1}
@@ -43,9 +43,25 @@ MonoBehaviour:
   aimDeadzoneDegrees: 0.75
   aimSoftKneeDegrees: 1.5
   aimHalfLifeMs: 45
-  overrideFire: 0
-  fireInterval: 0.18
+  overrideFire: 1
+  fireInterval: 0.13
   range: 60
   createMuzzleIfMissing: 0
   muzzleLocalPosition: {x: 0, y: 0, z: 0}
+  fireMode: 0
+  kickPitchPerShot: 2.5
+  kickYawJitter: 0.5
+  kickBackMeters: 0.012
+  maxAccumPitch: 8
+  maxAccumBack: 0.04
+  recoilDecayHalfLife: 0.12
+  recoilRestDecayHalfLife: 0.08
+  supportRecoilMultiplier: 0.6
+  spreadBase: 0.25
+  spreadPerShot: 0.4
+  spreadMax: 3
+  spreadDecayHalfLife: 0.2
+  hapticAmplitude: 0.7
+  hapticDuration: 0.08
+  supportHapticAmplitude: 0.35
   simpleColliders: []

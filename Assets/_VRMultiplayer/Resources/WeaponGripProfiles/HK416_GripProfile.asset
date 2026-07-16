@@ -11,8 +11,8 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b37255edf5b63a8408ec2f907e179ba4, type: 3}
   m_Name: HK416_GripProfile
-  m_EditorClassIdentifier:
-  weaponNameEquals:
+  m_EditorClassIdentifier: 
+  weaponNameEquals: 
   weaponNameContains: Rifle_HK416
   gripLocalPosition: {x: 0.0181, y: -0.0005, z: 0.0162}
   gripLocalEuler: {x: 312.9881, y: 304.7636, z: 345.5506}
@@ -43,9 +43,25 @@ MonoBehaviour:
   aimDeadzoneDegrees: 0.75
   aimSoftKneeDegrees: 1.5
   aimHalfLifeMs: 45
-  overrideFire: 0
-  fireInterval: 0.18
+  overrideFire: 1
+  fireInterval: 0.08
   range: 60
   createMuzzleIfMissing: 0
   muzzleLocalPosition: {x: 0, y: 0, z: 0}
+  fireMode: 1
+  kickPitchPerShot: 1.2
+  kickYawJitter: 0.35
+  kickBackMeters: 0.006
+  maxAccumPitch: 7
+  maxAccumBack: 0.04
+  recoilDecayHalfLife: 0.15
+  recoilRestDecayHalfLife: 0.06
+  supportRecoilMultiplier: 0.5
+  spreadBase: 0.15
+  spreadPerShot: 0.15
+  spreadMax: 2
+  spreadDecayHalfLife: 0.15
+  hapticAmplitude: 0.7
+  hapticDuration: 0.08
+  supportHapticAmplitude: 0.35
   simpleColliders: []
