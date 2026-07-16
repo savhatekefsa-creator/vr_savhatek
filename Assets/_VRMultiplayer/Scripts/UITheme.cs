@@ -4,7 +4,7 @@ namespace VRMultiplayer.UI
 {
     /// <summary>
     /// Holds the centralized theme for the game's UI (colors, fonts, materials).
-    /// Used by PlayerHUD and OverheadHealthBar to ensure a consistent look.
+    /// Used by PlayerHUD and the UI effects to ensure a consistent look.
     /// </summary>
     public static class UITheme
     {

@@ -2,6 +2,13 @@ using UnityEngine;
 
 namespace VRMultiplayer.Weapons
 {
+    /// <summary>How the trigger maps to shots: one per press, or a sustained burst.</summary>
+    public enum FireMode
+    {
+        Semi,
+        Auto,
+    }
+
     /// <summary>
     /// Data-driven static grip pose for one weapon type — this project's ScriptableObject
     /// equivalent of ISDK's HandGrabPose + Fingers Freedom + BoxGrabSurface. A weapon matches a
@@ -53,6 +60,66 @@ namespace VRMultiplayer.Weapons
         [Tooltip("Silahta Muzzle child'i yoksa bu lokal noktada olusturulur (isaretliyse).")]
         public bool createMuzzleIfMissing;
         public Vector3 muzzleLocalPosition;
+
+        [Header("Ates modu")]
+        [Tooltip("Semi: tik basina tek atis. Auto: tetik basili tutuldukca fireInterval araliginda tarar (overrideFire ile aralik verilmeli).")]
+        public FireMode fireMode = FireMode.Semi;
+
+        // Kick alanlari 0 = tepme yok: dokunulmamis bir profil (Paintball) eski davranisini
+        // birebir korur, WeaponRecoil hic eklenmez.
+        [Header("Tepme (recoil) — aci: derece, mesafe: DUNYA metresi")]
+        [Tooltip("Atis basina namlunun yukari kalkisi (derece).")]
+        public float kickPitchPerShot;
+        [Tooltip("Atis basina rastgele +-yaw sekmesi (derece).")]
+        public float kickYawJitter;
+        [Tooltip("Atis basina namlu ekseninin tersine geri itilme (dunya metresi).")]
+        public float kickBackMeters;
+        [Tooltip("Birikmis tirmanis tavani (derece).")]
+        public float maxAccumPitch = 8f;
+        [Tooltip("Birikmis geri itilme tavani (dunya metresi).")]
+        public float maxAccumBack = 0.04f;
+        [Tooltip("Ates SURERKEN tepmenin sonme yarilanma suresi (s).")]
+        public float recoilDecayHalfLife = 0.12f;
+        [Tooltip("Tetik BIRAKILINCA nisan hattina toparlanma yarilanma suresi (s).")]
+        public float recoilRestDecayHalfLife = 0.07f;
+        [Tooltip("Iki elli tutusta tepme ve sapmaya uygulanan carpan.")]
+        public float supportRecoilMultiplier = 0.55f;
+
+        [Header("Sapma (bloom) — derece")]
+        [Tooltip("Dinlenmedeki isabet konisi yari-acisi.")]
+        public float spreadBase;
+        [Tooltip("Her atisin koniye ekledigi buyume.")]
+        public float spreadPerShot;
+        [Tooltip("Koninin ulasabilecegi en genis yari-aci.")]
+        public float spreadMax = 3f;
+        [Tooltip("Ates kesilince koninin daralma yarilanma suresi (s).")]
+        public float spreadDecayHalfLife = 0.18f;
+
+        [Header("Ates izi (tracer)")]
+        [Tooltip("Iz cizgisinin rengi. Gercek 5.56 izli fisegi turuncu-kirmizi yanar.")]
+        public Color tracerColor = new Color(1f, 0.45f, 0.12f);
+        [Tooltip("Izin ucus hizi (m/s). Gercek mermi ~900 m/s'de gozle takip edilemez; 200-350 arasi hem hizli hem gorunur. 0 = aninda tam boy cizgi (eski davranis).")]
+        public float tracerSpeed = 260f;
+        [Tooltip("Ucan iz parcasinin uzunlugu (m).")]
+        public float tracerLength = 2.5f;
+        [Tooltip("Iz cizgisinin kalinligi (m).")]
+        public float tracerWidth = 0.03f;
+        [Tooltip("Namlu alevinin parlama suresi (s).")]
+        public float flashDuration = 0.035f;
+
+        [Header("Mermi izi (carptigi yerde kalan delik)")]
+        [Tooltip("Izin rengi. Koyu = kursun deligi; parlak renk = boya lekesi.")]
+        public Color impactColor = new Color(0.03f, 0.03f, 0.04f, 1f);
+        [Tooltip("Izin capi (m). 0 = hic iz birakma.")]
+        public float impactSize = 0.06f;
+
+        [Header("Haptik")]
+        [Tooltip("Atis aninda ates eden kumandanin titresim siddeti (0..1).")]
+        public float hapticAmplitude = 0.7f;
+        [Tooltip("Titresim suresi (s).")]
+        public float hapticDuration = 0.08f;
+        [Tooltip("Destek eli takiliysa o kumandaya giden hafif titresim (0 = kapali).")]
+        public float supportHapticAmplitude = 0.35f;
 
         [Header("Opsiyonel basit collider degisimi (bos = collider'lara dokunulmaz)")]
         public BoxSpec[] simpleColliders = new BoxSpec[0];
