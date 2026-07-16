@@ -116,4 +116,10 @@ MonoBehaviour:
   hapticAmplitude: 0.7
   hapticDuration: 0.08
   supportHapticAmplitude: 0.35
+  magazineSize: 30
+  spareMagazines: -1
+  reloadDuration: 1.6
+  reloadFlickSpeed: 1.3
+  reloadFlickTravel: 0.25
+  reloadFlickWindow: 0.8
   simpleColliders: []
