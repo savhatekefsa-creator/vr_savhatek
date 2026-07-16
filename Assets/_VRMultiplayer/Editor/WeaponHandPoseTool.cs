@@ -27,19 +27,22 @@ namespace VRMultiplayer.EditorTools
     /// </summary>
     public class WeaponHandPoseTool : EditorWindow
     {
-        WeaponGripProfile _profile;
-        Animator _avatar;
-        Transform _weapon;
-        bool _support;          // false = ana el (kabza), true = destek eli (kundak)
-        bool _left;             // pozun yazildigi FIZIKSEL el
-        float _seed = 1f;
+        // [SerializeField]: EditorWindow alanlari domain reload'da (her script derlemesinde)
+        // sifirlanir — isaretlenmezse her derlemede secimler ucar.
+        [SerializeField] WeaponGripProfile _profile;
+        [SerializeField] Animator _avatar;
+        [SerializeField] Transform _weapon;
+        [SerializeField] bool _support;   // false = ana el (kabza), true = destek eli (kundak)
+        [SerializeField] bool _left;      // pozun yazildigi FIZIKSEL el
+        [SerializeField] float _seed = 1f;
+        [SerializeField] bool _showSeed;
         Vector2 _scroll;
         string _status = "";
 
-        // Rest (T-pose) anlik goruntusu: seed her seferinde BURADAN baslar, yoksa butona iki kez
-        // basinca kivrim uzerine biner.
-        readonly Dictionary<Transform, Quaternion> _rest = new Dictionary<Transform, Quaternion>();
-        Animator _restOf;
+        // NOT: rest pozu ANLIK SNAPSHOT olarak tutulmaz. Tutulursa domain reload'da (her script
+        // derlemesinde) ucar, ve sonraki "T-pose'a don" mevcut KIVRIK pozu rest sanip geri yazar
+        // — yani hicbir sey yapmaz. Rest her zaman PREFAB'in kendi degerlerinden okunur: orasi
+        // bozulmaz, reload'dan etkilenmez, ve poz verirken zaten prefab override'i yaziyoruz.
 
         // Prosedurel curl'un kaba karsiligi — sadece BASLANGIC pozu uretmek icin. Runtime'daki
         // ProceduralFingerPoser degerleriyle birebir ayni olmasi gerekmiyor: uzerine zaten elle
@@ -48,6 +51,35 @@ namespace VRMultiplayer.EditorTools
 
         [MenuItem("Tools/VR Multiplayer/31. Weapon Finger Pose Tool")]
         static void Open() => GetWindow<WeaponHandPoseTool>("Parmak Pozu");
+
+        void OnEnable() => AutoFind();
+
+        /// <summary>Ucunu de acik sahneden kendisi bulur — elle suruklemeye gerek yok.
+        /// Avatar: ilk humanoid Animator. Silah + profil: eslesmesi olan ilk grabbable
+        /// (binder'in runtime'da kullandigi eslesmenin aynisi).</summary>
+        void AutoFind()
+        {
+            if (_avatar == null)
+                foreach (var a in FindObjectsByType<Animator>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                    if (a.isHuman) { _avatar = a; break; }
+
+            // Profil bos olsa bile silahi bulabilmeli: sahnedeki profilli ilk silahtan ikisini
+            // birden doldur. Profil seciliyse yalniz ONA eslesen silahi ara.
+            if (_weapon == null)
+                foreach (var g in FindObjectsByType<GrabbableObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    string clean = WeaponGripBinder.CleanName(g.name);
+                    if (_profile != null)
+                    {
+                        if (_profile.MatchScore(clean) > 0) { _weapon = g.transform; break; }
+                    }
+                    else
+                    {
+                        var p = WeaponGripBinder.FindProfile(clean);
+                        if (p != null) { _profile = p; _weapon = g.transform; break; }
+                    }
+                }
+        }
 
         void OnGUI()
         {
@@ -58,9 +90,13 @@ namespace VRMultiplayer.EditorTools
                 "Parmaklari Hierarchy'den secip Rotate tool (E) ile bukersin, sonra kaydedersin.",
                 MessageType.Info);
 
+            EditorGUI.BeginChangeCheck();
             _profile = (WeaponGripProfile)EditorGUILayout.ObjectField("Profil", _profile, typeof(WeaponGripProfile), false);
+            if (EditorGUI.EndChangeCheck()) { _weapon = null; AutoFind(); } // profil degisti -> silahi yeniden bul
+
             _avatar = (Animator)EditorGUILayout.ObjectField("Avatar (sahnede)", _avatar, typeof(Animator), true);
             _weapon = (Transform)EditorGUILayout.ObjectField("Silah (sahnede)", _weapon, typeof(Transform), true);
+            if (GUILayout.Button("Sahnede otomatik bul")) AutoFind();
 
             EditorGUILayout.Space();
             _support = EditorGUILayout.Popup("Rol", _support ? 1 : 0, new[] { "Ana el (kabza)", "Destek eli (kundak)" }) == 1;
@@ -77,20 +113,35 @@ namespace VRMultiplayer.EditorTools
             using (new EditorGUI.DisabledScope(!Ready()))
             {
                 if (GUILayout.Button("1) Silahi ele hizala")) AlignWeapon();
-
-                EditorGUILayout.BeginHorizontal();
-                _seed = EditorGUILayout.Slider("Kivrim", _seed, 0f, 1.5f);
-                if (GUILayout.Button("2) Kaba kivrim uygula", GUILayout.Width(160))) SeedCurl();
-                EditorGUILayout.EndHorizontal();
-
-                if (GUILayout.Button("T-pose'a don")) ResetToRest();
+                if (GUILayout.Button("2) T-pose'a don (temiz baslangic)")) ResetToRest();
 
                 EditorGUILayout.Space();
-                if (GUILayout.Button("3) Profile KAYDET", GUILayout.Height(30))) Save(false);
+                EditorGUILayout.LabelField("3) Eklemi sec, sahnede cevir", EditorStyles.boldLabel);
+                EditorGUILayout.HelpBox(
+                    "Butona bas -> kemik secilir ve Rotate tool acilir. Sahnede kureyi cevirerek " +
+                    "parmagi kabzaya yasla (F = secilene yakinlas).\n" +
+                    "Sira onerisi: Orta -> Yuzuk -> Serce (kabzayi saranlar), sonra Basparmak, en son Isaret.",
+                    MessageType.None);
+                DrawJointPicker();
+
+                EditorGUILayout.Space();
+                if (GUILayout.Button("4) Profile KAYDET", GUILayout.Height(30))) Save(false);
                 if (GUILayout.Button("Tetik CEKILI isaret parmagini kaydet")) Save(true);
 
                 EditorGUILayout.Space();
                 if (GUILayout.Button("Profilden yukle (duzenlemeye devam et)")) Load();
+
+                // Prosedurel curl'un ta kendisi: ayni menteşe matematigi, ayni sinirlar. Bazi
+                // rig'lerde ise yarar, bazilarinda pozu bozar — o yuzden opsiyonel ve en altta.
+                EditorGUILayout.Space();
+                _showSeed = EditorGUILayout.Foldout(_showSeed, "Opsiyonel: kaba kivrim (prosedurel — pozu bozabilir)");
+                if (_showSeed)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    _seed = EditorGUILayout.Slider("Kivrim", _seed, 0f, 1.5f);
+                    if (GUILayout.Button("Uygula", GUILayout.Width(80))) SeedCurl();
+                    EditorGUILayout.EndHorizontal();
+                }
             }
 
             if (!Ready())
@@ -103,36 +154,74 @@ namespace VRMultiplayer.EditorTools
 
         bool Ready() => _profile != null && _avatar != null && _avatar.isHuman;
 
-        Transform Bone(int joint) => _avatar.GetBoneTransform(HandPoseBones.Bone(joint, _left));
+        // Null guard sart: EditorGUI.DisabledScope sadece GORSEL olarak gri yapar, icindeki kod
+        // yine calisir. Avatar sahneden silinince (Unity'nin sahte-null'i) burasi patlardi.
+        Transform Bone(int joint) =>
+            _avatar == null ? null : _avatar.GetBoneTransform(HandPoseBones.Bone(joint, _left));
 
         // Yazim kurali ana el=SAG / destek=SOL. Roller takas edilince profilin lokal degerleri
         // aynalanir — weld ile BIREBIR ayni kural, yoksa arac silahi runtime'dakinden baska
         // yere koyar ve yanlis yere poz verirsin.
         bool Mirrored => _support != _left;
 
-        void CacheRest()
+        /// <summary>Bir kemigin BOZULMAMIS rest rotasyonu = prefab asset'indeki degeri. Sahnedeki
+        /// kemik ne kadar bukulmus olursa olsun prefab'daki hali degismez, domain reload da onu
+        /// etkilemez — anlik snapshot'in aksine.</summary>
+        static bool TryRestRotation(Transform bone, out Quaternion rest)
         {
-            if (_restOf == _avatar && _rest.Count > 0) return;
-            _rest.Clear();
-            _restOf = _avatar;
-            for (int side = 0; side < 2; side++)
-                for (int j = 0; j < HandPoseBones.JointCount; j++)
+            var src = PrefabUtility.GetCorrespondingObjectFromSource(bone);
+            if (src != null) { rest = src.localRotation; return true; }
+            rest = Quaternion.identity;
+            return false;
+        }
+
+        static readonly string[] FingerNames = { "Basparmak", "Isaret", "Orta", "Yuzuk", "Serce" };
+        static readonly string[] JointShort = { "Dip", "Orta", "Uc" };
+
+        // Kemikleri Hierarchy'nin derin agacinda avlamak yerine tek tikla sec. Secince Rotate
+        // tool + Local pivot: parmak kendi ekseninde doner, elle poz vermenin dogal hali.
+        void DrawJointPicker()
+        {
+            for (int f = 0; f < 5; f++)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(FingerNames[f], GUILayout.Width(72));
+                for (int j = 0; j < 3; j++)
                 {
-                    var t = _avatar.GetBoneTransform(HandPoseBones.Bone(j, side == 0));
-                    if (t != null) _rest[t] = t.localRotation;
+                    int joint = f * 3 + j;
+                    Transform t = Bone(joint);
+                    using (new EditorGUI.DisabledScope(t == null))
+                    {
+                        bool selected = t != null && Selection.activeTransform == t;
+                        var style = selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton;
+                        if (GUILayout.Button(t == null ? JointShort[j] + " (yok)" : JointShort[j], style))
+                        {
+                            Selection.activeTransform = t;
+                            Tools.current = Tool.Rotate;
+                            Tools.pivotRotation = PivotRotation.Local;
+                        }
+                    }
                 }
+                EditorGUILayout.EndHorizontal();
+            }
         }
 
         void ResetToRest()
         {
-            CacheRest();
-            foreach (var kv in _rest)
+            int done = 0, noSource = 0;
+            for (int j = 0; j < HandPoseBones.JointCount; j++)
             {
-                if (kv.Key == null) continue;
-                Undo.RecordObject(kv.Key, "T-pose'a don");
-                kv.Key.localRotation = kv.Value;
+                var t = Bone(j);
+                if (t == null) continue;
+                if (!TryRestRotation(t, out var rest)) { noSource++; continue; }
+                Undo.RecordObject(t, "T-pose'a don");
+                t.localRotation = rest;
+                done++;
             }
-            _status = "T-pose'a donuldu.";
+            _status = noSource > 0
+                ? $"{done} eklem sifirlandi, {noSource} eklemin prefab kaynagi YOK — avatar prefab " +
+                  "instance'i degilse rest pozu okunamiyor."
+                : $"{done} eklem T-pose'a dondu ({(_left ? "sol" : "sag")} el).";
         }
 
         // Weld'in TERSI: bilek kemigi nerede duruyorsa, silahi cipasi tam oraya gelecek sekilde
@@ -176,8 +265,7 @@ namespace VRMultiplayer.EditorTools
         // sebebi tam da idle'in bu olcumu kirletmesiydi).
         void SeedCurl()
         {
-            CacheRest();
-            ResetToRest();
+            ResetToRest(); // her zaman temiz pozdan basla, yoksa ust uste biner
 
             Transform wrist = _avatar.GetBoneTransform(_left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
             Transform idxP = Bone(3), midP = Bone(6), litP = Bone(12);
