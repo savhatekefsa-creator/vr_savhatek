@@ -26,10 +26,12 @@ namespace VRMultiplayer
 
         GrabbableObject _grab;
         WeaponGripProfile _profile;
+        WeaponRecoil _recoil;
         Vector3 _muzzleLocal;
         Vector3 _barrelLocal = Vector3.forward;
         float _nextFire;
         float _srvNextFire;
+        float _lastFire = float.NegativeInfinity;
         bool _prevTrigger;
 
         // Profilsiz silah = bugunku sabitler; her erisim profili varsa oradan okur.
@@ -76,6 +78,14 @@ namespace VRMultiplayer
                 m.localRotation = Quaternion.identity; // +Z = barrel by convention
                 muzzle = m;
             }
+
+            // Tepme bileseni yalnizca profil gercekten kick istiyorsa takilir: dokunulmamis
+            // (sifir kick) bir profil hicbir sey almaz, LateUpdate maliyeti bile olusmaz.
+            if (profile.kickPitchPerShot != 0f || profile.kickYawJitter != 0f || profile.kickBackMeters != 0f)
+            {
+                _recoil = gameObject.AddComponent<WeaponRecoil>();
+                _recoil.Init(_grab, profile);
+            }
         }
 
         void Update()
@@ -109,10 +119,16 @@ namespace VRMultiplayer
                 Fire(firedDev, firedNode);
             }
             _prevTrigger = trig;
+
+            // Tarama sonerken tepme yavas dinsin, tetik kesilince hizla toparlansin.
+            if (_recoil != null)
+                _recoil.SetSustainedFire(trig && Time.time - _lastFire < fireInterval * 2f);
         }
 
         void Fire(InputDevice firedDev, XRNode firedNode)
         {
+            _lastFire = Time.time;
+
             Vector3 origin;
             Vector3 dir;
             if (muzzle != null)
@@ -126,6 +142,10 @@ namespace VRMultiplayer
                 dir = (transform.rotation * _barrelLocal).normalized;
             }
             FireServerRpc(origin, dir);
+
+            // Yon YUKARIDA okundu: bu atis mevcut (onceki karenin tepmis) pozunu kullanir,
+            // yeni kick bir sonraki atisi kaldirir.
+            if (_recoil != null) _recoil.AddKick();
 
             if (firedDev.isValid)
                 firedDev.SendHapticImpulse(0, HapticAmplitude, HapticDuration);
