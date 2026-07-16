@@ -131,6 +131,15 @@ namespace VRMultiplayer.EditorTools
                 EditorGUILayout.Space();
                 if (GUILayout.Button("Profilden yukle (duzenlemeye devam et)")) Load();
 
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("Bilek duzeltmesi", EditorStyles.boldLabel);
+                EditorGUILayout.HelpBox(
+                    "El, verdigin pozun TERSI yonde duruyorsa bilek cipasi ters yakalanmis " +
+                    "demektir. Bu buton bilegi YZ duzleminde aynalar (MirrorX). Bir kez bas, " +
+                    "'Silahi ele hizala' ile bak; duzelmezse Ctrl+Z.",
+                    MessageType.None);
+                if (GUILayout.Button("Bu rolun bilek pozunu AYNALA (MirrorX)")) MirrorWrist();
+
                 // Prosedurel curl'un ta kendisi: ayni menteşe matematigi, ayni sinirlar. Bazi
                 // rig'lerde ise yarar, bazilarinda pozu bozar — o yuzden opsiyonel ve en altta.
                 EditorGUILayout.Space();
@@ -311,6 +320,26 @@ namespace VRMultiplayer.EditorTools
                 }
             }
             _status = $"Kaba kivrim uygulandi ({_seed:0.00}). Simdi ince ayar yap.";
+        }
+
+        /// <summary>Bilek cipasini YZ duzleminde aynalar. Euler<->quaternion cevrimini UNITY
+        /// yapiyor (Quaternion.Euler / .eulerAngles): Unity'nin euler sirasi ZXY ve elle yapilan
+        /// cevrim bu projede bilinen bir tuzak — hesabi motora birakmak tek guvenli yol.</summary>
+        void MirrorWrist()
+        {
+            var hp = _support ? _profile.supportHand : _profile.mainHand;
+
+            Undo.RecordObject(_profile, "Bilek pozunu aynala");
+            hp.wristLocalPosition = WeaponGripMath.MirrorX(hp.wristLocalPosition);
+            hp.wristLocalEuler = WeaponGripMath.MirrorX(Quaternion.Euler(hp.wristLocalEuler)).eulerAngles;
+
+            if (_support) _profile.supportHand = hp; else _profile.mainHand = hp;
+            EditorUtility.SetDirty(_profile);
+            AssetDatabase.SaveAssets();
+
+            _status = $"{(_support ? "Destek" : "Ana")} el bilegi aynalandi -> euler " +
+                      $"{hp.wristLocalEuler.x:0.#}, {hp.wristLocalEuler.y:0.#}, {hp.wristLocalEuler.z:0.#}. " +
+                      "'Silahi ele hizala' ile kontrol et.";
         }
 
         void Load()
