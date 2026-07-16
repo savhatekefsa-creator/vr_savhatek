@@ -52,6 +52,7 @@ namespace VRMultiplayer
         const int QueueBase = 3000;
 
         PlayerHealth _health;
+        HandGrabber _grabber;
         Transform _face;
         TextMesh _clock, _compass, _battery, _healthT, _ammo;
         Transform _healthBar;
@@ -63,6 +64,7 @@ namespace VRMultiplayer
         void Start()
         {
             _health = GetComponentInParent<PlayerHealth>(); // avatar bağlıysa bulur, değilse null
+            _grabber = GetComponentInParent<HandGrabber>(); // elindeki silahın mermisi için
             Build();
         }
 
@@ -99,7 +101,27 @@ namespace VRMultiplayer
                 _healthBar.localPosition = new Vector3(BarLeftX + BarWidth * r * 0.5f, BarY, BarZ);
             }
 
-            _ammo.text = "∞"; // ∞
+            _ammo.text = AmmoText();
+        }
+
+        /// <summary>Elindeki silah mermi sayıyorsa gerçek sayı; saymıyorsa (silahsızsın ya da
+        /// o silahta şarjör kapalı) eskisi gibi ∞.</summary>
+        string AmmoText()
+        {
+            var w = HeldWeapon();
+            if (w == null || !w.UsesAmmo) return "∞";
+            if (w.IsReloading) return "···";
+            return w.Ammo.ToString();
+        }
+
+        NetworkWeapon HeldWeapon()
+        {
+            if (_grabber == null) return null;
+            // Unity'nin sahte-null'ı yüzünden ?? kullanılmaz; == null operatör aşırı yüklemesi
+            // yok edilmiş objeyi de yakalar.
+            var g = _grabber.HeldRight;
+            if (g == null) g = _grabber.HeldLeft;
+            return g != null ? g.GetComponent<NetworkWeapon>() : null;
         }
 
         string CompassText()
