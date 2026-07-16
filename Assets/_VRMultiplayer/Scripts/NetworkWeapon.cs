@@ -45,7 +45,21 @@ namespace VRMultiplayer
         LineRenderer _tracer;
         Light _flash;
         Transform _impact;
-        float _fxOffAt = -1f;
+
+        // Ucan ates izi: atis dunya uzayinda saklanir, her kare ilerletilir.
+        Vector3 _shotOrigin, _shotDir, _shotEnd;
+        float _shotDist;
+        float _shotFiredAt;
+        bool _shotFlying;
+        bool _impactShown;
+        float _flashOffAt = -1f;
+        float _impactOffAt = -1f;
+
+        Color TracerColor => _profile != null ? _profile.tracerColor : new Color(1f, 0.45f, 0.12f);
+        float TracerSpeed => _profile != null ? _profile.tracerSpeed : 260f;
+        float TracerLength => _profile != null ? _profile.tracerLength : 2.5f;
+        float TracerWidth => _profile != null ? _profile.tracerWidth : 0.012f;
+        float FlashDuration => _profile != null ? _profile.flashDuration : 0.035f;
 
         void Awake()
         {
@@ -91,7 +105,7 @@ namespace VRMultiplayer
 
         void Update()
         {
-            if (_fxOffAt > 0f && Time.time > _fxOffAt) HideFx();
+            UpdateFx(); // herkeste, silah elde olmasa da: ucan iz sahibi birakinca da tamamlanir
 
             if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; return; }
             if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId) return;
@@ -341,10 +355,11 @@ namespace VRMultiplayer
             _tracer = tracerGo.AddComponent<LineRenderer>();
             _tracer.useWorldSpace = true;
             _tracer.positionCount = 2;
-            _tracer.widthMultiplier = 0.01f;
+            _tracer.widthMultiplier = TracerWidth;
             var mat = new Material(FindShaderSafe());
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(1f, 0.9f, 0.4f));
-            else mat.color = new Color(1f, 0.9f, 0.4f);
+            Color tc = TracerColor;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tc);
+            else mat.color = tc;
             _tracer.material = mat;
             _tracer.enabled = false;
 
@@ -372,31 +387,103 @@ namespace VRMultiplayer
 
         void ShowShot(Vector3 origin, Vector3 end)
         {
-            if (_tracer != null)
-            {
-                _tracer.SetPosition(0, origin);
-                _tracer.SetPosition(1, end);
-                _tracer.enabled = true;
-            }
+            _shotOrigin = origin;
+            _shotEnd = end;
+            Vector3 d = end - origin;
+            _shotDist = d.magnitude;
+            _shotDir = _shotDist > 1e-4f ? d / _shotDist : transform.forward;
+            _shotFiredAt = Time.time;
+            _shotFlying = true;
+            _impactShown = false;
+
+            // Namlu alevi silahin cocugu: dunya noktasi bir kez yazilir, sonra silahla birlikte
+            // hareket eder — namludan ayrilmaz.
             if (_flash != null)
             {
                 _flash.transform.position = origin;
                 _flash.enabled = true;
+                _flashOffAt = Time.time + FlashDuration;
             }
-            if (_impact != null)
-            {
-                _impact.position = end;
-                _impact.gameObject.SetActive(true);
-            }
-            _fxOffAt = Time.time + 0.07f;
+
+            UpdateFx(); // ilk kareyi hemen ciz: bir kare gecikmeyle baslamasin
         }
 
-        void HideFx()
+        // Izi namludan hedefe dogru UCURUR. Eskiden tam boy cizgi aninda cizilip 70 ms duruyordu:
+        // silahi cevirirken donuk cizgi namludan kopuk kaliyor ve atis sapmis gibi gorunuyordu.
+        void UpdateFx()
         {
-            _fxOffAt = -1f;
-            if (_tracer != null) _tracer.enabled = false;
-            if (_flash != null) _flash.enabled = false;
-            if (_impact != null) _impact.gameObject.SetActive(false);
+            if (_flashOffAt > 0f && Time.time > _flashOffAt)
+            {
+                _flashOffAt = -1f;
+                if (_flash != null) _flash.enabled = false;
+            }
+
+            // Carpma kivilcimi silahin cocugu, ama DUNYA noktasinda durmali: konumu her kare
+            // yeniden yaziyoruz, yoksa silah donunce kivilcim de onunla suruklenir (60 m'de
+            // birkac derece metrelerce kayma demek).
+            if (_impactOffAt > 0f)
+            {
+                if (_impact != null) _impact.position = _shotEnd;
+                if (Time.time > _impactOffAt)
+                {
+                    _impactOffAt = -1f;
+                    if (_impact != null) _impact.gameObject.SetActive(false);
+                }
+            }
+
+            if (!_shotFlying) return;
+
+            float speed = TracerSpeed;
+            if (speed <= 0f)
+            {
+                // Hiz 0 = eski davranis: aninda tam boy cizgi.
+                if (_tracer != null)
+                {
+                    _tracer.SetPosition(0, _shotOrigin);
+                    _tracer.SetPosition(1, _shotEnd);
+                    _tracer.enabled = true;
+                }
+                ShowImpact();
+                if (Time.time - _shotFiredAt > 0.07f)
+                {
+                    _shotFlying = false;
+                    if (_tracer != null) _tracer.enabled = false;
+                }
+                return;
+            }
+
+            float travelled = (Time.time - _shotFiredAt) * speed;
+            float head = Mathf.Min(travelled, _shotDist);
+            float tail = Mathf.Max(0f, travelled - Mathf.Max(0.1f, TracerLength));
+
+            // Kivilcim izin ucu hedefe VARDIGINDA parlar, atisla ayni anda degil.
+            if (travelled >= _shotDist) ShowImpact();
+
+            if (tail >= _shotDist)
+            {
+                _shotFlying = false;
+                if (_tracer != null) _tracer.enabled = false;
+                return;
+            }
+
+            if (_tracer != null)
+            {
+                _tracer.SetPosition(0, _shotOrigin + _shotDir * tail);
+                _tracer.SetPosition(1, _shotOrigin + _shotDir * head);
+                _tracer.enabled = true;
+            }
+        }
+
+        void ShowImpact()
+        {
+            if (_impactShown) return;
+            _impactShown = true;
+            if (_impact != null)
+            {
+                _impact.position = _shotEnd;
+                _impact.gameObject.SetActive(true);
+            }
+            _impactOffAt = Time.time + 0.06f;
         }
     }
 }

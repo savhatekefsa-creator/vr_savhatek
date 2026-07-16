@@ -95,6 +95,18 @@ namespace VRMultiplayer.Weapons
         [Tooltip("Ates kesilince koninin daralma yarilanma suresi (s).")]
         public float spreadDecayHalfLife = 0.18f;
 
+        [Header("Ates izi (tracer)")]
+        [Tooltip("Iz cizgisinin rengi. Gercek 5.56 izli fisegi turuncu-kirmizi yanar.")]
+        public Color tracerColor = new Color(1f, 0.45f, 0.12f);
+        [Tooltip("Izin ucus hizi (m/s). Gercek mermi ~900 m/s'de gozle takip edilemez; 200-350 arasi hem hizli hem gorunur. 0 = aninda tam boy cizgi (eski davranis).")]
+        public float tracerSpeed = 260f;
+        [Tooltip("Ucan iz parcasinin uzunlugu (m).")]
+        public float tracerLength = 2.5f;
+        [Tooltip("Iz cizgisinin kalinligi (m).")]
+        public float tracerWidth = 0.012f;
+        [Tooltip("Namlu alevinin parlama suresi (s).")]
+        public float flashDuration = 0.035f;
+
         [Header("Haptik")]
         [Tooltip("Atis aninda ates eden kumandanin titresim siddeti (0..1).")]
         public float hapticAmplitude = 0.7f;
