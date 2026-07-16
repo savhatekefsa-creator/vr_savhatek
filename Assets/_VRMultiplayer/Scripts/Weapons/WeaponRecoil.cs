@@ -28,6 +28,9 @@ namespace VRMultiplayer.Weapons
         GrabbableObject _grab;
         WeaponGripProfile _profile;
 
+        // Tepme MUTLAK bir durum olarak tutulur, transforma kare kare eklenmez: HandGrabber her
+        // LateUpdate'te silahi el cipasindan yeniden yaziyor, biz de o temiz pozun uzerine ayni
+        // offseti bastan uyguluyoruz. Offseti transforma biriktirseydik surukleneceklerdi.
         float _pitch;   // birikmis namlu kalkisi (derece)
         float _yaw;     // birikmis yatay sekme (derece)
         float _back;    // birikmis geri itilme (DUNYA metresi)

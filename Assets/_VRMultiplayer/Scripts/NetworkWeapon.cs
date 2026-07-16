@@ -32,6 +32,7 @@ namespace VRMultiplayer
         float _nextFire;
         float _srvNextFire;
         float _lastFire = float.NegativeInfinity;
+        float _bloom;   // birikmis sapma (derece), owner-lokal
         bool _prevTrigger;
 
         // Profilsiz silah = bugunku sabitler; her erisim profili varsa oradan okur.
@@ -92,8 +93,12 @@ namespace VRMultiplayer
         {
             if (_fxOffAt > 0f && Time.time > _fxOffAt) HideFx();
 
-            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; return; }
+            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; return; }
             if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId) return;
+
+            // Ates kesilince koni daralir.
+            if (_profile != null && _bloom > 0f)
+                _bloom *= Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, _profile.spreadDecayHalfLife));
 
             // EITHER controller's trigger fires while you hold the weapon — grip hand or
             // support hand, so two-handed players can use their front-hand trigger too.
@@ -141,6 +146,18 @@ namespace VRMultiplayer
                 origin = transform.TransformPoint(_muzzleLocal);
                 dir = (transform.rotation * _barrelLocal).normalized;
             }
+
+            // Sacilim owner'da uygulanir ve RPC'ye SACILMIS yon girer: tracer, sunucu isabeti
+            // ve hasar hepsi ayni yonu paylasir, ayrica bir senkron gerekmez.
+            if (_profile != null)
+            {
+                float mult = _grab.SupportHand != GrabbableObject.NoHand
+                    ? _profile.supportRecoilMultiplier
+                    : 1f;
+                dir = ApplySpread(dir, Mathf.Min(_profile.spreadBase + _bloom, _profile.spreadMax));
+                _bloom = Mathf.Min(_bloom + _profile.spreadPerShot * mult, _profile.spreadMax);
+            }
+
             FireServerRpc(origin, dir);
 
             // Yon YUKARIDA okundu: bu atis mevcut (onceki karenin tepmis) pozunu kullanir,
@@ -163,6 +180,23 @@ namespace VRMultiplayer
                         supDev.SendHapticImpulse(0, SupportHapticAmplitude, HapticDuration);
                 }
             }
+        }
+
+        /// <summary>Yonu, yari-acisi `degrees` olan koninin icinde rastgele bir yone kaydirir.
+        /// insideUnitCircle teget duzlemde duzgun dagilir, yani atislar koni icinde kumelenmeden
+        /// esit yayilir.</summary>
+        static Vector3 ApplySpread(Vector3 dir, float degrees)
+        {
+            if (degrees <= 0f) return dir;
+            dir.Normalize();
+
+            Vector3 right = Vector3.Cross(dir, Vector3.up);
+            if (right.sqrMagnitude < 1e-4f) right = Vector3.Cross(dir, Vector3.right); // namlu dike yakin
+            right.Normalize();
+            Vector3 up = Vector3.Cross(right, dir);
+
+            Vector2 d = Random.insideUnitCircle * Mathf.Tan(degrees * Mathf.Deg2Rad);
+            return (dir + right * d.x + up * d.y).normalized;
         }
 
         static bool ReadTrigger(XRNode node, out InputDevice dev)
