@@ -124,6 +124,29 @@ namespace VRMultiplayer.Weapons
         [Header("Opsiyonel basit collider degisimi (bos = collider'lara dokunulmaz)")]
         public BoxSpec[] simpleColliders = new BoxSpec[0];
 
+        /// <summary>
+        /// Editorde ELLE verilmis parmak pozu: 15 eklemin lokal rotasyonu (sira icin bkz.
+        /// <see cref="HandPoseBones"/>). Prosedurel curl'un yapisal limiti yok — parmak yayilmasi,
+        /// her parmagin kabzada farkli derinlikte durmasi, basparmagin avuc ustunden capraz
+        /// gecmesi, hepsi temsil edilebilir. Ayrica hicbir eksen tahmini yok: rig'in kemik
+        /// eksenleri ne kadar tuhaf olursa olsun kaydedilen poz aynen geri gelir.
+        ///
+        /// Sag ve sol el AYRI yazilir: parmak rotasyonlarini aynalamak rig'in sol/sag kemik
+        /// eksenlerinin gercekten simetrik olmasina bagli ve bu garanti edilemez.
+        /// </summary>
+        [System.Serializable]
+        public struct FingerPose
+        {
+            [Tooltip("15 eklem lokal rotasyonu. Bos = bu el icin eski curl davranisi.")]
+            public Quaternion[] joints;
+
+            [Tooltip("Tetik TAM cekiliyken isaret parmaginin 3 bogumu. Bos = isaret parmagi sabit kalir.")]
+            public Quaternion[] indexPulled;
+
+            public bool HasPose => joints != null && joints.Length == HandPoseBones.JointCount;
+            public bool HasIndexPulled => indexPulled != null && indexPulled.Length == HandPoseBones.IndexJointCount;
+        }
+
         /// <summary>Static hand pose: wrist offset + five finger curls (ISDK Fingers Freedom:
         /// locked curls, index optionally Free = driven by the trigger axis).</summary>
         [System.Serializable]
@@ -145,6 +168,15 @@ namespace VRMultiplayer.Weapons
 
             [Tooltip("Tetik TAM cekiliyken isaret parmaginin kivrim tavani (0..1). Tetik cekisi kucuk bir harekettir — 1.0 tam yumruk yapar. 0 birakilirsa 1 sayilir (eski assetler).")]
             [Range(0f, 1f)] public float indexTriggerMaxCurl;
+
+            [Header("Authored parmak pozu (doluysa yukaridaki curl'lerin yerine gecer)")]
+            [Tooltip("Bu tutus SAG elle yapildiginda kullanilir.")]
+            public FingerPose rightFingers;
+            [Tooltip("Bu tutus SOL elle yapildiginda kullanilir.")]
+            public FingerPose leftFingers;
+
+            /// <summary>Pozu tutan FIZIKSEL ele gore sec — aynalama gerekmez, iki el ayri yazilir.</summary>
+            public FingerPose Fingers(bool left) => left ? leftFingers : rightFingers;
 
             /// <summary>Curl by finger id: 0 thumb, 1 index, 2 middle, 3 ring, 4 pinky.</summary>
             public float Curl(int finger)

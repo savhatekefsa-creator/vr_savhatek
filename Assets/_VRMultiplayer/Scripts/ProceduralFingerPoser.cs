@@ -296,8 +296,41 @@ namespace VRMultiplayer
             UpdateFingerTargets(_fingersL, _ovrProfileL, _ovrSupportL, _tL, k);
             UpdateFingerTargets(_fingersR, _ovrProfileR, _ovrSupportR, _tR, k);
 
-            Apply(_left, _gL, _tL, _ovrProfileL != null, _fingersL);
-            Apply(_right, _gR, _tR, _ovrProfileR != null, _fingersR);
+            ApplyHand(true, _left, _gL, _tL, _ovrProfileL, _ovrSupportL, _fingersL, k);
+            ApplyHand(false, _right, _gR, _tR, _ovrProfileR, _ovrSupportR, _fingersR, k);
+        }
+
+        // Profilde bu EL icin authored poz varsa o kazanir; yoksa eski prosedurel curl.
+        void ApplyHand(bool left, List<Phalanx> hand, float grip, float trigger,
+            WeaponGripProfile profile, bool isSupport, float[] fingers, float k)
+        {
+            if (profile != null)
+            {
+                var pose = isSupport ? profile.supportHand : profile.mainHand;
+                var fp = pose.Fingers(left);
+                if (fp.HasPose) { ApplyAuthored(left, fp, pose.indexFollowsTrigger, trigger, k); return; }
+            }
+            Apply(hand, grip, trigger, profile != null, fingers);
+        }
+
+        // Kaydedilmis lokal rotasyonlari dogrudan yazar — eksen turetme, curl, tahmin YOK.
+        void ApplyAuthored(bool left, WeaponGripProfile.FingerPose fp, bool indexFollowsTrigger,
+            float trigger, float k)
+        {
+            bool pulled = indexFollowsTrigger && fp.HasIndexPulled;
+            for (int j = 0; j < HandPoseBones.JointCount; j++)
+            {
+                var t = Bone(HandPoseBones.Bone(j, left));
+                if (t == null) continue;
+
+                Quaternion target = fp.joints[j];
+                // Isaret parmagi: birakili poz -> cekili poz arasi, ag uzerinden gelen tetik
+                // ekseniyle. Uzaktakiler de tetik parmaginin hareketini gorur.
+                if (pulled && HandPoseBones.IsIndex(j))
+                    target = Quaternion.Slerp(target, fp.indexPulled[j - HandPoseBones.IndexFirst], trigger);
+
+                t.localRotation = Quaternion.Slerp(t.localRotation, target, k);
+            }
         }
 
         // Ease each overridden finger toward its authored curl; the index finger optionally
