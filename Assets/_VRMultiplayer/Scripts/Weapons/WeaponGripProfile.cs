@@ -121,6 +121,22 @@ namespace VRMultiplayer.Weapons
         [Tooltip("Destek eli takiliysa o kumandaya giden hafif titresim (0 = kapali).")]
         public float supportHapticAmplitude = 0.35f;
 
+        [Header("Sarjor (0 = mermi sayilmaz, silah sinirsiz ates eder)")]
+        [Tooltip("Bir sarjordeki mermi sayisi. 0 birakilirsa mermi sistemi HIC devreye girmez — profilsiz silahin bugunku davranisi aynen korunur.")]
+        public int magazineSize;
+        [Tooltip("Yedek sarjor sayisi. -1 = sinirsiz (mevcut ayar). 0 = hic yedek yok, sarjor bitince silah susar.")]
+        public int spareMagazines = -1;
+        [Tooltip("Sarjor degisiminin suresi (s). Bu sure boyunca silah ates edemez.")]
+        public float reloadDuration = 1.4f;
+
+        [Header("Sarjor degistirme hareketi (silahi asagi savur, sonra geri kaldir)")]
+        [Tooltip("Hareketin sayilmasi icin gereken en dusuk dikey hiz (m/s). Silahi YAVASCA indirip kaldirmak sayilmaz — kazara sarjor degisimini onleyen ana filtre budur. Buyutursen hareket sertlesir.")]
+        public float reloadFlickSpeed = 1.3f;
+        [Tooltip("Asagi ve yukari fazlarin her birinin kat etmesi gereken en az dikey yol (m). Kucuk titremeleri eler.")]
+        public float reloadFlickTravel = 0.25f;
+        [Tooltip("Asagi + yukari hareketin tamamlanmasi gereken sure (s). Asilirsa iptal — 'silahi indirdim ve oylece durdum' sarjor degistirmez.")]
+        public float reloadFlickWindow = 0.8f;
+
         [Header("Opsiyonel basit collider degisimi (bos = collider'lara dokunulmaz)")]
         public BoxSpec[] simpleColliders = new BoxSpec[0];
 
