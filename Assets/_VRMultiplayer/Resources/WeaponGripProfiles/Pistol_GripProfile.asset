@@ -14,12 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   weaponNameEquals: Weapon_Pistol
   weaponNameContains:
-  gripLocalPosition: {x: -0.0339, y: 0.0741, z: 0.0885}
-  gripLocalEuler: {x: 318.7942, y: 215.6804, z: 343.9071}
+  gripLocalPosition: {x: -0.0278, y: 0.0844, z: -0.0059}
+  gripLocalEuler: {x: 300.6761, y: 232.6344, z: 333.0594}
   barrelLocalDirection: {x: 0, y: 0, z: -1}
   mainHand:
-    wristLocalPosition: {x: 0, y: 0, z: -0.0792}
-    wristLocalEuler: {x: 333.0938, y: 276.1086, z: 239.368}
+    wristLocalPosition: {x: 0.0669, y: 0.0765, z: -0.1067}
+    wristLocalEuler: {x: 321.8404, y: 274.5487, z: 225.5803}
     thumbCurl: 0
     indexCurl: 0.55
     middleCurl: 0.75

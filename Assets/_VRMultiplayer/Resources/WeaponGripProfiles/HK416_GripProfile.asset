@@ -14,12 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   weaponNameEquals:
   weaponNameContains: Rifle_HK416
-  gripLocalPosition: {x: 0.0277, y: 0.0024, z: 0.0181}
-  gripLocalEuler: {x: 329.698, y: 321.5219, z: 311.6912}
+  gripLocalPosition: {x: 0.0181, y: -0.0005, z: 0.0162}
+  gripLocalEuler: {x: 312.9881, y: 304.7636, z: 345.5506}
   barrelLocalDirection: {x: -1, y: 0, z: 0}
   mainHand:
-    wristLocalPosition: {x: -0.0001, y: 0, z: -0.0925}
-    wristLocalEuler: {x: 348.1159, y: 270.4017, z: 241.0609}
+    wristLocalPosition: {x: 0.0004, y: 0.0003, z: -0.079}
+    wristLocalEuler: {x: 333.2111, y: 276.1721, z: 239.4335}
     thumbCurl: 0
     indexCurl: 0.2
     middleCurl: 0
@@ -27,12 +27,12 @@ MonoBehaviour:
     pinkyCurl: 0
     indexFollowsTrigger: 1
     indexTriggerMaxCurl: 0.55
-  supportRailLocalStart: {x: -0.1272, y: -0.0003, z: -0.0251}
-  supportRailLocalEnd: {x: -0.1272, y: -0.0003, z: -0.0251}
+  supportRailLocalStart: {x: -0.1784, y: 0.0074, z: -0.0025}
+  supportRailLocalEnd: {x: -0.1784, y: 0.0074, z: -0.0025}
   supportBreakDistance: 0.3
   supportHand:
-    wristLocalPosition: {x: 0.0147, y: 0.0777, z: -0.0827}
-    wristLocalEuler: {x: 354.0233, y: 274.7069, z: 252.7304}
+    wristLocalPosition: {x: 0.0248, y: 0.1073, z: -0.0752}
+    wristLocalEuler: {x: 341.53, y: 281.8991, z: 228.0868}
     thumbCurl: 0
     indexCurl: 0
     middleCurl: 0
