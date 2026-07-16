@@ -72,6 +72,15 @@ namespace VRMultiplayer
         readonly float[] _fingersL = new float[5];
         readonly float[] _fingersR = new float[5];
 
+        // Authored pozun CANLI durumu. Kemikten okumak yerine burada tutulmasi sart: Animator
+        // (idle klibi) her kare parmak kemiklerine kendi pozunu yaziyor, dolayisiyla
+        // "Slerp(bone.localRotation, hedef, k)" her kare animatorun pozundan yeniden basliyor,
+        // birikmiyor ve hedefe HIC varmiyor (parmaklar titrer ve duz kalir). Durumu kendimiz
+        // tutup kemige MUTLAK yazinca animatorun yazdigi degerin onemi kalmaz.
+        readonly Quaternion[] _authL = new Quaternion[HandPoseBones.JointCount];
+        readonly Quaternion[] _authR = new Quaternion[HandPoseBones.JointCount];
+        bool _authSeededL, _authSeededR;
+
         void Start()
         {
             _anim = GetComponent<Animator>();
@@ -111,20 +120,22 @@ namespace VRMultiplayer
                 _ovrProfileL = profile;
                 _ovrSupportL = isSupportHand;
                 SeedFingers(_fingersL, _gL, _tL);
+                _authSeededL = false; // yeni tutus -> authored blend mevcut pozdan yeniden basla
             }
             else
             {
                 _ovrProfileR = profile;
                 _ovrSupportR = isSupportHand;
                 SeedFingers(_fingersR, _gR, _tR);
+                _authSeededR = false;
             }
         }
 
         /// <summary>Back to the grip-driven procedural curl for that hand.</summary>
         public void ClearHandOverride(bool leftHand)
         {
-            if (leftHand) _ovrProfileL = null;
-            else _ovrProfileR = null;
+            if (leftHand) { _ovrProfileL = null; _authSeededL = false; }
+            else { _ovrProfileR = null; _authSeededR = false; }
         }
 
         // Start the override blend from the hand's current curl so the transition is continuous.
@@ -313,11 +324,16 @@ namespace VRMultiplayer
             Apply(hand, grip, trigger, profile != null, fingers);
         }
 
-        // Kaydedilmis lokal rotasyonlari dogrudan yazar — eksen turetme, curl, tahmin YOK.
+        // Kaydedilmis lokal rotasyonlari yazar — eksen turetme, curl, tahmin YOK.
+        // Yumusatma kendi durumumuz uzerinde yapilir, kemikten OKUYARAK degil (bkz. _authL/_authR):
+        // animator her kare kemige kendi pozunu yazdigi icin geri-okuma hedefe hic ulasmaz.
         void ApplyAuthored(bool left, WeaponGripProfile.FingerPose fp, bool indexFollowsTrigger,
             float trigger, float k)
         {
+            var cur = left ? _authL : _authR;
+            bool seeded = left ? _authSeededL : _authSeededR;
             bool pulled = indexFollowsTrigger && fp.HasIndexPulled;
+
             for (int j = 0; j < HandPoseBones.JointCount; j++)
             {
                 var t = Bone(HandPoseBones.Bone(j, left));
@@ -329,8 +345,13 @@ namespace VRMultiplayer
                 if (pulled && HandPoseBones.IsIndex(j))
                     target = Quaternion.Slerp(target, fp.indexPulled[j - HandPoseBones.IndexFirst], trigger);
 
-                t.localRotation = Quaternion.Slerp(t.localRotation, target, k);
+                // Ilk kare: animatorun o anki pozundan tohumla ki silahi kavrarken pop olmasin.
+                if (!seeded) cur[j] = t.localRotation;
+                cur[j] = Quaternion.Slerp(cur[j], target, k);
+                t.localRotation = cur[j];
             }
+
+            if (left) _authSeededL = true; else _authSeededR = true;
         }
 
         // Ease each overridden finger toward its authored curl; the index finger optionally
