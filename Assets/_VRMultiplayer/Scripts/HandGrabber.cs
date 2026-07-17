@@ -76,7 +76,8 @@ namespace VRMultiplayer
         /// PC test harness carries weapons with this component switched off — the server's holder
         /// value is the only truth both paths agree on. Silent no-op off-owner / unregistered
         /// prefab.</summary>
-        public void RequestWeaponSwap(GrabbableObject current, GameObject prefab)
+        public void RequestWeaponSwap(GrabbableObject current, GameObject prefab,
+                                      int ammo = -1, int spares = -1)
         {
             if (!IsOwner) return;
 
@@ -104,11 +105,12 @@ namespace VRMultiplayer
             var oldRef = current != null && current.NetworkObject != null
                 ? new NetworkObjectReference(current.NetworkObject)
                 : default;
-            SwapWeaponServerRpc(oldRef, idx, h.index);
+            SwapWeaponServerRpc(oldRef, idx, h.index, ammo, spares);
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        void SwapWeaponServerRpc(NetworkObjectReference oldRef, int prefabIndex, byte hand, RpcParams p = default)
+        void SwapWeaponServerRpc(NetworkObjectReference oldRef, int prefabIndex, byte hand,
+                                 int ammo, int spares, RpcParams p = default)
         {
             ulong sender = p.Receive.SenderClientId;
 
@@ -134,6 +136,12 @@ namespace VRMultiplayer
             var no = go.GetComponent<NetworkObject>();
             if (no == null) { Destroy(go); return; }
             no.SpawnWithOwnership(sender);
+
+            // Silah cantaya kac mermiyle girdiyse o kadarla ciksin. Spawn'dan SONRA yaziyoruz:
+            // NetworkWeapon.OnNetworkSpawn sarjoru doldurur, biz onun uzerine gercek degeri
+            // koyariz. Yoksa galeriyi acip kapamak bedava sarjor olurdu.
+            var nw = go.GetComponent<NetworkWeapon>();
+            if (nw != null) nw.SetAmmoStateServer(ammo, spares);
 
             EquipSpawnedRpc(new NetworkObjectReference(no), hand,
                 RpcTarget.Single(sender, RpcTargetUse.Temp));

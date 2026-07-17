@@ -26,6 +26,13 @@ namespace VRMultiplayer.UI
             public GameObject Prefab;   // Resources/WeaponPrefabs'taki kalip; secilince BUNDAN
                                         // yeni bir tane uretilir. null = bu silah spawn edilemez
                                         // (kalibi yok) -> galeride durur ama equip edilemez.
+
+            // Silah cantaya kac mermiyle girdi. Geri cagirinca bu deger yeni silaha yazilir —
+            // yoksa taze silah DOLU dogar (NetworkWeapon.OnNetworkSpawn) ve galeriyi acip
+            // kapamak savurarak dolumdan hizli bir BEDAVA SARJOR olurdu. Cantanin bir NESNEYI
+            // saklamasina gerek yok, bu iki SAYI yetiyor.
+            public int Ammo = -1;    // -1 = kayit yok -> silah dolu dogsun
+            public int Spares = -1;  // -1 = dokunma (profilde sinirsiz olabilir)
         }
 
         readonly List<Entry> _entries = new List<Entry>();
@@ -72,7 +79,23 @@ namespace VRMultiplayer.UI
                     Debug.Log($"[WeaponInventory] Yeni silah: {key}  (toplam {_entries.Count})");
                     Changed?.Invoke();
                 }
+
+                // Elde tuttugum silahin mermisini SUREKLI not al. Silah yok oldugu anda (birakinca
+                // ya da takasta) son bilinen deger cantada kalir; geri cagirinca ayni mermiyle gelir.
+                var nw = g.GetComponent<NetworkWeapon>();
+                if (nw != null && nw.UsesAmmo)
+                {
+                    var e = Find(key);
+                    if (e != null) { e.Ammo = nw.Ammo; e.Spares = nw.SpareMagazines; }
+                }
             }
+        }
+
+        /// <summary>Bu turun canta kaydi (yoksa null).</summary>
+        public Entry Find(string key)
+        {
+            foreach (var e in _entries) if (e.Key == key) return e;
+            return null;
         }
 
         // Bu turden yeni bir tane uretecek kalibi bul: Resources/WeaponPrefabs'taki her prefabin

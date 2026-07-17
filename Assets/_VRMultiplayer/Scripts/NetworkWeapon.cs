@@ -155,6 +155,18 @@ namespace VRMultiplayer
             }
         }
 
+        /// <summary>Sunucu: silahin mermi durumunu belirli bir degere kur. Silah secici bunu
+        /// cantadan geri cagirirken kullanir — silah cantaya kac mermiyle girdiyse o kadarla
+        /// cikmali. Yoksa galeriyi acip kapamak BEDAVA SARJOR olurdu ve savurarak dolum
+        /// mekanigini kimse kullanmazdi (yedekler de sifirlanacagi icin cephane sinirsiz olurdu).
+        /// Negatif deger = dokunma (spawn'daki dolu hali kalir).</summary>
+        public void SetAmmoStateServer(int ammo, int spares)
+        {
+            if (!IsServer || !UsesAmmo) return;
+            if (ammo >= 0) _ammo.Value = Mathf.Clamp(ammo, 0, MagazineSize);
+            if (spares >= -1 && _profile.spareMagazines >= 0) _spares.Value = spares; // -1 profil = sinirsiz, dokunma
+        }
+
         void Update()
         {
             UpdateFx(); // herkeste, silah elde olmasa da: ucan iz sahibi birakinca da tamamlanir

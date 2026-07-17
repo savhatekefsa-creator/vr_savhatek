@@ -202,8 +202,22 @@ namespace VRMultiplayer.UI
                 return;
             }
 
-            Debug.Log($"[WeaponSelector] Equip: {e.Key}  (eski: {(cur != null ? cur.name : "yok")})");
-            grabber.RequestWeaponSwap(cur, e.Prefab);
+            // Elimdekinin mermisini TAM SU AN kaydet. Envanterin 0.3 sn'lik taramasi bayat
+            // olabilir; son yarim saniyede attigin mermiler bedavaya geri gelmesin.
+            if (cur != null)
+            {
+                var curNw = cur.GetComponent<NetworkWeapon>();
+                var curEntry = inv.Find(WeaponInventory.TypeKey(cur));
+                if (curNw != null && curNw.UsesAmmo && curEntry != null)
+                {
+                    curEntry.Ammo = curNw.Ammo;
+                    curEntry.Spares = curNw.SpareMagazines;
+                }
+            }
+
+            Debug.Log($"[WeaponSelector] Equip: {e.Key} — {(e.Ammo < 0 ? "dolu" : e.Ammo + " mermi")}" +
+                      $"  (eski: {(cur != null ? cur.name : "yok")})");
+            grabber.RequestWeaponSwap(cur, e.Prefab, e.Ammo, e.Spares);
         }
 
         void ShowPreviews(bool visible)
