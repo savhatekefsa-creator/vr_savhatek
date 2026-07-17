@@ -70,3 +70,16 @@ crashlytics-build.properties
 *.apk
 *.aab
 *.unitypackage
+
+# ============ Kisisel yerel calisma dosyalari (depoya girmez) ============
+# Dev araclarinin kaydettigi ekran goruntuleri
+[Aa]ssets/Screenshots/
+[Aa]ssets/Screenshots.meta
+# Unity sahne kurtarma kopyalari (crash/kapanma sonrasi otomatik olusur)
+# Not: daha once commit'lenmis _Recovery dosyalari izlenmeye devam eder;
+# bu kural yalnizca YENI olusan kurtarma coplerini gizler.
+[Aa]ssets/_Recovery/
+[Aa]ssets/_Recovery.meta
+# Yerel planlama / analiz raporlari
+PLAN_*.md
+unused_textures_report.csv
