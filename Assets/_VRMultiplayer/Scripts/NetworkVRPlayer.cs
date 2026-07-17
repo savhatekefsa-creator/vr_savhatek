@@ -15,6 +15,10 @@ namespace VRMultiplayer
     ///    only your own head is hidden so the camera isn't inside it.
     ///  - Others see your full humanoid avatar (driven by <see cref="AvatarIKController"/>).
     /// </summary>
+    // Must write the pose carriers BEFORE AvatarIKController (order 0) reads them in LateUpdate;
+    // with both at the default order Unity gives no guarantee, and losing the race adds a
+    // one-frame head/hand mismatch that reads as hand jitter.
+    [DefaultExecutionOrder(-100)]
     public class NetworkVRPlayer : NetworkBehaviour
     {
         [Header("Networked pose carriers (this prefab's own children)")]
