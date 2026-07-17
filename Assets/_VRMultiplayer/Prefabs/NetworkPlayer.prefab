@@ -1593,6 +1593,7 @@ MonoBehaviour:
   palmRollDegrees: 0
   invertCurl: 0
   smoothing: 14
+  triggerSmoothing: 60
   heldGripMin: 0.85
   rollSignOverrideLeft: 0
   rollSignOverrideRight: 0
