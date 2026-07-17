@@ -20,8 +20,9 @@ namespace VRMultiplayer.UI
     ///  - Stick'i YANA it -> galeri acilir; her YENI itis TEK adim kaydirir. Merkeze donmeden
     ///    ikinci adim sayilmaz (snap-turn'un _snapReady deseni). Onceden itili tuttukca surekli
     ///    kayiyordu: 2-3 silahla A>B>A>B doner, secim yapilamazdi.
-    ///  - Stick'i YUKARI it -> secer ve galeri kapanir. Y ekseni bos: snap-turn sadece X'i,
-    ///    yurume sol stick'i kullaniyor. Grip secim tusu YAPILAMAZ (kapma/birakma tusu o).
+    ///  - Stick'i YUKARI it -> secer ve galeri kapanir. Sag stick tamamen bos: snap-turn
+    ///    kapatildi (XRRigLocomotion.snapTurnEnabled), yurume sol stick'te. Grip SECIM tusu
+    ///    YAPILAMAZ — o kapma/birakma tusu; denendi, ara durumlarda silah havada asili kaldi.
     ///  - PC (gozluksuz test): TAB acar, Sol/Sag ok kaydirir, Enter secer (grip sarti aranmaz).
     ///
     /// Onizleme modellerini <see cref="WeaponInventory"/> uretir. Olcek/aci/aralik Inspector'dan
@@ -108,34 +109,24 @@ namespace VRMultiplayer.UI
             _selected = Mathf.Clamp(_selected, 0, n - 1);
             Layout();
 
-            // YUKARI = SEC. Y ekseni bos: snap-turn X'i, yurume sol stick'i kullaniyor.
+            // YUKARI = SEC. Sag stick tamamen bos (snap-turn kapali, yurume sol stick'te).
             if (stick.y > openThreshold) { Confirm(); SetOpen(false); return; }
 #if ENABLE_INPUT_SYSTEM
             if (kb != null && kb.enterKey.wasPressedThisFrame) { Confirm(); SetOpen(false); }
 #endif
         }
 
+        // Not: galeri acikken hareket ENGELLENMIYOR — silah secerken de yuruyebilirsin. Bir ara
+        // XRRigLocomotion'i gecici kapatiyorduk ama o sadece snap-turn cakismasi icindi (sag
+        // stick hem donduruyor hem seciyordu); snap-turn tamamen kapatilinca gerek kalmadi.
         void SetOpen(bool open)
         {
             if (_open == open) return;
             _open = open;
             ShowPreviews(open);
-
-            // Galeri acikken hareket/donus kapali. SAG stick zaten snap-turn'e bagli
-            // (XRRigLocomotion, |x| > 0.7) ve biz AYNI ekseni okuyoruz — onlemezsek her itiste
-            // 45 derece doneriz. Galeri 0.4'te acildigi, donus 0.7'de tetiklendigi icin bileseni
-            // burada kapatmak donusun hic calismamasini garantiler.
-            if (_loco == null) _loco = FindFirstObjectByType<XRRigLocomotion>();
-            if (_loco != null) _loco.enabled = !open;
         }
 
-        XRRigLocomotion _loco;
-
-        void OnDisable() // obje kapanirsa oyuncuyu hareketsiz birakma
-        {
-            _open = false;
-            if (_loco != null) _loco.enabled = true;
-        }
+        void OnDisable() => _open = false;
 
         /// <summary>SAG grip basili mi? VR yoksa (PC testi) true doner. HandGrabber ile ayni
         /// okuma: bazi OpenXR profilleri butonu vermez, sadece analog degeri verir.</summary>
