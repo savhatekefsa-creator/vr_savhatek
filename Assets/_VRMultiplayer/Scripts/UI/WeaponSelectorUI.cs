@@ -12,10 +12,17 @@ namespace VRMultiplayer.UI
     /// Silah secici GALERI: toplanan silahlarin gercek 3B modellerini kameranin onunde yatay bir
     /// sirada gosterir; secili olan biraz buyur ve yavas doner.
     ///
-    /// GIRIS:
-    ///  - VR: SAG kumanda thumbstick'i yana itilince galeri acilir; sag/sol itince silahlar
-    ///    gecer (birakinca merkeze donunce SECIM onaylanir).
-    ///  - PC (gozluksuz test): TAB basili = ac, Sol/Sag ok = kaydir.
+    /// GIRIS — grip'i tut, stick ile gez, stick ile sec:
+    ///  - GRIP BASILI: galeri sadece grip basiliyken yasar. Birakirsan kapanir ve silah
+    ///    (HandGrabber'in normal isi) cantaya gider. Bu sart, secim boyunca elin hep "tutuyor"
+    ///    kalmasini garantiler — grip'in yarim kaldigi ara durumlarda silah havada asili
+    ///    kaliyordu. Grip ORTA parmak, stick BASPARMAK: ayni anda rahat kullanilir.
+    ///  - Stick'i YANA it -> galeri acilir; her YENI itis TEK adim kaydirir. Merkeze donmeden
+    ///    ikinci adim sayilmaz (snap-turn'un _snapReady deseni). Onceden itili tuttukca surekli
+    ///    kayiyordu: 2-3 silahla A>B>A>B doner, secim yapilamazdi.
+    ///  - Stick'i YUKARI it -> secer ve galeri kapanir. Y ekseni bos: snap-turn sadece X'i,
+    ///    yurume sol stick'i kullaniyor. Grip secim tusu YAPILAMAZ (kapma/birakma tusu o).
+    ///  - PC (gozluksuz test): TAB acar, Sol/Sag ok kaydirir, Enter secer (grip sarti aranmaz).
     ///
     /// Onizleme modellerini <see cref="WeaponInventory"/> uretir. Olcek/aci/aralik Inspector'dan
     /// CANLI ayarlanir.
@@ -27,26 +34,24 @@ namespace VRMultiplayer.UI
     /// </summary>
     public class WeaponSelectorUI : MonoBehaviour
     {
-        [Header("Galeri yerlesimi (kameraya gore — gozle ayarla)")]
+        [Header("Galeri yerlesimi (kameraya gore — Play'de canli ayarlanir)")]
         public float distance = 1.0f;
-        public float spacing = 0.32f;
-        public float previewScale = 0.3f;
-        public float selectedBoost = 1.4f;
+        [Tooltip("Silahlar arasi mesafe. previewScale'i buyutursen bunu da buyut, yoksa ic ice girerler.")]
+        public float spacing = 0.75f;
+        public float previewScale = 0.8f;
+        [Tooltip("Secili silah bu kat kadar buyur.")]
+        public float selectedBoost = 1.6f;
         [Tooltip("Onizlemelerin duruş acisi (silahin yani kameraya baksin — genelde Y=90).")]
         public Vector3 previewEuler = new Vector3(0f, 90f, 0f);
         public float selectedSpin = 40f;
 
         [Header("Joystick")]
-        [Tooltip("Galeri bu esigin uzerinde thumbstick yana itilince acilir.")]
+        [Tooltip("Thumbstick bu kadar itilince sayilir: yana = ac/kaydir, yukari = sec.")]
         public float openThreshold = 0.4f;
-        [Tooltip("Silah gecisi icin gereken itme miktari.")]
-        public float stepThreshold = 0.65f;
-        [Tooltip("Iki gecis arasi bekleme (sn) — basili tutunca cok hizli gecmesin.")]
-        public float stepCooldown = 0.28f;
 
         int _selected;
         bool _open;
-        float _nextStep;
+        bool _stickReady = true;  // itis basina TEK adim: merkeze donmeden ikincisi sayilmaz
         UnityEngine.XR.InputDevice _rightHand;
 
         public int SelectedIndex => _selected;
@@ -63,53 +68,94 @@ namespace VRMultiplayer.UI
         {
             var inv = WeaponInventory.Instance;
             int n = inv != null ? inv.Entries.Count : 0;
-            if (n == 0) { if (_open) { _open = false; ShowPreviews(false); } return; }
+            if (n == 0) { SetOpen(false); return; }
 
-            bool wantOpen = false;
+            // Galeri SADECE grip basiliyken yasar. Birakirsan kapanir ve HandGrabber kendi
+            // normal isini yapar (silah cantaya gider).
+            if (!GripHeld()) { SetOpen(false); return; }
+
+            Vector2 stick = RightStick();
             int dir = 0;
+            bool flick = false;
 
-            // --- VR: SAG thumbstick ---
-            float x = RightStickX();
-            if (Mathf.Abs(x) > openThreshold)
+            // ITIS BASINA TEK ADIM: merkeze donmeden ikinci adim sayilmaz.
+            if (Mathf.Abs(stick.x) < openThreshold * 0.5f) _stickReady = true;
+            else if (_stickReady && Mathf.Abs(stick.x) > openThreshold)
             {
-                wantOpen = true;
-                if (Mathf.Abs(x) > stepThreshold && Time.time >= _nextStep)
-                {
-                    dir = x > 0f ? +1 : -1;
-                    _nextStep = Time.time + stepCooldown;
-                }
+                _stickReady = false;
+                flick = true;
+                if (_open) dir = stick.x > 0f ? +1 : -1; // ilk itis ACAR, sonrakiler kaydirir
             }
 
-            // --- PC yedek: TAB + oklar (gozluksuz test) ---
+            // --- PC yedek: TAB acar, oklar kaydirir (gozluksuz test) ---
 #if ENABLE_INPUT_SYSTEM
             var kb = Keyboard.current;
-            if (kb != null && kb.tabKey.isPressed)
+            if (kb != null)
             {
-                wantOpen = true;
-                if (kb.leftArrowKey.wasPressedThisFrame)  dir = -1;
-                if (kb.rightArrowKey.wasPressedThisFrame) dir = +1;
+                if (kb.tabKey.wasPressedThisFrame) flick = true;
+                if (_open && kb.leftArrowKey.wasPressedThisFrame)  { dir = -1; flick = true; }
+                if (_open && kb.rightArrowKey.wasPressedThisFrame) { dir = +1; flick = true; }
             }
 #endif
 
-            if (dir != 0) _selected = (_selected + dir + n) % n;
-
-            if (wantOpen != _open)
+            if (flick)
             {
-                _open = wantOpen;
-                ShowPreviews(_open);
-                if (!_open) Confirm(); // galeri kapandi -> secimi onayla
+                if (!_open) SetOpen(true);
+                else if (dir != 0) _selected = (_selected + dir + n) % n;
             }
-            if (_open) { _selected = Mathf.Clamp(_selected, 0, n - 1); Layout(); }
+
+            if (!_open) return;
+            _selected = Mathf.Clamp(_selected, 0, n - 1);
+            Layout();
+
+            // YUKARI = SEC. Y ekseni bos: snap-turn X'i, yurume sol stick'i kullaniyor.
+            if (stick.y > openThreshold) { Confirm(); SetOpen(false); return; }
+#if ENABLE_INPUT_SYSTEM
+            if (kb != null && kb.enterKey.wasPressedThisFrame) { Confirm(); SetOpen(false); }
+#endif
         }
 
-        float RightStickX()
+        void SetOpen(bool open)
+        {
+            if (_open == open) return;
+            _open = open;
+            ShowPreviews(open);
+
+            // Galeri acikken hareket/donus kapali. SAG stick zaten snap-turn'e bagli
+            // (XRRigLocomotion, |x| > 0.7) ve biz AYNI ekseni okuyoruz — onlemezsek her itiste
+            // 45 derece doneriz. Galeri 0.4'te acildigi, donus 0.7'de tetiklendigi icin bileseni
+            // burada kapatmak donusun hic calismamasini garantiler.
+            if (_loco == null) _loco = FindFirstObjectByType<XRRigLocomotion>();
+            if (_loco != null) _loco.enabled = !open;
+        }
+
+        XRRigLocomotion _loco;
+
+        void OnDisable() // obje kapanirsa oyuncuyu hareketsiz birakma
+        {
+            _open = false;
+            if (_loco != null) _loco.enabled = true;
+        }
+
+        /// <summary>SAG grip basili mi? VR yoksa (PC testi) true doner. HandGrabber ile ayni
+        /// okuma: bazi OpenXR profilleri butonu vermez, sadece analog degeri verir.</summary>
+        bool GripHeld()
+        {
+            if (!_rightHand.isValid)
+                _rightHand = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
+            if (!_rightHand.isValid) return true; // VR bagli degil -> sart aranmaz
+            if (_rightHand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.gripButton, out bool b) && b) return true;
+            return _rightHand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.grip, out float g) && g > 0.5f;
+        }
+
+        Vector2 RightStick()
         {
             if (!_rightHand.isValid)
                 _rightHand = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
             if (_rightHand.isValid &&
                 _rightHand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primary2DAxis, out Vector2 axis))
-                return axis.x;
-            return 0f;
+                return axis;
+            return Vector2.zero;
         }
 
         HandGrabber _grabber;

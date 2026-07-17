@@ -73,13 +73,17 @@ namespace VRMultiplayer
         /// prefab.</summary>
         public void RequestWeaponSwap(GrabbableObject current, GameObject prefab)
         {
-            if (!IsOwner || prefab == null) return;
+            if (!IsOwner) return;
 
-            var prefabs = WeaponPrefabRegistrar.Prefabs;
+            // prefab == null -> SADECE yok et (birakma: "cantaya girdi", yerine bir sey gelmez).
             int idx = -1;
-            for (int i = 0; i < prefabs.Count; i++)
-                if (prefabs[i] == prefab) { idx = i; break; }
-            if (idx < 0) return; // Resources/WeaponPrefabs disinda -> spawn edilemez
+            if (prefab != null)
+            {
+                var prefabs = WeaponPrefabRegistrar.Prefabs;
+                for (int i = 0; i < prefabs.Count; i++)
+                    if (prefabs[i] == prefab) { idx = i; break; }
+                if (idx < 0) return; // Resources/WeaponPrefabs disinda -> spawn edilemez
+            }
 
             var h = _right ?? _left;
             if (h == null) return;
@@ -435,7 +439,15 @@ namespace VRMultiplayer
             if (g.HolderClientId != NetworkManager.LocalClientId) return;
 
             if (profiled)
+            {
                 g.SetSupportHandOwner(GrabbableObject.NoHand); // clear while we still own it
+
+                // A released WEAPON vanishes — the "went into the bag" look; the selector gallery
+                // brings its type back on demand. Only profiled weapons: rocks and props (no grip
+                // profile) keep the throw-and-land behaviour bit-for-bit.
+                RequestWeaponSwap(g, null);
+                return;
+            }
 
             g.ApplyThrow(HandVelocity(h), Vector3.zero);
             g.ReleaseServerRpc();
