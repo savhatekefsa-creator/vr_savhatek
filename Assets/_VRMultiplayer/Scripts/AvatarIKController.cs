@@ -64,6 +64,8 @@ namespace VRMultiplayer
         [Tooltip("Eyes sit this far in FRONT of the head bone, so the body hangs slightly behind the camera.")]
         public float headForwardOffset = 0.07f;
         public float fitLerpSpeed = 8f;
+        [Tooltip("Ignore head-height changes smaller than this (m) so per-frame tracking noise doesn't shimmer the whole body/arms.")]
+        public float heightDeadband = 0.02f;
         public float minScale = 0.6f;
         public float maxScale = 1.6f;
 
@@ -82,6 +84,7 @@ namespace VRMultiplayer
         float _baseScale = 1f;   // authored localScale
         float _baseHeadH;        // head-bone height above the root, at authored scale
         float _scaleK = 1f;      // current fit multiplier
+        float _heightRef;        // stable (deadbanded) player height feeding the scale servo
 
         Animator _animator;
         int _speedHash;
@@ -284,7 +287,16 @@ namespace VRMultiplayer
                 float playerH = headSource.position.y - groundY;
                 if (playerH > 0.3f && _smoothCrouch < 0.2f)
                 {
-                    float ratio = Mathf.Clamp(playerH / liveHeadH, 0.5f, 2f);
+                    // Deadband the measured height before it drives the scale servo. Raw head-Y
+                    // carries tracking noise; fed straight in it shimmers the whole skeleton
+                    // (arms and hands included). Hold a stable reference and only chase it once
+                    // the real height moves beyond heightDeadband.
+                    if (_heightRef <= 0f)
+                        _heightRef = playerH;
+                    else if (Mathf.Abs(playerH - _heightRef) > heightDeadband)
+                        _heightRef = Mathf.Lerp(_heightRef, playerH, fitLerpSpeed * Time.deltaTime);
+
+                    float ratio = Mathf.Clamp(_heightRef / liveHeadH, 0.5f, 2f);
                     float targetK = Mathf.Clamp(_scaleK * ratio, minScale, maxScale);
                     _scaleK = Mathf.Lerp(_scaleK, targetK, fitLerpSpeed * Time.deltaTime);
                     transform.localScale = Vector3.one * (_baseScale * _scaleK);
