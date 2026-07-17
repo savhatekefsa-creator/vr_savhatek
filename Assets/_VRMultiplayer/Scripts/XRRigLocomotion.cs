@@ -10,6 +10,10 @@ namespace VRMultiplayer
     ///
     /// Moving the rig moves the local camera, and because the networked avatar mirrors the
     /// camera, other players see this player walk around the shared world.
+    ///
+    /// SNAP TURN VARSAYILAN OLARAK KAPALI (<see cref="snapTurnEnabled"/>): oyuncular fiziksel
+    /// olarak donuyor, ve sag thumbstick silah seciciye ayrildi — acik kalsaydi silah secerken
+    /// 45'er derece donerdik. Yurume (sol thumbstick) aynen calisiyor.
     /// </summary>
     public class XRRigLocomotion : MonoBehaviour
     {
@@ -21,6 +25,10 @@ namespace VRMultiplayer
         [Range(0f, 0.9f)] public float deadzone = 0.15f;
 
         [Header("Snap Turn")]
+        [Tooltip("KAPALI (ekip karari): sag thumbstick ile donme yok — oyuncular fiziksel olarak " +
+                 "donuyor. Ayrica sag thumbstick silah seciciye ayrildi; acik kalsaydi silah " +
+                 "secerken 45'er derece donerdik. Geri istenirse tek tik.")]
+        public bool snapTurnEnabled = false;
         public float snapTurnDegrees = 45f;
         [Range(0.5f, 0.95f)] public float snapActivation = 0.7f;
 
@@ -51,6 +59,7 @@ namespace VRMultiplayer
 
         void HandleSnapTurn()
         {
+            if (!snapTurnEnabled) return;
             var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
             if (!right.isValid) return;
             if (!right.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 axis)) return;
