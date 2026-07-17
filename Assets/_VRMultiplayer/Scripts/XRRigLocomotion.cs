@@ -11,9 +11,14 @@ namespace VRMultiplayer
     /// Moving the rig moves the local camera, and because the networked avatar mirrors the
     /// camera, other players see this player walk around the shared world.
     ///
-    /// SNAP TURN VARSAYILAN OLARAK KAPALI (<see cref="snapTurnEnabled"/>): oyuncular fiziksel
-    /// olarak donuyor, ve sag thumbstick silah seciciye ayrildi — acik kalsaydi silah secerken
-    /// 45'er derece donerdik. Yurume (sol thumbstick) aynen calisiyor.
+    /// IKISI DE VARSAYILAN OLARAK KAPALI (ekip karari — tamamen FIZIKSEL hareket):
+    ///  - <see cref="smoothMoveEnabled"/>: sol stick ile yurume yok, oyuncular odada yuruyor.
+    ///  - <see cref="snapTurnEnabled"/>: sag stick ile donme yok, oyuncular kendileri donuyor.
+    ///    Ayrica sag stick silah seciciye ayrildi; acik kalsaydi silah secerken donerdik.
+    /// Fiziksel hareket bu bilesen olmadan da calisir: gozluk kafa konumunu zaten takip eder,
+    /// kamera hareket eder, agdaki avatar kamerayi aynalar. Yani bu bilesen kapaliyken oyun
+    /// hareketsiz kalmaz — sadece "yerinde durup cubukla gezme" ozelligi kalkar.
+    /// DIKKAT: harita fiziksel oyun alanindan buyukse ulasilamayan bolgeler olusur.
     /// </summary>
     public class XRRigLocomotion : MonoBehaviour
     {
@@ -21,6 +26,10 @@ namespace VRMultiplayer
         public Transform head;
 
         [Header("Move")]
+        [Tooltip("KAPALI (ekip karari): sol thumbstick ile yurume yok — oyuncular FIZIKSEL olarak " +
+                 "yuruyor (colocation). Gozluk kafa konumunu zaten takip ediyor, o yuzden fiziksel " +
+                 "hareket bu bilesen olmadan da calisir. Geri istenirse tek tik.")]
+        public bool smoothMoveEnabled = false;
         public float moveSpeed = 2.5f;
         [Range(0f, 0.9f)] public float deadzone = 0.15f;
 
@@ -42,6 +51,7 @@ namespace VRMultiplayer
 
         void HandleMove()
         {
+            if (!smoothMoveEnabled) return;
             var left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
             if (!left.isValid) return;
             if (!left.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 axis)) return;
