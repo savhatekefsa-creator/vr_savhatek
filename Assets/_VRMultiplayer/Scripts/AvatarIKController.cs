@@ -46,6 +46,8 @@ namespace VRMultiplayer
         public float feetOffset = -0.9f;
         [Tooltip("World Y of the floor the players stand on (usually 0).")]
         public float groundY = 0f;
+        [Tooltip("Avatar body/IK stays frozen until the head is at least this high (m) above the floor -- prevents the spawn-time 'fly up / sink into floor' glitch while the Floor tracking origin settles.")]
+        public float trackingReadyMinHeight = 0.4f;
         [Tooltip("Fine-tune: nudge the whole body up (+) or down (-).")]
         public float bodyHeightOffset = 0f;
         [Tooltip("Body only turns after the head yaw differs by more than this.")]
@@ -85,6 +87,7 @@ namespace VRMultiplayer
         float _baseHeadH;        // head-bone height above the root, at authored scale
         float _scaleK = 1f;      // current fit multiplier
         float _heightRef;        // stable (deadbanded) player height feeding the scale servo
+        bool _trackingValid;     // false until the first plausible head pose (Floor origin settled)
 
         Animator _animator;
         int _speedHash;
@@ -231,6 +234,18 @@ namespace VRMultiplayer
         {
             if (headSource == null)
                 return;
+
+            // Startup gate: on session start the XR tracking origin (Floor mode) needs a few
+            // frames to settle; until then head-Y reads ~0 and positioning/scaling the body from
+            // it launches the avatar into the air or sinks it into the floor ("her giriste
+            // ucma/egilme"). Hold ALL body/IK updates until the head pose is a plausible height
+            // above the floor. One-shot latch, so later crouching never re-triggers it.
+            if (!_trackingValid)
+            {
+                if (headSource.position.y - groundY < trackingReadyMinHeight)
+                    return;
+                _trackingValid = true;
+            }
 
             // Real walking -> walking animation: measure the head's horizontal speed and feed
             // it to the Animator (blends Idle <-> Walk in the locomotion blend tree).
