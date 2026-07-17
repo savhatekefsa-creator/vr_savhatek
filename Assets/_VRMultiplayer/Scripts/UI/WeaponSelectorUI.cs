@@ -189,7 +189,7 @@ namespace VRMultiplayer.UI
             if (e.Prefab == null)
             {
                 Debug.LogWarning($"[WeaponSelector] '{e.Key}' equip edilemez: Resources/WeaponPrefabs " +
-                                 "altinda kalibi yok (Tools > VR Multiplayer > 31 ile uretilebilir).");
+                                 "altinda kalibi yok (Tools > VR Multiplayer > 32 ile uretilebilir).");
                 return;
             }
 
