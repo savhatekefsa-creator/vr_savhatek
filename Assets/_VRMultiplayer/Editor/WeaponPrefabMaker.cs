@@ -9,7 +9,7 @@ namespace VRMultiplayer.EditorTools
     /// <summary>
     /// Sahnede elle kurulmus bir silahi SPAWN EDILEBILIR bir prefaba cevirir.
     ///
-    ///   Tools ▸ VR Multiplayer ▸ 32. Make Spawnable Weapon Prefab (select weapon)
+    ///   Tools ▸ VR Multiplayer ▸ 38. Make Spawnable Weapon Prefab (select weapon)
     ///
     /// NEDEN: <see cref="WeaponPrefabRegistrar"/> Resources/WeaponPrefabs altindaki HER prefabi
     /// otomatik olarak NetworkManager'a kaydeder — yani oraya konan silah calisma aninda
@@ -29,7 +29,7 @@ namespace VRMultiplayer.EditorTools
     {
         const string PrefabFolder = "Assets/_VRMultiplayer/Resources/WeaponPrefabs";
 
-        [MenuItem("Tools/VR Multiplayer/32. Make Spawnable Weapon Prefab (select weapon)")]
+        [MenuItem("Tools/VR Multiplayer/38. Make Spawnable Weapon Prefab (select weapon)")]
         public static void CreateFromSelection()
         {
             var go = Selection.activeGameObject;
