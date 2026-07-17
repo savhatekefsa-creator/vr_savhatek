@@ -35,6 +35,21 @@ namespace VRMultiplayer
         float _bloom;   // birikmis sapma (derece), owner-lokal
         bool _prevTrigger;
 
+        // Sarjor sayaci SILAHIN uzerinde durur, oyuncunun degil: silah el degistirse de, yere
+        // atilsa da yarim sarjor onunla kalir ve iki silah birbirinden bagimsiz sayar — hicbiri
+        // icin ek kod yok. Sunucu yazar, herkes okur (NetworkVariable varsayilani).
+        readonly NetworkVariable<int> _ammo = new NetworkVariable<int>();
+        readonly NetworkVariable<int> _spares = new NetworkVariable<int>();
+        // 0 = dolum yok. Sunucu SAATIYLE yazilir ki dolum her istemcide ayni anda bitsin.
+        readonly NetworkVariable<double> _reloadDoneAt = new NetworkVariable<double>();
+
+        // Sarjor degistirme hareketi — yalnizca silahi TUTAN istemcide islenir.
+        int _flickPhase;            // 0 bekle, 1 asagi iniyor, 2 yukari donuyor
+        float _flickPrevY, _flickTopY, _flickLowY;
+        float _flickStartedAt;
+        float _nextReloadRequest;
+        bool _dryFired;
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         /// <summary>Dev harness kancasi (yalnizca editor/development build). PC'de hicbir XR
         /// kumandasi gecerli olmadigi icin <see cref="ReadTrigger"/> hep false doner ve Update
@@ -49,6 +64,15 @@ namespace VRMultiplayer
         float HapticAmplitude => _profile != null ? _profile.hapticAmplitude : 0.7f;
         float HapticDuration => _profile != null ? _profile.hapticDuration : 0.08f;
         float SupportHapticAmplitude => _profile != null ? _profile.supportHapticAmplitude : 0f;
+
+        /// <summary>Sarjor kapasitesi; 0 = bu silahta mermi HIC sayilmaz. Profilsiz silah da
+        /// buraya duser, yani bugunku sinirsiz davranis aynen korunur.</summary>
+        public int MagazineSize => _profile != null ? _profile.magazineSize : 0;
+        public bool UsesAmmo => MagazineSize > 0;
+        public int Ammo => _ammo.Value;
+        public int SpareMagazines => _spares.Value;
+        public bool IsReloading => _reloadDoneAt.Value > 0d;
+        float ReloadDuration => _profile != null ? _profile.reloadDuration : 1.4f;
 
         // Effects (created once, reused per shot)
         LineRenderer _tracer;
@@ -76,7 +100,7 @@ namespace VRMultiplayer
         float TracerWidth => _profile != null ? _profile.tracerWidth : 0.03f;
         float FlashDuration => _profile != null ? _profile.flashDuration : 0.035f;
         Color ImpactColor => _profile != null ? _profile.impactColor : new Color(0.03f, 0.03f, 0.04f, 1f);
-        float ImpactSize => _profile != null ? _profile.impactSize : 0.06f;
+        float ImpactSize => _profile != null ? _profile.impactSize : 0.022f;
 
         void Awake()
         {
@@ -120,12 +144,29 @@ namespace VRMultiplayer
             }
         }
 
+        public override void OnNetworkSpawn()
+        {
+            // Silah dolu sarjorle dogar. Yalnizca sunucu yazar; degerler NetworkVariable ile
+            // herkese (ve sonradan katilana) kendiliginden tasinir.
+            if (IsServer && UsesAmmo)
+            {
+                _ammo.Value = MagazineSize;
+                _spares.Value = _profile.spareMagazines;
+            }
+        }
+
         void Update()
         {
             UpdateFx(); // herkeste, silah elde olmasa da: ucan iz sahibi birakinca da tamamlanir
 
-            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; return; }
-            if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId) return;
+            // Dolumu sunucu bitirir ve sunucu silahi tutan kisi OLMAYABILIR — bu yuzden
+            // asagidaki "sadece tutan oyuncu" cikislarindan ONCE isletilmeli.
+            if (IsSpawned && IsServer) TickReloadServer();
+
+            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; ResetFlick(); return; }
+            if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId) { ResetFlick(); return; }
+
+            TickReloadGesture();
 
             // Ates kesilince koni daralir.
             if (_profile != null && _bloom > 0f)
@@ -149,6 +190,17 @@ namespace VRMultiplayer
 
             // Semi: her atis tetigin yeniden cekilmesini ister. Auto: basili tutuldukca tarar.
             bool wantsFire = IsAuto ? trig : (trig && !_prevTrigger);
+
+            // Bos sarjor / dolum sirasinda tetik. Buradaki kontrol YALNIZCA his icindir —
+            // otorite FireServerRpc'de. Kuru tetik titresimi tetigin her cekilisinde bir kez
+            // verilir; auto'da parmak basili dururken kumandayi surekli titretmemek icin.
+            if (wantsFire && UsesAmmo && (_ammo.Value <= 0 || IsReloading))
+            {
+                if (!_dryFired) { DryFire(firedDev); _dryFired = true; }
+                wantsFire = false;
+            }
+            if (!trig) _dryFired = false;
+
             if (wantsFire && Time.time >= _nextFire)
             {
                 // Kadans kareye degil saate baglanir: taramada frame quantization birikip
@@ -250,11 +302,19 @@ namespace VRMultiplayer
             if (p.Receive.SenderClientId != _grab.HolderClientId) return; // only the holder fires
             if (dir.sqrMagnitude < 0.5f) return;
 
+            // Mermi otoritesi burada: ele gecirilmis bir istemci istedigi kadar FireServerRpc
+            // cagirsin, bos sarjorle ya da dolum ortasinda atis cikmaz. Istemcideki ayni
+            // kontrol sadece hisdir, guvenlik degil.
+            if (UsesAmmo && (_ammo.Value <= 0 || IsReloading)) return;
+
             // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
             // FireServerRpc'yi her karede cagirsa da atis hizi profilin uzerine cikamaz.
             // %15 tolerans, ag jitter'inda mesru atisin dusmesini onler.
             if (Time.time < _srvNextFire) return;
             _srvNextFire = Time.time + fireInterval * 0.85f;
+
+            // Kadans kapisini gectik = atis GERCEKTEN cikiyor; mermi tam burada duser.
+            if (UsesAmmo) _ammo.Value--;
 
             dir.Normalize();
 
@@ -326,6 +386,129 @@ namespace VRMultiplayer
         void FireFxClientRpc(Vector3 origin, Vector3 end, Vector3 hitNormal)
         {
             ShowShot(origin, end, hitNormal);
+        }
+
+        // ------------------------------------------------------------- sarjor
+
+        /// <summary>Sarjor degistirme istegi — hareketi yakalayan istemci gonderir. Istemciye
+        /// hicbir konuda guvenilmez: gonderen gercekten silahi tutuyor mu, sarjor zaten dolu mu,
+        /// yedek kaldi mi, zaten dolum var mi — hepsini sunucu dogrular.</summary>
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void ReloadServerRpc(RpcParams p = default)
+        {
+            if (!UsesAmmo) return;
+            if (p.Receive.SenderClientId != _grab.HolderClientId) return;
+            if (IsReloading) return;
+            if (_ammo.Value >= MagazineSize) return; // dolu sarjor degistirilmez
+            if (_spares.Value == 0) return;          // -1 = sinirsiz, 0 = yedek bitti
+
+            _reloadDoneAt.Value = NetworkManager.ServerTime.Time + ReloadDuration;
+        }
+
+        /// <summary>Sunucu: suresi dolan dolumu tamamlar. Silah dolum ortasinda birakilirsa
+        /// iptal edilir — yoksa yerde duran silah kendi kendine dolardi.</summary>
+        void TickReloadServer()
+        {
+            if (_reloadDoneAt.Value <= 0d) return;
+
+            if (_grab == null || !_grab.IsHeld) { _reloadDoneAt.Value = 0d; return; }
+            if (NetworkManager.ServerTime.Time < _reloadDoneAt.Value) return;
+
+            _reloadDoneAt.Value = 0d;
+            _ammo.Value = MagazineSize;
+            if (_spares.Value > 0) _spares.Value--; // -1 (sinirsiz) oldugu gibi kalir
+            ReloadDoneClientRpc();
+        }
+
+        [Rpc(SendTo.Everyone)]
+        void ReloadDoneClientRpc()
+        {
+            if (NetworkManager == null || _grab == null || !_grab.IsHeld) return;
+            if (_grab.HolderClientId != NetworkManager.LocalClientId) return;
+            Buzz(_grab.HolderHand == 0 ? XRNode.LeftHand : XRNode.RightHand, 0.75f, 0.09f);
+        }
+
+        /// <summary>Silahi asagi savirip geri kaldirma hareketi (yalnizca tutan istemcide).
+        ///
+        /// Buradaki filtrelerin tamami kazara sarjor degisimine karsidir. Silahi indirip
+        /// kaldirmak bir nisanci oyununda yapilan EN dogal harekettir — yururken, sipere
+        /// cokerken, asagi nisan alirken surekli olur. Bu yuzden hareket sayilmak icin
+        /// HIZLI olmali (yavas indirmek sayilmaz), asagi ve yukari fazlarin her biri yeterli
+        /// YOL katetmeli ve ikisi kisa bir PENCERE icinde bitmeli. Sarjor doluysa hic bakilmaz.
+        /// </summary>
+        void TickReloadGesture()
+        {
+            if (!UsesAmmo || _profile == null) { ResetFlick(); return; }
+
+            float y = transform.position.y;
+            float dt = Time.deltaTime;
+            if (dt <= 0f) { _flickPrevY = y; return; }
+            float vy = (y - _flickPrevY) / dt;
+            _flickPrevY = y;
+
+            // Dolu sarjor / zaten dolum var / az once istendi -> hareketi izlemeye bile gerek yok.
+            if (_ammo.Value >= MagazineSize || IsReloading || Time.time < _nextReloadRequest)
+            {
+                _flickPhase = 0;
+                return;
+            }
+
+            float speed = _profile.reloadFlickSpeed;
+            float travel = _profile.reloadFlickTravel;
+            bool expired = Time.time - _flickStartedAt > _profile.reloadFlickWindow;
+
+            switch (_flickPhase)
+            {
+                case 0: // bekle: yeterince hizli bir ASAGI hareket baslatir
+                    if (vy <= -speed)
+                    {
+                        _flickPhase = 1;
+                        _flickTopY = y;
+                        _flickLowY = y;
+                        _flickStartedAt = Time.time;
+                    }
+                    break;
+
+                case 1: // asagi iniyor: dip noktayi takip et, yeterince indiyse donusu bekle
+                    if (expired) { _flickPhase = 0; break; }
+                    if (y < _flickLowY) _flickLowY = y;
+                    if (_flickTopY - _flickLowY >= travel && vy >= speed) _flickPhase = 2;
+                    break;
+
+                case 2: // yukari donuyor: dipten yeterince kalktiysa hareket tamamlandi
+                    if (expired) { _flickPhase = 0; break; }
+                    if (y - _flickLowY >= travel)
+                    {
+                        _flickPhase = 0;
+                        _nextReloadRequest = Time.time + 0.6f; // tek harekette tek istek
+                        ReloadServerRpc();
+                        // Hareket KABUL edildi. Tusa basmadigin icin bunu hissetmen sart:
+                        // yoksa oyuncu algilandi mi bilemez ve silahi sallamaya devam eder.
+                        Buzz(_grab.HolderHand == 0 ? XRNode.LeftHand : XRNode.RightHand, 0.5f, 0.05f);
+                    }
+                    break;
+            }
+        }
+
+        // Silah elde degilken de tazelenir: yoksa silahi kaptigin ILK karede eski/sifir
+        // yukseklikle devasa bir sahte hiz cikar ve hareket kendiliginden tetiklenir.
+        void ResetFlick()
+        {
+            _flickPhase = 0;
+            _flickPrevY = transform.position.y;
+        }
+
+        // Ses varligi yok; kuru tetik yalnizca titresimle bildirilir. Atis titresiminden
+        // belirgin sekilde kisa ve zayif — "atesledim" sanilmasin diye.
+        static void DryFire(InputDevice dev)
+        {
+            if (dev.isValid) dev.SendHapticImpulse(0, 0.25f, 0.03f);
+        }
+
+        static void Buzz(XRNode node, float amplitude, float duration)
+        {
+            var dev = InputDevices.GetDeviceAtXRNode(node);
+            if (dev.isValid) dev.SendHapticImpulse(0, amplitude, duration);
         }
 
         // ------------------------------------------------------------- barrel
@@ -409,10 +592,10 @@ namespace VRMultiplayer
             _decals = new Transform[DecalCount];
             for (int i = 0; i < DecalCount; i++)
             {
-                // Yassilastirilmis kup: yuzeye gomulu koyu bir yama = delik. Kup simetrik
-                // oldugu icin normalin isareti yanlis olsa bile gorunmez yuze donmez
-                // (Quad'in tek yuzu var, ters donerse hic cizilmez).
-                var d = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                // Yassilastirilmis SILINDIR = yuvarlak disk (kursun deligi kare degil yuvarlak).
+                // Silindir de kup gibi simetrik, yani normalin isareti yanlis olsa bile gorunmez
+                // yuze donmez (Quad'in tek yuzu var, ters donerse hic cizilmez).
+                var d = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 d.name = "Bullet Hole";
                 Destroy(d.GetComponent<Collider>());
                 d.GetComponent<MeshRenderer>().sharedMaterial = imat;
@@ -519,12 +702,12 @@ namespace VRMultiplayer
             var d = _decals[_decalNext];
             _decalNext = (_decalNext + 1) % _decals.Length;
 
+            // Silindirin ekseni LOKAL Y; onu yuzey normaline hizala. Olcek: mesh yaricapi 0.5
+            // (yani cap = scale.x) ve yuksekligi 2 (yani kalinlik = 2 * scale.y).
             float s = ImpactSize;
-            // Ince eksen (lokal Z) normal boyunca; yuzeyin biraz icine gomulu dursun ki
-            // z-fighting olmadan "delik" gibi otursun.
-            d.SetPositionAndRotation(_shotEnd + _shotNormal * 0.002f,
-                Quaternion.LookRotation(_shotNormal));
-            d.localScale = new Vector3(s, s, 0.006f);
+            d.SetPositionAndRotation(_shotEnd + _shotNormal * 0.001f,
+                Quaternion.FromToRotation(Vector3.up, _shotNormal));
+            d.localScale = new Vector3(s, 0.0015f, s); // kalinlik 3 mm: yuzeye gomulu dursun
             d.gameObject.SetActive(true);
         }
     }

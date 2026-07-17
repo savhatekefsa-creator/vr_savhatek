@@ -22,7 +22,7 @@ namespace VRMultiplayer.Weapons
         [Header("Eslestirme (Equals > Contains; ikisi de bossa profil hic eslesmez)")]
         [Tooltip("Silah GameObject adi TAM olarak buysa eslesir (oncelikli).")]
         public string weaponNameEquals = "";
-        [Tooltip("Silah GameObject adi bunu ICERIYORSA eslesir (Equals eslesmezse bakilir).")]
+        [Tooltip("Silah GameObject adi bunu ICERIYORSA eslesir (Equals eslesmezse bakilir). BUNU DOLDUR: yalnizca Equals kullanirsan silahin sahnedeki kopyalari (\"Weapon_Pistol (1)\") profille ESLESMEZ ve sessizce eski pivot-snap davranisina duser — poz, tepme, ates modu hicbiri calismaz.")]
         public string weaponNameContains = "";
 
         [Header("Kabza cipasi (silah-lokal kumanda pozu — yakalama araciyla uretilir)")]
@@ -110,8 +110,8 @@ namespace VRMultiplayer.Weapons
         [Header("Mermi izi (carptigi yerde kalan delik)")]
         [Tooltip("Izin rengi. Koyu = kursun deligi; parlak renk = boya lekesi.")]
         public Color impactColor = new Color(0.03f, 0.03f, 0.04f, 1f);
-        [Tooltip("Izin capi (m). 0 = hic iz birakma.")]
-        public float impactSize = 0.06f;
+        [Tooltip("Izin capi (m) — yuvarlak disk. Kursun deligi kucuk olmali; iz cizgisi kalinligi civari iyi bir taban. 0 = hic iz birakma.")]
+        public float impactSize = 0.022f;
 
         [Header("Haptik")]
         [Tooltip("Atis aninda ates eden kumandanin titresim siddeti (0..1).")]
@@ -121,8 +121,47 @@ namespace VRMultiplayer.Weapons
         [Tooltip("Destek eli takiliysa o kumandaya giden hafif titresim (0 = kapali).")]
         public float supportHapticAmplitude = 0.35f;
 
+        [Header("Sarjor (0 = mermi sayilmaz, silah sinirsiz ates eder)")]
+        [Tooltip("Bir sarjordeki mermi sayisi. 0 birakilirsa mermi sistemi HIC devreye girmez — profilsiz silahin bugunku davranisi aynen korunur.")]
+        public int magazineSize;
+        [Tooltip("Yedek sarjor sayisi. -1 = sinirsiz (mevcut ayar). 0 = hic yedek yok, sarjor bitince silah susar.")]
+        public int spareMagazines = -1;
+        [Tooltip("Sarjor degisiminin suresi (s). Bu sure boyunca silah ates edemez.")]
+        public float reloadDuration = 1.4f;
+
+        [Header("Sarjor degistirme hareketi (silahi asagi savur, sonra geri kaldir)")]
+        [Tooltip("Hareketin sayilmasi icin gereken en dusuk dikey hiz (m/s). Silahi YAVASCA indirip kaldirmak sayilmaz — kazara sarjor degisimini onleyen ana filtre budur. Buyutursen hareket sertlesir.")]
+        public float reloadFlickSpeed = 1.3f;
+        [Tooltip("Asagi ve yukari fazlarin her birinin kat etmesi gereken en az dikey yol (m). Kucuk titremeleri eler.")]
+        public float reloadFlickTravel = 0.25f;
+        [Tooltip("Asagi + yukari hareketin tamamlanmasi gereken sure (s). Asilirsa iptal — 'silahi indirdim ve oylece durdum' sarjor degistirmez.")]
+        public float reloadFlickWindow = 0.8f;
+
         [Header("Opsiyonel basit collider degisimi (bos = collider'lara dokunulmaz)")]
         public BoxSpec[] simpleColliders = new BoxSpec[0];
+
+        /// <summary>
+        /// Editorde ELLE verilmis parmak pozu: 15 eklemin lokal rotasyonu (sira icin bkz.
+        /// <see cref="HandPoseBones"/>). Prosedurel curl'un yapisal limiti yok — parmak yayilmasi,
+        /// her parmagin kabzada farkli derinlikte durmasi, basparmagin avuc ustunden capraz
+        /// gecmesi, hepsi temsil edilebilir. Ayrica hicbir eksen tahmini yok: rig'in kemik
+        /// eksenleri ne kadar tuhaf olursa olsun kaydedilen poz aynen geri gelir.
+        ///
+        /// Sag ve sol el AYRI yazilir: parmak rotasyonlarini aynalamak rig'in sol/sag kemik
+        /// eksenlerinin gercekten simetrik olmasina bagli ve bu garanti edilemez.
+        /// </summary>
+        [System.Serializable]
+        public struct FingerPose
+        {
+            [Tooltip("15 eklem lokal rotasyonu. Bos = bu el icin eski curl davranisi.")]
+            public Quaternion[] joints;
+
+            [Tooltip("Tetik TAM cekiliyken isaret parmaginin 3 bogumu. Bos = isaret parmagi sabit kalir.")]
+            public Quaternion[] indexPulled;
+
+            public bool HasPose => joints != null && joints.Length == HandPoseBones.JointCount;
+            public bool HasIndexPulled => indexPulled != null && indexPulled.Length == HandPoseBones.IndexJointCount;
+        }
 
         /// <summary>Static hand pose: wrist offset + five finger curls (ISDK Fingers Freedom:
         /// locked curls, index optionally Free = driven by the trigger axis).</summary>
@@ -145,6 +184,15 @@ namespace VRMultiplayer.Weapons
 
             [Tooltip("Tetik TAM cekiliyken isaret parmaginin kivrim tavani (0..1). Tetik cekisi kucuk bir harekettir — 1.0 tam yumruk yapar. 0 birakilirsa 1 sayilir (eski assetler).")]
             [Range(0f, 1f)] public float indexTriggerMaxCurl;
+
+            [Header("Authored parmak pozu (doluysa yukaridaki curl'lerin yerine gecer)")]
+            [Tooltip("Bu tutus SAG elle yapildiginda kullanilir.")]
+            public FingerPose rightFingers;
+            [Tooltip("Bu tutus SOL elle yapildiginda kullanilir.")]
+            public FingerPose leftFingers;
+
+            /// <summary>Pozu tutan FIZIKSEL ele gore sec — aynalama gerekmez, iki el ayri yazilir.</summary>
+            public FingerPose Fingers(bool left) => left ? leftFingers : rightFingers;
 
             /// <summary>Curl by finger id: 0 thumb, 1 index, 2 middle, 3 ring, 4 pinky.</summary>
             public float Curl(int finger)

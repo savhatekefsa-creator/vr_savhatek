@@ -52,6 +52,11 @@ namespace VRMultiplayer
         public bool HoldingLeft => _left != null && _left.held != null;
         public bool HoldingRight => _right != null && _right.held != null;
 
+        /// <summary>Bu elin tuttugu obje, yoksa null. Kol saati ekrani gibi tuketiciler
+        /// tutulan silaha (ve mermisine) buradan ulasir.</summary>
+        public GrabbableObject HeldLeft => _left != null ? _left.held : null;
+        public GrabbableObject HeldRight => _right != null ? _right.held : null;
+
         /// <summary>Networked hand anchor transforms (read-only; the weapon-grip system solves
         /// the held weapon's pose from these).</summary>
         public Transform LeftAnchor => leftHand;
