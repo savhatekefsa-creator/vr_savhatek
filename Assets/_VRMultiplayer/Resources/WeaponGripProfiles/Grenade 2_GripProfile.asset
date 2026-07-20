@@ -19,7 +19,7 @@ MonoBehaviour:
   barrelLocalDirection: {x: 0, y: 0, z: 1}
   mainHand:
     wristLocalPosition: {x: 0, y: 0, z: -0.077}
-    wristLocalEuler: {x: 321.86618, y: 274.55164, z: 225.62057}
+    wristLocalEuler: {x: 321.86618, y: 274.55167, z: 225.62057}
     thumbCurl: 0
     indexCurl: 0.55
     middleCurl: 0.75

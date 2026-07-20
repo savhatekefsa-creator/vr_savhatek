@@ -4891,7 +4891,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.NetworkWeapon
   ShowTopMostFoldoutHeaderGroup: 1
-  fireInterval: 0.18
+  fireInterval: 0.08
   range: 60
   muzzle: {fileID: 1068875283}
 --- !u!114 &305971768
@@ -14936,43 +14936,43 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 2.214
+      value: 2.049
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.165
+      value: 1.262
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 3.278
+      value: 3.059
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.7326502
+      value: -0.5745978
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0
+      value: 0.04392854
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.6806054
+      value: -0.8153107
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: -0.05635754
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
+      value: -8.186
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 85.782
+      value: 109.679
       objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
+      value: -0.397
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -27863,7 +27863,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.NetworkWeapon
   ShowTopMostFoldoutHeaderGroup: 1
-  fireInterval: 0.18
+  fireInterval: 0.08
   range: 60
   muzzle: {fileID: 1985301776}
 --- !u!114 &1390322562
@@ -38589,7 +38589,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.NetworkWeapon
   ShowTopMostFoldoutHeaderGroup: 1
-  fireInterval: 0.18
+  fireInterval: 0.08
   range: 60
   muzzle: {fileID: 597568472}
 --- !u!114 &1986381563
@@ -39337,7 +39337,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.NetworkWeapon
   ShowTopMostFoldoutHeaderGroup: 1
-  fireInterval: 0.18
+  fireInterval: 0.08
   range: 60
   muzzle: {fileID: 488843278}
 --- !u!114 &2029698304

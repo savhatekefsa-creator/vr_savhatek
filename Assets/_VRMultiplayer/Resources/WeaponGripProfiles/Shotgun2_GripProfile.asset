@@ -1,0 +1,125 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b37255edf5b63a8408ec2f907e179ba4, type: 3}
+  m_Name: Shotgun2_GripProfile
+  m_EditorClassIdentifier: 
+  weaponNameEquals: Shotgun 2
+  weaponNameContains: Shotgun 2
+  gripLocalPosition: {x: -0.00050493306, y: 0.023137331, z: 0.11552167}
+  gripLocalEuler: {x: 323.00253, y: 237.71655, z: 325.48065}
+  barrelLocalDirection: {x: -0, y: -0, z: -1}
+  mainHand:
+    wristLocalPosition: {x: 0, y: 0, z: -0.0763}
+    wristLocalEuler: {x: 321.8392, y: 274.55762, z: 225.56097}
+    thumbCurl: 0
+    indexCurl: 0.2
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 1
+    indexTriggerMaxCurl: 0.55
+    rightFingers:
+      joints:
+      - {x: 0.46158427, y: 0.530093, z: 0.33768204, w: 0.62602895}
+      - {x: -0.068997875, y: 0.98254526, z: -0.086269595, w: 0.14967163}
+      - {x: 0.25413686, y: -0.02382474, z: 0.10455531, w: 0.96120495}
+      - {x: 0.3274932, y: 0.6877186, z: 0.019051848, w: 0.64763296}
+      - {x: 0.026178833, y: -0.05374863, z: -0.044726755, w: 0.9972087}
+      - {x: 0.045725986, y: -0.24871792, z: -0.001725443, w: 0.9674945}
+      - {x: 0.31522885, y: 0.401879, z: -0.20333837, w: 0.83533084}
+      - {x: 0.22031985, y: 0.16845028, z: 0.10452481, w: 0.9550697}
+      - {x: 0.23647891, y: -0.007439106, z: 0.046836898, w: 0.97047865}
+      - {x: 0.31901368, y: 0.428454, z: -0.24289885, w: 0.80972695}
+      - {x: 0.15160361, y: 0.05557285, z: 0.10710109, w: 0.9810491}
+      - {x: 0.28835624, y: -0.05458554, z: 0.0076796496, w: 0.9559353}
+      - {x: 0.21031706, y: 0.16602525, z: -0.42798927, w: 0.86314976}
+      - {x: 0.031222511, y: 0.2071693, z: 0.06432525, w: 0.97568864}
+      - {x: 0.3340864, y: -0.14708754, z: 0.015826844, w: 0.93086034}
+      indexPulled:
+      - {x: 0.3274932, y: 0.6877186, z: 0.019051848, w: 0.64763296}
+      - {x: 0.026178833, y: -0.05374863, z: -0.044726755, w: 0.9972087}
+      - {x: 0.3647288, y: -0.23514825, z: 0.08104862, w: 0.8972789}
+    leftFingers:
+      joints: []
+      indexPulled: []
+  supportRailLocalStart: {x: 0.052694853, y: 0.051337242, z: -0.299651}
+  supportRailLocalEnd: {x: 0.052694853, y: 0.051337242, z: -0.299651}
+  supportBreakDistance: 0.3
+  supportHand:
+    wristLocalPosition: {x: 0.040925, y: 0.1075029, z: -0.0674659}
+    wristLocalEuler: {x: 345.9394, y: 261.70996, z: 230.21039}
+    thumbCurl: 0
+    indexCurl: 0
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 1
+    rightFingers:
+      joints: []
+      indexPulled: []
+    leftFingers:
+      joints:
+      - {x: 0.1997105, y: 0.94940025, z: 0.23982513, w: -0.035197046}
+      - {x: 0.07453224, y: -0.08871958, z: -0.13692158, w: 0.98378164}
+      - {x: 0.003736566, y: -0.04677561, z: -0.1941842, w: 0.9798421}
+      - {x: -0.045655556, y: -0.71636325, z: 0.03781712, w: 0.6952044}
+      - {x: 0.15121754, y: 0.05340808, z: -0.05629765, w: 0.9854499}
+      - {x: 0.15006039, y: -0.04315624, z: -0.05058487, w: 0.98643833}
+      - {x: 0.053257067, y: -0.69200873, z: 0.06082407, w: 0.71734786}
+      - {x: 0.30077294, y: 0.15906979, z: -0.016474338, w: 0.94019204}
+      - {x: 0.16011538, y: 0.12480164, z: -0.2218122, w: 0.9537227}
+      - {x: 0.115792535, y: -0.62190497, z: 0.18493629, w: 0.75208044}
+      - {x: 0.4790041, y: 0.27988383, z: -0.22323532, w: 0.80148995}
+      - {x: 0.3559576, y: 0.014282044, z: -0.037663653, w: 0.93363357}
+      - {x: 0.23662299, y: -0.45708305, z: 0.26040936, w: 0.81686693}
+      - {x: 0.14946784, y: 0.09754528, z: -0.19628969, w: 0.9641653}
+      - {x: 0.57841134, y: 0.31078017, z: -0.015778858, w: 0.75406045}
+      indexPulled: []
+  aimDeadzoneDegrees: 0.75
+  aimSoftKneeDegrees: 1.5
+  aimHalfLifeMs: 45
+  overrideFire: 1
+  fireInterval: 0.08
+  range: 60
+  createMuzzleIfMissing: 0
+  muzzleLocalPosition: {x: 0, y: 0, z: 0}
+  fireMode: 1
+  kickPitchPerShot: 2.5
+  kickYawJitter: 0.8
+  kickBackMeters: 0.012
+  maxAccumPitch: 12
+  maxAccumBack: 0.06
+  recoilDecayHalfLife: 0.15
+  recoilRestDecayHalfLife: 0.06
+  supportRecoilMultiplier: 0.5
+  spreadBase: 0.15
+  spreadPerShot: 0.15
+  spreadMax: 2
+  spreadDecayHalfLife: 0.15
+  tracerColor: {r: 1, g: 0.42, b: 0.1, a: 1}
+  tracerSpeed: 330
+  tracerLength: 5
+  tracerWidth: 0.032
+  flashDuration: 0.03
+  impactColor: {r: 0.03, g: 0.03, b: 0.04, a: 1}
+  impactSize: 0.022
+  hapticAmplitude: 0.7
+  hapticDuration: 0.08
+  supportHapticAmplitude: 0.35
+  magazineSize: 30
+  spareMagazines: -1
+  reloadDuration: 1.6
+  reloadFlickSpeed: 1.3
+  reloadFlickTravel: 0.25
+  reloadFlickWindow: 0.8
+  simpleColliders: []

@@ -69,3 +69,23 @@
   wristLocalEuler: {x: 327,4872, y: 84,7947, z: 133,2255}
 ```
 <!-- ham quaternion — gripLocalRotation: {x: -0,767765, y: -0,587105, z: 0,107738, w: -0,232889} wristLocalRotation: {x: 0,51207, y: 0,446691, z: 0,725639, w: 0,108173} -->
+
+## SAG el — Rifle 3 — 2026-07-20 16:09:00
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: -0,0414, y: 0,0908, z: 0,1427}
+  gripLocalEuler: {x: 311,5018, y: 235,3153, z: 338,3637}
+  wristLocalPosition: {x: -0,0001, y: 0, z: -0,065}
+  wristLocalEuler: {x: 321,8506, y: 274,5687, z: 225,5885}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0,035678, y: 0,829017, z: 0,436748, w: -0,347432} wristLocalRotation: {x: 0,49802, y: -0,46974, z: -0,726045, w: 0,064647} -->
+
+## SAG el — Rifle 3 — 2026-07-20 16:14:14
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: -0,0364, y: 0,1055, z: 0,1505}
+  gripLocalEuler: {x: 320,7066, y: 237,6589, z: 346,4845}
+  wristLocalPosition: {x: 0, y: 0,0001, z: -0,0718}
+  wristLocalEuler: {x: 321,8325, y: 274,582, z: 225,601}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0,063914, y: 0,838404, z: 0,34594, w: -0,416317} wristLocalRotation: {x: 0,49781, y: -0,469875, z: -0,7261, w: 0,064673} -->
