@@ -10,37 +10,37 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 35cdd2b17db64d47899f6445c7f68e95, type: 3}
-  m_Name: Sniper1_Combat
+  m_Name: Smg3_Combat
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponCombatConfig
-  weaponName: Sniper 1
-  fireMode: 0
-  fireInterval: 1.4
+  weaponName: Smg 3
+  fireMode: 2
+  fireInterval: 0.28
   burstCount: 3
   burstShotInterval: 0.06
-  range: 200
+  range: 60
   pelletCount: 1
   pelletSpreadDegrees: 0
   pelletDamageScale: 1
-  headDamage: 100
-  torsoDamage: 60
-  armDamage: 40
-  legDamage: 40
-  magazineSize: 5
+  headDamage: 14
+  torsoDamage: 7
+  armDamage: 5
+  legDamage: 5
+  magazineSize: 30
   spareMagazines: -1
-  reloadDuration: 2.8
-  spreadBase: 0
-  spreadPerShot: 1
-  spreadMax: 1.5
-  spreadDecayHalfLife: 0.3
-  kickPitchPerShot: 12
-  kickYawJitter: 1.5
-  kickBackMeters: 0.05
-  maxAccumPitch: 16
-  maxAccumBack: 0.1
+  reloadDuration: 1.6
+  spreadBase: 0.1
+  spreadPerShot: 0.25
+  spreadMax: 2.5
+  spreadDecayHalfLife: 0.18
+  kickPitchPerShot: 2
+  kickYawJitter: 0.8
+  kickBackMeters: 0.012
+  maxAccumPitch: 8
+  maxAccumBack: 0.05
   recoilDecayHalfLife: 0.15
-  recoilRestDecayHalfLife: 0.12
-  supportRecoilMultiplier: 0.6
-  fireClip: WeaponSounds/sniper1_fire
+  recoilRestDecayHalfLife: 0.07
+  supportRecoilMultiplier: 0.55
+  fireClip: WeaponSounds/smg3_fire
   dryFireClip: WeaponSounds/dry_generic
   reloadStartClip: WeaponSounds/reload_start_generic
   reloadEndClip: WeaponSounds/reload_end_generic

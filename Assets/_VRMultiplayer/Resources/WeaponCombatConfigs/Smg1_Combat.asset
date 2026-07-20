@@ -21,25 +21,25 @@ MonoBehaviour:
   pelletCount: 1
   pelletSpreadDegrees: 0
   pelletDamageScale: 1
-  headDamage: 0
-  torsoDamage: 0
-  armDamage: 0
-  legDamage: 0
+  headDamage: 12
+  torsoDamage: 6
+  armDamage: 4
+  legDamage: 4
   magazineSize: 30
   spareMagazines: -1
   reloadDuration: 1.6
   spreadBase: 0.15
-  spreadPerShot: 0.15
-  spreadMax: 2
+  spreadPerShot: 0.18
+  spreadMax: 2.5
   spreadDecayHalfLife: 0.15
-  kickPitchPerShot: 2.5
-  kickYawJitter: 0.8
-  kickBackMeters: 0.012
-  maxAccumPitch: 12
-  maxAccumBack: 0.06
+  kickPitchPerShot: 1.6
+  kickYawJitter: 0.7
+  kickBackMeters: 0.01
+  maxAccumPitch: 8
+  maxAccumBack: 0.05
   recoilDecayHalfLife: 0.15
-  recoilRestDecayHalfLife: 0.06
-  supportRecoilMultiplier: 0.5
+  recoilRestDecayHalfLife: 0.07
+  supportRecoilMultiplier: 0.55
   fireClip: WeaponSounds/smg1_fire
   dryFireClip: WeaponSounds/dry_generic
   reloadStartClip: WeaponSounds/reload_start_generic

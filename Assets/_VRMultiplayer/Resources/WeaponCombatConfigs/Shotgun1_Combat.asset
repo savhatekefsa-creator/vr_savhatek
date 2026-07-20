@@ -21,17 +21,17 @@ MonoBehaviour:
   pelletCount: 7
   pelletSpreadDegrees: 6
   pelletDamageScale: 0.35
-  headDamage: 0
-  torsoDamage: 0
-  armDamage: 0
-  legDamage: 0
-  magazineSize: 30
+  headDamage: 16
+  torsoDamage: 10
+  armDamage: 6
+  legDamage: 6
+  magazineSize: 6
   spareMagazines: -1
-  reloadDuration: 1.6
-  spreadBase: 0.15
-  spreadPerShot: 0.15
+  reloadDuration: 2.4
+  spreadBase: 0
+  spreadPerShot: 0.6
   spreadMax: 2
-  spreadDecayHalfLife: 0.15
+  spreadDecayHalfLife: 0.2
   kickPitchPerShot: 8
   kickYawJitter: 1.5
   kickBackMeters: 0.035

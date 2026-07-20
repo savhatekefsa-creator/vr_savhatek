@@ -14,32 +14,32 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponCombatConfig
   weaponName: Rifle_HK416
   fireMode: 1
-  fireInterval: 0.08
+  fireInterval: 0.11
   burstCount: 3
   burstShotInterval: 0.06
-  range: 60
+  range: 90
   pelletCount: 1
   pelletSpreadDegrees: 0
   pelletDamageScale: 1
-  headDamage: 0
-  torsoDamage: 0
-  armDamage: 0
-  legDamage: 0
+  headDamage: 18
+  torsoDamage: 9
+  armDamage: 6
+  legDamage: 6
   magazineSize: 30
   spareMagazines: -1
-  reloadDuration: 1.6
-  spreadBase: 0.15
-  spreadPerShot: 0.15
-  spreadMax: 2
-  spreadDecayHalfLife: 0.15
-  kickPitchPerShot: 2.5
-  kickYawJitter: 0.8
-  kickBackMeters: 0.012
-  maxAccumPitch: 12
+  reloadDuration: 1.8
+  spreadBase: 0.1
+  spreadPerShot: 0.2
+  spreadMax: 3
+  spreadDecayHalfLife: 0.18
+  kickPitchPerShot: 2.8
+  kickYawJitter: 0.9
+  kickBackMeters: 0.015
+  maxAccumPitch: 10
   maxAccumBack: 0.06
   recoilDecayHalfLife: 0.15
-  recoilRestDecayHalfLife: 0.06
-  supportRecoilMultiplier: 0.5
+  recoilRestDecayHalfLife: 0.08
+  supportRecoilMultiplier: 0.55
   fireClip: WeaponSounds/hk416_fire
   dryFireClip: WeaponSounds/dry_generic
   reloadStartClip: WeaponSounds/reload_start_generic

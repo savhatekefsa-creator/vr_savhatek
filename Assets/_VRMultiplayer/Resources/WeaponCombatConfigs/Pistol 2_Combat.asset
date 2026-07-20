@@ -14,31 +14,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponCombatConfig
   weaponName: Pistol 2
   fireMode: 0
-  fireInterval: 0.18
+  fireInterval: 0.25
   burstCount: 3
   burstShotInterval: 0.06
-  range: 60
+  range: 50
   pelletCount: 1
   pelletSpreadDegrees: 0
   pelletDamageScale: 1
-  headDamage: 0
-  torsoDamage: 0
-  armDamage: 0
-  legDamage: 0
-  magazineSize: 0
+  headDamage: 26
+  torsoDamage: 13
+  armDamage: 8
+  legDamage: 8
+  magazineSize: 15
   spareMagazines: -1
-  reloadDuration: 1.4
+  reloadDuration: 1.2
   spreadBase: 0
-  spreadPerShot: 0
-  spreadMax: 3
-  spreadDecayHalfLife: 0.18
-  kickPitchPerShot: 0
-  kickYawJitter: 0
-  kickBackMeters: 0
+  spreadPerShot: 0.3
+  spreadMax: 2
+  spreadDecayHalfLife: 0.2
+  kickPitchPerShot: 3
+  kickYawJitter: 0.6
+  kickBackMeters: 0.02
   maxAccumPitch: 8
-  maxAccumBack: 0.04
+  maxAccumBack: 0.05
   recoilDecayHalfLife: 0.12
-  recoilRestDecayHalfLife: 0.07
+  recoilRestDecayHalfLife: 0.06
   supportRecoilMultiplier: 0.55
   fireClip: WeaponSounds/pistol2_fire
   dryFireClip: WeaponSounds/dry_generic

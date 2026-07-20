@@ -13,33 +13,33 @@ MonoBehaviour:
   m_Name: Dmr1_Combat
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponCombatConfig
   weaponName: Dmr1
-  fireMode: 1
-  fireInterval: 0.08
+  fireMode: 0
+  fireInterval: 0.5
   burstCount: 3
   burstShotInterval: 0.06
-  range: 60
+  range: 130
   pelletCount: 1
   pelletSpreadDegrees: 0
   pelletDamageScale: 1
-  headDamage: 0
-  torsoDamage: 0
-  armDamage: 0
-  legDamage: 0
-  magazineSize: 30
+  headDamage: 50
+  torsoDamage: 24
+  armDamage: 16
+  legDamage: 16
+  magazineSize: 10
   spareMagazines: -1
-  reloadDuration: 1.6
-  spreadBase: 0.15
-  spreadPerShot: 0.15
+  reloadDuration: 2.0
+  spreadBase: 0
+  spreadPerShot: 0.5
   spreadMax: 2
-  spreadDecayHalfLife: 0.15
-  kickPitchPerShot: 2.5
-  kickYawJitter: 0.8
-  kickBackMeters: 0.012
+  spreadDecayHalfLife: 0.25
+  kickPitchPerShot: 5.5
+  kickYawJitter: 1.0
+  kickBackMeters: 0.03
   maxAccumPitch: 12
-  maxAccumBack: 0.06
+  maxAccumBack: 0.07
   recoilDecayHalfLife: 0.15
-  recoilRestDecayHalfLife: 0.06
-  supportRecoilMultiplier: 0.5
+  recoilRestDecayHalfLife: 0.09
+  supportRecoilMultiplier: 0.55
   fireClip: WeaponSounds/dmr1_fire
   dryFireClip: WeaponSounds/dry_generic
   reloadStartClip: WeaponSounds/reload_start_generic
