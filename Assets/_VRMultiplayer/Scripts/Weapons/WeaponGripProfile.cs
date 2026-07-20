@@ -2,11 +2,13 @@ using UnityEngine;
 
 namespace VRMultiplayer.Weapons
 {
-    /// <summary>How the trigger maps to shots: one per press, or a sustained burst.</summary>
+    /// <summary>How the trigger maps to shots: one per press, sustained fire, or a fixed burst
+    /// per press.</summary>
     public enum FireMode
     {
         Semi,
         Auto,
+        Burst,
     }
 
     /// <summary>
@@ -33,6 +35,10 @@ namespace VRMultiplayer.Weapons
 
         [Tooltip("Namlunun silah-LOKAL yonu (Muzzle forward). Iki elli nisan BU ekseni hedefe hizalar; kabza cipasi egik yakalanmis olsa bile namlu dogru doner.")]
         public Vector3 barrelLocalDirection = Vector3.forward;
+
+        [Header("Savas config (SUNUCU-OTORITER; doluysa asagidaki eski ates/tepme/sarjor alanlarini ezer)")]
+        [Tooltip("Bu silahin savas ayarlari. Bos = asagidaki eski alanlar gecerli (davranis degismez).")]
+        public WeaponCombatConfig combat;
 
         [Header("Ana el (kabza)")]
         public HandPose mainHand = HandPose.Defaults(true);
