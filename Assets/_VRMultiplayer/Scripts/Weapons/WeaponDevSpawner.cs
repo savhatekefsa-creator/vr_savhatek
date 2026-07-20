@@ -38,6 +38,12 @@ namespace VRMultiplayer.Weapons
                 if (GUILayout.Button($"Spawn {p.name}"))
                     SpawnInFront(p);
             }
+
+            // Canli ayar OnValidate+debounce ile zaten otomatik yayinlanir; bu buton yedek
+            // (orn. debounce kacirilirsa ya da elle tetiklemek istenirse).
+            GUILayout.Space(6f);
+            if (GUILayout.Button("Configleri HERKESE gonder"))
+                WeaponConfigSyncTool.PushToAll();
             GUILayout.EndArea();
         }
 

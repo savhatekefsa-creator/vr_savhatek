@@ -85,5 +85,26 @@ namespace VRMultiplayer.Weapons
         [Range(0f, 1f)] public float reloadVolume = 0.8f;
         [Tooltip("Sesin tamamen sondugu mesafe (m) — Linear rolloff bu noktada 0'a iner.")]
         public float soundMaxDistance = 120f;
+
+        // ---- Canli ayar kirlilik bayragi ----
+        // Sunucu editorde calistigi icin OnValidate = Inspector'daki her degisiklik. Bayrak
+        // statik: hangi config degisirse degissin sunucu TUM seti yeniden yayinlar (ucuz ve
+        // kesin). WeaponConfigSyncTool debounce'layarak okur-ve-temizler.
+        static bool _dirty;
+
+        /// <summary>Okur ve temizler: son okumadan beri herhangi bir config degisti mi?</summary>
+        public static bool ConsumeDirty()
+        {
+            if (!_dirty) return false;
+            _dirty = false;
+            return true;
+        }
+
+#if UNITY_EDITOR
+        void OnValidate() { _dirty = true; }
+#endif
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetDirty() { _dirty = false; }
     }
 }
