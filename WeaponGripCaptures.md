@@ -242,3 +242,13 @@ Degerler WeaponGripProfile .asset icine oldugu gibi yapistirilabilir.
   wristLocalEuler: {x: 327,5524, y: 84,9678, z: 133,1867}
 ```
 <!-- ham quaternion — gripLocalRotation: {x: -0,781373, y: -0,610145, z: -0,098273, w: 0,086727} wristLocalRotation: {x: 0,513272, y: 0,4467, z: 0,724789, w: 0,108128} -->
+
+## SAG el — Pistol 2 — 2026-07-20 11:03:22
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: -0,0497, y: 0,0898, z: 0,1187}
+  gripLocalEuler: {x: 322,1003, y: 231,9009, z: 344,5165}
+  wristLocalPosition: {x: 0, y: 0, z: -0,0947}
+  wristLocalEuler: {x: 321,8803, y: 274,5469, z: 225,6121}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0,026248, y: 0,861832, z: 0,345089, w: -0,370771} wristLocalRotation: {x: -0,498184, y: 0,469712, z: 0,72593, w: -0,064885} -->
