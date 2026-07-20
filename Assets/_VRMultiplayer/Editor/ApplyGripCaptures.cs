@@ -21,6 +21,9 @@ namespace VRMultiplayer.EditorTools
     ///    rotasyonuyla uygular — Dmr1 menu 33'teki ayni donusum).
     ///  - Rotasyonlar euler yerine kayittaki HAM QUATERNION'lardan okunur (aracin kendi notu:
     ///    euler kayipli, quaternion gercek olcum).
+    ///  - SAG var + SOL yoksa: kayitli destek bilegi ESKI kabza cercevesinden YENI kabza
+    ///    cercevesine tasinir. WeaponHandWeld destegi de ana kabza rotasyonuyla cozdugu icin,
+    ///    bu tasima olmadan destek eli ana kabza deltasi kadar sessizce kayar (HK416'da 24°).
     ///  - ALTIN profiller (HK416, Weapon_Pistol — elle kaptirilip ayarlanmis referanslar)
     ///    otomatik geciste ATLANIR; menu 37 calistirilirsa tek tek sorulur. Not: 12:04:10'daki
     ///    "Rifle_HK416 (1)" SAG kaydi buyuk olasilikla rafta HK416'nin ustunde duran Shotgun 1'e
@@ -143,8 +146,12 @@ namespace VRMultiplayer.EditorTools
                     }
                     if (interactive && !EditorUtility.DisplayDialog("Yakalama Uygula",
                         "'" + weapon + "' kaydi ALTIN profili (" + profile.name + ") ezecek.\n\n"
-                        + "Bu profil elle kaptirilip ayarlanmis referans. (Not: HK416'ya yazilan 12:04 kaydi "
-                        + "buyuk olasilikla rafta ustundeki Shotgun 1'e uzanirken olan yanlis atama.)\n\nUygulansin mi?",
+                        + "Bu profil elle kaptirilip ayarlanmis referans (parmak pozlari + ayarli destek).\n\n"
+                        + "Uygulanacak kayitlar:\n"
+                        + "  ana el : " + (main.HasValue ? main.Value.stamp : "YOK — mevcut deger kalir") + "\n"
+                        + "  destek : " + (sup.HasValue ? sup.Value.stamp
+                            : "YOK — mevcut deger yeni kabza cercevesine tasinir") + "\n\n"
+                        + "Damgayi dogrula: beklemedigin bir kayitsa atla.\n\nUygulansin mi?",
                         "Evet, ez", "Hayir, atla"))
                     {
                         lines.Add("  " + weapon + ": altin profil — kullanici atladi");
@@ -153,7 +160,9 @@ namespace VRMultiplayer.EditorTools
                 }
 
                 // Ana el: birebir. (Destek donusumu icin nihai ana rotasyon = varsa yeni, yoksa mevcut.)
-                Quaternion mainRot = main.HasValue ? main.Value.gripRot : profile.GripLocalRotation;
+                bool rebased = false;
+                Quaternion oldMainRot = profile.GripLocalRotation;
+                Quaternion mainRot = main.HasValue ? main.Value.gripRot : oldMainRot;
                 if (main.HasValue)
                 {
                     var m = main.Value;
@@ -173,12 +182,30 @@ namespace VRMultiplayer.EditorTools
                     profile.supportHand.wristLocalPosition = toMain * s.wristPos;
                     profile.supportHand.wristLocalEuler = (toMain * s.wristRot).eulerAngles;
                 }
+                else if (main.HasValue && HasSupportPose(profile))
+                {
+                    // Destek bilegi ANA kabza rotasyonu cercevesinde saklanir — WeaponHandWeld her iki
+                    // el icin de anchorRot = weapon.rotation * gripLocalRot kullanir. Ana kabza yeni
+                    // kayitla donunce, eslesen SOL kayit yoksa eski destek bilegi tam o delta kadar
+                    // kayar (silaha gore sabit kalmasi gerekirken ana elle birlikte doner). Eski
+                    // cerceveden yeni cerceveye tasi. Ray weapon-local oldugu icin dokunulmaz.
+                    Quaternion delta = Quaternion.Inverse(mainRot) * oldMainRot;
+                    if (Quaternion.Angle(Quaternion.identity, delta) > 0.01f)
+                    {
+                        profile.supportHand.wristLocalPosition = delta * profile.supportHand.wristLocalPosition;
+                        profile.supportHand.wristLocalEuler =
+                            (delta * Quaternion.Euler(profile.supportHand.wristLocalEuler)).eulerAngles;
+                        rebased = true;
+                    }
+                }
 
                 EditorUtility.SetDirty(profile);
                 applied++;
                 lines.Add("  " + weapon + " -> " + profile.name + ": "
                     + (main.HasValue ? "ana(" + main.Value.stamp + ") " : "ana YOK — geometrik kaldi ")
-                    + (sup.HasValue ? "destek(" + sup.Value.stamp + ")" : "destek YOK — eski deger kaldi"));
+                    + (sup.HasValue ? "destek(" + sup.Value.stamp + ")"
+                        : rebased ? "destek YOK — eski deger yeni kabza cercevesine tasindi"
+                        : "destek YOK — eski deger kaldi"));
             }
 
             AssetDatabase.SaveAssets();
@@ -191,6 +218,16 @@ namespace VRMultiplayer.EditorTools
             Debug.Log("[ApplyGripCaptures] " + msg);
             if (interactive) EditorUtility.DisplayDialog("Yakalama Uygula", msg, "Tamam");
             return missing;
+        }
+
+        /// <summary>Profilde gercekten yazilmis bir destek pozu var mi? Bos profilde re-baseleme
+        /// anlamsiz olur (sifir bilek deltanin eulerine donusur).</summary>
+        static bool HasSupportPose(WeaponGripProfile p)
+        {
+            return p.supportRailLocalStart != Vector3.zero
+                || p.supportRailLocalEnd != Vector3.zero
+                || p.supportHand.wristLocalPosition != Vector3.zero
+                || p.supportHand.wristLocalEuler != Vector3.zero;
         }
 
         // ------------------------------------------------------------------ dosya ayristirma

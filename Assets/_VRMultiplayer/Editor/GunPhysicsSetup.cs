@@ -57,13 +57,51 @@ namespace VRMultiplayer.EditorTools
                 return;
             }
 
+            // Gecmis surumun actigi yarayi her derlemede supur: prefabin ICINDEKI ayni isimli
+            // dugume kurulmus kacak fizik (cift Rigidbody) silahi dusurur ve aldirtmaz.
+            CleanChildRigidbodies();
+
             foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (!t.gameObject.scene.IsValid()) continue;
                 if (WeaponGripBinder.CleanName(t.name) != AutoTargetName) continue;
+                // "Rifle 1" adi prefabin IC dugumunde de gecer — fizik yalnizca instance KOKUNE
+                // kurulur, yoksa ic dugumdeki ikinci Rigidbody tum gorunur mesh'i dusurur.
+                if (PrefabUtility.GetOutermostPrefabInstanceRoot(t.gameObject) != t.gameObject) continue;
                 if (t.GetComponentInChildren<Collider>() != null) return; // fizik zaten var
                 Apply(t.gameObject, false);
                 return;
+            }
+        }
+
+        /// <summary>Tutulabilir silahlarin COCUK dugumlerinde kalmis kacak Rigidbody'leri (ve o
+        /// dugume onlarla birlikte eklenmis BoxCollider'lari) temizler. Silahin tek govdesi kok
+        /// Rigidbody'dir; cocuk RB compound collider'i bolup GrabbableObject'in donma kilidini
+        /// devre disi birakir — silah yere duser ve alinamaz. Dmr1 tarzi cocuk MeshCollider'lara
+        /// dokunulmaz (onlar RB'siz dugumlerde durur).</summary>
+        static void CleanChildRigidbodies()
+        {
+            foreach (var g in Object.FindObjectsByType<GrabbableObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                int removed = 0;
+                foreach (var rb in g.GetComponentsInChildren<Rigidbody>(true))
+                {
+                    if (rb.transform == g.transform) continue; // kok RB dogru yerde, kalir
+                    foreach (var bc in rb.GetComponents<BoxCollider>())
+                    {
+                        Object.DestroyImmediate(bc);
+                        removed++;
+                    }
+                    Object.DestroyImmediate(rb);
+                    removed++;
+                }
+                if (removed > 0)
+                {
+                    EditorUtility.SetDirty(g.gameObject);
+                    EditorSceneManager.MarkSceneDirty(g.gameObject.scene);
+                    Debug.Log("[GunPhysicsSetup] '" + g.name + "': cocuk dugumdeki kacak Rigidbody/BoxCollider temizlendi ("
+                        + removed + " bilesen) — cift-RB yuzunden dusme/alinamama onarildi. Sahneyi kaydet (Ctrl+S).");
+                }
             }
         }
 
