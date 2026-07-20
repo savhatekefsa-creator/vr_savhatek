@@ -131,7 +131,13 @@ namespace VRMultiplayer
                 var m = new GameObject("Muzzle").transform;
                 m.SetParent(transform, false);
                 m.localPosition = profile.muzzleLocalPosition;
-                m.localRotation = Quaternion.identity; // +Z = barrel by convention
+                // Muzzle forward = profilin namlu ekseni. Identity (+Z) varsaymak, paketin
+                // -Z namlulu modellerinde ters yone bakan bir muzzle uretir.
+                Vector3 b = profile.barrelLocalDirection;
+                m.localRotation = b.sqrMagnitude > 1e-6f
+                    ? Quaternion.LookRotation(b.normalized,
+                        Mathf.Abs(b.normalized.y) > 0.9f ? Vector3.forward : Vector3.up)
+                    : Quaternion.identity;
                 muzzle = m;
             }
 
@@ -227,6 +233,12 @@ namespace VRMultiplayer
             {
                 origin = muzzle.position;   // precise barrel tip placed in the editor
                 dir = muzzle.forward;
+                // Profil namlu eksenini biliyorsa YON profilden gelir. Silah paketinin kurulum
+                // araci Muzzle child'larini identity rotasyonla (+Z) birakti ama paket modelleri
+                // -Z namlulu — muzzle.forward'a guvenmek mermiyi ARKAYA firlatiyordu. Muzzle uc
+                // NOKTASI olarak dogru; yonun kaynagi profildeki barrelLocalDirection.
+                if (_profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f)
+                    dir = (transform.rotation * _profile.barrelLocalDirection).normalized;
             }
             else
             {
@@ -537,6 +549,20 @@ namespace VRMultiplayer
 
             float sign = Mathf.Sign(Vector3.Dot(mb.center, axis));
             if (sign == 0f) sign = 1f;
+
+            // Profil namlu eksenini soyluyorsa tahmin ONUNLA hizalanir: eksen, profil yonune
+            // en yakin ana eksene, isaret de profil isaretine cekilir. "Kutle tarafi = namlu"
+            // varsayimi, kutlesi dipcik/govdede toplanan modellerde (SMG gibi) ters secebiliyor.
+            if (_profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f)
+            {
+                Vector3 axisMesh = Quaternion.Inverse(biggest.transform.rotation)
+                    * (transform.rotation * _profile.barrelLocalDirection.normalized);
+                axis = Vector3.right; extent = mb.extents.x; float a = Mathf.Abs(axisMesh.x);
+                if (Mathf.Abs(axisMesh.y) > a) { axis = Vector3.up; extent = mb.extents.y; a = Mathf.Abs(axisMesh.y); }
+                if (Mathf.Abs(axisMesh.z) > a) { axis = Vector3.forward; extent = mb.extents.z; }
+                sign = Mathf.Sign(Vector3.Dot(axisMesh, axis));
+                if (sign == 0f) sign = 1f;
+            }
 
             Vector3 muzzleChild = mb.center + axis * (sign * extent);
             _muzzleLocal = transform.InverseTransformPoint(biggest.transform.TransformPoint(muzzleChild));
