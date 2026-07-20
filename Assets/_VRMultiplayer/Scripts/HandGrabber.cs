@@ -39,6 +39,10 @@ namespace VRMultiplayer
             public bool confirmed;          // server confirmed WE hold it
             public Vector3 posOffset;       // grab-moment offset, hand-local
             public Quaternion rotOffset;
+            public float blendUntil;        // pose-blend window end (0 = not blending)
+            public Vector3 blendFromPos;    // weapon pose captured at the discontinuity
+            public Quaternion blendFromRot;
+            public bool legacyAiming;       // legacy path: was two-hand aim engaged last frame?
             public readonly Queue<(Vector3 pos, float t)> trail = new Queue<(Vector3, float)>();
         }
 
@@ -163,7 +167,13 @@ namespace VRMultiplayer
                             && h.held.HolderHand == h.index;
                 if (mine && h.held.IsOwner)
                 {
-                    h.confirmed = true;
+                    if (!h.confirmed)
+                    {
+                        h.confirmed = true;
+                        // Confirm lands ~1 RTT after the squeeze with the weapon still at its
+                        // rest pose — blend it into the hand instead of teleporting it.
+                        StartPoseBlend(h);
+                    }
 
                     if (h.grip != null && h.grip.Profile != null)
                     {
@@ -179,14 +189,20 @@ namespace VRMultiplayer
                             ? sup.anchor.position - h.anchor.position
                             : Vector3.zero;
 
-                        if (aim.sqrMagnitude > 0.0025f)
-                            h.held.transform.SetPositionAndRotation(
-                                h.anchor.TransformPoint(h.posOffset),
-                                Quaternion.LookRotation(aim.normalized, h.anchor.up) * h.rotOffset);
-                        else
-                            h.held.transform.SetPositionAndRotation(
-                                h.anchor.TransformPoint(h.posOffset),
-                                h.anchor.rotation * h.rotOffset);
+                        // The legacy path has no aim filter, so engaging/releasing the support
+                        // hand reorients the weapon in one step — re-blend across the switch.
+                        bool aiming = aim.sqrMagnitude > 0.0025f;
+                        if (aiming != h.legacyAiming)
+                        {
+                            h.legacyAiming = aiming;
+                            StartPoseBlend(h);
+                        }
+
+                        ApplyWeaponPose(h,
+                            h.anchor.TransformPoint(h.posOffset),
+                            aiming
+                                ? Quaternion.LookRotation(aim.normalized, h.anchor.up) * h.rotOffset
+                                : h.anchor.rotation * h.rotOffset);
                     }
                 }
                 else if (h.confirmed && !h.held.IsHeld)
@@ -226,19 +242,19 @@ namespace VRMultiplayer
             // Publish the support hand to everyone (owner-authoritative, like the transform).
             h.held.SetSupportHandOwner(hasSupport ? sup.index : GrabbableObject.NoHand);
 
+            // Grip anchors are captured from the controller's REAL grip rake, so the barrel
+            // is NOT the anchor's +Z — aim along the profile's weapon-local barrel axis.
+            Vector3 barrelLocal = profile.barrelLocalDirection.sqrMagnitude > 1e-6f
+                ? profile.barrelLocalDirection.normalized
+                : Vector3.forward;
+
             Quaternion oneHandRot = h.anchor.rotation * Quaternion.Inverse(gripLocalRot);
+            // The barrel direction the grip hand ALONE would produce — the two-hand aim only
+            // REFINES this, it never swings the muzzle wildly (e.g. back toward the player).
+            Vector3 oneHandBarrel = oneHandRot * barrelLocal;
             Quaternion weaponRot;
             if (hasSupport)
             {
-                // Grip anchors are captured from the controller's REAL grip rake, so the barrel
-                // is NOT the anchor's +Z — aim along the profile's weapon-local barrel axis.
-                Vector3 barrelLocal = profile.barrelLocalDirection.sqrMagnitude > 1e-6f
-                    ? profile.barrelLocalDirection.normalized
-                    : Vector3.forward;
-
-                // The barrel direction the grip hand ALONE would produce — the two-hand aim only
-                // REFINES this, it never swings the muzzle wildly (e.g. back toward the player).
-                Vector3 oneHandBarrel = oneHandRot * barrelLocal;
                 if (h.aimDir.sqrMagnitude < 1e-6f)
                     h.aimDir = oneHandBarrel; // engage seed = current one-hand barrel -> no pop
 
@@ -258,15 +274,49 @@ namespace VRMultiplayer
                 // roll stays 1:1 with the grip hand, no up-vector guessing.
                 weaponRot = Quaternion.FromToRotation(oneHandBarrel, h.aimDir) * oneHandRot;
             }
-            else
+            else if (h.aimDir.sqrMagnitude > 1e-6f)
             {
-                h.aimDir = Vector3.zero; // next engage re-seeds
-                weaponRot = oneHandRot;
+                // Support just let go: keep filtering the aim back onto the one-hand barrel
+                // (zero deadzone so it always converges) instead of snapping there in one frame.
+                h.aimDir = WeaponGripMath.FilterAim(
+                    h.aimDir, oneHandBarrel, 0f, 1f, profile.aimHalfLifeMs, Time.deltaTime);
+                if (Vector3.Angle(h.aimDir, oneHandBarrel) < 0.5f)
+                    h.aimDir = Vector3.zero; // converged; next engage re-seeds
+                weaponRot = h.aimDir.sqrMagnitude > 1e-6f
+                    ? Quaternion.FromToRotation(oneHandBarrel, h.aimDir) * oneHandRot
+                    : oneHandRot;
             }
+            else
+                weaponRot = oneHandRot;
 
             Vector3 weaponPos = h.anchor.position
                 - weaponRot * Vector3.Scale(h.held.transform.lossyScale, gripLocal);
-            h.held.transform.SetPositionAndRotation(weaponPos, weaponRot);
+            ApplyWeaponPose(h, weaponPos, weaponRot);
+        }
+
+        // Any would-be single-frame weapon-pose jump (the grab confirm arriving ~1 RTT after
+        // the squeeze, the legacy path's support engage/disengage) is blended out over this
+        // window instead of teleporting the weapon — and, through the wrist weld, the hand.
+        const float PoseBlendSeconds = 0.12f;
+
+        void StartPoseBlend(HandState h)
+        {
+            if (h.held == null) return;
+            h.blendFromPos = h.held.transform.position;
+            h.blendFromRot = h.held.transform.rotation;
+            h.blendUntil = Time.time + PoseBlendSeconds;
+        }
+
+        void ApplyWeaponPose(HandState h, Vector3 pos, Quaternion rot)
+        {
+            if (Time.time < h.blendUntil)
+            {
+                float t = Mathf.SmoothStep(0f, 1f,
+                    1f - (h.blendUntil - Time.time) / PoseBlendSeconds);
+                pos = Vector3.Lerp(h.blendFromPos, pos, t);
+                rot = Quaternion.Slerp(h.blendFromRot, rot, t);
+            }
+            h.held.transform.SetPositionAndRotation(pos, rot);
         }
 
         // Self-heal: if the server thinks WE hold something that neither hand is actually
@@ -327,6 +377,8 @@ namespace VRMultiplayer
             h.grip = best.GetComponent<WeaponGrip>();
             if (h.grip != null && h.grip.Profile == null) h.grip = null;
             h.aimDir = Vector3.zero;
+            h.blendUntil = 0f;
+            h.legacyAiming = false;
             if (best.snapToHand)
             {
                 // Pull it into the palm, barrel aligned with where the controller points.
@@ -359,6 +411,8 @@ namespace VRMultiplayer
             h.held = null;
             h.grip = null;
             h.aimDir = Vector3.zero;
+            h.blendUntil = 0f;
+            h.legacyAiming = false;
             var o = Other(h);
             if (o != null && o.supporting == g)
             {

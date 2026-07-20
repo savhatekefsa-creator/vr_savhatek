@@ -17,6 +17,7 @@ MonoBehaviour:
   gripLocalPosition: {x: -0.0525, y: 0.1487, z: 0.2366}
   gripLocalEuler: {x: 301.7868, y: 222.2209, z: 344.1611}
   barrelLocalDirection: {x: -0, y: -0, z: -1}
+  combat: {fileID: 11400000, guid: 0661b89cb368427d9e03939962a0f24f, type: 2}
   mainHand:
     wristLocalPosition: {x: 0.0002, y: 0, z: -0.0845}
     wristLocalEuler: {x: 321.88916, y: 274.48315, z: 225.65254}
