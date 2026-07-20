@@ -14,13 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   weaponNameEquals: Rifle 3
   weaponNameContains: Rifle 3
-  gripLocalPosition: {x: -0.0525, y: 0.1487, z: 0.2366}
-  gripLocalEuler: {x: 301.7868, y: 222.2209, z: 344.1611}
+  gripLocalPosition: {x: -0.0591, y: 0.1193, z: 0.1581}
+  gripLocalEuler: {x: 318.27966, y: 222.1254, z: 351.1965}
   barrelLocalDirection: {x: -0, y: -0, z: -1}
   combat: {fileID: 11400000, guid: f6ce416af5394bec8817bddd35069348, type: 2}
   mainHand:
-    wristLocalPosition: {x: 0.0002, y: 0, z: -0.0845}
-    wristLocalEuler: {x: 321.88916, y: 274.48315, z: 225.65254}
+    wristLocalPosition: {x: -0.0001, y: 0.0001, z: -0.0846}
+    wristLocalEuler: {x: 321.86823, y: 274.60904, z: 225.58543}
     thumbCurl: 0
     indexCurl: 0.2
     middleCurl: 0
@@ -52,12 +52,12 @@ MonoBehaviour:
     leftFingers:
       joints: []
       indexPulled: []
-  supportRailLocalStart: {x: 0.0825, y: 0.163, z: -0.131}
-  supportRailLocalEnd: {x: 0.0825, y: 0.163, z: -0.131}
+  supportRailLocalStart: {x: 0.0439, y: 0.0812, z: -0.1874}
+  supportRailLocalEnd: {x: 0.0439, y: 0.0812, z: -0.1874}
   supportBreakDistance: 0.3
   supportHand:
-    wristLocalPosition: {x: 0.035287358, y: 0.0122884195, z: -0.07612501}
-    wristLocalEuler: {x: 331.78983, y: 56.096462, z: 142.1044}
+    wristLocalPosition: {x: 0.051062576, y: 0.06593669, z: -0.013613173}
+    wristLocalEuler: {x: 325.74973, y: 274.93372, z: 226.85924}
     thumbCurl: 0
     indexCurl: 0
     middleCurl: 0
