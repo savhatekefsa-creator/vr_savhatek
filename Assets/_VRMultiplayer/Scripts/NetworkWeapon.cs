@@ -506,9 +506,23 @@ namespace VRMultiplayer
             // (pellet sayisi kac olursa olsun).
             if (UsesAmmo) _ammo.Value--;
 
-            // Pellet sayisi SUNUCUNUN config'inden: istemci dilerse 500 yon gondersin,
-            // fazlasi kirpilir; her yon ayrica normalize + sanity edilir.
-            int pellets = Mathf.Min(dirs.Length, Mathf.Clamp(_cv.pelletCount, 1, MaxPellets));
+            // Pellet sayisi GERCEKTEN sunucu-otoriter: fazla yon KIRPILIR (500-yon saldirisi
+            // imkansiz), EKSIK yon SUNUCUDA tamamlanir — bayat config'li istemci tek yon
+            // gonderse bile sacma sayisi configteki kadar cikar (canli pellet ayari yeni
+            // kulaklik build'i istemez; FX yayini herkese 7 izi birlikte tasir).
+            int pellets = Mathf.Clamp(_cv.pelletCount, 1, MaxPellets);
+            if (dirs.Length < pellets)
+            {
+                Vector3 baseDir = Vector3.zero;
+                foreach (var d0 in dirs)
+                    if (IsFinite(d0) && d0.sqrMagnitude >= 0.5f) { baseDir = d0.normalized; break; }
+                if (baseDir == Vector3.zero)
+                    baseDir = (transform.rotation * _barrelLocal).normalized;
+                var padded = new Vector3[pellets];
+                for (int i = 0; i < pellets; i++)
+                    padded[i] = i < dirs.Length ? dirs[i] : ApplySpread(baseDir, _cv.pelletSpreadDegrees);
+                dirs = padded;
+            }
             ulong shooter = _grab.HolderClientId;
             byte shooterTeam = TeamOf(shooter);
 

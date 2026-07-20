@@ -19,7 +19,7 @@ MonoBehaviour:
   burstShotInterval: 0.06
   range: 40
   pelletCount: 7
-  pelletSpreadDegrees: 4
+  pelletSpreadDegrees: 6
   pelletDamageScale: 0.35
   headDamage: 0
   torsoDamage: 0
@@ -32,13 +32,13 @@ MonoBehaviour:
   spreadPerShot: 0.15
   spreadMax: 2
   spreadDecayHalfLife: 0.15
-  kickPitchPerShot: 2.5
-  kickYawJitter: 0.8
-  kickBackMeters: 0.012
-  maxAccumPitch: 12
-  maxAccumBack: 0.06
+  kickPitchPerShot: 8
+  kickYawJitter: 1.5
+  kickBackMeters: 0.035
+  maxAccumPitch: 14
+  maxAccumBack: 0.08
   recoilDecayHalfLife: 0.15
-  recoilRestDecayHalfLife: 0.06
+  recoilRestDecayHalfLife: 0.09
   supportRecoilMultiplier: 0.5
   fireClip: WeaponSounds/shotgun1_fire
   dryFireClip: WeaponSounds/dry_generic
