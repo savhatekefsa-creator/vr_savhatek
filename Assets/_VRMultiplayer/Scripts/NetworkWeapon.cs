@@ -44,6 +44,19 @@ namespace VRMultiplayer
         float _srvTokens = 1f;
         float _srvLastRefill;
         float _srvLastShot = float.NegativeInfinity;
+
+        // Sunucu ret sayaci: config-oncesi pencerede sessizce yenen atislar ve olasi kadans
+        // hileleri buradan gorunur (teshis + telemetri). Log seli olmasin diye 2 sn'de bir.
+        int _srvRejects;
+        float _srvNextRejectLog;
+
+        void LogReject(string reason)
+        {
+            _srvRejects++;
+            if (Time.time < _srvNextRejectLog) return;
+            _srvNextRejectLog = Time.time + 2f;
+            Debug.Log($"[Silah] {name}: atis reddedildi ({reason}) — toplam ret {_srvRejects}");
+        }
         float _bloom;   // birikmis sapma (derece), owner-lokal
         bool _prevTrigger;
 
@@ -388,7 +401,7 @@ namespace VRMultiplayer
             // Mermi otoritesi burada: ele gecirilmis bir istemci istedigi kadar FireServerRpc
             // cagirsin, bos sarjorle ya da dolum ortasinda atis cikmaz. Istemcideki ayni
             // kontrol sadece hisdir, guvenlik degil.
-            if (UsesAmmo && (_ammo.Value <= 0 || IsReloading)) return;
+            if (UsesAmmo && (_ammo.Value <= 0 || IsReloading)) { LogReject("bos sarjor/dolum"); return; }
 
             // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
             // FireServerRpc'yi her karede cagirsa da uzun-vadeli atis hizi config'in uzerine
@@ -401,7 +414,7 @@ namespace VRMultiplayer
             _srvTokens = Mathf.Min(cap, _srvTokens + (now - _srvLastRefill) * refill);
             _srvLastRefill = now;
             float minGap = _cv.fireMode == FireMode.Burst ? _cv.burstShotInterval * 0.85f : 0f;
-            if (_srvTokens < 1f || now - _srvLastShot < minGap) return;
+            if (_srvTokens < 1f || now - _srvLastShot < minGap) { LogReject("kadans"); return; }
             _srvTokens -= 1f;
             _srvLastShot = now;
 
@@ -414,6 +427,23 @@ namespace VRMultiplayer
             int pellets = Mathf.Min(dirs.Length, Mathf.Clamp(_cv.pelletCount, 1, 32));
             ulong shooter = _grab.HolderClientId;
             byte shooterTeam = TeamOf(shooter);
+
+            // GOZLEM (simdilik LOG-ONLY): origin sunucudaki namlu ucundan cok uzaksa ya da yon
+            // sunucudaki namlu ekseninden cok sapmissa kaydet. VR bilek flikleri +
+            // ClientNetworkTransform gecikmesi MESRU sapma uretir — esikler once Quest verisiyle
+            // olculur, ret kapisina ancak ondan sonra cevrilir.
+            {
+                Vector3 srvOrigin = muzzle != null ? muzzle.position : transform.TransformPoint(_muzzleLocal);
+                Vector3 srvBarrelLocal = _profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f
+                    ? _profile.barrelLocalDirection.normalized
+                    : _barrelLocal;
+                Vector3 srvBarrel = (transform.rotation * srvBarrelLocal).normalized;
+                Vector3 obsDir = dirs[0].sqrMagnitude > 0.5f ? dirs[0].normalized : srvBarrel;
+                float originDist = Vector3.Distance(origin, srvOrigin);
+                float aimDelta = Vector3.Angle(srvBarrel, obsDir);
+                if (originDist > 0.5f || aimDelta > _cv.spreadMax + _cv.pelletSpreadDegrees + 25f)
+                    Debug.Log($"[Silah][gozlem] {name}: origin sapmasi {originDist:0.00}m, aci sapmasi {aimDelta:0.0} derece (holder {shooter})");
+            }
 
             var ends = new Vector3[pellets];
             var normals = new Vector3[pellets];
