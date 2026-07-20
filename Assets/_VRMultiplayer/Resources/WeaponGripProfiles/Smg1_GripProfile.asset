@@ -16,7 +16,7 @@ MonoBehaviour:
   weaponNameContains: Smg 1
   gripLocalPosition: {x: 0.1205, y: 0.0915, z: -0.1315}
   gripLocalEuler: {x: 316.89838, y: 37.975754, z: 358.9693}
-  barrelLocalDirection: {x: -0, y: -0, z: -1}
+  barrelLocalDirection: {x: 0, y: 0, z: 1}
   mainHand:
     wristLocalPosition: {x: 0, y: 0.0001, z: -0.0848}
     wristLocalEuler: {x: 321.8164, y: 274.51846, z: 225.57954}

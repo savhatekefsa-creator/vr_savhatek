@@ -233,12 +233,17 @@ namespace VRMultiplayer
             {
                 origin = muzzle.position;   // precise barrel tip placed in the editor
                 dir = muzzle.forward;
-                // Profil namlu eksenini biliyorsa YON profilden gelir. Silah paketinin kurulum
-                // araci Muzzle child'larini identity rotasyonla (+Z) birakti ama paket modelleri
-                // -Z namlulu — muzzle.forward'a guvenmek mermiyi ARKAYA firlatiyordu. Muzzle uc
-                // NOKTASI olarak dogru; yonun kaynagi profildeki barrelLocalDirection.
+                // Profil namlu eksenini biliyorsa YON her zaman profilden gelir. Kurulum
+                // aracinin koydugu Muzzle profil ekseniyle CELISIYORSA (Smg 1: arac muzzle'i
+                // dipcik ucuna koyup -Z'ye dondurdu, gercek namlu +Z) o muzzle'a NOKTA olarak
+                // da guvenilmez — cikis noktasi ComputeBarrel'in profil-hizali ucundan gelir.
                 if (_profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f)
-                    dir = (transform.rotation * _profile.barrelLocalDirection).normalized;
+                {
+                    Vector3 pdir = (transform.rotation * _profile.barrelLocalDirection).normalized;
+                    if (Vector3.Dot(dir, pdir) < 0f)
+                        origin = transform.TransformPoint(_muzzleLocal);
+                    dir = pdir;
+                }
             }
             else
             {
