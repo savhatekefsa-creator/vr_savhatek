@@ -14,12 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponGripProfile
   weaponNameEquals: Pistol 2
   weaponNameContains: Pistol 2
-  gripLocalPosition: {x: 0, y: 0, z: 0}
-  gripLocalEuler: {x: -0, y: 180, z: 0}
-  barrelLocalDirection: {x: 0, y: 0, z: 1}
+  gripLocalPosition: {x: -0.0497, y: 0.0898, z: 0.1187}
+  gripLocalEuler: {x: 322.1003, y: 231.9009, z: 344.5165}
+  barrelLocalDirection: {x: 0, y: 0, z: -1}
   mainHand:
-    wristLocalPosition: {x: 0, y: 0, z: 0}
-    wristLocalEuler: {x: 0, y: 0, z: 0}
+    wristLocalPosition: {x: 0, y: 0, z: -0.0947}
+    wristLocalEuler: {x: 321.8803, y: 274.5469, z: 225.6121}
     thumbCurl: 0
     indexCurl: 0.55
     middleCurl: 0.75
