@@ -151,17 +151,32 @@ namespace VRMultiplayer
             CreateFx();
         }
 
-        /// <summary>Savas degerlerini kaynak zincirinden cozer: profile.combat SO -> eski profil
-        /// alanlari -> kod varsayilanlari. (Ag katmani geldiginde zincirin basina agdan gelen
-        /// kayit eklenir.) Awake'te ve her config guncellemesinde cagrilir.</summary>
+        /// <summary>Savas degerlerini kaynak zincirinden cozer:
+        /// (1) agdan gelen sunucu kaydi (canli ayar) -> (2) yerel combat SO (sunucuda canli
+        /// kaynak, istemcide gomulu yedek) -> (3) eski profil alanlari -> (4) varsayilanlar.
+        /// Awake'te ve her config guncellemesinde cagrilir.</summary>
         void ResolveCombat()
         {
-            if (_profile != null && _profile.combat != null)
+            if (_profile != null &&
+                WeaponConfigRegistry.TryGet(_profile.weaponNameEquals, out var netData))
+                _cv = CombatValues.FromData(netData);
+            else if (_profile != null && _profile.combat != null)
                 _cv = CombatValues.FromConfig(_profile.combat);
             else if (_profile != null)
                 _cv = CombatValues.FromLegacyProfile(_profile, fireInterval, range);
             else
                 _cv = CombatValues.Defaults(fireInterval, range);
+        }
+
+        // Canli ayar: yeni set uygulaninca (istemci) ya da sunucu yayin yapinca degerler
+        // yeniden cozulur; sonradan kick acilan silaha tepme bileseni de takilir.
+        void OnEnable() { WeaponConfigRegistry.ConfigsUpdated += OnConfigsUpdated; }
+        void OnDisable() { WeaponConfigRegistry.ConfigsUpdated -= OnConfigsUpdated; }
+
+        void OnConfigsUpdated()
+        {
+            ResolveCombat();
+            AttachRecoil();
         }
 
         // Tepme bileseni yalnizca degerler gercekten kick istiyorsa takilir (profil de sart:
