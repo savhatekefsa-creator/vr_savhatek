@@ -15,11 +15,11 @@ MonoBehaviour:
   weaponNameEquals: Rifle 3
   weaponNameContains: Rifle 3
   gripLocalPosition: {x: -0.0364, y: 0.1055, z: 0.1505}
-  gripLocalEuler: {x: 320.7066, y: 237.65889, z: 346.48453}
+  gripLocalEuler: {x: 320.7066, y: 237.65887, z: 346.48453}
   barrelLocalDirection: {x: -0, y: -0, z: -1}
   mainHand:
     wristLocalPosition: {x: 0, y: 0.0001, z: -0.0718}
-    wristLocalEuler: {x: 321.83255, y: 274.58197, z: 225.60107}
+    wristLocalEuler: {x: 321.83252, y: 274.58197, z: 225.60109}
     thumbCurl: 0
     indexCurl: 0.2
     middleCurl: 0
@@ -55,7 +55,7 @@ MonoBehaviour:
   supportRailLocalEnd: {x: 0.0231, y: 0.0833, z: -0.172}
   supportBreakDistance: 0.3
   supportHand:
-    wristLocalPosition: {x: 0.0492978, y: 0.0615901, z: 0.0012829}
+    wristLocalPosition: {x: 0.049297813, y: 0.06159012, z: 0.0012829471}
     wristLocalEuler: {x: 325.56802, y: 269.40924, z: 219.77478}
     thumbCurl: 0
     indexCurl: 0
