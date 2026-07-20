@@ -10,16 +10,16 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b37255edf5b63a8408ec2f907e179ba4, type: 3}
-  m_Name: Grenade 2_GripProfile
+  m_Name: Shotgun 2_GripProfile
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponGripProfile
-  weaponNameEquals: Grenade 2
-  weaponNameContains: 
-  gripLocalPosition: {x: -0.0643, y: 0.0757, z: -0.0524}
-  gripLocalEuler: {x: 316.77274, y: 174.73807, z: 314.1065}
-  barrelLocalDirection: {x: 0, y: 0, z: 1}
+  weaponNameEquals: Shotgun 2
+  weaponNameContains: Shotgun 2
+  gripLocalPosition: {x: -0.0502, y: 0.0774, z: 0.2188}
+  gripLocalEuler: {x: 318.1182, y: 229.3647, z: 342.15662}
+  barrelLocalDirection: {x: 0, y: 0, z: -1}
   mainHand:
-    wristLocalPosition: {x: 0, y: 0, z: -0.077}
-    wristLocalEuler: {x: 321.86618, y: 274.55167, z: 225.62057}
+    wristLocalPosition: {x: 0.0002, y: 0.0001, z: -0.0842}
+    wristLocalEuler: {x: 321.88983, y: 274.5239, z: 225.59193}
     thumbCurl: 0
     indexCurl: 0.55
     middleCurl: 0.75
@@ -28,32 +28,17 @@ MonoBehaviour:
     indexFollowsTrigger: 1
     indexTriggerMaxCurl: 1
     rightFingers:
-      joints:
-      - {x: 0.4593794, y: 0.52890193, z: 0.3395445, w: 0.62764865}
-      - {x: 0.005396701, y: 0.87847394, z: -0.39772373, w: 0.26470783}
-      - {x: 0.25413686, y: -0.02382474, z: 0.10455531, w: 0.96120495}
-      - {x: 0.3274932, y: 0.6877186, z: 0.019051848, w: 0.64763296}
-      - {x: 0.13159844, y: -0.09584976, z: 0.21609885, w: 0.9627024}
-      - {x: 0.23904634, y: -0.074358255, z: -0.06741176, w: 0.9658071}
-      - {x: 0.31522885, y: 0.401879, z: -0.20333837, w: 0.83533084}
-      - {x: 0.22031985, y: 0.16845028, z: 0.10452481, w: 0.9550697}
-      - {x: 0.23647891, y: -0.007439106, z: 0.046836898, w: 0.97047865}
-      - {x: 0.31901368, y: 0.428454, z: -0.24289885, w: 0.80972695}
-      - {x: 0.15160361, y: 0.05557285, z: 0.10710109, w: 0.9810491}
-      - {x: 0.28835624, y: -0.05458554, z: 0.0076796496, w: 0.9559353}
-      - {x: 0.21031706, y: 0.16602525, z: -0.42798927, w: 0.86314976}
-      - {x: 0.031222511, y: 0.2071693, z: 0.06432525, w: 0.97568864}
-      - {x: 0.3340864, y: -0.14708754, z: 0.015826844, w: 0.93086034}
+      joints: []
       indexPulled: []
     leftFingers:
       joints: []
       indexPulled: []
-  supportRailLocalStart: {x: 0, y: 0, z: 0}
-  supportRailLocalEnd: {x: 0, y: 0, z: 0}
+  supportRailLocalStart: {x: 0.0419, y: 0.0056, z: -0.1028}
+  supportRailLocalEnd: {x: 0.0419, y: 0.0056, z: -0.1028}
   supportBreakDistance: 0.3
   supportHand:
-    wristLocalPosition: {x: 0, y: 0, z: 0}
-    wristLocalEuler: {x: 0, y: 0, z: 0}
+    wristLocalPosition: {x: 0.048247546, y: 0.06872089, z: -0.014447891}
+    wristLocalEuler: {x: 328.4376, y: 276.174, z: 226.67264}
     thumbCurl: 0
     indexCurl: 0.55
     middleCurl: 0.75
@@ -98,7 +83,7 @@ MonoBehaviour:
   hapticAmplitude: 0.7
   hapticDuration: 0.08
   supportHapticAmplitude: 0.35
-  magazineSize: 0
+  magazineSize: 10
   spareMagazines: -1
   reloadDuration: 1.4
   reloadFlickSpeed: 1.3

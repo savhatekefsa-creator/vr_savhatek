@@ -50,6 +50,29 @@ namespace VRMultiplayer
 
         HandState Other(HandState h) => h == _left ? _right : _left;
 
+        // Compound-collider weapons (GunPhysicsSetup builds one box per region) need the NEAREST
+        // part, not GetComponentInChildren's first hit — that could be the magazine or stock while
+        // the support hand reaches for the handguard, making two-handed hold impossible on some
+        // weapons and fine on others purely by child order.
+        // Returns -1 when the weapon has no usable collider.
+        static float NearestColliderDistance(GrabbableObject weapon, Vector3 point, bool useBounds)
+        {
+            float best = -1f;
+            foreach (var c in weapon.GetComponentsInChildren<Collider>())
+            {
+                if (!c.enabled || c.isTrigger) continue;
+                // ClosestPoint throws on a non-convex MeshCollider — fall back to its bounds.
+                var mesh = c as MeshCollider;
+                bool canClosestPoint = mesh == null || mesh.convex;
+                Vector3 p = (useBounds || !canClosestPoint)
+                    ? c.ClosestPointOnBounds(point)
+                    : c.ClosestPoint(point);
+                float d = Vector3.Distance(point, p);
+                if (best < 0f || d < best) best = d;
+            }
+            return best;
+        }
+
         /// <summary>True while that hand is holding a grabbable (used by the finger poser to
         /// firm up the grip). Non-owner instances never run grab logic, so these stay false —
         /// the finger poser falls back to the networked grip value, which is what we want.</summary>
@@ -114,7 +137,8 @@ namespace VRMultiplayer
             }
 
             // Profiled weapons: auto-release the support hand only when it truly LEAVES the
-            // weapon. Measure against the weapon COLLIDER (same metric support was grabbed with),
+            // weapon. Measure against the weapon COLLIDERS (looser BOUNDS metric here, vs the
+            // tighter surface metric used to grab — releasing should lag grabbing, not race it),
             // NOT the thin rail segment — the hand can sit validly beside the rail while still on
             // the weapon, and the two-hand aim rotates the weapon (moving a rail-relative point)
             // right after engage. A short grace period lets that aim settle before we judge.
@@ -123,10 +147,8 @@ namespace VRMultiplayer
                 var p = h.supportGrip.Profile;
                 if (Time.time - h.supportSince > 0.4f)
                 {
-                    var wc = h.supporting.GetComponentInChildren<Collider>();
-                    float d = wc != null
-                        ? Vector3.Distance(h.anchor.position, wc.ClosestPointOnBounds(h.anchor.position))
-                        : 0f;
+                    float nearest = NearestColliderDistance(h.supporting, h.anchor.position, useBounds: true);
+                    float d = nearest >= 0f ? nearest : 0f;
                     // Break threshold is at least the grab reach so grabbing can't instantly undo.
                     if (d > Mathf.Max(p.supportBreakDistance, grabRadius * 1.5f))
                     {
@@ -323,9 +345,8 @@ namespace VRMultiplayer
             var o = Other(h);
             if (o != null && o.held != null && o.confirmed && o.held.snapToHand)
             {
-                var wc = o.held.GetComponentInChildren<Collider>();
-                if (wc != null &&
-                    Vector3.Distance(h.anchor.position, wc.ClosestPoint(h.anchor.position)) < grabRadius * 1.5f)
+                float sd = NearestColliderDistance(o.held, h.anchor.position, useBounds: false);
+                if (sd >= 0f && sd < grabRadius * 1.5f)
                 {
                     h.supporting = o.held;
                     h.supportGrip = o.grip; // null for legacy weapons — rail logic then stays off
