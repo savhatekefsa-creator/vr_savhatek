@@ -35,6 +35,14 @@ namespace VRMultiplayer
         float _bloom;   // birikmis sapma (derece), owner-lokal
         bool _prevTrigger;
 
+        // Cozulmus savas degerleri — kaynak zinciri ResolveCombat()'ta. Kadans/menzil/sarjor/
+        // sacilim/tepme tuketiminin tamami buradan okur; config guncellemesi gelince yeniden
+        // cozulur, boylece canli ayar calisan silaha aninda yansir.
+        CombatValues _cv;
+
+        /// <summary>WeaponRecoil'un her kare okudugu anlik savas degerleri.</summary>
+        public CombatValues Combat => _cv;
+
         // Sarjor sayaci SILAHIN uzerinde durur, oyuncunun degil: silah el degistirse de, yere
         // atilsa da yarim sarjor onunla kalir ve iki silah birbirinden bagimsiz sayar — hicbiri
         // icin ek kod yok. Sunucu yazar, herkes okur (NetworkVariable varsayilani).
@@ -59,20 +67,20 @@ namespace VRMultiplayer
         public static System.Func<NetworkWeapon, bool> DevTriggerOverride;
 #endif
 
-        // Profilsiz silah = bugunku sabitler; her erisim profili varsa oradan okur.
-        bool IsAuto => _profile != null && _profile.fireMode == FireMode.Auto;
+        // Savas sayilari cozulmus degerlerden; FX/haptik profilde kalir (kozmetik).
+        bool IsAuto => _cv.fireMode == FireMode.Auto;
         float HapticAmplitude => _profile != null ? _profile.hapticAmplitude : 0.7f;
         float HapticDuration => _profile != null ? _profile.hapticDuration : 0.08f;
         float SupportHapticAmplitude => _profile != null ? _profile.supportHapticAmplitude : 0f;
 
-        /// <summary>Sarjor kapasitesi; 0 = bu silahta mermi HIC sayilmaz. Profilsiz silah da
-        /// buraya duser, yani bugunku sinirsiz davranis aynen korunur.</summary>
-        public int MagazineSize => _profile != null ? _profile.magazineSize : 0;
+        /// <summary>Sarjor kapasitesi; 0 = bu silahta mermi HIC sayilmaz. Profilsiz/configsiz
+        /// silah da buraya duser, yani bugunku sinirsiz davranis aynen korunur.</summary>
+        public int MagazineSize => _cv.magazineSize;
         public bool UsesAmmo => MagazineSize > 0;
         public int Ammo => _ammo.Value;
         public int SpareMagazines => _spares.Value;
         public bool IsReloading => _reloadDoneAt.Value > 0d;
-        float ReloadDuration => _profile != null ? _profile.reloadDuration : 1.4f;
+        float ReloadDuration => _cv.reloadDuration;
 
         // Effects (created once, reused per shot)
         LineRenderer _tracer;
@@ -107,8 +115,35 @@ namespace VRMultiplayer
             _grab = GetComponent<GrabbableObject>();
             if (muzzle == null) muzzle = transform.Find("Muzzle");
             ApplyProfile();
+            ResolveCombat();
+            AttachRecoil();
             ComputeBarrel();
             CreateFx();
+        }
+
+        /// <summary>Savas degerlerini kaynak zincirinden cozer: profile.combat SO -> eski profil
+        /// alanlari -> kod varsayilanlari. (Ag katmani geldiginde zincirin basina agdan gelen
+        /// kayit eklenir.) Awake'te ve her config guncellemesinde cagrilir.</summary>
+        void ResolveCombat()
+        {
+            if (_profile != null && _profile.combat != null)
+                _cv = CombatValues.FromConfig(_profile.combat);
+            else if (_profile != null)
+                _cv = CombatValues.FromLegacyProfile(_profile, fireInterval, range);
+            else
+                _cv = CombatValues.Defaults(fireInterval, range);
+        }
+
+        // Tepme bileseni yalnizca degerler gercekten kick istiyorsa takilir (profil de sart:
+        // pivot/namlu geometrisi oradan gelir). Dokunulmamis silah LateUpdate maliyeti gormez.
+        // Canli ayarla kick sonradan acilirsa config guncellemesi bunu yeniden cagirir.
+        void AttachRecoil()
+        {
+            if (_profile == null || _recoil != null) return;
+            if (_cv.kickPitchPerShot == 0f && _cv.kickYawJitter == 0f && _cv.kickBackMeters == 0f)
+                return;
+            _recoil = gameObject.AddComponent<WeaponRecoil>();
+            _recoil.Init(_grab, _profile, this);
         }
 
         // Optional data-driven overrides from the same profile the grip system uses. Only the
@@ -119,12 +154,6 @@ namespace VRMultiplayer
             var profile = WeaponGripBinder.FindProfile(name);
             if (profile == null) return;
             _profile = profile;
-
-            if (profile.overrideFire)
-            {
-                fireInterval = profile.fireInterval;
-                range = profile.range;
-            }
 
             if (muzzle == null && profile.createMuzzleIfMissing)
             {
@@ -140,14 +169,6 @@ namespace VRMultiplayer
                     : Quaternion.identity;
                 muzzle = m;
             }
-
-            // Tepme bileseni yalnizca profil gercekten kick istiyorsa takilir: dokunulmamis
-            // (sifir kick) bir profil hicbir sey almaz, LateUpdate maliyeti bile olusmaz.
-            if (profile.kickPitchPerShot != 0f || profile.kickYawJitter != 0f || profile.kickBackMeters != 0f)
-            {
-                _recoil = gameObject.AddComponent<WeaponRecoil>();
-                _recoil.Init(_grab, profile);
-            }
         }
 
         public override void OnNetworkSpawn()
@@ -157,7 +178,7 @@ namespace VRMultiplayer
             if (IsServer && UsesAmmo)
             {
                 _ammo.Value = MagazineSize;
-                _spares.Value = _profile.spareMagazines;
+                _spares.Value = _cv.spareMagazines;
             }
         }
 
@@ -175,8 +196,8 @@ namespace VRMultiplayer
             TickReloadGesture();
 
             // Ates kesilince koni daralir.
-            if (_profile != null && _bloom > 0f)
-                _bloom *= Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, _profile.spreadDecayHalfLife));
+            if (_bloom > 0f)
+                _bloom *= Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, _cv.spreadDecayHalfLife));
 
             // EITHER controller's trigger fires while you hold the weapon — grip hand or
             // support hand, so two-handed players can use their front-hand trigger too.
@@ -212,15 +233,15 @@ namespace VRMultiplayer
                 // Kadans kareye degil saate baglanir: taramada frame quantization birikip
                 // atis hizini dusurmez. Uzun aradan sonra ise tam bir aralik beklenir —
                 // yoksa geride kalmis _nextFire bir sonraki karede bedava ikinci atis verir.
-                _nextFire += fireInterval;
-                if (_nextFire < Time.time) _nextFire = Time.time + fireInterval;
+                _nextFire += _cv.fireInterval;
+                if (_nextFire < Time.time) _nextFire = Time.time + _cv.fireInterval;
                 Fire(firedDev, firedNode);
             }
             _prevTrigger = trig;
 
             // Tarama sonerken tepme yavas dinsin, tetik kesilince hizla toparlansin.
             if (_recoil != null)
-                _recoil.SetSustainedFire(trig && Time.time - _lastFire < fireInterval * 2f);
+                _recoil.SetSustainedFire(trig && Time.time - _lastFire < _cv.fireInterval * 2f);
         }
 
         void Fire(InputDevice firedDev, XRNode firedNode)
@@ -252,15 +273,13 @@ namespace VRMultiplayer
             }
 
             // Sacilim owner'da uygulanir ve RPC'ye SACILMIS yon girer: tracer, sunucu isabeti
-            // ve hasar hepsi ayni yonu paylasir, ayrica bir senkron gerekmez.
-            if (_profile != null)
-            {
-                float mult = _grab.SupportHand != GrabbableObject.NoHand
-                    ? _profile.supportRecoilMultiplier
-                    : 1f;
-                dir = ApplySpread(dir, Mathf.Min(_profile.spreadBase + _bloom, _profile.spreadMax));
-                _bloom = Mathf.Min(_bloom + _profile.spreadPerShot * mult, _profile.spreadMax);
-            }
+            // ve hasar hepsi ayni yonu paylasir, ayrica bir senkron gerekmez. (Configsiz silahta
+            // spreadBase/PerShot sifirdir — blok no-op, eski davranis birebir.)
+            float mult = _grab.SupportHand != GrabbableObject.NoHand
+                ? _cv.supportRecoilMultiplier
+                : 1f;
+            dir = ApplySpread(dir, Mathf.Min(_cv.spreadBase + _bloom, _cv.spreadMax));
+            _bloom = Mathf.Min(_bloom + _cv.spreadPerShot * mult, _cv.spreadMax);
 
             FireServerRpc(origin, dir);
 
@@ -328,7 +347,7 @@ namespace VRMultiplayer
             // FireServerRpc'yi her karede cagirsa da atis hizi profilin uzerine cikamaz.
             // %15 tolerans, ag jitter'inda mesru atisin dusmesini onler.
             if (Time.time < _srvNextFire) return;
-            _srvNextFire = Time.time + fireInterval * 0.85f;
+            _srvNextFire = Time.time + _cv.fireInterval * 0.85f;
 
             // Kadans kapisini gectik = atis GERCEKTEN cikiyor; mermi tam burada duser.
             if (UsesAmmo) _ammo.Value--;
@@ -340,11 +359,11 @@ namespace VRMultiplayer
             ulong shooter = _grab.HolderClientId;
             byte shooterTeam = TeamOf(shooter);
 
-            Vector3 end = origin + dir * range;
+            Vector3 end = origin + dir * _cv.range;
             // Sifir = mermi izi birakma. YALNIZCA sabit geometri normal doner: hareketli bir
             // oyuncuya dunya-uzayi izi cakarsak oyuncu yurudugunde iz havada asili kalirdi.
             Vector3 hitNormal = Vector3.zero;
-            var hits = Physics.RaycastAll(origin + dir * 0.03f, dir, range,
+            var hits = Physics.RaycastAll(origin + dir * 0.03f, dir, _cv.range,
                 Physics.AllLayers, QueryTriggerInteraction.Collide);
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
 

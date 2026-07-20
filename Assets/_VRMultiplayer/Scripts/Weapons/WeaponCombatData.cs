@@ -141,6 +141,131 @@ namespace VRMultiplayer.Weapons
         }
     }
 
+    /// <summary>
+    /// COZULMUS savas degerleri — <see cref="NetworkWeapon"/> ve <see cref="WeaponRecoil"/>'un
+    /// her kare okudugu duz anlik-goruntu. Kaynak zinciri (NetworkWeapon.ResolveCombat):
+    /// agdan gelen kayit → profile.combat SO → eski profil alanlari → kod varsayilanlari.
+    /// </summary>
+    public struct CombatValues
+    {
+        public FireMode fireMode;
+        public float fireInterval;
+        public int burstCount;
+        public float burstShotInterval;
+        public float range;
+
+        public int pelletCount;
+        public float pelletSpreadDegrees;
+        public float pelletDamageScale;
+
+        public int headDamage, torsoDamage, armDamage, legDamage;
+
+        public int magazineSize;
+        public int spareMagazines;
+        public float reloadDuration;
+
+        public float spreadBase, spreadPerShot, spreadMax, spreadDecayHalfLife;
+
+        public float kickPitchPerShot, kickYawJitter, kickBackMeters;
+        public float maxAccumPitch, maxAccumBack;
+        public float recoilDecayHalfLife, recoilRestDecayHalfLife;
+        public float supportRecoilMultiplier;
+
+        public string fireClip, dryFireClip, reloadStartClip, reloadEndClip;
+        public float fireVolume, firePitchMin, firePitchMax, dryFireVolume, reloadVolume;
+        public float soundMaxDistance;
+
+        /// <summary>Profilsiz silah: bugunku sabit davranis (inspector kadans/menzil, geri kalani notr).</summary>
+        public static CombatValues Defaults(float fireInterval, float range)
+        {
+            var v = FromData(new WeaponCombatData());
+            v.fireInterval = fireInterval;
+            v.range = range;
+            v.supportRecoilMultiplier = 1f;
+            return v;
+        }
+
+        public static CombatValues FromData(WeaponCombatData d)
+        {
+            return new CombatValues
+            {
+                fireMode = (FireMode)d.fireMode,
+                fireInterval = d.fireInterval,
+                burstCount = d.burstCount,
+                burstShotInterval = d.burstShotInterval,
+                range = d.range,
+                pelletCount = d.pelletCount,
+                pelletSpreadDegrees = d.pelletSpreadDegrees,
+                pelletDamageScale = d.pelletDamageScale,
+                headDamage = d.headDamage,
+                torsoDamage = d.torsoDamage,
+                armDamage = d.armDamage,
+                legDamage = d.legDamage,
+                magazineSize = d.magazineSize,
+                spareMagazines = d.spareMagazines,
+                reloadDuration = d.reloadDuration,
+                spreadBase = d.spreadBase,
+                spreadPerShot = d.spreadPerShot,
+                spreadMax = d.spreadMax,
+                spreadDecayHalfLife = d.spreadDecayHalfLife,
+                kickPitchPerShot = d.kickPitchPerShot,
+                kickYawJitter = d.kickYawJitter,
+                kickBackMeters = d.kickBackMeters,
+                maxAccumPitch = d.maxAccumPitch,
+                maxAccumBack = d.maxAccumBack,
+                recoilDecayHalfLife = d.recoilDecayHalfLife,
+                recoilRestDecayHalfLife = d.recoilRestDecayHalfLife,
+                supportRecoilMultiplier = d.supportRecoilMultiplier,
+                fireClip = d.fireClip,
+                dryFireClip = d.dryFireClip,
+                reloadStartClip = d.reloadStartClip,
+                reloadEndClip = d.reloadEndClip,
+                fireVolume = d.fireVolume,
+                firePitchMin = d.firePitchMin,
+                firePitchMax = d.firePitchMax,
+                dryFireVolume = d.dryFireVolume,
+                reloadVolume = d.reloadVolume,
+                soundMaxDistance = d.soundMaxDistance,
+            };
+        }
+
+        public static CombatValues FromConfig(WeaponCombatConfig c)
+        {
+            var d = WeaponCombatData.FromConfig(c);
+            d.Sanitize();
+            return FromData(d);
+        }
+
+        /// <summary>ESKI profil alanlarindan (combat referansi bos profiller — geriye uyum).
+        /// overrideFire kapaliysa kadans/menzil inspector degerlerinde kalir; bugunku davranisin
+        /// birebir aynisi.</summary>
+        public static CombatValues FromLegacyProfile(WeaponGripProfile p, float inspectorInterval, float inspectorRange)
+        {
+            var v = FromData(new WeaponCombatData());
+            v.fireMode = p.fireMode;
+            v.fireInterval = p.overrideFire ? p.fireInterval : inspectorInterval;
+            v.range = p.overrideFire ? p.range : inspectorRange;
+            v.magazineSize = p.magazineSize;
+            v.spareMagazines = p.spareMagazines;
+            v.reloadDuration = p.reloadDuration;
+            v.spreadBase = p.spreadBase;
+            v.spreadPerShot = p.spreadPerShot;
+            v.spreadMax = p.spreadMax;
+            v.spreadDecayHalfLife = p.spreadDecayHalfLife;
+            v.kickPitchPerShot = p.kickPitchPerShot;
+            v.kickYawJitter = p.kickYawJitter;
+            v.kickBackMeters = p.kickBackMeters;
+            v.maxAccumPitch = p.maxAccumPitch;
+            v.maxAccumBack = p.maxAccumBack;
+            v.recoilDecayHalfLife = p.recoilDecayHalfLife;
+            v.recoilRestDecayHalfLife = p.recoilRestDecayHalfLife;
+            v.supportRecoilMultiplier = p.supportRecoilMultiplier;
+            if (v.fireInterval <= 0.005f) v.fireInterval = 0.18f;
+            if (v.range <= 0f) v.range = 60f;
+            return v;
+        }
+    }
+
     /// <summary>Aga giden tam set: tum silahlarin verisi + siralama icin versiyon.</summary>
     [Serializable]
     public class WeaponCombatSet
