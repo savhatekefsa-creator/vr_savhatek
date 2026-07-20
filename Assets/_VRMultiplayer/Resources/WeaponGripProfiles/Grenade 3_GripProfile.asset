@@ -1,0 +1,107 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b37255edf5b63a8408ec2f907e179ba4, type: 3}
+  m_Name: Grenade 3_GripProfile
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponGripProfile
+  weaponNameEquals: Grenade 3
+  weaponNameContains: 
+  gripLocalPosition: {x: -0.0701, y: 0.0788, z: 0.0645}
+  gripLocalEuler: {x: 321.0675, y: 248.08563, z: 329.50244}
+  barrelLocalDirection: {x: 0, y: 0, z: 1}
+  mainHand:
+    wristLocalPosition: {x: 0.0001, y: 0.0001, z: -0.0806}
+    wristLocalEuler: {x: 321.87158, y: 274.56964, z: 225.58218}
+    thumbCurl: 0
+    indexCurl: 0.55
+    middleCurl: 0.75
+    ringCurl: 0.8
+    pinkyCurl: 0.85
+    indexFollowsTrigger: 1
+    indexTriggerMaxCurl: 1
+    rightFingers:
+      joints:
+      - {x: 0.42520458, y: 0.58589655, z: 0.38147208, w: 0.574809}
+      - {x: -0.239307, y: 0.83351344, z: -0.25212458, w: 0.4294424}
+      - {x: 0.17338297, y: 0.23371875, z: 0.10859264, w: 0.95053756}
+      - {x: 0.29473782, y: 0.7042444, z: -0.07495791, w: 0.6415223}
+      - {x: 0.29436633, y: -0.029409375, z: 0.16541943, w: 0.9408082}
+      - {x: 0.19432278, y: -0.017224867, z: 0.060942084, w: 0.97889125}
+      - {x: 0.3116845, y: 0.4954852, z: -0.22238141, w: 0.7796755}
+      - {x: 0.31747183, y: 0.19137898, z: 0.016098581, w: 0.9286154}
+      - {x: 0.13859786, y: -0.014580974, z: 0.07227094, w: 0.9876007}
+      - {x: 0.27059156, y: 0.48419902, z: -0.28090605, w: 0.7832135}
+      - {x: 0.27295256, y: 0.08522237, z: 0.015259836, w: 0.9581238}
+      - {x: 0.22710891, y: -0.0660486, z: 0.00006255274, w: 0.9716271}
+      - {x: 0.22035375, y: 0.41589758, z: -0.32927066, w: 0.8185684}
+      - {x: 0.03818483, y: 0.20762323, z: 0.06284505, w: 0.9754409}
+      - {x: 0.31144065, y: -0.14742784, z: 0.012259351, w: 0.93867964}
+      indexPulled: []
+    leftFingers:
+      joints: []
+      indexPulled: []
+  supportRailLocalStart: {x: 0, y: 0, z: 0}
+  supportRailLocalEnd: {x: 0, y: 0, z: 0}
+  supportBreakDistance: 0.3
+  supportHand:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    thumbCurl: 0
+    indexCurl: 0.55
+    middleCurl: 0.75
+    ringCurl: 0.8
+    pinkyCurl: 0.85
+    indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 1
+    rightFingers:
+      joints: []
+      indexPulled: []
+    leftFingers:
+      joints: []
+      indexPulled: []
+  aimDeadzoneDegrees: 0.75
+  aimSoftKneeDegrees: 1.5
+  aimHalfLifeMs: 45
+  overrideFire: 0
+  fireInterval: 0.18
+  range: 60
+  createMuzzleIfMissing: 0
+  muzzleLocalPosition: {x: 0, y: 0, z: 0}
+  fireMode: 0
+  kickPitchPerShot: 0
+  kickYawJitter: 0
+  kickBackMeters: 0
+  maxAccumPitch: 8
+  maxAccumBack: 0.04
+  recoilDecayHalfLife: 0.12
+  recoilRestDecayHalfLife: 0.07
+  supportRecoilMultiplier: 0.55
+  spreadBase: 0
+  spreadPerShot: 0
+  spreadMax: 3
+  spreadDecayHalfLife: 0.18
+  tracerColor: {r: 1, g: 0.45, b: 0.12, a: 1}
+  tracerSpeed: 260
+  tracerLength: 2.5
+  tracerWidth: 0.03
+  flashDuration: 0.035
+  impactColor: {r: 0.03, g: 0.03, b: 0.04, a: 1}
+  impactSize: 0.022
+  hapticAmplitude: 0.7
+  hapticDuration: 0.08
+  supportHapticAmplitude: 0.35
+  magazineSize: 0
+  spareMagazines: -1
+  reloadDuration: 1.4
+  reloadFlickSpeed: 1.3
+  reloadFlickTravel: 0.25
+  reloadFlickWindow: 0.8
+  simpleColliders: []
