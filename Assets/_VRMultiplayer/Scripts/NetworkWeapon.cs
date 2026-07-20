@@ -389,7 +389,7 @@ namespace VRMultiplayer
                         Debug.Log($"[Silah] Isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {health.OwnerClientId}");
                         end = h.point; break; // block, no damage (friendly fire off)
                     }
-                    int dmg = CombatConfig.Instance.DamageFor(zone.zoneType);
+                    int dmg = DamageFor(zone.zoneType);
                     Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {health.OwnerClientId} (takim {t}), bolge {zone.zoneName}, {dmg} hasar. Kalan: {Mathf.Max(0, health.Health.Value - dmg)}");
                     health.ServerApplyDamage(dmg, shooter);
                     end = h.point; break;
@@ -404,6 +404,22 @@ namespace VRMultiplayer
                 Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi. Toplam collider: {hits.Length}. Ilk carpan: {(hits.Length > 0 ? hits[0].collider.name : "hicbir sey")}");
 
             FireFxClientRpc(origin, end, hitNormal);
+        }
+
+        /// <summary>Bolge hasari, SILAH-basina: config alani doluysa (>0) o deger, degilse
+        /// CombatConfig'in global bolge varsayilani. Fallback ALAN-BASINA bilincli — yalnizca
+        /// kafa hasari doldurulmus bir config diger bolgeleri sifirlamasin. Sunucuda cozulur.</summary>
+        int DamageFor(ZoneType zone)
+        {
+            int global = CombatConfig.Instance.DamageFor(zone);
+            switch (zone)
+            {
+                case ZoneType.Head:  return _cv.headDamage  > 0 ? _cv.headDamage  : global;
+                case ZoneType.Torso: return _cv.torsoDamage > 0 ? _cv.torsoDamage : global;
+                case ZoneType.Arm:   return _cv.armDamage   > 0 ? _cv.armDamage   : global;
+                case ZoneType.Leg:   return _cv.legDamage   > 0 ? _cv.legDamage   : global;
+                default:             return global;
+            }
         }
 
         byte TeamOf(ulong clientId)
