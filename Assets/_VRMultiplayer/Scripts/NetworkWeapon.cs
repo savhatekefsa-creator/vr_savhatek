@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.XR;
+using VRMultiplayer.Audio;
 using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer
@@ -225,6 +226,25 @@ namespace VRMultiplayer
                 _ammo.Value = MagazineSize;
                 _spares.Value = _cv.spareMagazines;
             }
+
+            // Dolum baslangic sesi RPC'siz: _reloadDoneAt 0'dan pozitife gecince HER istemcide
+            // duyulur (NetworkVariable degisimi zaten herkese replike).
+            _reloadDoneAt.OnValueChanged += OnReloadStateChanged;
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            _reloadDoneAt.OnValueChanged -= OnReloadStateChanged;
+            base.OnNetworkDespawn();
+        }
+
+        void OnReloadStateChanged(double prev, double now)
+        {
+            // 0 -> pozitif = dolum basladi. Pozitif -> 0 hem bitis hem iptal olabilir: bitis
+            // sesi ReloadDoneClientRpc'den gelir, iptal (silah birakildi) sessiz kalir.
+            if (prev <= 0d && now > 0d)
+                WeaponAudioPlayer.PlayAt(_cv.reloadStartClip, transform.position, _cv.reloadVolume,
+                    1f, 1f, _cv.soundMaxDistance, priority: true);
         }
 
         void Update()
@@ -357,6 +377,11 @@ namespace VRMultiplayer
                 dirs[i] = pellets == 1 ? dir : ApplySpread(dir, _cv.pelletSpreadDegrees);
 
             FireServerRpc(origin, dirs);
+
+            // Ates sesi OWNER'da ANINDA calar: sunucu gidis-donusunu bekleyen FX yolundan
+            // gelseydi tetik-ses gecikmesi VR'da hissedilirdi. Digerleri ShowVolley'de duyar.
+            WeaponAudioPlayer.PlayAt(_cv.fireClip, origin, _cv.fireVolume,
+                _cv.firePitchMin, _cv.firePitchMax, _cv.soundMaxDistance);
 
             // Yon YUKARIDA okundu: bu atis mevcut (onceki karenin tepmis) pozunu kullanir,
             // yeni kick bir sonraki atisi kaldirir.
@@ -595,6 +620,10 @@ namespace VRMultiplayer
         [Rpc(SendTo.Everyone)]
         void ReloadDoneClientRpc()
         {
+            // Dolum bitis sesi HERKESTE (tutan filtresinden ONCE); titresim yalniz tutana.
+            WeaponAudioPlayer.PlayAt(_cv.reloadEndClip, transform.position, _cv.reloadVolume,
+                1f, 1f, _cv.soundMaxDistance, priority: true);
+
             if (NetworkManager == null || _grab == null || !_grab.IsHeld) return;
             if (_grab.HolderClientId != NetworkManager.LocalClientId) return;
             Buzz(_grab.HolderHand == 0 ? XRNode.LeftHand : XRNode.RightHand, 0.75f, 0.09f);
@@ -670,11 +699,14 @@ namespace VRMultiplayer
             _flickPrevY = transform.position.y;
         }
 
-        // Ses varligi yok; kuru tetik yalnizca titresimle bildirilir. Atis titresiminden
-        // belirgin sekilde kisa ve zayif — "atesledim" sanilmasin diye.
-        static void DryFire(InputDevice dev)
+        // Kuru tetik: kisa/zayif titresim + (varsa) bos-tetik sesi. v1'de yalniz TUTAN duyar —
+        // bos tetik tutanin geri bildirimidir, RPC maliyeti gerektirmez.
+        void DryFire(InputDevice dev)
         {
             if (dev.isValid) dev.SendHapticImpulse(0, 0.25f, 0.03f);
+            Vector3 pos = muzzle != null ? muzzle.position : transform.position;
+            WeaponAudioPlayer.PlayAt(_cv.dryFireClip, pos, _cv.dryFireVolume,
+                1f, 1f, _cv.soundMaxDistance);
         }
 
         static void Buzz(XRNode node, float amplitude, float duration)
@@ -830,6 +862,14 @@ namespace VRMultiplayer
                 if (_flights.Count >= MaxTracers) _flights.RemoveAt(0);
                 _flights.Add(f);
             }
+
+            // Ates sesi: tutan oyuncu KENDI atisini Fire()'da anında duydu — burada yalnizca
+            // DIGERLERI duyar (cift ses olmasin). Pellet sayisi kac olursa olsun TEK ses.
+            bool localHolderHere = _grab != null && _grab.IsHeld && NetworkManager != null &&
+                _grab.HolderClientId == NetworkManager.LocalClientId;
+            if (!localHolderHere)
+                WeaponAudioPlayer.PlayAt(_cv.fireClip, origin, _cv.fireVolume,
+                    _cv.firePitchMin, _cv.firePitchMax, _cv.soundMaxDistance);
 
             // Namlu alevi: pellet sayisi kac olursa olsun TEK parlama. Alev silahin cocugu:
             // dunya noktasi bir kez yazilir, sonra silahla birlikte hareket eder.
