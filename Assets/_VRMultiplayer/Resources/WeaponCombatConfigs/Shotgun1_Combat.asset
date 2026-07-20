@@ -13,14 +13,14 @@ MonoBehaviour:
   m_Name: Shotgun1_Combat
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponCombatConfig
   weaponName: Shotgun 1
-  fireMode: 1
-  fireInterval: 0.08
+  fireMode: 0
+  fireInterval: 0.9
   burstCount: 3
   burstShotInterval: 0.06
-  range: 60
-  pelletCount: 1
-  pelletSpreadDegrees: 0
-  pelletDamageScale: 1
+  range: 40
+  pelletCount: 7
+  pelletSpreadDegrees: 4
+  pelletDamageScale: 0.35
   headDamage: 0
   torsoDamage: 0
   armDamage: 0
