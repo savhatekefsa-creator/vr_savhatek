@@ -15,11 +15,12 @@ MonoBehaviour:
   weaponNameEquals: Pistol 2
   weaponNameContains: Pistol 2
   gripLocalPosition: {x: -0.0497, y: 0.0898, z: 0.1187}
-  gripLocalEuler: {x: 322.1003, y: 231.9009, z: 344.5165}
+  gripLocalEuler: {x: 322.1003, y: 231.90091, z: 344.51654}
   barrelLocalDirection: {x: 0, y: 0, z: -1}
+  combat: {fileID: 11400000, guid: e2420be57a714c74b4d5d6b800014ee0, type: 2}
   mainHand:
     wristLocalPosition: {x: 0, y: 0, z: -0.0947}
-    wristLocalEuler: {x: 321.8803, y: 274.5469, z: 225.6121}
+    wristLocalEuler: {x: 321.8803, y: 274.5469, z: 225.6122}
     thumbCurl: 0
     indexCurl: 0.55
     middleCurl: 0.75

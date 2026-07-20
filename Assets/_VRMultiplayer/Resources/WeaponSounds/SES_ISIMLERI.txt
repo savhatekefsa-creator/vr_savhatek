@@ -1,0 +1,10 @@
+Silah ses dosyalarini BU klasore, asagidaki isimlerle koyun (.wav/.ogg):
+  <silah>_fire      : atis sesi (smg1_fire, sniper1_fire, pistol2_fire, hk416_fire,
+                      rifle1_fire, shotgun1_fire, dmr1_fire, smg2_fire, pistol_fire,
+                      pistol3_fire, pistol4_fire, paintball_fire)
+  dry_generic       : bos tetik (tum silahlar paylasir)
+  reload_start_generic / reload_end_generic : dolum baslangic/bitis (paylasilan)
+
+Klip yokken oyun HATA VERMEZ, ses sadece sessiz kalir. Dosyayi koyunca kendiliginden calar.
+Import onerisi (kisa atis sesleri): Force To Mono + Decompress On Load + ADPCM.
+Farkli isim kullanmak isterseniz ilgili silahin _Combat config'indeki alanlari degistirin.

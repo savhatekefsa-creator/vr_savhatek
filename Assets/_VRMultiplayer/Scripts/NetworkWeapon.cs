@@ -158,8 +158,12 @@ namespace VRMultiplayer
         /// Awake'te ve her config guncellemesinde cagrilir.</summary>
         void ResolveCombat()
         {
-            if (_profile != null &&
-                WeaponConfigRegistry.TryGet(_profile.weaponNameEquals, out var netData))
+            // Ag kaydi anahtari = profilin kanonik adi (HK416 gibi Equals'i bos profillerde
+            // Contains'e duser — config'in weaponName'i de ayni kuralla uretildi).
+            string netKey = _profile == null ? null
+                : !string.IsNullOrEmpty(_profile.weaponNameEquals) ? _profile.weaponNameEquals
+                : _profile.weaponNameContains;
+            if (netKey != null && WeaponConfigRegistry.TryGet(netKey, out var netData))
                 _cv = CombatValues.FromData(netData);
             else if (_profile != null && _profile.combat != null)
                 _cv = CombatValues.FromConfig(_profile.combat);
