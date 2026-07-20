@@ -243,6 +243,35 @@ Degerler WeaponGripProfile .asset icine oldugu gibi yapistirilabilir.
 ```
 <!-- ham quaternion — gripLocalRotation: {x: -0,781373, y: -0,610145, z: -0,098273, w: 0,086727} wristLocalRotation: {x: 0,513272, y: 0,4467, z: 0,724789, w: 0,108128} -->
 
+## SAG el — Pistol 3 — 2026-07-17 16:02:58
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: -0,0485, y: 0,0768, z: 0,1157}
+  gripLocalEuler: {x: 304,9236, y: 227,0182, z: 334,0139}
+  wristLocalPosition: {x: 0, y: 0,0001, z: -0,0702}
+  wristLocalEuler: {x: 321,8473, y: 274,6108, z: 225,5784}
+```
+<!-- ham quaternion — gripLocalRotation: {x: -0,003109, y: 0,833751, z: 0,492633, w: -0,249324} wristLocalRotation: {x: 0,497781, y: -0,469689, z: -0,726234, w: 0,064736} -->
+
+## SAG el — Smg 2 — 2026-07-17 16:29:25
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: -0,0393, y: 0,0822, z: 0,0094}
+  gripLocalEuler: {x: 309,3298, y: 219,9342, z: 348,3059}
+  wristLocalPosition: {x: 0, y: -0,0004, z: -0,0769}
+  wristLocalEuler: {x: 321,8817, y: 274,5635, z: 225,7348}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0,058823, y: 0,859957, z: 0,431539, w: -0,266059} wristLocalRotation: {x: 0,497582, y: -0,470228, z: -0,725932, w: 0,065738} -->
+
+## SAG el — Rifle_HK416 — 2026-07-20 09:56:55
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: 0,0409, y: -0,0017, z: 0,02}
+  gripLocalEuler: {x: 325,6431, y: 328,5931, z: 339,8535}
+  wristLocalPosition: {x: 0, y: 0,0001, z: -0,0885}
+  wristLocalEuler: {x: 321,8568, y: 274,5472, z: 225,6306}
+```
+<!-- ham quaternion — gripLocalRotation: {x: -0,234714, y: -0,304328, z: -0,239574, w: 0,891571} wristLocalRotation: {x: -0,498009, y: 0,469906, z: 0,725926, w: -0,064862} -->
 ## SAG el — Pistol 2 — 2026-07-20 11:03:22
 - rol: TUTULMUYOR — silah bostayken olculdu
 ```
