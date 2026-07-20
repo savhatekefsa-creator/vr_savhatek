@@ -169,11 +169,13 @@ namespace VRMultiplayer
         void ResolveCombat()
         {
             // Ag kaydi anahtari = profilin kanonik adi (HK416 gibi Equals'i bos profillerde
-            // Contains'e duser — config'in weaponName'i de ayni kuralla uretildi).
-            string netKey = _profile == null ? null
+            // Contains'e duser — config'in weaponName'i de ayni kuralla uretildi). PROFILSIZ
+            // silah GameObject adiyla dener: build'inde profil olmayan eski istemci bile
+            // sunucunun kadans/pellet degerlerini agdan alir (tutus gorselleri haric).
+            string netKey = _profile == null ? WeaponGripBinder.CleanName(name)
                 : !string.IsNullOrEmpty(_profile.weaponNameEquals) ? _profile.weaponNameEquals
                 : _profile.weaponNameContains;
-            if (netKey != null && WeaponConfigRegistry.TryGet(netKey, out var netData))
+            if (!string.IsNullOrEmpty(netKey) && WeaponConfigRegistry.TryGet(netKey, out var netData))
                 _cv = CombatValues.FromData(netData);
             else if (_profile != null && _profile.combat != null)
                 _cv = CombatValues.FromConfig(_profile.combat);
