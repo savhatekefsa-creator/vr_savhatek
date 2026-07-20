@@ -30,8 +30,19 @@ namespace VRMultiplayer
         Vector3 _muzzleLocal;
         Vector3 _barrelLocal = Vector3.forward;
         float _nextFire;
-        float _srvNextFire;
         float _lastFire = float.NegativeInfinity;
+
+        // Burst kuyrugu (yalnizca tutan istemcide): tetik cekilince baslar, tetik birakilsa da
+        // tamamlanir; silah birakilir/mermi biter/dolum baslarsa iptal olur.
+        int _burstRemaining;
+        float _burstNextAt;
+        XRNode _burstNode = XRNode.RightHand;
+
+        // Sunucu kadans zorlamasi: TOKEN BUCKET (fixed-window degil — pencere sinirinda 2x
+        // patlama acigi olmasin). Kapasite Semi/Auto'da 1, Burst'te burstCount.
+        float _srvTokens = 1f;
+        float _srvLastRefill;
+        float _srvLastShot = float.NegativeInfinity;
         float _bloom;   // birikmis sapma (derece), owner-lokal
         bool _prevTrigger;
 
@@ -190,7 +201,7 @@ namespace VRMultiplayer
             // asagidaki "sadece tutan oyuncu" cikislarindan ONCE isletilmeli.
             if (IsSpawned && IsServer) TickReloadServer();
 
-            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; ResetFlick(); return; }
+            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; _burstRemaining = 0; ResetFlick(); return; }
             if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId) { ResetFlick(); return; }
 
             TickReloadGesture();
@@ -216,7 +227,9 @@ namespace VRMultiplayer
 #endif
 
             // Semi: her atis tetigin yeniden cekilmesini ister. Auto: basili tutuldukca tarar.
+            // Burst: tetik cekilisi bir kuyrugu baslatir (asagida); kuyruk bitmeden yenisi baslamaz.
             bool wantsFire = IsAuto ? trig : (trig && !_prevTrigger);
+            if (_burstRemaining > 0) wantsFire = false;
 
             // Bos sarjor / dolum sirasinda tetik. Buradaki kontrol YALNIZCA his icindir —
             // otorite FireServerRpc'de. Kuru tetik titresimi tetigin her cekilisinde bir kez
@@ -236,6 +249,27 @@ namespace VRMultiplayer
                 _nextFire += _cv.fireInterval;
                 if (_nextFire < Time.time) _nextFire = Time.time + _cv.fireInterval;
                 Fire(firedDev, firedNode);
+
+                if (_cv.fireMode == FireMode.Burst && _cv.burstCount > 1)
+                {
+                    _burstRemaining = _cv.burstCount - 1;
+                    _burstNextAt = Time.time + _cv.burstShotInterval;
+                    _burstNode = firedNode;
+                }
+            }
+
+            // Kuyruktaki burst atislari: tetik birakilsa da tamamlanir; mermi biterse ya da
+            // dolum baslarsa SESSIZCE iptal (her atis icin ayri kuru-tetik tiklamasi olmasin).
+            if (_burstRemaining > 0 && Time.time >= _burstNextAt)
+            {
+                if (UsesAmmo && (_ammo.Value <= 0 || IsReloading))
+                    _burstRemaining = 0;
+                else
+                {
+                    _burstRemaining--;
+                    _burstNextAt = Time.time + _cv.burstShotInterval;
+                    Fire(InputDevices.GetDeviceAtXRNode(_burstNode), _burstNode);
+                }
             }
             _prevTrigger = trig;
 
@@ -344,10 +378,19 @@ namespace VRMultiplayer
             if (UsesAmmo && (_ammo.Value <= 0 || IsReloading)) return;
 
             // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
-            // FireServerRpc'yi her karede cagirsa da atis hizi profilin uzerine cikamaz.
-            // %15 tolerans, ag jitter'inda mesru atisin dusmesini onler.
-            if (Time.time < _srvNextFire) return;
-            _srvNextFire = Time.time + _cv.fireInterval * 0.85f;
+            // FireServerRpc'yi her karede cagirsa da uzun-vadeli atis hizi config'in uzerine
+            // cikamaz. TOKEN BUCKET: kapasite Semi/Auto'da 1 (eski davranisa birebir iner),
+            // Burst'te burstCount; burst ICI atislar arasina ayrica min-gap konur. %15
+            // tolerans ag jitter'inda mesru atisin dusmesini onler.
+            float now = Time.time;
+            float cap = _cv.fireMode == FireMode.Burst ? Mathf.Max(1, _cv.burstCount) : 1f;
+            float refill = cap / Mathf.Max(0.005f, _cv.fireInterval * 0.85f);
+            _srvTokens = Mathf.Min(cap, _srvTokens + (now - _srvLastRefill) * refill);
+            _srvLastRefill = now;
+            float minGap = _cv.fireMode == FireMode.Burst ? _cv.burstShotInterval * 0.85f : 0f;
+            if (_srvTokens < 1f || now - _srvLastShot < minGap) return;
+            _srvTokens -= 1f;
+            _srvLastShot = now;
 
             // Kadans kapisini gectik = atis GERCEKTEN cikiyor; mermi tam burada duser.
             if (UsesAmmo) _ammo.Value--;
