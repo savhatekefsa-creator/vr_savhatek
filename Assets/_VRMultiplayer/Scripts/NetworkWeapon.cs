@@ -51,6 +51,12 @@ namespace VRMultiplayer
         int _srvRejects;
         float _srvNextRejectLog;
 
+        static bool IsFinite(Vector3 v)
+        {
+            float s = v.x + v.y + v.z;
+            return !float.IsNaN(s) && !float.IsInfinity(s);
+        }
+
         void LogReject(string reason)
         {
             _srvRejects++;
@@ -129,8 +135,12 @@ namespace VRMultiplayer
             public float dist, firedAt;
             public bool impactShown;
         }
-        const int MaxTracers = 16;
+        // Volley basina pellet tavani; iz havuzu ARDISIK volley'ler ust uste binebildigi icin
+        // (otomatik ates) bunun iki kati tutulur.
+        const int MaxPellets = 16;
+        const int MaxTracers = MaxPellets * 2;
         readonly List<ShotFx> _flights = new List<ShotFx>();
+        bool _tracersOn;
         float _flashOffAt = -1f;
 
         Color TracerColor => _profile != null ? _profile.tracerColor : new Color(1f, 0.45f, 0.12f);
@@ -174,14 +184,29 @@ namespace VRMultiplayer
         }
 
         // Canli ayar: yeni set uygulaninca (istemci) ya da sunucu yayin yapinca degerler
-        // yeniden cozulur; sonradan kick acilan silaha tepme bileseni de takilir.
-        void OnEnable() { WeaponConfigRegistry.ConfigsUpdated += OnConfigsUpdated; }
+        // yeniden cozulur; sonradan kick acilan silaha tepme bileseni de takilir. Devre
+        // disiyken kacirilan yayinlar icin enable aninda bir kez yeniden cozulur.
+        void OnEnable()
+        {
+            WeaponConfigRegistry.ConfigsUpdated += OnConfigsUpdated;
+            if (_grab != null) { ResolveCombat(); AttachRecoil(); }
+        }
+
         void OnDisable() { WeaponConfigRegistry.ConfigsUpdated -= OnConfigsUpdated; }
 
         void OnConfigsUpdated()
         {
+            int prevMag = _cv.magazineSize;
             ResolveCombat();
             AttachRecoil();
+
+            // Canli ayarla mermi sistemi SONRADAN acilan silah olu dogmasin: spawn'da
+            // tohumlanmamis _ammo/_spares (0/0) "bos sarjor + yedek yok" kilidine dusuyordu.
+            if (IsServer && IsSpawned && prevMag <= 0 && _cv.magazineSize > 0)
+            {
+                _ammo.Value = _cv.magazineSize;
+                _spares.Value = _cv.spareMagazines;
+            }
         }
 
         // Tepme bileseni yalnizca degerler gercekten kick istiyorsa takilir (profil de sart:
@@ -260,7 +285,15 @@ namespace VRMultiplayer
             if (IsSpawned && IsServer) TickReloadServer();
 
             if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; _burstRemaining = 0; ResetFlick(); return; }
-            if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId) { ResetFlick(); return; }
+            if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId)
+            {
+                // Elden-ele geciste (birak+kap ayni tick'e sigarsa !IsHeld karesi hic gorunmez)
+                // eski tutanin burst kuyrugu/bloom'u hayalet atis uretmesin.
+                _burstRemaining = 0;
+                _bloom = 0f;
+                ResetFlick();
+                return;
+            }
 
             TickReloadGesture();
 
@@ -327,6 +360,10 @@ namespace VRMultiplayer
                     _burstRemaining--;
                     _burstNextAt = Time.time + _cv.burstShotInterval;
                     Fire(InputDevices.GetDeviceAtXRNode(_burstNode), _burstNode);
+                    // Sunucu min-gap'i SON atistan olcer; istemci de yeni burst'u son atistan
+                    // en az bir burst-ici aralik sonra baslatsin ki mesru atis reddedilmesin.
+                    if (_burstRemaining == 0)
+                        _nextFire = Mathf.Max(_nextFire, Time.time + _cv.burstShotInterval);
                 }
             }
             _prevTrigger = trig;
@@ -375,7 +412,7 @@ namespace VRMultiplayer
 
             // Pellet: nisan-sacilimi TABAN yone bir kez uygulanir (yukarida), pelletler o
             // tabanin etrafina kendi konileriyle sacilir. Tek pellet = eski tek-ray davranisi.
-            int pellets = Mathf.Clamp(_cv.pelletCount, 1, 32);
+            int pellets = Mathf.Clamp(_cv.pelletCount, 1, MaxPellets);
             var dirs = new Vector3[pellets];
             for (int i = 0; i < pellets; i++)
                 dirs[i] = pellets == 1 ? dir : ApplySpread(dir, _cv.pelletSpreadDegrees);
@@ -441,6 +478,9 @@ namespace VRMultiplayer
         {
             if (p.Receive.SenderClientId != _grab.HolderClientId) return; // only the holder fires
             if (dirs == null || dirs.Length == 0) return;
+            // NaN/Infinity filtresi: "sqrMagnitude < 0.5" NaN'da FALSE doner (NaN karsilastirmasi
+            // hep false) ve bozuk vektor tum istemcilerin FX'ine yayilirdi.
+            if (!IsFinite(origin)) { LogReject("bozuk origin"); return; }
 
             // Mermi otoritesi burada: ele gecirilmis bir istemci istedigi kadar FireServerRpc
             // cagirsin, bos sarjorle ya da dolum ortasinda atis cikmaz. Istemcideki ayni
@@ -468,7 +508,7 @@ namespace VRMultiplayer
 
             // Pellet sayisi SUNUCUNUN config'inden: istemci dilerse 500 yon gondersin,
             // fazlasi kirpilir; her yon ayrica normalize + sanity edilir.
-            int pellets = Mathf.Min(dirs.Length, Mathf.Clamp(_cv.pelletCount, 1, 32));
+            int pellets = Mathf.Min(dirs.Length, Mathf.Clamp(_cv.pelletCount, 1, MaxPellets));
             ulong shooter = _grab.HolderClientId;
             byte shooterTeam = TeamOf(shooter);
 
@@ -495,7 +535,7 @@ namespace VRMultiplayer
             for (int i = 0; i < pellets; i++)
             {
                 Vector3 dir = dirs[i];
-                if (dir.sqrMagnitude < 0.5f) { ends[i] = origin; continue; }
+                if (!IsFinite(dir) || dir.sqrMagnitude < 0.5f) { ends[i] = origin; continue; }
                 dir.Normalize();
                 hitboxesSeen += RaycastOne(origin, dir, shooter, shooterTeam,
                     out ends[i], out normals[i]);
@@ -898,59 +938,70 @@ namespace VRMultiplayer
                 if (_flash != null) _flash.enabled = false;
             }
 
-            if (_flights.Count == 0) return;
+            if (_flights.Count == 0)
+            {
+                if (_tracersOn)
+                {
+                    for (int i = 0; i < _tracers.Count; i++) _tracers[i].enabled = false;
+                    _tracersOn = false;
+                }
+                return;
+            }
+            _tracersOn = true;
 
             float speed = TracerSpeed;
             float len = Mathf.Max(0.1f, TracerLength);
-            EnsureTracers(_flights.Count);
 
+            // GECIS 1 — ilerlet/temizle: biten ucuslar listeden cikar, varista kivilcim.
             for (int i = _flights.Count - 1; i >= 0; i--)
             {
                 var f = _flights[i];
-                bool done = false;
-
+                bool done;
                 if (speed <= 0f)
                 {
                     // Hiz 0 = eski davranis: aninda tam boy cizgi, ~70 ms sonra soner.
-                    if (i < _tracers.Count)
-                    {
-                        var t = _tracers[i];
-                        t.SetPosition(0, f.origin);
-                        t.SetPosition(1, f.end);
-                        t.enabled = true;
-                    }
                     if (!f.impactShown) { ShowImpact(f.end, f.normal); f.impactShown = true; }
                     done = Time.time - f.firedAt > 0.07f;
                 }
                 else
                 {
                     float travelled = (Time.time - f.firedAt) * speed;
-                    float head = Mathf.Min(travelled, f.dist);
-                    float tail = Mathf.Max(0f, travelled - len);
-
                     // Kivilcim izin ucu hedefe VARDIGINDA parlar, atisla ayni anda degil.
                     if (travelled >= f.dist && !f.impactShown)
                     {
                         ShowImpact(f.end, f.normal);
                         f.impactShown = true;
                     }
-
-                    done = tail >= f.dist;
-                    if (!done && i < _tracers.Count)
-                    {
-                        var t = _tracers[i];
-                        t.SetPosition(0, f.origin + f.dir * tail);
-                        t.SetPosition(1, f.origin + f.dir * head);
-                        t.enabled = true;
-                    }
+                    done = travelled - len >= f.dist;
                 }
-
                 if (done) _flights.RemoveAt(i);
                 else _flights[i] = f;
             }
 
-            // Ucusu kalmayan havuz izlerini sondur.
-            for (int i = _flights.Count; i < _tracers.Count; i++)
+            // GECIS 2 — ciz: kalan ucuslar temiz index eslesmesiyle havuza yazilir (silme
+            // sonrasi ayni karede cizim yapildigi icin 1-karelik iz kaymasi olmaz).
+            EnsureTracers(_flights.Count);
+            int drawn = Mathf.Min(_flights.Count, _tracers.Count);
+            for (int i = 0; i < drawn; i++)
+            {
+                var f = _flights[i];
+                var t = _tracers[i];
+                if (speed <= 0f)
+                {
+                    t.SetPosition(0, f.origin);
+                    t.SetPosition(1, f.end);
+                }
+                else
+                {
+                    float travelled = (Time.time - f.firedAt) * speed;
+                    float head = Mathf.Min(travelled, f.dist);
+                    float tail = Mathf.Max(0f, travelled - len);
+                    t.SetPosition(0, f.origin + f.dir * tail);
+                    t.SetPosition(1, f.origin + f.dir * head);
+                }
+                t.enabled = true;
+            }
+            for (int i = drawn; i < _tracers.Count; i++)
                 _tracers[i].enabled = false;
         }
 

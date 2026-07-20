@@ -114,8 +114,12 @@ namespace VRMultiplayer.Weapons
             if (fireInterval <= 0.005f) fireInterval = 0.18f;
             burstCount = Mathf.Clamp(burstCount, 1, 16);
             if (burstShotInterval <= 0.005f) burstShotInterval = 0.06f;
+            // Burst'te fireInterval, burst'un kendisinden kisa olamaz: istemci ile sunucunun
+            // kadans kapilari tutarli kalsin (aksi mesru atisin sessizce reddi demekti).
+            if (fireMode == 2 && fireInterval < burstCount * burstShotInterval)
+                fireInterval = burstCount * burstShotInterval;
             if (range <= 0f) range = 60f;
-            pelletCount = Mathf.Clamp(pelletCount, 1, 32);
+            pelletCount = Mathf.Clamp(pelletCount, 1, 16); // NetworkWeapon.MaxPellets ile ayni
             pelletSpreadDegrees = Mathf.Clamp(pelletSpreadDegrees, 0f, 45f);
             if (pelletDamageScale <= 0f) pelletDamageScale = 1f;
             headDamage = Mathf.Max(0, headDamage);

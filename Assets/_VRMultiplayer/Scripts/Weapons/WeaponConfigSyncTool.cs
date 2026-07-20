@@ -48,7 +48,15 @@ namespace VRMultiplayer.Weapons
 
             if (!nm.IsListening)
             {
-                // Oturum kapandi: NGO shutdown handler'lari sildi — sonrakine temiz basla.
+                if (_handlersRegistered)
+                {
+                    // Oturum KAPANDI (aciktan kapaliya gecis): registry'yi sifirla ki yeni
+                    // oturumun v1 seti eski AppliedVersion'a takilip reddedilmesin; sunucu
+                    // baglanti abonelisini de birak (NGO shutdown delegeyi TEMIZLEMEZ,
+                    // birakmazsak her yeniden baslatmada bir kez daha birikir).
+                    WeaponConfigRegistry.ClearSession();
+                    nm.OnClientConnectedCallback -= OnClientConnected;
+                }
                 _handlersRegistered = false;
                 _serverHooked = false;
                 _pullSent = false;

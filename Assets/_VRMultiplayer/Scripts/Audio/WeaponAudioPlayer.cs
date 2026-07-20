@@ -35,7 +35,9 @@ namespace VRMultiplayer.Audio
             if (clip == null || volume <= 0f) return;
             EnsurePool();
 
-            AudioSource s = priority ? _priority : Pick();
+            // Oncelikli kaynak tekse ve doluysa (iki silah ayni anda dolumda) yenisi normal
+            // havuza duser — calan uzun ses ORTASINDA kesilmez.
+            AudioSource s = priority && !_priority.isPlaying ? _priority : Pick();
             s.transform.position = pos;
             s.maxDistance = Mathf.Max(1f, maxDistance);
             s.minDistance = 1f;

@@ -87,6 +87,18 @@ namespace VRMultiplayer.Weapons
         /// SO'lari dogrudan okur ama silahlarin cozulmus kopyalari yenilenmeli).</summary>
         public static void RaiseUpdatedLocal() => ConfigsUpdated?.Invoke();
 
+        /// <summary>Ag oturumu KAPANINCA cagrilir: kayitlar ve versiyon sifirlanir ki bir
+        /// sonraki oturumun v1 seti "ayni versiyon" diye reddedilmesin (sunucu surecleri
+        /// versiyonu hep 1'den baslatir; kulaklik uygulamasi acik kalirsa statikler yasar).
+        /// Silahlar gomulu SO/profil yedegine geri duser.</summary>
+        public static void ClearSession()
+        {
+            if (_byName.Count == 0 && AppliedVersion == 0) return;
+            _byName.Clear();
+            AppliedVersion = 0;
+            ConfigsUpdated?.Invoke();
+        }
+
         // Enter Play Mode Options ile domain reload kapaliysa statikler onceki Play'den kirli
         // kalir — her Play basinda temiz baslangic garanti edilir.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
