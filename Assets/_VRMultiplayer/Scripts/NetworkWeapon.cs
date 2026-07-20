@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.XR;
@@ -93,8 +94,9 @@ namespace VRMultiplayer
         public bool IsReloading => _reloadDoneAt.Value > 0d;
         float ReloadDuration => _cv.reloadDuration;
 
-        // Effects (created once, reused per shot)
-        LineRenderer _tracer;
+        // Effects: iz cizgileri havuzdan (pellet = ayni anda birden cok ucan iz), alev tek.
+        readonly List<LineRenderer> _tracers = new List<LineRenderer>();
+        Material _tracerMat;
         Light _flash;
 
         // Mermi izleri: silahin ALTINDA DEGIL, dunya kokunde duran bir havuz. Silahin cocugu
@@ -105,12 +107,16 @@ namespace VRMultiplayer
         Transform[] _decals;
         int _decalNext;
 
-        // Ucan ates izi: atis dunya uzayinda saklanir, her kare ilerletilir.
-        Vector3 _shotOrigin, _shotDir, _shotEnd, _shotNormal;
-        float _shotDist;
-        float _shotFiredAt;
-        bool _shotFlying;
-        bool _impactShown;
+        // Ucan ates izleri: her atis/pellet dunya uzayinda saklanir, her kare ilerletilir.
+        // Havuz MaxTracers ile sinirli — asilirsa en eski iz devrilir (pompali seri atis).
+        struct ShotFx
+        {
+            public Vector3 origin, dir, end, normal;
+            public float dist, firedAt;
+            public bool impactShown;
+        }
+        const int MaxTracers = 16;
+        readonly List<ShotFx> _flights = new List<ShotFx>();
         float _flashOffAt = -1f;
 
         Color TracerColor => _profile != null ? _profile.tracerColor : new Color(1f, 0.45f, 0.12f);
@@ -315,7 +321,14 @@ namespace VRMultiplayer
             dir = ApplySpread(dir, Mathf.Min(_cv.spreadBase + _bloom, _cv.spreadMax));
             _bloom = Mathf.Min(_bloom + _cv.spreadPerShot * mult, _cv.spreadMax);
 
-            FireServerRpc(origin, dir);
+            // Pellet: nisan-sacilimi TABAN yone bir kez uygulanir (yukarida), pelletler o
+            // tabanin etrafina kendi konileriyle sacilir. Tek pellet = eski tek-ray davranisi.
+            int pellets = Mathf.Clamp(_cv.pelletCount, 1, 32);
+            var dirs = new Vector3[pellets];
+            for (int i = 0; i < pellets; i++)
+                dirs[i] = pellets == 1 ? dir : ApplySpread(dir, _cv.pelletSpreadDegrees);
+
+            FireServerRpc(origin, dirs);
 
             // Yon YUKARIDA okundu: bu atis mevcut (onceki karenin tepmis) pozunu kullanir,
             // yeni kick bir sonraki atisi kaldirir.
@@ -367,10 +380,10 @@ namespace VRMultiplayer
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        void FireServerRpc(Vector3 origin, Vector3 dir, RpcParams p = default)
+        void FireServerRpc(Vector3 origin, Vector3[] dirs, RpcParams p = default)
         {
             if (p.Receive.SenderClientId != _grab.HolderClientId) return; // only the holder fires
-            if (dir.sqrMagnitude < 0.5f) return;
+            if (dirs == null || dirs.Length == 0) return;
 
             // Mermi otoritesi burada: ele gecirilmis bir istemci istedigi kadar FireServerRpc
             // cagirsin, bos sarjorle ya da dolum ortasinda atis cikmaz. Istemcideki ayni
@@ -392,20 +405,45 @@ namespace VRMultiplayer
             _srvTokens -= 1f;
             _srvLastShot = now;
 
-            // Kadans kapisini gectik = atis GERCEKTEN cikiyor; mermi tam burada duser.
+            // Kadans kapisini gectik = atis GERCEKTEN cikiyor; mermi tetik basina BIR duser
+            // (pellet sayisi kac olursa olsun).
             if (UsesAmmo) _ammo.Value--;
 
-            dir.Normalize();
-
-            // Authoritative hit: nearest thing the ray touches that is neither the weapon nor
-            // the shooter's own body. Player hitboxes are triggers, so include triggers.
+            // Pellet sayisi SUNUCUNUN config'inden: istemci dilerse 500 yon gondersin,
+            // fazlasi kirpilir; her yon ayrica normalize + sanity edilir.
+            int pellets = Mathf.Min(dirs.Length, Mathf.Clamp(_cv.pelletCount, 1, 32));
             ulong shooter = _grab.HolderClientId;
             byte shooterTeam = TeamOf(shooter);
 
-            Vector3 end = origin + dir * _cv.range;
+            var ends = new Vector3[pellets];
+            var normals = new Vector3[pellets];
+            int hitboxesSeen = 0;
+            for (int i = 0; i < pellets; i++)
+            {
+                Vector3 dir = dirs[i];
+                if (dir.sqrMagnitude < 0.5f) { ends[i] = origin; continue; }
+                dir.Normalize();
+                hitboxesSeen += RaycastOne(origin, dir, shooter, shooterTeam,
+                    out ends[i], out normals[i]);
+            }
+
+            if (hitboxesSeen == 0)
+                Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi ({pellets} pellet).");
+
+            FireFxClientRpc(origin, ends, normals);
+        }
+
+        /// <summary>Tek bir rayin otoriter isabet cozumu (pellet basina bir kez cagrilir).
+        /// Donus: bu rayin gordugu dusman hitbox sayisi (teshis logu icin). Hasar pellet
+        /// basina pelletDamageScale ile carpilir — pompalida tanesi zayif, hepsi birden olumcul.</summary>
+        int RaycastOne(Vector3 origin, Vector3 dir, ulong shooter, byte shooterTeam,
+            out Vector3 end, out Vector3 hitNormal)
+        {
+            end = origin + dir * _cv.range;
             // Sifir = mermi izi birakma. YALNIZCA sabit geometri normal doner: hareketli bir
             // oyuncuya dunya-uzayi izi cakarsak oyuncu yurudugunde iz havada asili kalirdi.
-            Vector3 hitNormal = Vector3.zero;
+            hitNormal = Vector3.zero;
+
             var hits = Physics.RaycastAll(origin + dir * 0.03f, dir, _cv.range,
                 Physics.AllLayers, QueryTriggerInteraction.Collide);
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
@@ -416,9 +454,7 @@ namespace VRMultiplayer
                 if (h.collider.transform.IsChildOf(transform)) continue; // own weapon
 
                 // Regional damage: the ray hits a HitZone (head/torso/arm/leg); the per-region
-                // amount is looked up in CombatConfig. GetComponentInParent reaches the zone whether
-                // the collider carries it directly or on a child. The amount is resolved on the
-                // SERVER (clients can't send damage values — security).
+                // amount is resolved on the SERVER (clients can't send damage values — security).
                 var zone = h.collider.GetComponentInParent<HitZone>();
                 if (zone != null && zone.health != null)
                 {
@@ -432,7 +468,7 @@ namespace VRMultiplayer
                         Debug.Log($"[Silah] Isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {health.OwnerClientId}");
                         end = h.point; break; // block, no damage (friendly fire off)
                     }
-                    int dmg = DamageFor(zone.zoneType);
+                    int dmg = Mathf.Max(1, Mathf.RoundToInt(DamageFor(zone.zoneType) * _cv.pelletDamageScale));
                     Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {health.OwnerClientId} (takim {t}), bolge {zone.zoneName}, {dmg} hasar. Kalan: {Mathf.Max(0, health.Health.Value - dmg)}");
                     health.ServerApplyDamage(dmg, shooter);
                     end = h.point; break;
@@ -442,11 +478,7 @@ namespace VRMultiplayer
                 hitNormal = h.normal;
                 break;
             }
-
-            if (hitboxesSeen == 0)
-                Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi. Toplam collider: {hits.Length}. Ilk carpan: {(hits.Length > 0 ? hits[0].collider.name : "hicbir sey")}");
-
-            FireFxClientRpc(origin, end, hitNormal);
+            return hitboxesSeen;
         }
 
         /// <summary>Bolge hasari, SILAH-basina: config alani doluysa (>0) o deger, degilse
@@ -478,9 +510,9 @@ namespace VRMultiplayer
         }
 
         [Rpc(SendTo.Everyone)]
-        void FireFxClientRpc(Vector3 origin, Vector3 end, Vector3 hitNormal)
+        void FireFxClientRpc(Vector3 origin, Vector3[] ends, Vector3[] normals)
         {
-            ShowShot(origin, end, hitNormal);
+            ShowVolley(origin, ends, normals);
         }
 
         // ------------------------------------------------------------- sarjor
@@ -667,18 +699,11 @@ namespace VRMultiplayer
 
         void CreateFx()
         {
-            var tracerGo = new GameObject("Tracer");
-            tracerGo.transform.SetParent(transform, false);
-            _tracer = tracerGo.AddComponent<LineRenderer>();
-            _tracer.useWorldSpace = true;
-            _tracer.positionCount = 2;
-            _tracer.widthMultiplier = TracerWidth;
-            var mat = new Material(FindShaderSafe());
+            _tracerMat = new Material(FindShaderSafe());
             Color tc = TracerColor;
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tc);
-            else mat.color = tc;
-            _tracer.material = mat;
-            _tracer.enabled = false;
+            if (_tracerMat.HasProperty("_BaseColor")) _tracerMat.SetColor("_BaseColor", tc);
+            else _tracerMat.color = tc;
+            EnsureTracers(1); // ilk iz hazir; pellet gelirse havuz lazily buyur
 
             var flashGo = new GameObject("Muzzle Flash");
             flashGo.transform.SetParent(transform, false);
@@ -721,20 +746,48 @@ namespace VRMultiplayer
             base.OnDestroy();
         }
 
-        void ShowShot(Vector3 origin, Vector3 end, Vector3 hitNormal)
+        LineRenderer NewTracer()
         {
-            _shotOrigin = origin;
-            _shotEnd = end;
-            _shotNormal = hitNormal;
-            Vector3 d = end - origin;
-            _shotDist = d.magnitude;
-            _shotDir = _shotDist > 1e-4f ? d / _shotDist : transform.forward;
-            _shotFiredAt = Time.time;
-            _shotFlying = true;
-            _impactShown = false;
+            var go = new GameObject("Tracer");
+            go.transform.SetParent(transform, false);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.positionCount = 2;
+            lr.widthMultiplier = TracerWidth;
+            lr.material = _tracerMat;
+            lr.enabled = false;
+            return lr;
+        }
 
-            // Namlu alevi silahin cocugu: dunya noktasi bir kez yazilir, sonra silahla birlikte
-            // hareket eder — namludan ayrilmaz.
+        void EnsureTracers(int n)
+        {
+            n = Mathf.Min(n, MaxTracers);
+            while (_tracers.Count < n) _tracers.Add(NewTracer());
+        }
+
+        void ShowVolley(Vector3 origin, Vector3[] ends, Vector3[] normals)
+        {
+            if (ends == null || ends.Length == 0) return;
+
+            for (int i = 0; i < ends.Length; i++)
+            {
+                Vector3 d = ends[i] - origin;
+                float dist = d.magnitude;
+                var f = new ShotFx
+                {
+                    origin = origin,
+                    end = ends[i],
+                    normal = normals != null && i < normals.Length ? normals[i] : Vector3.zero,
+                    dir = dist > 1e-4f ? d / dist : transform.forward,
+                    dist = dist,
+                    firedAt = Time.time,
+                };
+                if (_flights.Count >= MaxTracers) _flights.RemoveAt(0);
+                _flights.Add(f);
+            }
+
+            // Namlu alevi: pellet sayisi kac olursa olsun TEK parlama. Alev silahin cocugu:
+            // dunya noktasi bir kez yazilir, sonra silahla birlikte hareket eder.
             if (_flash != null)
             {
                 _flash.transform.position = origin;
@@ -745,8 +798,9 @@ namespace VRMultiplayer
             UpdateFx(); // ilk kareyi hemen ciz: bir kare gecikmeyle baslamasin
         }
 
-        // Izi namludan hedefe dogru UCURUR. Eskiden tam boy cizgi aninda cizilip 70 ms duruyordu:
-        // silahi cevirirken donuk cizgi namludan kopuk kaliyor ve atis sapmis gibi gorunuyordu.
+        // Izleri namludan hedefe dogru UCURUR (pellet basina bir iz). Eskiden tam boy cizgi
+        // aninda cizilip 70 ms duruyordu: silahi cevirirken donuk cizgi namludan kopuk kaliyor
+        // ve atis sapmis gibi gorunuyordu.
         void UpdateFx()
         {
             if (_flashOffAt > 0f && Time.time > _flashOffAt)
@@ -755,58 +809,68 @@ namespace VRMultiplayer
                 if (_flash != null) _flash.enabled = false;
             }
 
-            if (!_shotFlying) return;
+            if (_flights.Count == 0) return;
 
             float speed = TracerSpeed;
-            if (speed <= 0f)
+            float len = Mathf.Max(0.1f, TracerLength);
+            EnsureTracers(_flights.Count);
+
+            for (int i = _flights.Count - 1; i >= 0; i--)
             {
-                // Hiz 0 = eski davranis: aninda tam boy cizgi.
-                if (_tracer != null)
+                var f = _flights[i];
+                bool done = false;
+
+                if (speed <= 0f)
                 {
-                    _tracer.SetPosition(0, _shotOrigin);
-                    _tracer.SetPosition(1, _shotEnd);
-                    _tracer.enabled = true;
+                    // Hiz 0 = eski davranis: aninda tam boy cizgi, ~70 ms sonra soner.
+                    if (i < _tracers.Count)
+                    {
+                        var t = _tracers[i];
+                        t.SetPosition(0, f.origin);
+                        t.SetPosition(1, f.end);
+                        t.enabled = true;
+                    }
+                    if (!f.impactShown) { ShowImpact(f.end, f.normal); f.impactShown = true; }
+                    done = Time.time - f.firedAt > 0.07f;
                 }
-                ShowImpact();
-                if (Time.time - _shotFiredAt > 0.07f)
+                else
                 {
-                    _shotFlying = false;
-                    if (_tracer != null) _tracer.enabled = false;
+                    float travelled = (Time.time - f.firedAt) * speed;
+                    float head = Mathf.Min(travelled, f.dist);
+                    float tail = Mathf.Max(0f, travelled - len);
+
+                    // Kivilcim izin ucu hedefe VARDIGINDA parlar, atisla ayni anda degil.
+                    if (travelled >= f.dist && !f.impactShown)
+                    {
+                        ShowImpact(f.end, f.normal);
+                        f.impactShown = true;
+                    }
+
+                    done = tail >= f.dist;
+                    if (!done && i < _tracers.Count)
+                    {
+                        var t = _tracers[i];
+                        t.SetPosition(0, f.origin + f.dir * tail);
+                        t.SetPosition(1, f.origin + f.dir * head);
+                        t.enabled = true;
+                    }
                 }
-                return;
+
+                if (done) _flights.RemoveAt(i);
+                else _flights[i] = f;
             }
 
-            float travelled = (Time.time - _shotFiredAt) * speed;
-            float head = Mathf.Min(travelled, _shotDist);
-            float tail = Mathf.Max(0f, travelled - Mathf.Max(0.1f, TracerLength));
-
-            // Kivilcim izin ucu hedefe VARDIGINDA parlar, atisla ayni anda degil.
-            if (travelled >= _shotDist) ShowImpact();
-
-            if (tail >= _shotDist)
-            {
-                _shotFlying = false;
-                if (_tracer != null) _tracer.enabled = false;
-                return;
-            }
-
-            if (_tracer != null)
-            {
-                _tracer.SetPosition(0, _shotOrigin + _shotDir * tail);
-                _tracer.SetPosition(1, _shotOrigin + _shotDir * head);
-                _tracer.enabled = true;
-            }
+            // Ucusu kalmayan havuz izlerini sondur.
+            for (int i = _flights.Count; i < _tracers.Count; i++)
+                _tracers[i].enabled = false;
         }
 
         // Carptigi yerde KALICI bir iz birakir. Havuzdaki en eski iz geri donusur.
-        void ShowImpact()
+        void ShowImpact(Vector3 end, Vector3 normal)
         {
-            if (_impactShown) return;
-            _impactShown = true;
-
             // Normal sifir = hicbir seye carpmadi ya da bir OYUNCUYA carpti: iz birakma.
             // Yuruyen bir oyuncuya cakilan dunya-uzayi izi havada asili kalirdi.
-            if (_decals == null || _shotNormal.sqrMagnitude < 0.5f) return;
+            if (_decals == null || normal.sqrMagnitude < 0.5f) return;
 
             var d = _decals[_decalNext];
             _decalNext = (_decalNext + 1) % _decals.Length;
@@ -814,8 +878,8 @@ namespace VRMultiplayer
             // Silindirin ekseni LOKAL Y; onu yuzey normaline hizala. Olcek: mesh yaricapi 0.5
             // (yani cap = scale.x) ve yuksekligi 2 (yani kalinlik = 2 * scale.y).
             float s = ImpactSize;
-            d.SetPositionAndRotation(_shotEnd + _shotNormal * 0.001f,
-                Quaternion.FromToRotation(Vector3.up, _shotNormal));
+            d.SetPositionAndRotation(end + normal * 0.001f,
+                Quaternion.FromToRotation(Vector3.up, normal));
             d.localScale = new Vector3(s, 0.0015f, s); // kalinlik 3 mm: yuzeye gomulu dursun
             d.gameObject.SetActive(true);
         }
