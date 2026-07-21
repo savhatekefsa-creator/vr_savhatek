@@ -35,7 +35,16 @@ namespace VRMultiplayer.Weapons
             public Vector3 wristLocalPos;   // mirror-resolved
             public Quaternion wristLocalRot;// mirror-resolved
             public bool mirrored;
+            public float blendStart;        // engage ramp start (weight 0 -> 1)
+            public bool fadingOut;          // release ramp (weight 1 -> 0), then inactive
+            public float fadeOutStart;
         }
+
+        // The weld writes the wrist ABSOLUTELY, so switching it on/off used to relocate the
+        // hand in a single frame (the "el kayboluyor/geri geliyor" pop, on every client).
+        // Ramping the weld weight over this window blends the wrist between the IK pose and
+        // the weapon anchor on both engage and release.
+        const float WeldBlendSeconds = 0.12f;
 
         HandWeld _left, _right;
         Animator _anim;
@@ -58,6 +67,10 @@ namespace VRMultiplayer.Weapons
             bool isSupport, bool mirrored)
         {
             var pose = isSupport ? profile.supportHand : profile.mainHand;
+            // WeaponGrip re-applies on every replicated state change — keep an in-progress
+            // engage ramp instead of restarting it, but a fresh weld (or a re-grab caught
+            // mid-fade-out) ramps in from now.
+            var prev = left ? _left : _right;
             var w = new HandWeld
             {
                 active = true,
@@ -70,6 +83,7 @@ namespace VRMultiplayer.Weapons
                 wristLocalPos = mirrored ? WeaponGripMath.MirrorX(pose.wristLocalPosition) : pose.wristLocalPosition,
                 wristLocalRot = mirrored ? WeaponGripMath.MirrorX(Quaternion.Euler(pose.wristLocalEuler)) : Quaternion.Euler(pose.wristLocalEuler),
                 mirrored = mirrored,
+                blendStart = prev.active && !prev.fadingOut ? prev.blendStart : Time.time,
             };
             if (left) _left = w; else _right = w;
             enabled = true;
@@ -77,8 +91,16 @@ namespace VRMultiplayer.Weapons
 
         public void ClearHand(bool left)
         {
-            if (left) _left.active = false; else _right.active = false;
-            if (!_left.active && !_right.active) enabled = false; // stop the empty per-frame tick
+            // Don't cut the weld in one frame — fade the wrist back to its IK/animator pose.
+            // The weld stays "active" (and this component enabled) until the fade finishes.
+            if (left)
+            {
+                if (_left.active && !_left.fadingOut) { _left.fadingOut = true; _left.fadeOutStart = Time.time; }
+            }
+            else
+            {
+                if (_right.active && !_right.fadingOut) { _right.fadingOut = true; _right.fadeOutStart = Time.time; }
+            }
         }
 
         void LateUpdate()
@@ -90,7 +112,15 @@ namespace VRMultiplayer.Weapons
 
         void WeldSide(ref HandWeld w, bool left)
         {
-            if (!w.active || w.weapon == null || w.profile == null || w.bone == null) return;
+            if (!w.active) return;
+            if (w.weapon == null || w.profile == null || w.bone == null)
+            {
+                // Weapon despawned mid-hold/fade: nothing left to weld to.
+                w.active = false;
+                w.fadingOut = false;
+                if (!_left.active && !_right.active) enabled = false;
+                return;
+            }
 
             Vector3 anchorLocal;
             Quaternion anchorLocalRot = w.gripLocalRot;
@@ -117,9 +147,36 @@ namespace VRMultiplayer.Weapons
             // independent of the weapon's scale).
             Vector3 anchorPos = w.weapon.TransformPoint(anchorLocal);
             Quaternion anchorRot = w.weapon.rotation * anchorLocalRot;
+            Vector3 targetPos = anchorPos + anchorRot * w.wristLocalPos;
+            Quaternion targetRot = anchorRot * w.wristLocalRot;
+
+            // Engage/release weight. The bone's pose here is this frame's IK/animator result
+            // (the weld runs after both), so a partial weight blends between that and the
+            // weapon anchor — no one-frame wrist relocation on grab or release.
+            float wgt;
+            if (w.fadingOut)
+            {
+                wgt = 1f - Mathf.Clamp01((Time.time - w.fadeOutStart) / WeldBlendSeconds);
+                if (wgt <= 0f)
+                {
+                    w.active = false;
+                    w.fadingOut = false;
+                    if (!_left.active && !_right.active) enabled = false; // empty tick off
+                    return;
+                }
+            }
+            else
+                wgt = Mathf.Clamp01((Time.time - w.blendStart) / WeldBlendSeconds);
+
+            if (wgt >= 1f)
+            {
+                w.bone.SetPositionAndRotation(targetPos, targetRot);
+                return;
+            }
+            wgt = Mathf.SmoothStep(0f, 1f, wgt);
             w.bone.SetPositionAndRotation(
-                anchorPos + anchorRot * w.wristLocalPos,
-                anchorRot * w.wristLocalRot);
+                Vector3.Lerp(w.bone.position, targetPos, wgt),
+                Quaternion.Slerp(w.bone.rotation, targetRot, wgt));
         }
     }
 }
