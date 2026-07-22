@@ -40,10 +40,10 @@ MonoBehaviour:
   recoilDecayHalfLife: 0.12
   recoilRestDecayHalfLife: 0.06
   supportRecoilMultiplier: 0.55
-  fireClip: WeaponSounds/pistol_fire
+  fireClip: WeaponSounds/pistol2_fire
   dryFireClip: WeaponSounds/dry_generic
-  reloadStartClip: WeaponSounds/reload_start_generic
-  reloadEndClip: WeaponSounds/reload_end_generic
+  reloadStartClip: WeaponSounds/pistol2_reload
+  reloadEndClip: WeaponSounds/pistol2_slide
   fireVolume: 1
   firePitchMin: 0.95
   firePitchMax: 1.05
