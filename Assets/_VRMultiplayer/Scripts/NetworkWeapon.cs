@@ -389,12 +389,11 @@ namespace VRMultiplayer
                 _recoil.SetSustainedFire(trig && Time.time - _lastFire < _cv.fireInterval * 2f);
         }
 
-        void Fire(InputDevice firedDev, XRNode firedNode)
+        /// <summary>Silahin SU ANKI nisan isini: cikis noktasi + yon (sacilim UYGULANMADAN).
+        /// Fire() ile AYNI kaynak — durbun de bunu okuyup nisan halkasini merminin gercekten
+        /// gidecegi noktaya koyuyor. Tek dogru kaynak olsun diye buraya cikarildi.</summary>
+        public void GetAimRay(out Vector3 origin, out Vector3 dir)
         {
-            _lastFire = Time.time;
-
-            Vector3 origin;
-            Vector3 dir;
             if (muzzle != null)
             {
                 origin = muzzle.position;   // precise barrel tip placed in the editor
@@ -416,6 +415,13 @@ namespace VRMultiplayer
                 origin = transform.TransformPoint(_muzzleLocal);
                 dir = (transform.rotation * _barrelLocal).normalized;
             }
+        }
+
+        void Fire(InputDevice firedDev, XRNode firedNode)
+        {
+            _lastFire = Time.time;
+
+            GetAimRay(out Vector3 origin, out Vector3 dir);
 
             // Sacilim owner'da uygulanir ve RPC'ye SACILMIS yon girer: tracer, sunucu isabeti
             // ve hasar hepsi ayni yonu paylasir, ayrica bir senkron gerekmez. (Configsiz silahta
