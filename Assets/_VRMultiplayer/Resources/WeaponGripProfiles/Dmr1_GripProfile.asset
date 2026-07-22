@@ -56,8 +56,8 @@ MonoBehaviour:
   supportRailLocalEnd: {x: 0.0658, y: 0.0713, z: -0.2041}
   supportBreakDistance: 0.3
   supportHand:
-    wristLocalPosition: {x: 0.008334085, y: 0.07017906, z: -0.029812464}
-    wristLocalEuler: {x: 354.65643, y: 278.76016, z: 242.1774}
+    wristLocalPosition: {x: 0.008334123, y: 0.070179045, z: -0.029812474}
+    wristLocalEuler: {x: 354.6564, y: 278.76016, z: 242.1774}
     thumbCurl: 0
     indexCurl: 0
     middleCurl: 0
