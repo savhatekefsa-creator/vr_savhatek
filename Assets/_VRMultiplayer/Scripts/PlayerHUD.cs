@@ -1,8 +1,7 @@
-using Unity.Netcode;
+﻿using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.XR;
 using VRMultiplayer.UI;
-using System.Collections;
 
 namespace VRMultiplayer
 {
@@ -25,21 +24,19 @@ namespace VRMultiplayer
         public float alwaysShowBelow = 0.35f;
 
         PlayerHealth _health;
+        PlayerIdentity _identity;
 
         Transform _root;      // billboarded container
         Transform _barFill;
-        TextMesh _label;
         DamageDirectionFlash _dirFlash; // hasarin geldigi yonde kenar parlamasi
         LowHealthVignette _vignette;    // dusuk canda kenar kizarmasi
-        MeshRenderer _deathFade; // Siyah ekran kararması
+        RespawnGuide _respawnGuide;     // olu/bekleyen ekrani: gri perde + bolge yonlendirmesi
         int _lastHealth = PlayerHealth.MaxHealth;
         float _targetRatio = 1f;
         float _displayedRatio = -1f;   // -1: ilk deger henuz uygulanmadi (animasyonsuz atanir)
         MeshRenderer _barFillMr;
         float _visibleUntil;           // bar bu ana kadar gorunur kalir
         float _hudScale = 1f;
-        Vector3 _initialLabelScale;
-        Coroutine _respawnCountdown;
 
         const float BarWidth = 0.32f;
 
@@ -48,6 +45,7 @@ namespace VRMultiplayer
             if (!IsOwner) { enabled = false; return; }
             _health = GetComponent<PlayerHealth>();
             if (_health == null) { enabled = false; return; }
+            _identity = GetComponent<PlayerIdentity>();
             Debug.Log("[PlayerHUD] OnNetworkSpawn calisti. Can degeri: " + _health.Health.Value);
 
             BuildHud();
@@ -67,8 +65,7 @@ namespace VRMultiplayer
             }
             if (_root != null) Destroy(_root.gameObject);
             // Ebeveynsiz efekt objeleri de temizlenmeli, yoksa oyuncu ayrilinca sahnede kalirlar.
-            if (_label != null) Destroy(_label.gameObject);
-            if (_deathFade != null) Destroy(_deathFade.gameObject);
+            if (_respawnGuide != null) Destroy(_respawnGuide.gameObject);
             if (_dirFlash != null) Destroy(_dirFlash.gameObject);
             if (_vignette != null) Destroy(_vignette.gameObject);
         }
@@ -86,28 +83,11 @@ namespace VRMultiplayer
             _lastHealth = now;
         }
 
+        // Perde/metin her kare Update'te beslenir (mesafe ve geri sayim surekli degisiyor);
+        // burada yalnizca ANLIK geri bildirim kalir.
         void OnDeadChanged(bool _, bool dead)
         {
-            if (dead)
-            {
-                // Oyuncu elendi: Ekranı karart ve animasyonlu geri sayımı başlat.
-                if (_deathFade != null) _deathFade.enabled = true;
-                if (_label != null) _label.gameObject.SetActive(true);
-                if (_respawnCountdown != null) StopCoroutine(_respawnCountdown);
-                _respawnCountdown = StartCoroutine(RespawnCountdownRoutine());
-                Rumble();
-            }
-            else
-            {
-                // Oyuncu yeniden doğdu: Kararmayı kaldır, geri sayımı durdur ve metni gizle.
-                if (_deathFade != null) _deathFade.enabled = false;
-                if (_label != null) _label.gameObject.SetActive(false);
-                if (_respawnCountdown != null)
-                {
-                    StopCoroutine(_respawnCountdown);
-                    _respawnCountdown = null;
-                }
-            }
+            if (dead) Rumble();
         }
 
         void Update()
@@ -123,6 +103,18 @@ namespace VRMultiplayer
                 ApplyBarRatio(Mathf.MoveTowards(_displayedRatio, _targetRatio, barSlideSpeed * Time.deltaTime));
 
             UpdateHudVisibility();
+
+            // Olu / henuz oyuna girmemis oyuncunun ekrani. Mesafe ve geri sayim her kare
+            // degistigi icin durum olay bazli degil, surekli beslenir.
+            if (_respawnGuide != null && _health != null)
+            {
+                _respawnGuide.SetState(
+                    _health.Dead.Value,
+                    _identity != null ? _identity.Team.Value : (byte)0,
+                    _health.InSpawnZone.Value,
+                    _health.SpawnProgress.Value,
+                    _health.spawnHoldSeconds);
+            }
 
             // VR rig yoksa (Editor'de Game penceresinden test) ana kamera kafa yerine gecer.
             var rig = XRRigReference.Instance;
@@ -143,21 +135,7 @@ namespace VRMultiplayer
                     _root.rotation = Quaternion.LookRotation(_root.position - head.position);
                 }
 
-                // Ölüm kararması her zaman kamerayı takip eder.
-                Transform effectParent = _deathFade != null && _deathFade.enabled ? _deathFade.transform : null;
-                if (effectParent != null)
-                {
-                    effectParent.SetPositionAndRotation(
-                        head.position + head.forward * 0.5f, // Biraz daha önde
-                        head.rotation);
-                }
-
-                // Ölüm ekranı metni her zaman kameranın önünde ve ortasında durur.
-                if (_label != null && _label.gameObject.activeSelf)
-                {
-                    _label.transform.position = head.position + head.forward * 1.2f;
-                    _label.transform.rotation = Quaternion.LookRotation(_label.transform.position - head.position);
-                }
+                // Olum perdesi ve metni kendi LateUpdate'inde kafayi takip eder (RespawnGuide).
             }
         }
 
@@ -203,33 +181,9 @@ namespace VRMultiplayer
             }
         }
 
-        IEnumerator RespawnCountdownRoutine()
-        {
-            if (_health == null || _label == null) yield break;
-
-            // Her sayı için bir saniyelik animasyon döngüsü
-            for (int i = Mathf.FloorToInt(_health.respawnDelay); i > 0; i--)
-            {
-                _label.text = i.ToString();
-
-                // Vuruş (pulse) animasyonu: 1 saniye içinde büyüyüp küçülme
-                float timer = 0f;
-                float duration = 1.0f;
-                Vector3 startScale = _initialLabelScale * 0.8f; // Biraz küçük başla
-                Vector3 peakScale = _initialLabelScale * 1.2f;  // Zirve noktası
-
-                while (timer < duration)
-                {
-                    timer += Time.deltaTime;
-                    float t = timer / duration;
-                    // Sinüs eğrisi ile yumuşak bir vuruş efekti (0 -> 1 -> 0)
-                    float pulse = Mathf.Sin(t * Mathf.PI);
-                    _label.transform.localScale = Vector3.Lerp(startScale, peakScale, pulse);
-                    yield return null;
-                }
-                _label.transform.localScale = startScale; // Sonraki sayı için başlangıç ölçeğine dön
-            }
-        }
+        // Eski sabit geri sayim (respawnDelay saniye) KALDIRILDI: dogum artik sureye degil
+        // dogum cemberinde durmaya bagli, geri sayimi RespawnGuide sunucudan gelen
+        // SpawnProgress ile cizer.
 
 #if UNITY_EDITOR
         // ------------------------------------------------------ editor test kisayollari
@@ -273,10 +227,6 @@ namespace VRMultiplayer
             Debug.Log("[PlayerHUD] BuildHud baslatildi.");
             _root = new GameObject("Combat HUD").transform;
 
-            _label = MakeText(null, "", Vector3.zero); // Başlangıçta dünya uzayında, ebeveyni yok
-            _label.gameObject.SetActive(false);
-            _initialLabelScale = _label.transform.localScale;
-
             // Yuzen can bari kaldirildi (can artik kol saati ekraninda gosteriliyor).
             // _root bos bir tasiyici olarak kalir; olum ekrani/flas/vignette ondan bagimsizdir.
 
@@ -286,44 +236,11 @@ namespace VRMultiplayer
             // Dusuk can vignette'i: can azaldikca gorus kenarlarinda kirmizi kizarma.
             _vignette = new GameObject("Low Health Vignette").AddComponent<LowHealthVignette>();
 
-            var deathFadeGo = MakeQuad(null, "Death Fade", new Color(0.05f, 0.05f, 0.05f, 0.85f));
-            deathFadeGo.SetParent(null, true);
-            deathFadeGo.localScale = new Vector3(2f, 2f, 1f);
-            _deathFade = deathFadeGo.GetComponent<MeshRenderer>();
-            _deathFade.enabled = false;
+            // Olu / dogum bekleyen ekrani: gri perde + takim bolgesine yonlendirme + geri sayim.
+            _respawnGuide = new GameObject("Respawn Guide").AddComponent<RespawnGuide>();
+            _respawnGuide.SetFont(countdownFont);
             Debug.Log("[PlayerHUD] BuildHud tamamlandi.");
-        }
-
-        TextMesh MakeText(Transform parent, string text, Vector3 localPos)
-        {
-            var go = new GameObject("Label");
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = localPos;
-            go.transform.localScale = Vector3.one * 0.2f; // Ölüm sayacı için daha büyük
-            var tm = go.AddComponent<TextMesh>();
-            tm.text = text;
-            tm.characterSize = 0.06f;
-            tm.fontSize = 60;
-            tm.anchor = TextAnchor.MiddleCenter;
-            tm.alignment = TextAlignment.Center;
-            tm.color = UITheme.HealthLow; // Geri sayım rengini kırmızı yap
-
-            // Eğer Inspector'dan özel bir font atandıysa onu kullan
-            if (countdownFont != null)
-                tm.font = countdownFont;
-            return tm;
-        }
-
-        static Transform MakeQuad(Transform parent, string name, Color color)
-        {
-            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            q.name = name;
-            var col = q.GetComponent<Collider>();
-            if (col != null) Destroy(col);
-            q.transform.SetParent(parent, false);
-            var mr = q.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = UITheme.CreateLitMaterial(color);
-            return q.transform;
         }
     }
 }
+

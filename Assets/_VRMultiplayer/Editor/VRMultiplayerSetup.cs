@@ -379,8 +379,11 @@ namespace VRMultiplayer.EditorTools
                 "Sahneyi kaydet (Ctrl+S) ve build al.", "Tamam");
         }
 
-        // Turns off joystick locomotion (pure physical walking) and adds two-point colocation
-        // calibration so real-world distance == in-game distance for players in the same room.
+        // Adds two-point colocation calibration so real-world distance == in-game distance for
+        // players in the same room. Hareket TAMAMEN fiziksel: rig'i koddan oynatan her sey
+        // (joystick yurume, snap turn, isinlanma) kalibrasyonu bozar — kalibrasyondan sonra
+        // sanal konum ile fiziksel konum ayni seydir, biri kayarsa oyuncu gercek odada
+        // baskasinin/duvarin icine yurur. Bu yuzden XRRigLocomotion tamamen SILINDI.
         [MenuItem("Tools/VR Multiplayer/5. Setup Colocation (physical walking)")]
         public static void SetupColocation()
         {
@@ -393,9 +396,12 @@ namespace VRMultiplayer.EditorTools
             }
             var rigGo = rigRef.gameObject;
 
-            // Pure physical walking: disable joystick move + snap turn.
-            var loco = rigGo.GetComponent<XRRigLocomotion>();
-            if (loco != null) loco.enabled = false;
+            // XRRigLocomotion silindigi icin eski sahnelerde rig'de "missing script" bir slot
+            // kalir. Elle YAML duzenlemek yerine Unity'nin kendi temizleyicisi kullanilir —
+            // sahneyi Unity yazar, yani bizim disaridan ezme riskimiz olmaz.
+            int removedDead = GameObjectUtility.RemoveMonoBehavioursWithMissingScript(rigGo);
+            if (removedDead > 0)
+                Debug.Log($"[VRMultiplayerSetup] Rig'den {removedDead} olu bilesen temizlendi (eski joystick locomotion).");
 
             // Calibration status label (world-space, faces the camera).
             var labelGo = GameObject.Find("Calibration Label");
@@ -428,7 +434,6 @@ namespace VRMultiplayer.EditorTools
             cal.sharedForward = Vector3.forward;
 
             EditorUtility.SetDirty(rigGo);
-            if (loco != null) EditorUtility.SetDirty(loco);
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 
             EditorUtility.DisplayDialog("VR Multiplayer",
@@ -492,9 +497,10 @@ namespace VRMultiplayer.EditorTools
                 if (oldCam.CompareTag("MainCamera")) oldCam.tag = "Untagged";
             }
 
+            // Locomotion bileseni YOK: hareket fizikseldir (bkz. menu 5). Analog cubuklar bos
+            // birakilir, baska ozellikler icin serbesttir.
             var rig = new GameObject("XR Rig");
             var rigRef = rig.AddComponent<XRRigReference>();
-            var loco = rig.AddComponent<XRRigLocomotion>();
             rig.AddComponent<XRTrackingOriginSetup>();
 
             // Camera = the player's head (driven directly by the HMD pose).
@@ -519,7 +525,6 @@ namespace VRMultiplayer.EditorTools
             rigRef.head = camGo.transform;
             rigRef.leftHand = lh.transform;
             rigRef.rightHand = rh.transform;
-            loco.head = camGo.transform;
 
             return rig;
         }

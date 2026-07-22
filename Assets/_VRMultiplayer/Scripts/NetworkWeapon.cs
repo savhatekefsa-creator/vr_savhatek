@@ -324,6 +324,10 @@ namespace VRMultiplayer
             bool wantsFire = IsAuto ? trig : (trig && !_prevTrigger);
             if (_burstRemaining > 0) wantsFire = false;
 
+            // Olu / dogum bekleyen oyuncu ates edemez. Buradaki kontrol HIS icindir (tetik
+            // sessizce olu kalir, kuru tetik sesi bile cikmaz); otorite FireServerRpc'de.
+            if (HolderIsDead()) { wantsFire = false; _burstRemaining = 0; }
+
             // Bos sarjor / dolum sirasinda tetik. Buradaki kontrol YALNIZCA his icindir —
             // otorite FireServerRpc'de. Kuru tetik titresimi tetigin her cekilisinde bir kez
             // verilir; auto'da parmak basili dururken kumandayi surekli titretmemek icin.
@@ -480,6 +484,7 @@ namespace VRMultiplayer
         {
             if (p.Receive.SenderClientId != _grab.HolderClientId) return; // only the holder fires
             if (dirs == null || dirs.Length == 0) return;
+            if (HolderIsDead()) { LogReject("olu oyuncu"); return; }
             // NaN/Infinity filtresi: "sqrMagnitude < 0.5" NaN'da FALSE doner (NaN karsilastirmasi
             // hep false) ve bozuk vektor tum istemcilerin FX'ine yayilirdi.
             if (!IsFinite(origin)) { LogReject("bozuk origin"); return; }
@@ -637,6 +642,34 @@ namespace VRMultiplayer
                 if (id != null) return id.Team.Value;
             }
             return 0;
+        }
+
+        /// <summary>Silahi tutan oyuncu OLU (ya da henuz dogum bolgesinde bekliyor) mu?
+        /// Olu oyuncu ates edememeli: hitbox'lari kapali oldugu icin kendisi vurulamazken
+        /// vurabilmek tek tarafli bir avantaj olurdu. Hem istemcide (his: tetik olu calisir)
+        /// hem sunucuda (otorite) sorulur.</summary>
+        bool HolderIsDead()
+        {
+            if (_grab == null || !_grab.IsHeld || NetworkManager == null) return false;
+            ulong holder = _grab.HolderClientId;
+
+            // ConnectedClients SUNUCUYA OZELDIR — istemcide okumak hata verir. Istemci tarafinda
+            // zaten yalnizca KENDI tetigimizi kapatiyoruz (his icin), o yuzden orada yerel
+            // oyuncu nesnesine bakilir; baskasinin silahini istemcide sorgulamaya gerek yok.
+            NetworkObject po = null;
+            if (IsServer)
+            {
+                if (NetworkManager.ConnectedClients.TryGetValue(holder, out var c))
+                    po = c.PlayerObject;
+            }
+            else if (NetworkManager.LocalClient != null && holder == NetworkManager.LocalClientId)
+            {
+                po = NetworkManager.LocalClient.PlayerObject;
+            }
+
+            if (po == null) return false;
+            var h = po.GetComponent<PlayerHealth>();
+            return h != null && h.IsDead;
         }
 
         [Rpc(SendTo.Everyone)]

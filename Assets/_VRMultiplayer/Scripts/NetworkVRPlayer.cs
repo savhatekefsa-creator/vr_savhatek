@@ -36,9 +36,6 @@ namespace VRMultiplayer
         [Tooltip("The humanoid avatar — shown to everyone, including you (first-person body).")]
         [SerializeField] GameObject remoteAvatar;
 
-        [Header("Spawn")]
-        [SerializeField] float spawnRingRadius = 0.9f;
-
         // Hand analog inputs, owner-written and replicated to everyone, so ProceduralFingerPoser
         // can curl each player's fingers on ALL clients. byte = 0..255 quantized grip/trigger;
         // one byte each, cheap. Owner writes directly (no RPC — the player owns this object).
@@ -77,8 +74,6 @@ namespace VRMultiplayer
             _srcLeft = rig.leftHand;
             _srcRight = rig.rightHand;
             _bound = _srcHead != null && head != null;
-
-            SpreadSpawn(rig);
         }
 
         void ApplyVisibility()
@@ -164,12 +159,11 @@ namespace VRMultiplayer
                 r.enabled = false;
         }
 
-        void SpreadSpawn(XRRigReference rig)
-        {
-            float angle = (OwnerClientId % 8) * 45f;
-            Vector3 offset = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * spawnRingRadius;
-            rig.transform.position += offset;
-        }
+        // SpreadSpawn KALDIRILDI: oyuncular ust uste dogmasin diye rig'i client id'ye gore bir
+        // cember uzerinde kaydiriyordu. Kolokasyonda bu YANLIS — rig'i koddan oynatmak sanal
+        // konumu fiziksel konumdan ayirir ve oyuncu gercek odada baskasinin icine yurur.
+        // Oyuncular artik <see cref="TeamSpawnZone"/> cemberine FIZIKSEL olarak yuruyerek
+        // girer; dagilimi gercek oda saglar.
 
         void LateUpdate()
         {
