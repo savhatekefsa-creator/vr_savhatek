@@ -39,6 +39,11 @@ namespace VRMultiplayer.Weapons
             foreach (var p in _prefabs)
             {
                 if (p == null || p.GetComponent<NetworkObject>() == null) continue;
+                // Unity'nin editor araci silah prefablarini DefaultNetworkPrefabs listesine
+                // kendiliginden ekleyebiliyor; o listede olan bir prefabi tekrar eklemek NGO'da
+                // kirmizi "duplicate GlobalObjectIdHash" hatasi bastiriyor (zararsiz ama her
+                // silah icin bir satir = gurultu seli). Zaten kayitliysa sessizce atla.
+                if (nm.NetworkConfig.Prefabs.Contains(p)) continue;
                 // AddNetworkPrefab throws if the same prefab/hash is already registered — harmless
                 // here (fresh scene reload = clean list), but guarded so one bad prefab can't abort
                 // the rest.
