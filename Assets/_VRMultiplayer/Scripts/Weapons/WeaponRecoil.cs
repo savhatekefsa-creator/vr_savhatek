@@ -26,7 +26,8 @@ namespace VRMultiplayer.Weapons
     public class WeaponRecoil : MonoBehaviour
     {
         GrabbableObject _grab;
-        WeaponGripProfile _profile;
+        WeaponGripProfile _profile;   // yalnizca GEOMETRI icin (kabza pivotu + namlu ekseni)
+        NetworkWeapon _weapon;        // kick SAYILARI buradan: canli config guncellemesi aninda yansir
 
         // Tepme MUTLAK bir durum olarak tutulur, transforma kare kare eklenmez: HandGrabber her
         // LateUpdate'te silahi el cipasindan yeniden yaziyor, biz de o temiz pozun uzerine ayni
@@ -39,26 +40,28 @@ namespace VRMultiplayer.Weapons
         // Yaw jitter tavani: sekme karakter katar, nisani kaybettirmez.
         const float MaxAccumYaw = 2f;
 
-        public void Init(GrabbableObject grab, WeaponGripProfile profile)
+        public void Init(GrabbableObject grab, WeaponGripProfile profile, NetworkWeapon weapon)
         {
             _grab = grab;
             _profile = profile;
+            _weapon = weapon;
         }
 
         /// <summary>Owner-side: bir atisin tepmesini birige ekle. Iki elli tutus hem tirmanisi
-        /// hem sekmeyi profildeki carpanla kisar.</summary>
+        /// hem sekmeyi config'teki carpanla kisar.</summary>
         public void AddKick()
         {
-            if (_profile == null || _grab == null) return;
+            if (_profile == null || _grab == null || _weapon == null) return;
+            var cv = _weapon.Combat;
 
             float mult = _grab.SupportHand != GrabbableObject.NoHand
-                ? _profile.supportRecoilMultiplier
+                ? cv.supportRecoilMultiplier
                 : 1f;
 
-            _pitch = Mathf.Min(_pitch + _profile.kickPitchPerShot * mult, _profile.maxAccumPitch);
-            _back = Mathf.Min(_back + _profile.kickBackMeters * mult, _profile.maxAccumBack);
+            _pitch = Mathf.Min(_pitch + cv.kickPitchPerShot * mult, cv.maxAccumPitch);
+            _back = Mathf.Min(_back + cv.kickBackMeters * mult, cv.maxAccumBack);
             _yaw = Mathf.Clamp(
-                _yaw + Random.Range(-_profile.kickYawJitter, _profile.kickYawJitter) * mult,
+                _yaw + Random.Range(-cv.kickYawJitter, cv.kickYawJitter) * mult,
                 -MaxAccumYaw, MaxAccumYaw);
         }
 
@@ -81,7 +84,8 @@ namespace VRMultiplayer.Weapons
                 return;
             }
 
-            float halfLife = _sustained ? _profile.recoilDecayHalfLife : _profile.recoilRestDecayHalfLife;
+            var cv = _weapon != null ? _weapon.Combat : default;
+            float halfLife = _sustained ? cv.recoilDecayHalfLife : cv.recoilRestDecayHalfLife;
             float k = Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, halfLife));
             _pitch *= k;
             _yaw *= k;

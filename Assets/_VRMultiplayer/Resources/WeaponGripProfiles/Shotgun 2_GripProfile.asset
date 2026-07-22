@@ -1,0 +1,93 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b37255edf5b63a8408ec2f907e179ba4, type: 3}
+  m_Name: Shotgun 2_GripProfile
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponGripProfile
+  weaponNameEquals: Shotgun 2
+  weaponNameContains: Shotgun 2
+  gripLocalPosition: {x: -0.0502, y: 0.0774, z: 0.2188}
+  gripLocalEuler: {x: 318.1182, y: 229.3647, z: 342.15662}
+  barrelLocalDirection: {x: 0, y: 0, z: -1}
+  combat: {fileID: 11400000, guid: 81bec12acdd6445f851c1c4ee359c59c, type: 2}
+  mainHand:
+    wristLocalPosition: {x: 0.0002, y: 0.0001, z: -0.0842}
+    wristLocalEuler: {x: 321.88983, y: 274.5239, z: 225.59193}
+    thumbCurl: 0
+    indexCurl: 0.55
+    middleCurl: 0.75
+    ringCurl: 0.8
+    pinkyCurl: 0.85
+    indexFollowsTrigger: 1
+    indexTriggerMaxCurl: 1
+    rightFingers:
+      joints: []
+      indexPulled: []
+    leftFingers:
+      joints: []
+      indexPulled: []
+  supportRailLocalStart: {x: 0.0419, y: 0.0056, z: -0.1028}
+  supportRailLocalEnd: {x: 0.0419, y: 0.0056, z: -0.1028}
+  supportBreakDistance: 0.3
+  supportHand:
+    wristLocalPosition: {x: 0.048247546, y: 0.06872089, z: -0.014447891}
+    wristLocalEuler: {x: 328.4376, y: 276.174, z: 226.67264}
+    thumbCurl: 0
+    indexCurl: 0.55
+    middleCurl: 0.75
+    ringCurl: 0.8
+    pinkyCurl: 0.85
+    indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 1
+    rightFingers:
+      joints: []
+      indexPulled: []
+    leftFingers:
+      joints: []
+      indexPulled: []
+  aimDeadzoneDegrees: 0.75
+  aimSoftKneeDegrees: 1.5
+  aimHalfLifeMs: 45
+  overrideFire: 0
+  fireInterval: 0.18
+  range: 60
+  createMuzzleIfMissing: 0
+  muzzleLocalPosition: {x: 0, y: 0, z: 0}
+  fireMode: 0
+  kickPitchPerShot: 0
+  kickYawJitter: 0
+  kickBackMeters: 0
+  maxAccumPitch: 8
+  maxAccumBack: 0.04
+  recoilDecayHalfLife: 0.12
+  recoilRestDecayHalfLife: 0.07
+  supportRecoilMultiplier: 0.55
+  spreadBase: 0
+  spreadPerShot: 0
+  spreadMax: 3
+  spreadDecayHalfLife: 0.18
+  tracerColor: {r: 1, g: 0.45, b: 0.12, a: 1}
+  tracerSpeed: 260
+  tracerLength: 2.5
+  tracerWidth: 0.03
+  flashDuration: 0.035
+  impactColor: {r: 0.03, g: 0.03, b: 0.04, a: 1}
+  impactSize: 0.022
+  hapticAmplitude: 0.7
+  hapticDuration: 0.08
+  supportHapticAmplitude: 0.35
+  magazineSize: 10
+  spareMagazines: -1
+  reloadDuration: 1.4
+  reloadFlickSpeed: 1.3
+  reloadFlickTravel: 0.25
+  reloadFlickWindow: 0.8
+  simpleColliders: []

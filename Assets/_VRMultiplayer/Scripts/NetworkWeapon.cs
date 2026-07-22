@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.XR;
+using VRMultiplayer.Audio;
 using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer
@@ -30,10 +32,48 @@ namespace VRMultiplayer
         Vector3 _muzzleLocal;
         Vector3 _barrelLocal = Vector3.forward;
         float _nextFire;
-        float _srvNextFire;
         float _lastFire = float.NegativeInfinity;
+
+        // Burst kuyrugu (yalnizca tutan istemcide): tetik cekilince baslar, tetik birakilsa da
+        // tamamlanir; silah birakilir/mermi biter/dolum baslarsa iptal olur.
+        int _burstRemaining;
+        float _burstNextAt;
+        XRNode _burstNode = XRNode.RightHand;
+
+        // Sunucu kadans zorlamasi: TOKEN BUCKET (fixed-window degil — pencere sinirinda 2x
+        // patlama acigi olmasin). Kapasite Semi/Auto'da 1, Burst'te burstCount.
+        float _srvTokens = 1f;
+        float _srvLastRefill;
+        float _srvLastShot = float.NegativeInfinity;
+
+        // Sunucu ret sayaci: config-oncesi pencerede sessizce yenen atislar ve olasi kadans
+        // hileleri buradan gorunur (teshis + telemetri). Log seli olmasin diye 2 sn'de bir.
+        int _srvRejects;
+        float _srvNextRejectLog;
+
+        static bool IsFinite(Vector3 v)
+        {
+            float s = v.x + v.y + v.z;
+            return !float.IsNaN(s) && !float.IsInfinity(s);
+        }
+
+        void LogReject(string reason)
+        {
+            _srvRejects++;
+            if (Time.time < _srvNextRejectLog) return;
+            _srvNextRejectLog = Time.time + 2f;
+            Debug.Log($"[Silah] {name}: atis reddedildi ({reason}) — toplam ret {_srvRejects}");
+        }
         float _bloom;   // birikmis sapma (derece), owner-lokal
         bool _prevTrigger;
+
+        // Cozulmus savas degerleri — kaynak zinciri ResolveCombat()'ta. Kadans/menzil/sarjor/
+        // sacilim/tepme tuketiminin tamami buradan okur; config guncellemesi gelince yeniden
+        // cozulur, boylece canli ayar calisan silaha aninda yansir.
+        CombatValues _cv;
+
+        /// <summary>WeaponRecoil'un her kare okudugu anlik savas degerleri.</summary>
+        public CombatValues Combat => _cv;
 
         // Sarjor sayaci SILAHIN uzerinde durur, oyuncunun degil: silah el degistirse de, yere
         // atilsa da yarim sarjor onunla kalir ve iki silah birbirinden bagimsiz sayar — hicbiri
@@ -59,23 +99,24 @@ namespace VRMultiplayer
         public static System.Func<NetworkWeapon, bool> DevTriggerOverride;
 #endif
 
-        // Profilsiz silah = bugunku sabitler; her erisim profili varsa oradan okur.
-        bool IsAuto => _profile != null && _profile.fireMode == FireMode.Auto;
+        // Savas sayilari cozulmus degerlerden; FX/haptik profilde kalir (kozmetik).
+        bool IsAuto => _cv.fireMode == FireMode.Auto;
         float HapticAmplitude => _profile != null ? _profile.hapticAmplitude : 0.7f;
         float HapticDuration => _profile != null ? _profile.hapticDuration : 0.08f;
         float SupportHapticAmplitude => _profile != null ? _profile.supportHapticAmplitude : 0f;
 
-        /// <summary>Sarjor kapasitesi; 0 = bu silahta mermi HIC sayilmaz. Profilsiz silah da
-        /// buraya duser, yani bugunku sinirsiz davranis aynen korunur.</summary>
-        public int MagazineSize => _profile != null ? _profile.magazineSize : 0;
+        /// <summary>Sarjor kapasitesi; 0 = bu silahta mermi HIC sayilmaz. Profilsiz/configsiz
+        /// silah da buraya duser, yani bugunku sinirsiz davranis aynen korunur.</summary>
+        public int MagazineSize => _cv.magazineSize;
         public bool UsesAmmo => MagazineSize > 0;
         public int Ammo => _ammo.Value;
         public int SpareMagazines => _spares.Value;
         public bool IsReloading => _reloadDoneAt.Value > 0d;
-        float ReloadDuration => _profile != null ? _profile.reloadDuration : 1.4f;
+        float ReloadDuration => _cv.reloadDuration;
 
-        // Effects (created once, reused per shot)
-        LineRenderer _tracer;
+        // Effects: iz cizgileri havuzdan (pellet = ayni anda birden cok ucan iz), alev tek.
+        readonly List<LineRenderer> _tracers = new List<LineRenderer>();
+        Material _tracerMat;
         Light _flash;
 
         // Mermi izleri: silahin ALTINDA DEGIL, dunya kokunde duran bir havuz. Silahin cocugu
@@ -86,12 +127,20 @@ namespace VRMultiplayer
         Transform[] _decals;
         int _decalNext;
 
-        // Ucan ates izi: atis dunya uzayinda saklanir, her kare ilerletilir.
-        Vector3 _shotOrigin, _shotDir, _shotEnd, _shotNormal;
-        float _shotDist;
-        float _shotFiredAt;
-        bool _shotFlying;
-        bool _impactShown;
+        // Ucan ates izleri: her atis/pellet dunya uzayinda saklanir, her kare ilerletilir.
+        // Havuz MaxTracers ile sinirli — asilirsa en eski iz devrilir (pompali seri atis).
+        struct ShotFx
+        {
+            public Vector3 origin, dir, end, normal;
+            public float dist, firedAt;
+            public bool impactShown;
+        }
+        // Volley basina pellet tavani; iz havuzu ARDISIK volley'ler ust uste binebildigi icin
+        // (otomatik ates) bunun iki kati tutulur.
+        const int MaxPellets = 16;
+        const int MaxTracers = MaxPellets * 2;
+        readonly List<ShotFx> _flights = new List<ShotFx>();
+        bool _tracersOn;
         float _flashOffAt = -1f;
 
         Color TracerColor => _profile != null ? _profile.tracerColor : new Color(1f, 0.45f, 0.12f);
@@ -107,8 +156,71 @@ namespace VRMultiplayer
             _grab = GetComponent<GrabbableObject>();
             if (muzzle == null) muzzle = transform.Find("Muzzle");
             ApplyProfile();
+            ResolveCombat();
+            AttachRecoil();
             ComputeBarrel();
             CreateFx();
+        }
+
+        /// <summary>Savas degerlerini kaynak zincirinden cozer:
+        /// (1) agdan gelen sunucu kaydi (canli ayar) -> (2) yerel combat SO (sunucuda canli
+        /// kaynak, istemcide gomulu yedek) -> (3) eski profil alanlari -> (4) varsayilanlar.
+        /// Awake'te ve her config guncellemesinde cagrilir.</summary>
+        void ResolveCombat()
+        {
+            // Ag kaydi anahtari = profilin kanonik adi (HK416 gibi Equals'i bos profillerde
+            // Contains'e duser — config'in weaponName'i de ayni kuralla uretildi). PROFILSIZ
+            // silah GameObject adiyla dener: build'inde profil olmayan eski istemci bile
+            // sunucunun kadans/pellet degerlerini agdan alir (tutus gorselleri haric).
+            string netKey = _profile == null ? WeaponGripBinder.CleanName(name)
+                : !string.IsNullOrEmpty(_profile.weaponNameEquals) ? _profile.weaponNameEquals
+                : _profile.weaponNameContains;
+            if (!string.IsNullOrEmpty(netKey) && WeaponConfigRegistry.TryGet(netKey, out var netData))
+                _cv = CombatValues.FromData(netData);
+            else if (_profile != null && _profile.combat != null)
+                _cv = CombatValues.FromConfig(_profile.combat);
+            else if (_profile != null)
+                _cv = CombatValues.FromLegacyProfile(_profile, fireInterval, range);
+            else
+                _cv = CombatValues.Defaults(fireInterval, range);
+        }
+
+        // Canli ayar: yeni set uygulaninca (istemci) ya da sunucu yayin yapinca degerler
+        // yeniden cozulur; sonradan kick acilan silaha tepme bileseni de takilir. Devre
+        // disiyken kacirilan yayinlar icin enable aninda bir kez yeniden cozulur.
+        void OnEnable()
+        {
+            WeaponConfigRegistry.ConfigsUpdated += OnConfigsUpdated;
+            if (_grab != null) { ResolveCombat(); AttachRecoil(); }
+        }
+
+        void OnDisable() { WeaponConfigRegistry.ConfigsUpdated -= OnConfigsUpdated; }
+
+        void OnConfigsUpdated()
+        {
+            int prevMag = _cv.magazineSize;
+            ResolveCombat();
+            AttachRecoil();
+
+            // Canli ayarla mermi sistemi SONRADAN acilan silah olu dogmasin: spawn'da
+            // tohumlanmamis _ammo/_spares (0/0) "bos sarjor + yedek yok" kilidine dusuyordu.
+            if (IsServer && IsSpawned && prevMag <= 0 && _cv.magazineSize > 0)
+            {
+                _ammo.Value = _cv.magazineSize;
+                _spares.Value = _cv.spareMagazines;
+            }
+        }
+
+        // Tepme bileseni yalnizca degerler gercekten kick istiyorsa takilir (profil de sart:
+        // pivot/namlu geometrisi oradan gelir). Dokunulmamis silah LateUpdate maliyeti gormez.
+        // Canli ayarla kick sonradan acilirsa config guncellemesi bunu yeniden cagirir.
+        void AttachRecoil()
+        {
+            if (_profile == null || _recoil != null) return;
+            if (_cv.kickPitchPerShot == 0f && _cv.kickYawJitter == 0f && _cv.kickBackMeters == 0f)
+                return;
+            _recoil = gameObject.AddComponent<WeaponRecoil>();
+            _recoil.Init(_grab, _profile, this);
         }
 
         // Optional data-driven overrides from the same profile the grip system uses. Only the
@@ -120,27 +232,19 @@ namespace VRMultiplayer
             if (profile == null) return;
             _profile = profile;
 
-            if (profile.overrideFire)
-            {
-                fireInterval = profile.fireInterval;
-                range = profile.range;
-            }
-
             if (muzzle == null && profile.createMuzzleIfMissing)
             {
                 var m = new GameObject("Muzzle").transform;
                 m.SetParent(transform, false);
                 m.localPosition = profile.muzzleLocalPosition;
-                m.localRotation = Quaternion.identity; // +Z = barrel by convention
+                // Muzzle forward = profilin namlu ekseni. Identity (+Z) varsaymak, paketin
+                // -Z namlulu modellerinde ters yone bakan bir muzzle uretir.
+                Vector3 b = profile.barrelLocalDirection;
+                m.localRotation = b.sqrMagnitude > 1e-6f
+                    ? Quaternion.LookRotation(b.normalized,
+                        Mathf.Abs(b.normalized.y) > 0.9f ? Vector3.forward : Vector3.up)
+                    : Quaternion.identity;
                 muzzle = m;
-            }
-
-            // Tepme bileseni yalnizca profil gercekten kick istiyorsa takilir: dokunulmamis
-            // (sifir kick) bir profil hicbir sey almaz, LateUpdate maliyeti bile olusmaz.
-            if (profile.kickPitchPerShot != 0f || profile.kickYawJitter != 0f || profile.kickBackMeters != 0f)
-            {
-                _recoil = gameObject.AddComponent<WeaponRecoil>();
-                _recoil.Init(_grab, profile);
             }
         }
 
@@ -151,8 +255,27 @@ namespace VRMultiplayer
             if (IsServer && UsesAmmo)
             {
                 _ammo.Value = MagazineSize;
-                _spares.Value = _profile.spareMagazines;
+                _spares.Value = _cv.spareMagazines;
             }
+
+            // Dolum baslangic sesi RPC'siz: _reloadDoneAt 0'dan pozitife gecince HER istemcide
+            // duyulur (NetworkVariable degisimi zaten herkese replike).
+            _reloadDoneAt.OnValueChanged += OnReloadStateChanged;
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            _reloadDoneAt.OnValueChanged -= OnReloadStateChanged;
+            base.OnNetworkDespawn();
+        }
+
+        void OnReloadStateChanged(double prev, double now)
+        {
+            // 0 -> pozitif = dolum basladi. Pozitif -> 0 hem bitis hem iptal olabilir: bitis
+            // sesi ReloadDoneClientRpc'den gelir, iptal (silah birakildi) sessiz kalir.
+            if (prev <= 0d && now > 0d)
+                WeaponAudioPlayer.PlayAt(_cv.reloadStartClip, transform.position, _cv.reloadVolume,
+                    1f, 1f, _cv.soundMaxDistance, priority: true);
         }
 
         /// <summary>Sunucu: silahin mermi durumunu belirli bir degere kur. Silah secici bunu
@@ -164,7 +287,9 @@ namespace VRMultiplayer
         {
             if (!IsServer || !UsesAmmo) return;
             if (ammo >= 0) _ammo.Value = Mathf.Clamp(ammo, 0, MagazineSize);
-            if (spares >= -1 && _profile.spareMagazines >= 0) _spares.Value = spares; // -1 profil = sinirsiz, dokunma
+            // Yedek kaynagi artik cozulmus config (_cv) — profil null olabilir (config'li ama
+            // profilsiz silah) ve canli ayar da _cv'den akar. -1 (sinirsiz) ise dokunma.
+            if (spares >= -1 && _cv.spareMagazines >= 0) _spares.Value = spares;
         }
 
         void Update()
@@ -175,14 +300,22 @@ namespace VRMultiplayer
             // asagidaki "sadece tutan oyuncu" cikislarindan ONCE isletilmeli.
             if (IsSpawned && IsServer) TickReloadServer();
 
-            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; ResetFlick(); return; }
-            if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId) { ResetFlick(); return; }
+            if (!IsSpawned || _grab == null || !_grab.IsHeld) { _prevTrigger = false; _bloom = 0f; _burstRemaining = 0; ResetFlick(); return; }
+            if (NetworkManager == null || _grab.HolderClientId != NetworkManager.LocalClientId)
+            {
+                // Elden-ele geciste (birak+kap ayni tick'e sigarsa !IsHeld karesi hic gorunmez)
+                // eski tutanin burst kuyrugu/bloom'u hayalet atis uretmesin.
+                _burstRemaining = 0;
+                _bloom = 0f;
+                ResetFlick();
+                return;
+            }
 
             TickReloadGesture();
 
             // Ates kesilince koni daralir.
-            if (_profile != null && _bloom > 0f)
-                _bloom *= Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, _profile.spreadDecayHalfLife));
+            if (_bloom > 0f)
+                _bloom *= Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, _cv.spreadDecayHalfLife));
 
             // EITHER controller's trigger fires while you hold the weapon — grip hand or
             // support hand, so two-handed players can use their front-hand trigger too.
@@ -201,7 +334,9 @@ namespace VRMultiplayer
 #endif
 
             // Semi: her atis tetigin yeniden cekilmesini ister. Auto: basili tutuldukca tarar.
+            // Burst: tetik cekilisi bir kuyrugu baslatir (asagida); kuyruk bitmeden yenisi baslamaz.
             bool wantsFire = IsAuto ? trig : (trig && !_prevTrigger);
+            if (_burstRemaining > 0) wantsFire = false;
 
             // Bos sarjor / dolum sirasinda tetik. Buradaki kontrol YALNIZCA his icindir —
             // otorite FireServerRpc'de. Kuru tetik titresimi tetigin her cekilisinde bir kez
@@ -218,15 +353,40 @@ namespace VRMultiplayer
                 // Kadans kareye degil saate baglanir: taramada frame quantization birikip
                 // atis hizini dusurmez. Uzun aradan sonra ise tam bir aralik beklenir —
                 // yoksa geride kalmis _nextFire bir sonraki karede bedava ikinci atis verir.
-                _nextFire += fireInterval;
-                if (_nextFire < Time.time) _nextFire = Time.time + fireInterval;
+                _nextFire += _cv.fireInterval;
+                if (_nextFire < Time.time) _nextFire = Time.time + _cv.fireInterval;
                 Fire(firedDev, firedNode);
+
+                if (_cv.fireMode == FireMode.Burst && _cv.burstCount > 1)
+                {
+                    _burstRemaining = _cv.burstCount - 1;
+                    _burstNextAt = Time.time + _cv.burstShotInterval;
+                    _burstNode = firedNode;
+                }
+            }
+
+            // Kuyruktaki burst atislari: tetik birakilsa da tamamlanir; mermi biterse ya da
+            // dolum baslarsa SESSIZCE iptal (her atis icin ayri kuru-tetik tiklamasi olmasin).
+            if (_burstRemaining > 0 && Time.time >= _burstNextAt)
+            {
+                if (UsesAmmo && (_ammo.Value <= 0 || IsReloading))
+                    _burstRemaining = 0;
+                else
+                {
+                    _burstRemaining--;
+                    _burstNextAt = Time.time + _cv.burstShotInterval;
+                    Fire(InputDevices.GetDeviceAtXRNode(_burstNode), _burstNode);
+                    // Sunucu min-gap'i SON atistan olcer; istemci de yeni burst'u son atistan
+                    // en az bir burst-ici aralik sonra baslatsin ki mesru atis reddedilmesin.
+                    if (_burstRemaining == 0)
+                        _nextFire = Mathf.Max(_nextFire, Time.time + _cv.burstShotInterval);
+                }
             }
             _prevTrigger = trig;
 
             // Tarama sonerken tepme yavas dinsin, tetik kesilince hizla toparlansin.
             if (_recoil != null)
-                _recoil.SetSustainedFire(trig && Time.time - _lastFire < fireInterval * 2f);
+                _recoil.SetSustainedFire(trig && Time.time - _lastFire < _cv.fireInterval * 2f);
         }
 
         void Fire(InputDevice firedDev, XRNode firedNode)
@@ -239,6 +399,17 @@ namespace VRMultiplayer
             {
                 origin = muzzle.position;   // precise barrel tip placed in the editor
                 dir = muzzle.forward;
+                // Profil namlu eksenini biliyorsa YON her zaman profilden gelir. Kurulum
+                // aracinin koydugu Muzzle profil ekseniyle CELISIYORSA (Smg 1: arac muzzle'i
+                // dipcik ucuna koyup -Z'ye dondurdu, gercek namlu +Z) o muzzle'a NOKTA olarak
+                // da guvenilmez — cikis noktasi ComputeBarrel'in profil-hizali ucundan gelir.
+                if (_profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f)
+                {
+                    Vector3 pdir = (transform.rotation * _profile.barrelLocalDirection).normalized;
+                    if (Vector3.Dot(dir, pdir) < 0f)
+                        origin = transform.TransformPoint(_muzzleLocal);
+                    dir = pdir;
+                }
             }
             else
             {
@@ -247,17 +418,27 @@ namespace VRMultiplayer
             }
 
             // Sacilim owner'da uygulanir ve RPC'ye SACILMIS yon girer: tracer, sunucu isabeti
-            // ve hasar hepsi ayni yonu paylasir, ayrica bir senkron gerekmez.
-            if (_profile != null)
-            {
-                float mult = _grab.SupportHand != GrabbableObject.NoHand
-                    ? _profile.supportRecoilMultiplier
-                    : 1f;
-                dir = ApplySpread(dir, Mathf.Min(_profile.spreadBase + _bloom, _profile.spreadMax));
-                _bloom = Mathf.Min(_bloom + _profile.spreadPerShot * mult, _profile.spreadMax);
-            }
+            // ve hasar hepsi ayni yonu paylasir, ayrica bir senkron gerekmez. (Configsiz silahta
+            // spreadBase/PerShot sifirdir — blok no-op, eski davranis birebir.)
+            float mult = _grab.SupportHand != GrabbableObject.NoHand
+                ? _cv.supportRecoilMultiplier
+                : 1f;
+            dir = ApplySpread(dir, Mathf.Min(_cv.spreadBase + _bloom, _cv.spreadMax));
+            _bloom = Mathf.Min(_bloom + _cv.spreadPerShot * mult, _cv.spreadMax);
 
-            FireServerRpc(origin, dir);
+            // Pellet: nisan-sacilimi TABAN yone bir kez uygulanir (yukarida), pelletler o
+            // tabanin etrafina kendi konileriyle sacilir. Tek pellet = eski tek-ray davranisi.
+            int pellets = Mathf.Clamp(_cv.pelletCount, 1, MaxPellets);
+            var dirs = new Vector3[pellets];
+            for (int i = 0; i < pellets; i++)
+                dirs[i] = pellets == 1 ? dir : ApplySpread(dir, _cv.pelletSpreadDegrees);
+
+            FireServerRpc(origin, dirs);
+
+            // Ates sesi OWNER'da ANINDA calar: sunucu gidis-donusunu bekleyen FX yolundan
+            // gelseydi tetik-ses gecikmesi VR'da hissedilirdi. Digerleri ShowVolley'de duyar.
+            WeaponAudioPlayer.PlayAt(_cv.fireClip, origin, _cv.fireVolume,
+                _cv.firePitchMin, _cv.firePitchMax, _cv.soundMaxDistance);
 
             // Yon YUKARIDA okundu: bu atis mevcut (onceki karenin tepmis) pozunu kullanir,
             // yeni kick bir sonraki atisi kaldirir.
@@ -309,37 +490,105 @@ namespace VRMultiplayer
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        void FireServerRpc(Vector3 origin, Vector3 dir, RpcParams p = default)
+        void FireServerRpc(Vector3 origin, Vector3[] dirs, RpcParams p = default)
         {
             if (p.Receive.SenderClientId != _grab.HolderClientId) return; // only the holder fires
-            if (dir.sqrMagnitude < 0.5f) return;
+            if (dirs == null || dirs.Length == 0) return;
+            // NaN/Infinity filtresi: "sqrMagnitude < 0.5" NaN'da FALSE doner (NaN karsilastirmasi
+            // hep false) ve bozuk vektor tum istemcilerin FX'ine yayilirdi.
+            if (!IsFinite(origin)) { LogReject("bozuk origin"); return; }
 
             // Mermi otoritesi burada: ele gecirilmis bir istemci istedigi kadar FireServerRpc
             // cagirsin, bos sarjorle ya da dolum ortasinda atis cikmaz. Istemcideki ayni
             // kontrol sadece hisdir, guvenlik degil.
-            if (UsesAmmo && (_ammo.Value <= 0 || IsReloading)) return;
+            if (UsesAmmo && (_ammo.Value <= 0 || IsReloading)) { LogReject("bos sarjor/dolum"); return; }
 
             // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
-            // FireServerRpc'yi her karede cagirsa da atis hizi profilin uzerine cikamaz.
-            // %15 tolerans, ag jitter'inda mesru atisin dusmesini onler.
-            if (Time.time < _srvNextFire) return;
-            _srvNextFire = Time.time + fireInterval * 0.85f;
+            // FireServerRpc'yi her karede cagirsa da uzun-vadeli atis hizi config'in uzerine
+            // cikamaz. TOKEN BUCKET: kapasite Semi/Auto'da 1 (eski davranisa birebir iner),
+            // Burst'te burstCount; burst ICI atislar arasina ayrica min-gap konur. %15
+            // tolerans ag jitter'inda mesru atisin dusmesini onler.
+            float now = Time.time;
+            float cap = _cv.fireMode == FireMode.Burst ? Mathf.Max(1, _cv.burstCount) : 1f;
+            float refill = cap / Mathf.Max(0.005f, _cv.fireInterval * 0.85f);
+            _srvTokens = Mathf.Min(cap, _srvTokens + (now - _srvLastRefill) * refill);
+            _srvLastRefill = now;
+            float minGap = _cv.fireMode == FireMode.Burst ? _cv.burstShotInterval * 0.85f : 0f;
+            if (_srvTokens < 1f || now - _srvLastShot < minGap) { LogReject("kadans"); return; }
+            _srvTokens -= 1f;
+            _srvLastShot = now;
 
-            // Kadans kapisini gectik = atis GERCEKTEN cikiyor; mermi tam burada duser.
+            // Kadans kapisini gectik = atis GERCEKTEN cikiyor; mermi tetik basina BIR duser
+            // (pellet sayisi kac olursa olsun).
             if (UsesAmmo) _ammo.Value--;
 
-            dir.Normalize();
-
-            // Authoritative hit: nearest thing the ray touches that is neither the weapon nor
-            // the shooter's own body. Player hitboxes are triggers, so include triggers.
+            // Pellet sayisi GERCEKTEN sunucu-otoriter: fazla yon KIRPILIR (500-yon saldirisi
+            // imkansiz), EKSIK yon SUNUCUDA tamamlanir — bayat config'li istemci tek yon
+            // gonderse bile sacma sayisi configteki kadar cikar (canli pellet ayari yeni
+            // kulaklik build'i istemez; FX yayini herkese 7 izi birlikte tasir).
+            int pellets = Mathf.Clamp(_cv.pelletCount, 1, MaxPellets);
+            if (dirs.Length < pellets)
+            {
+                Vector3 baseDir = Vector3.zero;
+                foreach (var d0 in dirs)
+                    if (IsFinite(d0) && d0.sqrMagnitude >= 0.5f) { baseDir = d0.normalized; break; }
+                if (baseDir == Vector3.zero)
+                    baseDir = (transform.rotation * _barrelLocal).normalized;
+                var padded = new Vector3[pellets];
+                for (int i = 0; i < pellets; i++)
+                    padded[i] = i < dirs.Length ? dirs[i] : ApplySpread(baseDir, _cv.pelletSpreadDegrees);
+                dirs = padded;
+            }
             ulong shooter = _grab.HolderClientId;
             byte shooterTeam = TeamOf(shooter);
 
-            Vector3 end = origin + dir * range;
+            // GOZLEM (simdilik LOG-ONLY): origin sunucudaki namlu ucundan cok uzaksa ya da yon
+            // sunucudaki namlu ekseninden cok sapmissa kaydet. VR bilek flikleri +
+            // ClientNetworkTransform gecikmesi MESRU sapma uretir — esikler once Quest verisiyle
+            // olculur, ret kapisina ancak ondan sonra cevrilir.
+            {
+                Vector3 srvOrigin = muzzle != null ? muzzle.position : transform.TransformPoint(_muzzleLocal);
+                Vector3 srvBarrelLocal = _profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f
+                    ? _profile.barrelLocalDirection.normalized
+                    : _barrelLocal;
+                Vector3 srvBarrel = (transform.rotation * srvBarrelLocal).normalized;
+                Vector3 obsDir = dirs[0].sqrMagnitude > 0.5f ? dirs[0].normalized : srvBarrel;
+                float originDist = Vector3.Distance(origin, srvOrigin);
+                float aimDelta = Vector3.Angle(srvBarrel, obsDir);
+                if (originDist > 0.5f || aimDelta > _cv.spreadMax + _cv.pelletSpreadDegrees + 25f)
+                    Debug.Log($"[Silah][gozlem] {name}: origin sapmasi {originDist:0.00}m, aci sapmasi {aimDelta:0.0} derece (holder {shooter})");
+            }
+
+            var ends = new Vector3[pellets];
+            var normals = new Vector3[pellets];
+            int hitboxesSeen = 0;
+            for (int i = 0; i < pellets; i++)
+            {
+                Vector3 dir = dirs[i];
+                if (!IsFinite(dir) || dir.sqrMagnitude < 0.5f) { ends[i] = origin; continue; }
+                dir.Normalize();
+                hitboxesSeen += RaycastOne(origin, dir, shooter, shooterTeam,
+                    out ends[i], out normals[i]);
+            }
+
+            if (hitboxesSeen == 0)
+                Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi ({pellets} pellet).");
+
+            FireFxClientRpc(origin, ends, normals);
+        }
+
+        /// <summary>Tek bir rayin otoriter isabet cozumu (pellet basina bir kez cagrilir).
+        /// Donus: bu rayin gordugu dusman hitbox sayisi (teshis logu icin). Hasar pellet
+        /// basina pelletDamageScale ile carpilir — pompalida tanesi zayif, hepsi birden olumcul.</summary>
+        int RaycastOne(Vector3 origin, Vector3 dir, ulong shooter, byte shooterTeam,
+            out Vector3 end, out Vector3 hitNormal)
+        {
+            end = origin + dir * _cv.range;
             // Sifir = mermi izi birakma. YALNIZCA sabit geometri normal doner: hareketli bir
             // oyuncuya dunya-uzayi izi cakarsak oyuncu yurudugunde iz havada asili kalirdi.
-            Vector3 hitNormal = Vector3.zero;
-            var hits = Physics.RaycastAll(origin + dir * 0.03f, dir, range,
+            hitNormal = Vector3.zero;
+
+            var hits = Physics.RaycastAll(origin + dir * 0.03f, dir, _cv.range,
                 Physics.AllLayers, QueryTriggerInteraction.Collide);
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
 
@@ -349,9 +598,7 @@ namespace VRMultiplayer
                 if (h.collider.transform.IsChildOf(transform)) continue; // own weapon
 
                 // Regional damage: the ray hits a HitZone (head/torso/arm/leg); the per-region
-                // amount is looked up in CombatConfig. GetComponentInParent reaches the zone whether
-                // the collider carries it directly or on a child. The amount is resolved on the
-                // SERVER (clients can't send damage values — security).
+                // amount is resolved on the SERVER (clients can't send damage values — security).
                 var zone = h.collider.GetComponentInParent<HitZone>();
                 if (zone != null && zone.health != null)
                 {
@@ -365,7 +612,7 @@ namespace VRMultiplayer
                         Debug.Log($"[Silah] Isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {health.OwnerClientId}");
                         end = h.point; break; // block, no damage (friendly fire off)
                     }
-                    int dmg = CombatConfig.Instance.DamageFor(zone.zoneType);
+                    int dmg = Mathf.Max(1, Mathf.RoundToInt(DamageFor(zone.zoneType) * _cv.pelletDamageScale));
                     Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {health.OwnerClientId} (takim {t}), bolge {zone.zoneName}, {dmg} hasar. Kalan: {Mathf.Max(0, health.Health.Value - dmg)}");
                     health.ServerApplyDamage(dmg, shooter);
                     end = h.point; break;
@@ -375,11 +622,23 @@ namespace VRMultiplayer
                 hitNormal = h.normal;
                 break;
             }
+            return hitboxesSeen;
+        }
 
-            if (hitboxesSeen == 0)
-                Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi. Toplam collider: {hits.Length}. Ilk carpan: {(hits.Length > 0 ? hits[0].collider.name : "hicbir sey")}");
-
-            FireFxClientRpc(origin, end, hitNormal);
+        /// <summary>Bolge hasari, SILAH-basina: config alani doluysa (>0) o deger, degilse
+        /// CombatConfig'in global bolge varsayilani. Fallback ALAN-BASINA bilincli — yalnizca
+        /// kafa hasari doldurulmus bir config diger bolgeleri sifirlamasin. Sunucuda cozulur.</summary>
+        int DamageFor(ZoneType zone)
+        {
+            int global = CombatConfig.Instance.DamageFor(zone);
+            switch (zone)
+            {
+                case ZoneType.Head:  return _cv.headDamage  > 0 ? _cv.headDamage  : global;
+                case ZoneType.Torso: return _cv.torsoDamage > 0 ? _cv.torsoDamage : global;
+                case ZoneType.Arm:   return _cv.armDamage   > 0 ? _cv.armDamage   : global;
+                case ZoneType.Leg:   return _cv.legDamage   > 0 ? _cv.legDamage   : global;
+                default:             return global;
+            }
         }
 
         byte TeamOf(ulong clientId)
@@ -395,9 +654,9 @@ namespace VRMultiplayer
         }
 
         [Rpc(SendTo.Everyone)]
-        void FireFxClientRpc(Vector3 origin, Vector3 end, Vector3 hitNormal)
+        void FireFxClientRpc(Vector3 origin, Vector3[] ends, Vector3[] normals)
         {
-            ShowShot(origin, end, hitNormal);
+            ShowVolley(origin, ends, normals);
         }
 
         // ------------------------------------------------------------- sarjor
@@ -435,6 +694,10 @@ namespace VRMultiplayer
         [Rpc(SendTo.Everyone)]
         void ReloadDoneClientRpc()
         {
+            // Dolum bitis sesi HERKESTE (tutan filtresinden ONCE); titresim yalniz tutana.
+            WeaponAudioPlayer.PlayAt(_cv.reloadEndClip, transform.position, _cv.reloadVolume,
+                1f, 1f, _cv.soundMaxDistance, priority: true);
+
             if (NetworkManager == null || _grab == null || !_grab.IsHeld) return;
             if (_grab.HolderClientId != NetworkManager.LocalClientId) return;
             Buzz(_grab.HolderHand == 0 ? XRNode.LeftHand : XRNode.RightHand, 0.75f, 0.09f);
@@ -510,11 +773,14 @@ namespace VRMultiplayer
             _flickPrevY = transform.position.y;
         }
 
-        // Ses varligi yok; kuru tetik yalnizca titresimle bildirilir. Atis titresiminden
-        // belirgin sekilde kisa ve zayif — "atesledim" sanilmasin diye.
-        static void DryFire(InputDevice dev)
+        // Kuru tetik: kisa/zayif titresim + (varsa) bos-tetik sesi. v1'de yalniz TUTAN duyar —
+        // bos tetik tutanin geri bildirimidir, RPC maliyeti gerektirmez.
+        void DryFire(InputDevice dev)
         {
             if (dev.isValid) dev.SendHapticImpulse(0, 0.25f, 0.03f);
+            Vector3 pos = muzzle != null ? muzzle.position : transform.position;
+            WeaponAudioPlayer.PlayAt(_cv.dryFireClip, pos, _cv.dryFireVolume,
+                1f, 1f, _cv.soundMaxDistance);
         }
 
         static void Buzz(XRNode node, float amplitude, float duration)
@@ -550,6 +816,20 @@ namespace VRMultiplayer
             float sign = Mathf.Sign(Vector3.Dot(mb.center, axis));
             if (sign == 0f) sign = 1f;
 
+            // Profil namlu eksenini soyluyorsa tahmin ONUNLA hizalanir: eksen, profil yonune
+            // en yakin ana eksene, isaret de profil isaretine cekilir. "Kutle tarafi = namlu"
+            // varsayimi, kutlesi dipcik/govdede toplanan modellerde (SMG gibi) ters secebiliyor.
+            if (_profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f)
+            {
+                Vector3 axisMesh = Quaternion.Inverse(biggest.transform.rotation)
+                    * (transform.rotation * _profile.barrelLocalDirection.normalized);
+                axis = Vector3.right; extent = mb.extents.x; float a = Mathf.Abs(axisMesh.x);
+                if (Mathf.Abs(axisMesh.y) > a) { axis = Vector3.up; extent = mb.extents.y; a = Mathf.Abs(axisMesh.y); }
+                if (Mathf.Abs(axisMesh.z) > a) { axis = Vector3.forward; extent = mb.extents.z; }
+                sign = Mathf.Sign(Vector3.Dot(axisMesh, axis));
+                if (sign == 0f) sign = 1f;
+            }
+
             Vector3 muzzleChild = mb.center + axis * (sign * extent);
             _muzzleLocal = transform.InverseTransformPoint(biggest.transform.TransformPoint(muzzleChild));
             _barrelLocal = (Quaternion.Inverse(transform.rotation) * biggest.transform.rotation) * (axis * sign);
@@ -570,18 +850,11 @@ namespace VRMultiplayer
 
         void CreateFx()
         {
-            var tracerGo = new GameObject("Tracer");
-            tracerGo.transform.SetParent(transform, false);
-            _tracer = tracerGo.AddComponent<LineRenderer>();
-            _tracer.useWorldSpace = true;
-            _tracer.positionCount = 2;
-            _tracer.widthMultiplier = TracerWidth;
-            var mat = new Material(FindShaderSafe());
+            _tracerMat = new Material(FindShaderSafe());
             Color tc = TracerColor;
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tc);
-            else mat.color = tc;
-            _tracer.material = mat;
-            _tracer.enabled = false;
+            if (_tracerMat.HasProperty("_BaseColor")) _tracerMat.SetColor("_BaseColor", tc);
+            else _tracerMat.color = tc;
+            EnsureTracers(1); // ilk iz hazir; pellet gelirse havuz lazily buyur
 
             var flashGo = new GameObject("Muzzle Flash");
             flashGo.transform.SetParent(transform, false);
@@ -624,20 +897,56 @@ namespace VRMultiplayer
             base.OnDestroy();
         }
 
-        void ShowShot(Vector3 origin, Vector3 end, Vector3 hitNormal)
+        LineRenderer NewTracer()
         {
-            _shotOrigin = origin;
-            _shotEnd = end;
-            _shotNormal = hitNormal;
-            Vector3 d = end - origin;
-            _shotDist = d.magnitude;
-            _shotDir = _shotDist > 1e-4f ? d / _shotDist : transform.forward;
-            _shotFiredAt = Time.time;
-            _shotFlying = true;
-            _impactShown = false;
+            var go = new GameObject("Tracer");
+            go.transform.SetParent(transform, false);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.positionCount = 2;
+            lr.widthMultiplier = TracerWidth;
+            lr.material = _tracerMat;
+            lr.enabled = false;
+            return lr;
+        }
 
-            // Namlu alevi silahin cocugu: dunya noktasi bir kez yazilir, sonra silahla birlikte
-            // hareket eder — namludan ayrilmaz.
+        void EnsureTracers(int n)
+        {
+            n = Mathf.Min(n, MaxTracers);
+            while (_tracers.Count < n) _tracers.Add(NewTracer());
+        }
+
+        void ShowVolley(Vector3 origin, Vector3[] ends, Vector3[] normals)
+        {
+            if (ends == null || ends.Length == 0) return;
+
+            for (int i = 0; i < ends.Length; i++)
+            {
+                Vector3 d = ends[i] - origin;
+                float dist = d.magnitude;
+                var f = new ShotFx
+                {
+                    origin = origin,
+                    end = ends[i],
+                    normal = normals != null && i < normals.Length ? normals[i] : Vector3.zero,
+                    dir = dist > 1e-4f ? d / dist : transform.forward,
+                    dist = dist,
+                    firedAt = Time.time,
+                };
+                if (_flights.Count >= MaxTracers) _flights.RemoveAt(0);
+                _flights.Add(f);
+            }
+
+            // Ates sesi: tutan oyuncu KENDI atisini Fire()'da anında duydu — burada yalnizca
+            // DIGERLERI duyar (cift ses olmasin). Pellet sayisi kac olursa olsun TEK ses.
+            bool localHolderHere = _grab != null && _grab.IsHeld && NetworkManager != null &&
+                _grab.HolderClientId == NetworkManager.LocalClientId;
+            if (!localHolderHere)
+                WeaponAudioPlayer.PlayAt(_cv.fireClip, origin, _cv.fireVolume,
+                    _cv.firePitchMin, _cv.firePitchMax, _cv.soundMaxDistance);
+
+            // Namlu alevi: pellet sayisi kac olursa olsun TEK parlama. Alev silahin cocugu:
+            // dunya noktasi bir kez yazilir, sonra silahla birlikte hareket eder.
             if (_flash != null)
             {
                 _flash.transform.position = origin;
@@ -648,8 +957,9 @@ namespace VRMultiplayer
             UpdateFx(); // ilk kareyi hemen ciz: bir kare gecikmeyle baslamasin
         }
 
-        // Izi namludan hedefe dogru UCURUR. Eskiden tam boy cizgi aninda cizilip 70 ms duruyordu:
-        // silahi cevirirken donuk cizgi namludan kopuk kaliyor ve atis sapmis gibi gorunuyordu.
+        // Izleri namludan hedefe dogru UCURUR (pellet basina bir iz). Eskiden tam boy cizgi
+        // aninda cizilip 70 ms duruyordu: silahi cevirirken donuk cizgi namludan kopuk kaliyor
+        // ve atis sapmis gibi gorunuyordu.
         void UpdateFx()
         {
             if (_flashOffAt > 0f && Time.time > _flashOffAt)
@@ -658,58 +968,79 @@ namespace VRMultiplayer
                 if (_flash != null) _flash.enabled = false;
             }
 
-            if (!_shotFlying) return;
+            if (_flights.Count == 0)
+            {
+                if (_tracersOn)
+                {
+                    for (int i = 0; i < _tracers.Count; i++) _tracers[i].enabled = false;
+                    _tracersOn = false;
+                }
+                return;
+            }
+            _tracersOn = true;
 
             float speed = TracerSpeed;
-            if (speed <= 0f)
+            float len = Mathf.Max(0.1f, TracerLength);
+
+            // GECIS 1 — ilerlet/temizle: biten ucuslar listeden cikar, varista kivilcim.
+            for (int i = _flights.Count - 1; i >= 0; i--)
             {
-                // Hiz 0 = eski davranis: aninda tam boy cizgi.
-                if (_tracer != null)
+                var f = _flights[i];
+                bool done;
+                if (speed <= 0f)
                 {
-                    _tracer.SetPosition(0, _shotOrigin);
-                    _tracer.SetPosition(1, _shotEnd);
-                    _tracer.enabled = true;
+                    // Hiz 0 = eski davranis: aninda tam boy cizgi, ~70 ms sonra soner.
+                    if (!f.impactShown) { ShowImpact(f.end, f.normal); f.impactShown = true; }
+                    done = Time.time - f.firedAt > 0.07f;
                 }
-                ShowImpact();
-                if (Time.time - _shotFiredAt > 0.07f)
+                else
                 {
-                    _shotFlying = false;
-                    if (_tracer != null) _tracer.enabled = false;
+                    float travelled = (Time.time - f.firedAt) * speed;
+                    // Kivilcim izin ucu hedefe VARDIGINDA parlar, atisla ayni anda degil.
+                    if (travelled >= f.dist && !f.impactShown)
+                    {
+                        ShowImpact(f.end, f.normal);
+                        f.impactShown = true;
+                    }
+                    done = travelled - len >= f.dist;
                 }
-                return;
+                if (done) _flights.RemoveAt(i);
+                else _flights[i] = f;
             }
 
-            float travelled = (Time.time - _shotFiredAt) * speed;
-            float head = Mathf.Min(travelled, _shotDist);
-            float tail = Mathf.Max(0f, travelled - Mathf.Max(0.1f, TracerLength));
-
-            // Kivilcim izin ucu hedefe VARDIGINDA parlar, atisla ayni anda degil.
-            if (travelled >= _shotDist) ShowImpact();
-
-            if (tail >= _shotDist)
+            // GECIS 2 — ciz: kalan ucuslar temiz index eslesmesiyle havuza yazilir (silme
+            // sonrasi ayni karede cizim yapildigi icin 1-karelik iz kaymasi olmaz).
+            EnsureTracers(_flights.Count);
+            int drawn = Mathf.Min(_flights.Count, _tracers.Count);
+            for (int i = 0; i < drawn; i++)
             {
-                _shotFlying = false;
-                if (_tracer != null) _tracer.enabled = false;
-                return;
+                var f = _flights[i];
+                var t = _tracers[i];
+                if (speed <= 0f)
+                {
+                    t.SetPosition(0, f.origin);
+                    t.SetPosition(1, f.end);
+                }
+                else
+                {
+                    float travelled = (Time.time - f.firedAt) * speed;
+                    float head = Mathf.Min(travelled, f.dist);
+                    float tail = Mathf.Max(0f, travelled - len);
+                    t.SetPosition(0, f.origin + f.dir * tail);
+                    t.SetPosition(1, f.origin + f.dir * head);
+                }
+                t.enabled = true;
             }
-
-            if (_tracer != null)
-            {
-                _tracer.SetPosition(0, _shotOrigin + _shotDir * tail);
-                _tracer.SetPosition(1, _shotOrigin + _shotDir * head);
-                _tracer.enabled = true;
-            }
+            for (int i = drawn; i < _tracers.Count; i++)
+                _tracers[i].enabled = false;
         }
 
         // Carptigi yerde KALICI bir iz birakir. Havuzdaki en eski iz geri donusur.
-        void ShowImpact()
+        void ShowImpact(Vector3 end, Vector3 normal)
         {
-            if (_impactShown) return;
-            _impactShown = true;
-
             // Normal sifir = hicbir seye carpmadi ya da bir OYUNCUYA carpti: iz birakma.
             // Yuruyen bir oyuncuya cakilan dunya-uzayi izi havada asili kalirdi.
-            if (_decals == null || _shotNormal.sqrMagnitude < 0.5f) return;
+            if (_decals == null || normal.sqrMagnitude < 0.5f) return;
 
             var d = _decals[_decalNext];
             _decalNext = (_decalNext + 1) % _decals.Length;
@@ -717,8 +1048,8 @@ namespace VRMultiplayer
             // Silindirin ekseni LOKAL Y; onu yuzey normaline hizala. Olcek: mesh yaricapi 0.5
             // (yani cap = scale.x) ve yuksekligi 2 (yani kalinlik = 2 * scale.y).
             float s = ImpactSize;
-            d.SetPositionAndRotation(_shotEnd + _shotNormal * 0.001f,
-                Quaternion.FromToRotation(Vector3.up, _shotNormal));
+            d.SetPositionAndRotation(end + normal * 0.001f,
+                Quaternion.FromToRotation(Vector3.up, normal));
             d.localScale = new Vector3(s, 0.0015f, s); // kalinlik 3 mm: yuzeye gomulu dursun
             d.gameObject.SetActive(true);
         }

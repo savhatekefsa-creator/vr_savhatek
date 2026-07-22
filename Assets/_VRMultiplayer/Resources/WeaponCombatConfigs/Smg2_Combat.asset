@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 35cdd2b17db64d47899f6445c7f68e95, type: 3}
+  m_Name: Smg2_Combat
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponCombatConfig
+  weaponName: Smg 2
+  fireMode: 1
+  fireInterval: 0.07
+  burstCount: 3
+  burstShotInterval: 0.06
+  range: 60
+  pelletCount: 1
+  pelletSpreadDegrees: 0
+  pelletDamageScale: 1
+  headDamage: 10
+  torsoDamage: 5
+  armDamage: 3
+  legDamage: 3
+  magazineSize: 50
+  spareMagazines: -1
+  reloadDuration: 1.8
+  spreadBase: 0.15
+  spreadPerShot: 0.15
+  spreadMax: 2.5
+  spreadDecayHalfLife: 0.15
+  kickPitchPerShot: 1.3
+  kickYawJitter: 0.6
+  kickBackMeters: 0.008
+  maxAccumPitch: 7
+  maxAccumBack: 0.04
+  recoilDecayHalfLife: 0.15
+  recoilRestDecayHalfLife: 0.07
+  supportRecoilMultiplier: 0.55
+  fireClip: WeaponSounds/smg2_fire
+  dryFireClip: WeaponSounds/dry_generic
+  reloadStartClip: WeaponSounds/smg2_reload
+  reloadEndClip: 
+  fireVolume: 1
+  firePitchMin: 0.95
+  firePitchMax: 1.05
+  dryFireVolume: 0.6
+  reloadVolume: 0.8
+  soundMaxDistance: 120

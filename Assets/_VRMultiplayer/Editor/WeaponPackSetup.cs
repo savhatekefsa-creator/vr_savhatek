@@ -25,6 +25,10 @@ namespace VRMultiplayer.EditorTools
     /// freni) o parca once "MuzzleMesh" yapilir — yoksa NetworkWeapon/menu 16 onu namlu ucu
     /// sanip tasiyabilirdi.
     ///
+    /// Kabza ADLI mesh olmayan modellerde (ikinci paket stili: main_frame/stock/trigger — orn.
+    /// Rifle 3) cipa tetik parcasinin arka-altindan turetilir. Kablolanmis ama profilsiz kalmis
+    /// silahlar otomatik geciste yalnizca profilleri yazilarak tamamlanir (fizik ellenmez).
+    ///
     /// Otomatik: derleme sonrasi kablosuz paket silahi varsa BIR kez calisir (GrabbableObject
     /// varligi = o silah bitmis sayilir). Menu 35 ayni isi elle tetikler; menu 36 SECILI silahin
     /// profil degerlerini (kablolamaya dokunmadan) guncel geometriden yeniden yazar.
@@ -40,6 +44,7 @@ namespace VRMultiplayer.EditorTools
         static readonly string[] IgnorePatterns = { "bullet", "shell", "screw", "bolt", "groove" };
         static readonly string[] GripPatterns = { "grip", "handle" };
         static readonly string[] GripExclude = { "foregrip" };
+        static readonly string[] TriggerPatterns = { "trigger" };
         static readonly string[] FrontPatterns = { "muzzle", "nozzle", "barrel", "silencer", "suppressor" };
 
         // ------------------------------------------------------------------ giris noktalari
@@ -60,7 +65,7 @@ namespace VRMultiplayer.EditorTools
             }
 
             foreach (var gun in FindPackGuns())
-                if (gun.GetComponent<GrabbableObject>() == null) { RunAll(false); return; }
+                if (gun.GetComponent<GrabbableObject>() == null || !HasProfile(gun)) { RunAll(false); return; }
         }
 
         [MenuItem("Tools/VR Multiplayer/35. Paketteki TUM Silahlari Tutulabilir Yap")]
@@ -131,7 +136,16 @@ namespace VRMultiplayer.EditorTools
             var lines = new List<string>();
             foreach (var gun in guns)
             {
-                if (gun.GetComponent<GrabbableObject>() != null) { skipped++; continue; }
+                if (gun.GetComponent<GrabbableObject>() != null)
+                {
+                    // Kablolu ama profilsiz kalmis silah (orn. o gunku geciste kabza parcasi
+                    // bulunamamisti): yalnizca profili tamamla, fizik/kablolamaya dokunma.
+                    if (HasProfile(gun)) { skipped++; continue; }
+                    string fix = WriteProfileFor(gun, repositionMuzzle: false);
+                    lines.Add("  " + gun.name + ": profil tamamlandi — " + fix);
+                    done++;
+                    continue;
+                }
 
                 // NGO ic ice NetworkObject yasagi: ust zincirde NetworkObject varsa dokunma.
                 if (gun.transform.parent != null &&
@@ -273,6 +287,22 @@ namespace VRMultiplayer.EditorTools
                     (gMin.z + gMax.z) * 0.5f);
                 geo.anchorW = geo.frame * anchorF;
                 geo.gripFound = true;
+            }
+            else
+            {
+                // Ikinci paket stilinde kabza adli parca yok (main_frame/stock/trigger — orn.
+                // Rifle 3). Tetikten tur: kabza her silahta tetigin hemen arka-altidir; cerceve
+                // uzayinda (dunya metresi) 3 cm geri, 5 cm asagi kabza orta-ustune denk gelir.
+                MeshFilter trig = FindPart(root, TriggerPatterns, null);
+                if (trig != null)
+                {
+                    Quaternion invFrame = Quaternion.Inverse(geo.frame);
+                    Vector3 tMin, tMax;
+                    FrameExtents(trig, invFrame, out tMin, out tMax);
+                    Vector3 tc = (tMin + tMax) * 0.5f;
+                    geo.anchorW = geo.frame * new Vector3(tc.x, tc.y - 0.05f, tc.z - 0.03f);
+                    geo.gripFound = true;
+                }
             }
 
             geo.valid = true;
@@ -422,6 +452,18 @@ namespace VRMultiplayer.EditorTools
         }
 
         // ------------------------------------------------------------------ yardimcilar
+
+        /// <summary>Silahin adi (kopya eki atilmis) herhangi bir profille eslesiyor mu?</summary>
+        static bool HasProfile(GameObject gun)
+        {
+            string name = TrimCopySuffix(WeaponGripBinder.CleanName(gun.name));
+            foreach (var guid in AssetDatabase.FindAssets("t:WeaponGripProfile"))
+            {
+                var p = AssetDatabase.LoadAssetAtPath<WeaponGripProfile>(AssetDatabase.GUIDToAssetPath(guid));
+                if (p != null && p.MatchScore(name) > 0) return true;
+            }
+            return false;
+        }
 
         static WeaponGripProfile FindProfileAsset(string name)
         {

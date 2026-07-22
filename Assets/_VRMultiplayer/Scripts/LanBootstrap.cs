@@ -140,6 +140,12 @@ namespace VRMultiplayer
             // Clients learn the real port from the discovery reply, so drifting is harmless.
             ushort serverPort = FindFreePort(port);
             utp.SetConnectionData(ip, serverPort, "0.0.0.0"); // listen on all interfaces
+
+            // 60 Hz network tick (scene asset says 30): halves the carrier-pose send interval so
+            // remote heads/hands interpolate visibly smoother. Set in CODE on both the server and
+            // client paths so every peer agrees no matter what the serialized scene value is.
+            nm.NetworkConfig.TickRate = 60;
+
             if (!nm.StartServer())
             {
                 // Without this check the label used to claim the server was up while Netcode
@@ -213,6 +219,7 @@ namespace VRMultiplayer
             // leaked socket held it); the fixed default only covers the manual-IP fallback.
             ushort connectPort = hostPort != 0 ? hostPort : port;
             utp.SetConnectionData(ip, connectPort);
+            nm.NetworkConfig.TickRate = 60; // must match the server (see StartAsServer)
             nm.StartClient();
             _clientStarted = true;
             SetStatus("Baglaniliyor: " + ip + ":" + connectPort);

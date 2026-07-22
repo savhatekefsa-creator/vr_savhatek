@@ -1,0 +1,20 @@
+Silah sesleri — Snake's Authentic Gun Sounds tabanli gercek kayitlar (44.1kHz WAV).
+Isimlendirme: <silah>_fire (atis), <silah>_reload (dolum), ekstralar asagida.
+Hangi silah hangi klibi calar → Resources/WeaponCombatConfigs/<silah>_Combat.asset
+icindeki fireClip/dryFireClip/reloadStartClip/reloadEndClip alanlari belirler.
+
+Ortak:
+  dry_generic       : bos tetik klik'i (M9 slide-release kaydindan; tum silahlar paylasir)
+
+Dolum-sonu ekstralari (reloadEndClip):
+  rifle1_rack, pistol2_slide, sniper1_bolt, shotgun1_pump
+
+Kendi kaydi olmayan silahlar akrabasinin klibini paylasir (config yonlendirmesi,
+dosya kopyasi yok):
+  hk416    → rifle2 (ikisi de 5.56 AR platformu)
+  paintball→ pistol4 (susturuculu — marker "puf"una en yakin)
+  pistol   → pistol2 (M9 9mm)
+
+Klip yokken oyun HATA VERMEZ, ses sadece sessiz kalir.
+Import ayari: Force To Mono + Decompress On Load + ADPCM (kisa SFX icin dogru ayar).
+NOT: Resources klasorundeki HER dosya build'e girer — kullanilmayan klip koymayin.
