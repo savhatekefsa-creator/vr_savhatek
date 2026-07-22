@@ -42,8 +42,8 @@ MonoBehaviour:
   supportRecoilMultiplier: 0.55
   fireClip: WeaponSounds/rifle2_fire
   dryFireClip: WeaponSounds/dry_generic
-  reloadStartClip: WeaponSounds/reload_start_generic
-  reloadEndClip: WeaponSounds/reload_end_generic
+  reloadStartClip: WeaponSounds/rifle2_reload
+  reloadEndClip: 
   fireVolume: 1
   firePitchMin: 0.95
   firePitchMax: 1.05

@@ -42,8 +42,8 @@ MonoBehaviour:
   supportRecoilMultiplier: 0.5
   fireClip: WeaponSounds/shotgun1_fire
   dryFireClip: WeaponSounds/dry_generic
-  reloadStartClip: WeaponSounds/reload_start_generic
-  reloadEndClip: WeaponSounds/reload_end_generic
+  reloadStartClip: WeaponSounds/shotgun1_reload
+  reloadEndClip: WeaponSounds/shotgun1_pump
   fireVolume: 1
   firePitchMin: 0.95
   firePitchMax: 1.05
