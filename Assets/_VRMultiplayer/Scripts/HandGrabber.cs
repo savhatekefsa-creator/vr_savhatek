@@ -89,6 +89,104 @@ namespace VRMultiplayer
         public Transform LeftAnchor => leftHand;
         public Transform RightAnchor => rightHand;
 
+        // ─── Silah secici kancasi (VRMultiplayer.UI.WeaponSelectorUI) ────────────────────
+        // Galeriden secilen silah ele BURADAN girer. Yakinlik ile kapma yolu (TryGrab) hic
+        // degismedi — iki yol da ayni Adopt() govdesini kullanir.
+
+        /// <summary>Owner-side: trade <paramref name="current"/> (may be null) for a fresh instance
+        /// of <paramref name="prefab"/>. The old one is DESPAWNED — that is the "goes into the bag"
+        /// disappearance — and the server spawns the new one straight into this hand. Weapons are
+        /// unlimited at the rack, so a TYPE is all the bag needs to remember; no per-object
+        /// ownership bookkeeping is required.
+        ///
+        /// The caller passes <paramref name="current"/> rather than us reading a hand, because the
+        /// PC test harness carries weapons with this component switched off — the server's holder
+        /// value is the only truth both paths agree on. Silent no-op off-owner / unregistered
+        /// prefab.</summary>
+        public void RequestWeaponSwap(GrabbableObject current, GameObject prefab,
+                                      int ammo = -1, int spares = -1)
+        {
+            if (!IsOwner) return;
+
+            // prefab == null -> SADECE yok et (birakma: "cantaya girdi", yerine bir sey gelmez).
+            int idx = -1;
+            if (prefab != null)
+            {
+                var prefabs = WeaponPrefabRegistrar.Prefabs;
+                for (int i = 0; i < prefabs.Count; i++)
+                    if (prefabs[i] == prefab) { idx = i; break; }
+                if (idx < 0) return; // Resources/WeaponPrefabs disinda -> spawn edilemez
+            }
+
+            var h = _right ?? _left;
+            if (h == null) return;
+
+            // Let go LOCALLY first: Reconcile releases anything we hold that is in neither hand,
+            // and the swap round trip takes ~1 RTT. Dropping the reference also stops UpdateHand
+            // from posing a weapon that is about to be destroyed.
+            if (_left != null && _left.held == current) { _left.held = null; _left.grip = null; _left.confirmed = false; }
+            if (_right != null && _right.held == current) { _right.held = null; _right.grip = null; _right.confirmed = false; }
+            if (_left != null && _left.supporting == current) { _left.supporting = null; _left.supportGrip = null; }
+            if (_right != null && _right.supporting == current) { _right.supporting = null; _right.supportGrip = null; }
+
+            var oldRef = current != null && current.NetworkObject != null
+                ? new NetworkObjectReference(current.NetworkObject)
+                : default;
+            SwapWeaponServerRpc(oldRef, idx, h.index, ammo, spares);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void SwapWeaponServerRpc(NetworkObjectReference oldRef, int prefabIndex, byte hand,
+                                 int ammo, int spares, RpcParams p = default)
+        {
+            ulong sender = p.Receive.SenderClientId;
+
+            // Despawn the old one — but only if the sender really held it (never destroy someone
+            // else's weapon on a stale/forged reference).
+            if (oldRef.TryGet(out var oldNo) && oldNo != null && oldNo.IsSpawned)
+            {
+                var og = oldNo.GetComponent<GrabbableObject>();
+                if (og != null && og.HolderClientId == sender) oldNo.Despawn(true);
+            }
+
+            var prefabs = WeaponPrefabRegistrar.Prefabs;
+            if (prefabIndex < 0 || prefabIndex >= prefabs.Count) return;
+            var prefab = prefabs[prefabIndex];
+            if (prefab == null) return;
+
+            // Spawn at the requester's hand: these anchors are the networked hand carriers, so
+            // the server already knows where that player's palm is.
+            Transform anchor = hand == 1 ? rightHand : leftHand;
+            Vector3 pos = anchor != null ? anchor.position : transform.position + Vector3.up;
+
+            var go = Instantiate(prefab, pos, Quaternion.identity);
+            var no = go.GetComponent<NetworkObject>();
+            if (no == null) { Destroy(go); return; }
+            no.SpawnWithOwnership(sender);
+
+            // Silah cantaya kac mermiyle girdiyse o kadarla ciksin. Spawn'dan SONRA yaziyoruz:
+            // NetworkWeapon.OnNetworkSpawn sarjoru doldurur, biz onun uzerine gercek degeri
+            // koyariz. Yoksa galeriyi acip kapamak bedava sarjor olurdu.
+            var nw = go.GetComponent<NetworkWeapon>();
+            if (nw != null) nw.SetAmmoStateServer(ammo, spares);
+
+            EquipSpawnedRpc(new NetworkObjectReference(no), hand,
+                RpcTarget.Single(sender, RpcTargetUse.Temp));
+        }
+
+        [Rpc(SendTo.SpecifiedInParams)]
+        void EquipSpawnedRpc(NetworkObjectReference r, byte hand, RpcParams p)
+        {
+            if (!IsOwner) return;
+            if (!r.TryGet(out var no) || no == null) return;
+            var g = no.GetComponent<GrabbableObject>();
+            if (g == null) return;
+
+            var h = hand == 1 ? _right : _left;
+            if (h == null || h.held != null) return; // hand filled again mid-flight -> skip
+            Adopt(h, g);
+        }
+
         public override void OnNetworkSpawn()
         {
             if (!IsOwner) { enabled = false; return; }
@@ -368,30 +466,37 @@ namespace VRMultiplayer
                 if (d < bestDist) { bestDist = d; best = g; }
             }
             if (best == null) return;
+            Adopt(h, best);
+        }
 
-            h.held = best;
+        /// <summary>Take <paramref name="g"/> into this hand and ask the server for it. Split out
+        /// of <see cref="TryGrab"/> so the weapon selector can hand a weapon straight into the
+        /// palm (see <see cref="EquipFromInventory"/>) — proximity grabbing is unchanged.</summary>
+        void Adopt(HandState h, GrabbableObject g)
+        {
+            h.held = g;
             h.requestedAt = Time.time;
             h.confirmed = false;
             // Grab-moment lookup only (the binder attached WeaponGrip at spawn); a weapon
             // without a profile keeps the legacy pivot-snap path bit-for-bit.
-            h.grip = best.GetComponent<WeaponGrip>();
+            h.grip = g.GetComponent<WeaponGrip>();
             if (h.grip != null && h.grip.Profile == null) h.grip = null;
             h.aimDir = Vector3.zero;
-            h.blendUntil = 0f;
+            h.blendUntil = 0f;      // main'in pop duzeltmesi: kapma aninda blend durumunu sifirla
             h.legacyAiming = false;
-            if (best.snapToHand)
+            if (g.snapToHand)
             {
                 // Pull it into the palm, barrel aligned with where the controller points.
                 h.posOffset = Vector3.zero;
-                h.rotOffset = SnapRotOffset(best);
+                h.rotOffset = SnapRotOffset(g);
             }
             else
             {
                 // Keep the grab-moment pose (natural for rocks and props).
-                h.posOffset = h.anchor.InverseTransformPoint(best.transform.position);
-                h.rotOffset = Quaternion.Inverse(h.anchor.rotation) * best.transform.rotation;
+                h.posOffset = h.anchor.InverseTransformPoint(g.transform.position);
+                h.rotOffset = Quaternion.Inverse(h.anchor.rotation) * g.transform.rotation;
             }
-            best.RequestGrabServerRpc(h.index);
+            g.RequestGrabServerRpc(h.index);
         }
 
         void Release(HandState h)
@@ -422,7 +527,15 @@ namespace VRMultiplayer
             if (g.HolderClientId != NetworkManager.LocalClientId) return;
 
             if (profiled)
+            {
                 g.SetSupportHandOwner(GrabbableObject.NoHand); // clear while we still own it
+
+                // A released WEAPON vanishes — the "went into the bag" look; the selector gallery
+                // brings its type back on demand. Only profiled weapons: rocks and props (no grip
+                // profile) keep the throw-and-land behaviour bit-for-bit.
+                RequestWeaponSwap(g, null);
+                return;
+            }
 
             g.ApplyThrow(HandVelocity(h), Vector3.zero);
             g.ReleaseServerRpc();
