@@ -10,17 +10,19 @@ namespace VRMultiplayer.UI
 {
     /// <summary>
     /// Silah secici CARK (Pavlov tarzi radyal menu): 3 dilim = cantanin 3 yuvasi
-    /// (HEAVY ustte, PISTOLS sol-altta, GRENADES sag-altta), ortada CLOSE. Her dilimde o
-    /// yuvadaki silahin 3B onizlemesi durur; bos yuvanin dilimi soluk ve secilemez.
+    /// (HEAVY ustte, PISTOLS sol-altta, GRENADES sag-altta). Her dilimde o yuvadaki silahin
+    /// 3B onizlemesi durur; bos yuvanin dilimi soluk ve secilemez. Cark TAM KARSIDA acilir
+    /// (viewOffset) ve kafayla birlikte doner.
     ///
-    /// GIRIS — tik ac, goster, tik sec (ekip tasarimi):
+    /// GIRIS — it, goster, BIRAK (ekip tasarimi; onay tusu yok):
     ///  - GRIP BASILI TUTULUR. Cark yalnizca grip basiliyken yasar; birakirsan kapanir ve
     ///    silah cantaya gider (HandGrabber'in normal isi). Grip ORTA parmak, stick BASPARMAK.
     ///  - THUMBSTICK'E BAS (tik) -> cark acilir.
-    ///  - Stick'i dilime dogru TUT -> dilim vurgulanir (renk + onizleme buyur).
-    ///  - TEKRAR BAS -> gosterilen silah ele gelir, cark kapanir. Stick merkezdeyken
-    ///    basarsan hicbir sey secilmez, cark kapanir (ortadaki CLOSE).
-    ///  - PC (gozluksuz test): TAB = tik, oklar = yon (yukari/sol/sag), Enter = sec-kapat.
+    ///  - Stick'i dilime dogru TUT -> dilim vurgulanir (camgobegi + onizleme buyur).
+    ///  - Stick'i BIRAK (merkeze donsun) -> vurguladigin silah ELE GELIR, cark kapanir.
+    ///    Hic gostermeden birakirsan degisiklik olmaz — elindeki kalir; CLOSE butonu bu
+    ///    yuzden yok, "vazgec" dogal olarak var (cark kimseyi silahsiz birakamaz).
+    ///  - PC (gozluksuz test): TAB = ac, oklar = yon (yukari/sol/sag), Enter = sec-kapat.
     ///
     /// Dilim vurgusu stick YONUNDEN gelir (aci -> en yakin dilim) — kaydirma/adim yok,
     /// radyal menunun dogal hissi. Sag stick tamamen bos (snap turn kapali, yurume fiziksel).
@@ -37,8 +39,9 @@ namespace VRMultiplayer.UI
     {
         [Header("Cark yerlesimi (Play'de canli ayarlanir)")]
         [Tooltip("Carkin KAFAYA gore konumu (metre): x=saga, y=asagi/yukari, z=uzaklik. " +
-                 "Varsayilan sag-alt — goruşun ortasini kapatmaz, kafayla birlikte doner.")]
-        public Vector3 viewOffset = new Vector3(0.26f, -0.18f, 0.95f);
+                 "Ekip karari: TAM KARSIDA (0,0) — cark aciliyken zaten silah secmekle mesgulsun, " +
+                 "gorusu kapatmasi sorun degil. Kafayla birlikte doner.")]
+        public Vector3 viewOffset = new Vector3(0f, 0f, 0.95f);
         public float discRadius = 0.28f;
         public float centerRadius = 0.075f;
         [Tooltip("Dilimler arasi bosluk (derece) — Pavlov'daki gibi ayrik dursunlar.")]
@@ -57,7 +60,7 @@ namespace VRMultiplayer.UI
         public Vector3 previewExtraEuler = Vector3.zero;
 
         [Header("Giris")]
-        [Tooltip("Stick bu kadar itilmisse bir dilimi 'gosteriyor' sayilir; alti = merkez (CLOSE).")]
+        [Tooltip("Stick bu kadar itilmisse bir dilimi 'gosteriyor' sayilir; alti = gosterim yok (birakinca degisiklik olmaz).")]
         [Range(0.1f, 0.9f)] public float pointDeadzone = 0.4f;
 
         [Header("Renkler (Pavlov paleti)")]
@@ -65,15 +68,15 @@ namespace VRMultiplayer.UI
         public Color sliceSelectedColor = new Color(0.10f, 0.47f, 0.53f, 0.90f); // camgobegi vurgu
         public Color sliceEmptyColor = new Color(0.06f, 0.06f, 0.08f, 0.42f);
         public Color centerColor = new Color(0.03f, 0.03f, 0.04f, 0.88f);
-        public Color centerSelectedColor = new Color(0.10f, 0.47f, 0.53f, 0.92f);
         public Color labelEmptyColor = new Color(1f, 1f, 1f, 0.30f);
 
         // Dilim merkez acilari (derece; 0 = sag, saat yonu tersi). Index = WeaponCategory.
         static readonly float[] SliceAngle = { 90f, 210f, 330f };   // Heavy, Pistol, Grenade
         static readonly string[] SliceLabel = { "HEAVY", "PISTOLS", "GRENADES" };
 
-        int _selected = -1;          // -1 = merkez (CLOSE), 0..2 = dilim
+        int _selected = -1;          // -1 = gosterim yok, 0..2 = dilim
         bool _open;
+        bool _pointed;               // bu acilista stick en az bir kez dilime dogru itildi mi
         bool _clickPrev;
         UnityEngine.XR.InputDevice _rightHand;
 
@@ -84,7 +87,6 @@ namespace VRMultiplayer.UI
         Material[] _sliceMats;
         TextMesh[] _labels;
         Material _centerMat;
-        TextMesh _closeLabel;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
@@ -115,9 +117,9 @@ namespace VRMultiplayer.UI
                 if (kb.tabKey.wasPressedThisFrame) click = true;      // TAB = tik
                 if (_open)
                 {
-                    if (kb.upArrowKey.wasPressedThisFrame)    _selected = 0;
-                    if (kb.leftArrowKey.wasPressedThisFrame)  _selected = 1;
-                    if (kb.rightArrowKey.wasPressedThisFrame) _selected = 2;
+                    if (kb.upArrowKey.wasPressedThisFrame)    { _selected = 0; _pointed = true; }
+                    if (kb.leftArrowKey.wasPressedThisFrame)  { _selected = 1; _pointed = true; }
+                    if (kb.rightArrowKey.wasPressedThisFrame) { _selected = 2; _pointed = true; }
                     if (kb.enterKey.wasPressedThisFrame) click = true; // Enter = sec-kapat
                 }
             }
@@ -129,22 +131,32 @@ namespace VRMultiplayer.UI
                 return;
             }
 
-            // Stick yonu dilimi GOSTERIR (aci -> en yakin dilim). Merkezde = CLOSE.
-            if (stick.magnitude >= pointDeadzone)
+            // Stick yonu dilimi GOSTERIR (aci -> en yakin dilim) ve isaretler. Onay tusu YOK
+            // (ekip karari): stick MERKEZE DONUNCE gosterilen silah ele gelir — it, goster,
+            // birak. Hic gostermeden birakirsan degisiklik olmaz, elindeki kalir (cark kimseyi
+            // silahsiz birakmaz; CLOSE butonu bu yuzden kaldirildi, "vazgec" hala mumkun).
+            // ONEMLI: vurgu aninda DEGIL birakinca equip — yoksa stick gezerken ustunden
+            // gecilen her dilim aninda ele gelirdi (spam takas).
+            float mag = stick.magnitude;
+            if (mag >= pointDeadzone)
+            {
                 _selected = NearestSlice(stick);
-            else if (stick.magnitude > 0.05f)
-                _selected = -1; // stick merkeze dondu -> gosterim yok (klavye secimi bozulmasin)
+                _pointed = true;
+            }
 
             Layout();
 
-            if (click)
+            bool commit = click; // tik hala calisir (aliskanlik/yedek), ama sart degil
+            if (_pointed && mag < pointDeadzone * 0.6f) commit = true; // birakti -> onay (histerezis)
+
+            if (commit)
             {
-                if (_selected >= 0)
+                if (_pointed && _selected >= 0)
                 {
                     var e = inv.Slot((WeaponCategory)_selected);
                     if (e != null) Confirm(e);
                 }
-                SetOpen(false); // merkezdeyken tik = CLOSE (secimsiz kapat)
+                SetOpen(false);
             }
         }
 
@@ -164,7 +176,7 @@ namespace VRMultiplayer.UI
         {
             if (_open == open) return;
             _open = open;
-            if (open) { EnsureWheel(); _selected = -1; }
+            if (open) { EnsureWheel(); _selected = -1; _pointed = false; }
             if (_wheel != null) _wheel.gameObject.SetActive(open);
 
             // Onizlemeler envanterin mali — cark kapaninca hepsini sakla.
@@ -219,13 +231,6 @@ namespace VRMultiplayer.UI
                 e.Preview.transform.localScale = Vector3.one * previewScale * (sel ? selectedBoost : 1f);
             }
 
-            // Merkez (CLOSE) de "uzerine gelinebilir": stick merkezdeyken vurgulanir —
-            // simdi tiklarsan secmeden kapanacagini gorursun.
-            bool closeHover = _selected < 0;
-            if (_centerMat != null)
-                UITheme.SetMaterialColor(_centerMat, closeHover ? centerSelectedColor : centerColor);
-            if (_closeLabel != null)
-                _closeLabel.color = closeHover ? Color.white : labelEmptyColor;
         }
 
         /// <summary>Cark gorsellerini bir kez uretir: 3 dilim (prosedurel yay mesh'i), merkez
@@ -254,7 +259,8 @@ namespace VRMultiplayer.UI
                     AngleToPos(SliceAngle[i], labelRadius), labelSize, 3002);
             }
 
-            // Merkez: koyu daire + CLOSE yazisi (Pavlov'daki gibi; merkezdeyken tik = kapat).
+            // Merkez: sade koyu gobek (estetik). CLOSE butonu YOK — ekip karari: hicbir dilimi
+            // gostermeden birakmak zaten "vazgec" demek, elindeki silah aynen kalir.
             var center = new GameObject("Center");
             center.transform.SetParent(_wheel, false);
             center.AddComponent<MeshFilter>().sharedMesh = ArcMesh(0.001f, centerRadius, 0f, 360f, 48);
@@ -262,7 +268,6 @@ namespace VRMultiplayer.UI
             _centerMat = MakeOverlayMaterial(3001);
             UITheme.SetMaterialColor(_centerMat, centerColor);
             cmr.sharedMaterial = _centerMat;
-            _closeLabel = MakeLabel(_wheel, "CLOSE", Vector3.back * 0.01f, labelSize * 0.8f, 3002);
 
             _wheel.gameObject.SetActive(false);
         }
