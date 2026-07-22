@@ -5,11 +5,19 @@ using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer.UI
 {
+    /// <summary>Cantanin 3 yuvasi. Kategori SILAH ADINDAN turetilir (ekip karari: tabanca +
+    /// el bombasi + geri kalan her sey): adinda "Pistol" gecen tabanca, "Grenade" gecen bomba,
+    /// GERISI uzun namlulu. UzunNamlulu'nun varsayilan olmasi bilincli — yeni eklenen silah hicbir sey
+    /// yapilmadan uzun namlulu sayilir. Ileride isim yetmezse (orn. "Revolver") profil alanina tasinir.</summary>
+    public enum WeaponCategory { UzunNamlulu = 0, Tabanca = 1, Bomba = 2 }
+
     /// <summary>
-    /// Yerel silah envanteri: yerel oyuncunun bu oturumda TOPLADIGI her farkli silahi, alis
-    /// sirasiyla hatirlar. Her silah icin bir GORSEL onizleme kopyasi (mesh+materyal, script/
-    /// fizik/ag YOK) uretir — silah secici galerisi (<see cref="WeaponSelectorUI"/>) bunlari
-    /// gosterir.
+    /// Yerel silah envanteri: 3 YUVALI canta — uzun namlulu / tabanca / bomba (ekip karari: her
+    /// kategoriden EN FAZLA BIR silah tasinir). Ayni kategoriden yeni bir silah alinca
+    /// yuvadaki ESKISININ YERINE gecer; "bomba yerine dorduncu silah" zaten mumkun degil,
+    /// yuva sayisi sabit. Her silah icin GORSEL onizleme kopyasi (mesh+materyal, script/
+    /// fizik/ag YOK) uretilir — silah secici galerisi (<see cref="WeaponSelectorUI"/>)
+    /// yuvalari SABIT sirayla gosterir: uzun namlulu, tabanca, bomba.
     ///
     /// Tamamen YEREL (kendi goruntun), ag yok. Her ~0.3sn elde tuttugun grabbable'lari tarar,
     /// bu yuzden HandGrabber / GrabbableObject'e HIC dokunmaz (sadece public alanlari okur) ve
@@ -22,6 +30,7 @@ namespace VRMultiplayer.UI
         public class Entry
         {
             public string Key;         // tur anahtari (dedup + equip icin)
+            public WeaponCategory Category;
             public GameObject Preview;  // gorsel-only klon (galeride gosterilir), pasif baslar
             public GameObject Prefab;   // Resources/WeaponPrefabs'taki kalip; secilince BUNDAN
                                         // yeni bir tane uretilir. null = bu silah spawn edilemez
@@ -35,12 +44,37 @@ namespace VRMultiplayer.UI
             public int Spares = -1;  // -1 = dokunma (profilde sinirsiz olabilir)
         }
 
-        readonly List<Entry> _entries = new List<Entry>();
-        readonly HashSet<string> _seen = new HashSet<string>();
+        // 3 sabit yuva (index = WeaponCategory). Galeri her zaman ayni sirayi gorur:
+        // uzun namlulu, tabanca, bomba — bos yuva listeye girmez.
+        readonly Entry[] _slots = new Entry[3];
+        readonly List<Entry> _view = new List<Entry>();
+        bool _viewDirty = true;
         float _nextScan;
 
-        /// <summary>Toplanan silahlar (anahtar + onizleme), alis sirasiyla.</summary>
-        public IReadOnlyList<Entry> Entries => _entries;
+        /// <summary>Dolu yuvalar, SABIT kategori sirasiyla (uzun namlulu, tabanca, bomba).</summary>
+        public IReadOnlyList<Entry> Entries
+        {
+            get
+            {
+                if (_viewDirty)
+                {
+                    _view.Clear();
+                    foreach (var e in _slots) if (e != null) _view.Add(e);
+                    _viewDirty = false;
+                }
+                return _view;
+            }
+        }
+
+        /// <summary>Silah adindan kategori: "Pistol" gecen tabanca, "Grenade" gecen bomba,
+        /// GERISI uzun namlulu (varsayilan). Ekip karari — bkz. <see cref="WeaponCategory"/>.</summary>
+        public static WeaponCategory CategoryOf(string key)
+        {
+            if (key == null) return WeaponCategory.UzunNamlulu;
+            if (key.IndexOf("Pistol", System.StringComparison.OrdinalIgnoreCase) >= 0) return WeaponCategory.Tabanca;
+            if (key.IndexOf("Grenade", System.StringComparison.OrdinalIgnoreCase) >= 0) return WeaponCategory.Bomba;
+            return WeaponCategory.UzunNamlulu;
+        }
 
         /// <summary>Yeni silah eklenince tetiklenir.</summary>
         public event System.Action Changed;
@@ -68,15 +102,25 @@ namespace VRMultiplayer.UI
             {
                 if (g.HolderClientId != me) continue; // sadece SU AN benim tuttugum silahlar
                 string key = TypeKey(g);
-                if (_seen.Add(key))
+                int slot = (int)CategoryOf(key);
+                var cur = _slots[slot];
+
+                if (cur == null || cur.Key != key)
                 {
-                    _entries.Add(new Entry
+                    // Yuva bos -> yeni silah. Yuva doluysa AYNI KATEGORIDEN farkli bir silah
+                    // alindi demektir: eskisi cantadan cikar (onizlemesiyle birlikte), yenisi
+                    // yuvaya oturur. Her kategoriden EN FAZLA BIR silah — ekip karari.
+                    if (cur != null && cur.Preview != null) Destroy(cur.Preview);
+                    _slots[slot] = new Entry
                     {
                         Key = key,
+                        Category = (WeaponCategory)slot,
                         Preview = BuildPreview(g, transform),
                         Prefab = FindPrefabFor(key),
-                    });
-                    Debug.Log($"[WeaponInventory] Yeni silah: {key}  (toplam {_entries.Count})");
+                    };
+                    _viewDirty = true;
+                    Debug.Log($"[WeaponInventory] {(WeaponCategory)slot} yuvasi: {key}" +
+                              (cur != null ? $"  (eski: {cur.Key} cikti)" : "  (yeni)"));
                     Changed?.Invoke();
                 }
 
@@ -85,7 +129,7 @@ namespace VRMultiplayer.UI
                 var nw = g.GetComponent<NetworkWeapon>();
                 if (nw != null && nw.UsesAmmo)
                 {
-                    var e = Find(key);
+                    var e = _slots[slot];
                     if (e != null) { e.Ammo = nw.Ammo; e.Spares = nw.SpareMagazines; }
                 }
             }
@@ -94,7 +138,7 @@ namespace VRMultiplayer.UI
         /// <summary>Bu turun canta kaydi (yoksa null).</summary>
         public Entry Find(string key)
         {
-            foreach (var e in _entries) if (e.Key == key) return e;
+            foreach (var e in _slots) if (e != null && e.Key == key) return e;
             return null;
         }
 

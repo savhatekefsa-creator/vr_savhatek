@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Grenade 3_GripProfile
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponGripProfile
   weaponNameEquals: Grenade 3
-  weaponNameContains: 
+  weaponNameContains: Grenade 3
   gripLocalPosition: {x: -0.0701, y: 0.0788, z: 0.0645}
   gripLocalEuler: {x: 321.0675, y: 248.08563, z: 329.50244}
   barrelLocalDirection: {x: 0, y: 0, z: 1}
