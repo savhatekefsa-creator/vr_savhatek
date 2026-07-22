@@ -9,7 +9,7 @@ namespace VRMultiplayer.UI
     /// el bombasi + geri kalan her sey): adinda "Pistol" gecen tabanca, "Grenade" gecen bomba,
     /// GERISI uzun namlulu. UzunNamlulu'nun varsayilan olmasi bilincli — yeni eklenen silah hicbir sey
     /// yapilmadan uzun namlulu sayilir. Ileride isim yetmezse (orn. "Revolver") profil alanina tasinir.</summary>
-    public enum WeaponCategory { UzunNamlulu = 0, Tabanca = 1, Bomba = 2 }
+    public enum WeaponCategory { Heavy = 0, Pistol = 1, Grenade = 2 }
 
     /// <summary>
     /// Yerel silah envanteri: 3 YUVALI canta — uzun namlulu / tabanca / bomba (ekip karari: her
@@ -42,6 +42,11 @@ namespace VRMultiplayer.UI
             // saklamasina gerek yok, bu iki SAYI yetiyor.
             public int Ammo = -1;    // -1 = kayit yok -> silah dolu dogsun
             public int Spares = -1;  // -1 = dokunma (profilde sinirsiz olabilir)
+
+            // Namlunun silah-LOKAL yonu (profilden). Cark onizlemeyi buna gore YAN cevirir:
+            // sabit bir aci hepsine uymaz — cogu silahin namlusu Z'de ama HK416'ninki X'te,
+            // ayni doniste digerleri yan dururken o yuzunu doner ve taninmaz olur.
+            public Vector3 BarrelDir = Vector3.forward;
         }
 
         // 3 sabit yuva (index = WeaponCategory). Galeri her zaman ayni sirayi gorur:
@@ -70,10 +75,10 @@ namespace VRMultiplayer.UI
         /// GERISI uzun namlulu (varsayilan). Ekip karari — bkz. <see cref="WeaponCategory"/>.</summary>
         public static WeaponCategory CategoryOf(string key)
         {
-            if (key == null) return WeaponCategory.UzunNamlulu;
-            if (key.IndexOf("Pistol", System.StringComparison.OrdinalIgnoreCase) >= 0) return WeaponCategory.Tabanca;
-            if (key.IndexOf("Grenade", System.StringComparison.OrdinalIgnoreCase) >= 0) return WeaponCategory.Bomba;
-            return WeaponCategory.UzunNamlulu;
+            if (key == null) return WeaponCategory.Heavy;
+            if (key.IndexOf("Pistol", System.StringComparison.OrdinalIgnoreCase) >= 0) return WeaponCategory.Pistol;
+            if (key.IndexOf("Grenade", System.StringComparison.OrdinalIgnoreCase) >= 0) return WeaponCategory.Grenade;
+            return WeaponCategory.Heavy;
         }
 
         /// <summary>Yeni silah eklenince tetiklenir.</summary>
@@ -111,12 +116,16 @@ namespace VRMultiplayer.UI
                     // alindi demektir: eskisi cantadan cikar (onizlemesiyle birlikte), yenisi
                     // yuvaya oturur. Her kategoriden EN FAZLA BIR silah — ekip karari.
                     if (cur != null && cur.Preview != null) Destroy(cur.Preview);
+                    var grip = g.GetComponent<WeaponGrip>();
                     _slots[slot] = new Entry
                     {
                         Key = key,
                         Category = (WeaponCategory)slot,
                         Preview = BuildPreview(g, transform),
                         Prefab = FindPrefabFor(key),
+                        BarrelDir = grip != null && grip.Profile != null && grip.Profile.barrelLocalDirection.sqrMagnitude > 0.01f
+                            ? grip.Profile.barrelLocalDirection.normalized
+                            : Vector3.forward,
                     };
                     _viewDirty = true;
                     Debug.Log($"[WeaponInventory] {(WeaponCategory)slot} yuvasi: {key}" +
@@ -142,11 +151,15 @@ namespace VRMultiplayer.UI
             return null;
         }
 
+        /// <summary>Kategorinin yuvasindaki silah (bos yuva = null). Cark her dilimi buradan okur.</summary>
+        public Entry Slot(WeaponCategory c) => _slots[(int)c];
+
         // Bu turden yeni bir tane uretecek kalibi bul: Resources/WeaponPrefabs'taki her prefabin
         // tutuş profili isim eslesmesiyle bulunur (WeaponGripBinder ile AYNI kural), profili bu
         // turun anahtariyla ayni olan prefab bizim kalibimizdir. Boylece silaha ozel kod yok:
         // klasore yeni silah konunca burasi da kendiliginden calisir.
-        static GameObject FindPrefabFor(string key)
+        // PUBLIC: sonsuz raf (WeaponRackRespawner) da ayni haritalamayi kullanir.
+        public static GameObject FindPrefabFor(string key)
         {
             var prefabs = WeaponPrefabRegistrar.Prefabs;
             if (prefabs == null) return null;
