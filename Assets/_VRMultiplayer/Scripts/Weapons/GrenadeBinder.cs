@@ -32,16 +32,23 @@ namespace VRMultiplayer.Weapons
             c.Bind(cfg);
         }
 
-        /// <summary>Obje adina (Clone eki temizlenmis) birebir uyan config, yoksa null.</summary>
+        /// <summary>Obje adina uyan config: birebir eslesme oncelikli; yoksa obje adi config
+        /// adini ICEREN kayit ("Weapon_Grenade 1" gibi onekli spawner prefablari icin —
+        /// silah secici cantasi bombalari bu adla dogurur). Uymayan icin null.</summary>
         public static GrenadeConfig FindConfig(string objectName)
         {
             objectName = WeaponGripBinder.CleanName(objectName);
             if (_configs == null)
                 _configs = Resources.LoadAll<GrenadeConfig>("GrenadeConfigs");
 
+            GrenadeConfig partial = null;
             foreach (var c in _configs)
-                if (c != null && c.name == objectName) return c;
-            return null;
+            {
+                if (c == null) continue;
+                if (c.name == objectName) return c;
+                if (objectName.Contains(c.name)) partial = c;
+            }
+            return partial;
         }
     }
 }
