@@ -19,16 +19,28 @@ namespace VRMultiplayer.UI
         public const float NameCharacterSize = 0.06f;
         public const int NameFontSize = 60;
 
+        /// <summary>Build'de garanti bulunan unlit shader zinciri — calisma aninda malzeme
+        /// ureten HER yer bunu kullanmali (4 ayri kopyasi vardi). URP/Unlit sahnede referanssiz
+        /// kalirsa build'den strip edilebilir; URP/Lit oda malzemeleri sayesinde hep gemidedir.</summary>
+        public static Shader SafeUnlitShader
+        {
+            get
+            {
+                var s = Shader.Find("Universal Render Pipeline/Unlit");
+                if (s == null) s = Shader.Find("Universal Render Pipeline/Lit");
+                if (s == null) s = Shader.Find("Unlit/Color");
+                if (s == null) s = Shader.Find("Sprites/Default");
+                return s;
+            }
+        }
+
         /// <summary>
         /// Creates a material with a safe, opaque shader that won't turn magenta in builds.
         /// </summary>
         public static Material CreateLitMaterial(Color color)
         {
             // HUD elemanları için ışıklandırmadan etkilenmeyen bir shader kullanalım.
-            var shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null) shader = Shader.Find("Unlit/Color"); // URP olmayan projeler için fallback
-            if (shader == null) shader = Shader.Find("Sprites/Default"); // Son çare
-            var m = new Material(shader);
+            var m = new Material(SafeUnlitShader);
             SetMaterialColor(m, color);
             return m;
         }
@@ -91,9 +103,7 @@ namespace VRMultiplayer.UI
         /// </summary>
         public static Material CreateTransparentMaterial(Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null) shader = Shader.Find("Sprites/Default"); // Fallback
-            var m = new Material(shader);
+            var m = new Material(SafeUnlitShader);
             if (m.HasProperty("_Surface"))
             {
                 m.SetFloat("_Surface", 1f); // Transparent

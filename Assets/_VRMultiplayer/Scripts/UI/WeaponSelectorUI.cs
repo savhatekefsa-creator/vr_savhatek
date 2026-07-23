@@ -310,10 +310,7 @@ namespace VRMultiplayer.UI
         /// saydamlik KURMUYOR (olum ekrani opak kaliyor) — blend state'leri burada elle aciliyor.</summary>
         static Material MakeOverlayMaterial(int queue)
         {
-            var sh = Shader.Find("Universal Render Pipeline/Unlit")
-                  ?? Shader.Find("Unlit/Color")
-                  ?? Shader.Find("Sprites/Default");
-            var m = new Material(sh);
+            var m = new Material(UITheme.SafeUnlitShader);
             m.SetFloat("_Surface", 1f);
             m.SetFloat("_Blend", 0f);
             m.SetFloat("_ZWrite", 0f);

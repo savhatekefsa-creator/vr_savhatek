@@ -906,13 +906,7 @@ namespace VRMultiplayer
         // Runtime-created materials need a shader that is guaranteed to be IN the build.
         // URP/Unlit may get stripped (nothing in the scene references it); URP/Lit always
         // ships because the room materials use it.
-        static Shader FindShaderSafe()
-        {
-            var s = Shader.Find("Universal Render Pipeline/Unlit");
-            if (s == null) s = Shader.Find("Universal Render Pipeline/Lit");
-            if (s == null) s = Shader.Find("Unlit/Color");
-            return s;
-        }
+        static Shader FindShaderSafe() => VRMultiplayer.UI.UITheme.SafeUnlitShader;
 
         /// <summary>Renk basina cache'lenmis, calisma aninda uretilmis unlit malzeme. Silah
         /// instance'lari malzemeyi PAYLASIR — kimse yok etmemeli.</summary>

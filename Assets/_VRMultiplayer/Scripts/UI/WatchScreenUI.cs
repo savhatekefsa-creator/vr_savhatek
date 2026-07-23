@@ -254,10 +254,7 @@ namespace VRMultiplayer
             var col = q.GetComponent<Collider>();
             if (col != null) Destroy(col);
             q.transform.SetParent(parent, false);
-            var sh = Shader.Find("Universal Render Pipeline/Unlit");
-            if (sh == null) sh = Shader.Find("Unlit/Color");
-            if (sh == null) sh = Shader.Find("Sprites/Default");
-            var m = new Material(sh);
+            var m = new Material(UITheme.SafeUnlitShader);
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
             if (m.HasProperty("_Color")) m.SetColor("_Color", color);
             if (m.HasProperty("_ZWrite")) m.SetInt("_ZWrite", 0);
