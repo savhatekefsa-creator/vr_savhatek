@@ -119,13 +119,35 @@ namespace VRMultiplayer
         Material _tracerMat;
         Light _flash;
 
-        // Mermi izleri: silahin ALTINDA DEGIL, dunya kokunde duran bir havuz. Silahin cocugu
-        // olsalardi silah her dondugunde izler de suruklenirdi. Havuz dolunca en eski iz geri
-        // donusur — sinirsiz GameObject birikmez.
-        const int DecalCount = 48;
-        Transform _decalRoot;
-        Transform[] _decals;
-        int _decalNext;
+        // Mermi izleri: TUM silahlarin paylastigi TEK global havuz, dunya kokunde (silahin
+        // cocugu olsalardi silahla suruklenirlerdi). Eskiden HER silah instance'i Awake'te
+        // kendi 48 silindirini kuruyordu: carktan her silah secimi tum istemcilerde ~50 obje
+        // yikip ~50 obje yaratiyordu (gorunur takilma). Havuz ilk ize kadar hic kurulmaz;
+        // dolunca en eski iz geri donusur. Iz rengi silah-basina: yerlestirme aninda
+        // sharedMaterial atanir.
+        const int DecalCount = 96; // eski duzende silah basina 48'di; global havuz genis tutulur
+        static Transform _sharedDecalRoot;
+        static Transform[] _sharedDecals;
+        static MeshRenderer[] _sharedDecalRenderers;
+        static int _sharedDecalNext;
+        Material _impactMat; // bu silahin iz malzemesi (paylasimli cache'ten)
+
+        // Calisma aninda uretilen FX malzemeleri RENK basina TEK: eskiden her silah instance'i
+        // kendine tracer + iz icin 2 malzeme yaratir, OnDestroy hicbirini yok etmezdi — her
+        // spawn/takas 2 malzeme sizdirir, oturum boyunca birikirdi. Cache kucuk ve sinirlidir
+        // (profillerdeki farkli renk sayisi kadar) ve oturum boyu yasar.
+        static readonly Dictionary<Color32, Material> _fxMatCache = new Dictionary<Color32, Material>();
+
+        // Domain reload kapali projede play'e her giriste statikler elle sifirlanir.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetFxStatics()
+        {
+            _sharedDecalRoot = null;
+            _sharedDecals = null;
+            _sharedDecalRenderers = null;
+            _sharedDecalNext = 0;
+            _fxMatCache.Clear();
+        }
 
         // Ucan ates izleri: her atis/pellet dunya uzayinda saklanir, her kare ilerletilir.
         // Havuz MaxTracers ile sinirli — asilirsa en eski iz devrilir (pompali seri atis).
@@ -892,12 +914,24 @@ namespace VRMultiplayer
             return s;
         }
 
+        /// <summary>Renk basina cache'lenmis, calisma aninda uretilmis unlit malzeme. Silah
+        /// instance'lari malzemeyi PAYLASIR — kimse yok etmemeli.</summary>
+        static Material GetFxMaterial(Color c)
+        {
+            Color32 key = c;
+            if (!_fxMatCache.TryGetValue(key, out var m) || m == null)
+            {
+                m = new Material(FindShaderSafe());
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+                else m.color = c;
+                _fxMatCache[key] = m;
+            }
+            return m;
+        }
+
         void CreateFx()
         {
-            _tracerMat = new Material(FindShaderSafe());
-            Color tc = TracerColor;
-            if (_tracerMat.HasProperty("_BaseColor")) _tracerMat.SetColor("_BaseColor", tc);
-            else _tracerMat.color = tc;
+            _tracerMat = GetFxMaterial(TracerColor);
             EnsureTracers(1); // ilk iz hazir; pellet gelirse havuz lazily buyur
 
             var flashGo = new GameObject("Muzzle Flash");
@@ -909,16 +943,19 @@ namespace VRMultiplayer
             _flash.range = 4f;
             _flash.enabled = false;
 
-            if (ImpactSize <= 0f) return; // iz istenmiyorsa havuzu hic kurma
+            // Iz malzemesi paylasimli cache'ten; global iz havuzunu ilk ShowImpact tembel kurar.
+            if (ImpactSize > 0f) _impactMat = GetFxMaterial(ImpactColor);
+        }
 
-            var imat = new Material(FindShaderSafe());
-            Color ic = ImpactColor;
-            if (imat.HasProperty("_BaseColor")) imat.SetColor("_BaseColor", ic);
-            else imat.color = ic;
-
-            // Kok seviyesinde: silahla birlikte tasinmamalilar.
-            _decalRoot = new GameObject(name + " Bullet Holes").transform;
-            _decals = new Transform[DecalCount];
+        /// <summary>Global mermi izi havuzunu (tembel) kurar. Sahne gecisinde kok yok olduysa
+        /// yeniden kurulur (Unity fake-null kontrolu).</summary>
+        static void EnsureSharedDecalPool()
+        {
+            if (_sharedDecalRoot != null && _sharedDecals != null) return;
+            _sharedDecalRoot = new GameObject("Bullet Holes (paylasimli)").transform;
+            _sharedDecals = new Transform[DecalCount];
+            _sharedDecalRenderers = new MeshRenderer[DecalCount];
+            _sharedDecalNext = 0;
             for (int i = 0; i < DecalCount; i++)
             {
                 // Yassilastirilmis SILINDIR = yuvarlak disk (kursun deligi kare degil yuvarlak).
@@ -927,18 +964,11 @@ namespace VRMultiplayer
                 var d = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 d.name = "Bullet Hole";
                 Destroy(d.GetComponent<Collider>());
-                d.GetComponent<MeshRenderer>().sharedMaterial = imat;
-                d.transform.SetParent(_decalRoot, false);
+                d.transform.SetParent(_sharedDecalRoot, false);
                 d.SetActive(false);
-                _decals[i] = d.transform;
+                _sharedDecals[i] = d.transform;
+                _sharedDecalRenderers[i] = d.GetComponent<MeshRenderer>();
             }
-        }
-
-        public override void OnDestroy()
-        {
-            // Havuz silahin cocugu olmadigi icin onunla birlikte yok olmaz — elle temizle.
-            if (_decalRoot != null) Destroy(_decalRoot.gameObject);
-            base.OnDestroy();
         }
 
         LineRenderer NewTracer()
@@ -1084,10 +1114,14 @@ namespace VRMultiplayer
         {
             // Normal sifir = hicbir seye carpmadi ya da bir OYUNCUYA carpti: iz birakma.
             // Yuruyen bir oyuncuya cakilan dunya-uzayi izi havada asili kalirdi.
-            if (_decals == null || normal.sqrMagnitude < 0.5f) return;
+            if (_impactMat == null || normal.sqrMagnitude < 0.5f) return;
 
-            var d = _decals[_decalNext];
-            _decalNext = (_decalNext + 1) % _decals.Length;
+            EnsureSharedDecalPool();
+            int idx = _sharedDecalNext;
+            _sharedDecalNext = (_sharedDecalNext + 1) % _sharedDecals.Length;
+            var d = _sharedDecals[idx];
+            if (d == null) return; // sahne gecisi havuzu oldurmus — bir sonraki cagri yeniden kurar
+            _sharedDecalRenderers[idx].sharedMaterial = _impactMat; // renk silah-basina
 
             // Silindirin ekseni LOKAL Y; onu yuzey normaline hizala. Olcek: mesh yaricapi 0.5
             // (yani cap = scale.x) ve yuksekligi 2 (yani kalinlik = 2 * scale.y).
