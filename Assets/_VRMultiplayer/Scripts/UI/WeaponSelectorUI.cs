@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using VRMultiplayer.Weapons;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif

@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
-using VRMultiplayer.Weapons;
 
-namespace VRMultiplayer.UI
+namespace VRMultiplayer.Weapons
 {
     /// <summary>Cantanin 3 yuvasi. Kategori SILAH ADINDAN turetilir (ekip karari: tabanca +
     /// el bombasi + geri kalan her sey): adinda "Pistol" gecen tabanca, "Grenade" gecen bomba,

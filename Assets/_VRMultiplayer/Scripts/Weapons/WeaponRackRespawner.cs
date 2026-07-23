@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
-using VRMultiplayer.Weapons;
 
-namespace VRMultiplayer.UI
+namespace VRMultiplayer.Weapons
 {
     /// <summary>
     /// SONSUZ RAF: izgaradaki silahlardan biri alininca yerine ANINDA yenisi gelir (ekip
