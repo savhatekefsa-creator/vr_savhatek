@@ -83,7 +83,14 @@ namespace VRMultiplayer.Weapons
                 wristLocalPos = mirrored ? WeaponGripMath.MirrorX(pose.wristLocalPosition) : pose.wristLocalPosition,
                 wristLocalRot = mirrored ? WeaponGripMath.MirrorX(Quaternion.Euler(pose.wristLocalEuler)) : Quaternion.Euler(pose.wristLocalEuler),
                 mirrored = mirrored,
-                blendStart = prev.active && !prev.fadingOut ? prev.blendStart : Time.time,
+                // Fade-out ORTASINDA yakalanan yeniden tutus: ramp sifirdan baslasaydi agirlik
+                // o karede (or.) 0.4'ten 0'a dusup bilek bir karelik IK pozuna sicrardi.
+                // Baslangic, kesilen fade'in GUNCEL agirligina denk gelecek sekilde geri
+                // tarihlenir — agirlik surekli kalir.
+                blendStart = prev.active && !prev.fadingOut ? prev.blendStart
+                    : prev.active && prev.fadingOut
+                        ? Time.time - Mathf.Clamp01(1f - (Time.time - prev.fadeOutStart) / WeldBlendSeconds) * WeldBlendSeconds
+                        : Time.time,
             };
             if (left) _left = w; else _right = w;
             enabled = true;
