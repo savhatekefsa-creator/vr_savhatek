@@ -139,6 +139,23 @@ namespace VRMultiplayer
         // (otomatik ates) bunun iki kati tutulur.
         const int MaxPellets = 16;
         const int MaxTracers = MaxPellets * 2;
+
+        // Atis basina dizi alloc'u olmasin (otomatik ates ~6-10 Hz, pompalida x16 pellet):
+        // pellet sayisina gore cache'lenmis diziler dondurulur. RPC serilestirme icerigi
+        // cagri aninda kopyaladigi icin dizileri elde tutup yeniden kullanmak guvenlidir.
+        // UC AYRI havuz: dirs/ends/normals ayni anda yasar; tek havuz ayni diziyi iki role
+        // verirdi.
+        static readonly Vector3[][] _dirsPool = new Vector3[MaxPellets + 1][];
+        static readonly Vector3[][] _endsPool = new Vector3[MaxPellets + 1][];
+        static readonly Vector3[][] _normalsPool = new Vector3[MaxPellets + 1][];
+        static Vector3[] FromPool(Vector3[][] pool, int n) => pool[n] ?? (pool[n] = new Vector3[n]);
+
+        // Sunucu isin taramasi icin sabit tampon + cache'li karsilastirici: RaycastAll her
+        // pellet'te sonuc dizisi, sort lambda'si da delegate alloc ediyordu. 64 = tek isinin
+        // ayni anda kestigi collider sayisi icin genis tavan (asilirsa fazlasi sessizce dusar).
+        static readonly RaycastHit[] _rayHits = new RaycastHit[64];
+        static readonly IComparer<RaycastHit> _byDistance =
+            Comparer<RaycastHit>.Create((a, b) => a.distance.CompareTo(b.distance));
         readonly List<ShotFx> _flights = new List<ShotFx>();
         bool _tracersOn;
         float _flashOffAt = -1f;
@@ -437,7 +454,7 @@ namespace VRMultiplayer
             // Pellet: nisan-sacilimi TABAN yone bir kez uygulanir (yukarida), pelletler o
             // tabanin etrafina kendi konileriyle sacilir. Tek pellet = eski tek-ray davranisi.
             int pellets = Mathf.Clamp(_cv.pelletCount, 1, MaxPellets);
-            var dirs = new Vector3[pellets];
+            var dirs = FromPool(_dirsPool, pellets);
             for (int i = 0; i < pellets; i++)
                 dirs[i] = pellets == 1 ? dir : ApplySpread(dir, _cv.pelletSpreadDegrees);
 
@@ -547,7 +564,9 @@ namespace VRMultiplayer
                     if (IsFinite(d0) && d0.sqrMagnitude >= 0.5f) { baseDir = d0.normalized; break; }
                 if (baseDir == Vector3.zero)
                     baseDir = (transform.rotation * _barrelLocal).normalized;
-                var padded = new Vector3[pellets];
+                // dirs.Length < pellets garanti: havuzdan farkli boy dondugu icin ayni dizi
+                // hem kaynak hem hedef olamaz.
+                var padded = FromPool(_dirsPool, pellets);
                 for (int i = 0; i < pellets; i++)
                     padded[i] = i < dirs.Length ? dirs[i] : ApplySpread(baseDir, _cv.pelletSpreadDegrees);
                 dirs = padded;
@@ -572,20 +591,24 @@ namespace VRMultiplayer
                     Debug.Log($"[Silah][gozlem] {name}: origin sapmasi {originDist:0.00}m, aci sapmasi {aimDelta:0.0} derece (holder {shooter})");
             }
 
-            var ends = new Vector3[pellets];
-            var normals = new Vector3[pellets];
+            var ends = FromPool(_endsPool, pellets);
+            var normals = FromPool(_normalsPool, pellets);
             int hitboxesSeen = 0;
             for (int i = 0; i < pellets; i++)
             {
                 Vector3 dir = dirs[i];
-                if (!IsFinite(dir) || dir.sqrMagnitude < 0.5f) { ends[i] = origin; continue; }
+                if (!IsFinite(dir) || dir.sqrMagnitude < 0.5f) { ends[i] = origin; normals[i] = Vector3.zero; continue; }
                 dir.Normalize();
                 hitboxesSeen += RaycastOne(origin, dir, shooter, shooterTeam,
                     out ends[i], out normals[i]);
             }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Paintball'da atislarin cogu iskalar: bu log uretim build'inde saniyede 5-10 kez
+            // logcat syscall'i + string alloc'u demekti. Teshis amaci dev build'de surer.
             if (hitboxesSeen == 0)
                 Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi ({pellets} pellet).");
+#endif
 
             FireFxClientRpc(origin, ends, normals);
         }
@@ -601,13 +624,17 @@ namespace VRMultiplayer
             // oyuncuya dunya-uzayi izi cakarsak oyuncu yurudugunde iz havada asili kalirdi.
             hitNormal = Vector3.zero;
 
-            var hits = Physics.RaycastAll(origin + dir * 0.03f, dir, _cv.range,
+            // NonAlloc + sabit tampon: RaycastAll pellet basina sonuc dizisi, sort lambda'si da
+            // delegate alloc ediyordu. Yakindan-uzaga yurume KORUNUR — "kendi govdeni gecip
+            // devam et" mantigi hit sirasina baglidir.
+            int hitCount = Physics.RaycastNonAlloc(origin + dir * 0.03f, dir, _rayHits, _cv.range,
                 Physics.AllLayers, QueryTriggerInteraction.Collide);
-            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            System.Array.Sort(_rayHits, 0, hitCount, _byDistance);
 
             int hitboxesSeen = 0;
-            foreach (var h in hits)
+            for (int hi = 0; hi < hitCount; hi++)
             {
+                var h = _rayHits[hi];
                 if (h.collider.transform.IsChildOf(transform)) continue; // own weapon
 
                 // Regional damage: the ray hits a HitZone (head/torso/arm/leg); the per-region
@@ -622,11 +649,15 @@ namespace VRMultiplayer
                     byte t = health.TeamValue;
                     if (t != 0 && t == shooterTeam)
                     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
                         Debug.Log($"[Silah] Isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {health.OwnerClientId}");
+#endif
                         end = h.point; break; // block, no damage (friendly fire off)
                     }
                     int dmg = Mathf.Max(1, Mathf.RoundToInt(DamageFor(zone.zoneType) * _cv.pelletDamageScale));
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
                     Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {health.OwnerClientId} (takim {t}), bolge {zone.zoneName}, {dmg} hasar. Kalan: {Mathf.Max(0, health.Health.Value - dmg)}");
+#endif
                     health.ServerApplyDamage(dmg, shooter);
                     end = h.point; break;
                 }
