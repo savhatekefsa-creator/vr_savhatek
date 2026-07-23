@@ -115,7 +115,7 @@ Her düzeltme **ayrı commit** olarak atılır. Her maddenin sonunda **TEST** sa
 
 ## Bu branch'in kapsamı
 
-Bu branch'te **Faz 0 + Faz 1** uygulanır (11 düzeltme, her biri ayrı commit). Faz 2-3 ayrı branch'lerde yapılır ki inceleme diff'leri okunabilir kalsın.
+Bu branch'te **Faz 0 + Faz 1 + Faz 2** uygulandı (11 düzeltme + 8 performans işi, her biri ayrı commit). Faz 2'de ana 5 kalemin yanında ek üç iş de yapıldı: kinematik gövdede `ContinuousSpeculative`, paylaşımlı çift-yüzlü malzeme varyantları (`MaterialDoubleSided`), oda chunk'larının kare başına ~8'erli gönderimi. Faz 3 ayrı branch'te yapılır ki inceleme diff'leri okunabilir kalsın.
 
 ## Birleştirme öncesi zorunlu test turu
 
