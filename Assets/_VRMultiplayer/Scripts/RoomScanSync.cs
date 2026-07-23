@@ -152,6 +152,11 @@ namespace VRMultiplayer
                 var chunk = new byte[len];
                 Buffer.BlockCopy(bytes, i * ChunkSize, chunk, 0, len);
                 SendRoomChunkServerRpc(i, total, chunk);
+                // Guvenilir kanalin gonderim kuyrugu sinirli: mobilya-yogun bir taramada tum
+                // chunk'lar (512'ye kadar x ~3 KB) tek karede kuyruklanirsa UTP kuyrugu tasar;
+                // dusen chunk'in yeniden gonderim yolu yok — sunucu transferi sonsuza dek
+                // bekler, panel 20 sn sonra zaman asimina duser. ~8 chunk/kare nefes aldirir.
+                if ((i & 7) == 7) yield return null;
             }
 
             Show($"GONDERILDI\n\n{plan.floorPolygon.Length} kose • {Mathf.Abs(plan.Area()):0.0} m2\n" +
