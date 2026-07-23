@@ -555,6 +555,11 @@ namespace VRMultiplayer.Weapons
                     {
                         var fx = Instantiate(gc._cfg.explodeFx, pos, gc._cfg.explodeFx.transform.rotation);
                         if (gc._cfg.fxScale != 1f) fx.transform.localScale *= gc._cfg.fxScale;
+
+                        // Duman perdesinin suresi prefabin partikul ayarlarindan degil config'ten
+                        // gelir; emisyon bitince duman dagilir, temizligi auto-destruct yapar.
+                        if (type == GrenadeType.Smoke)
+                            SmokeLifetime.Apply(fx, gc._cfg.smokeDuration);
                     }
                 }
             }

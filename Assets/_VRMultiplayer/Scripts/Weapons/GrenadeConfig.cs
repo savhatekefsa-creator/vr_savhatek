@@ -49,9 +49,9 @@ namespace VRMultiplayer.Weapons
         public float flashBlindSeconds = 8f;
 
         [Header("Smoke (yalniz type=Smoke)")]
-        [Tooltip("DIKKAT: bu alan HENUZ BAGLI DEGIL — dumanin suresi su an tamamen explodeFx " +
-                 "prefabinin kendi partikul ayarlarindan geliyor, burayi degistirmek hicbir sey " +
-                 "yapmaz. Sureyi degistirmek icin WarFX duman prefabini duzenle.")]
+        [Tooltip("Duman perdesinin EMISYON suresi (sn). Bu sure dolunca yeni duman uretilmez, " +
+                 "havadaki duman dogal olarak dagilir — yani perde birkac saniye daha gorunur. " +
+                 "0 = prefabin kendi suresi kullanilir.")]
         public float smokeDuration = 30f;
 
         [Header("Patlama gorseli (prefab referansi — Resources sart degil, referans build'e girer)")]
