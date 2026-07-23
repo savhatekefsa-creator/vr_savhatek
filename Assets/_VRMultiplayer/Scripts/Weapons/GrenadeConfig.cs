@@ -52,6 +52,33 @@ namespace VRMultiplayer.Weapons
                  "yoksa yari boy gorunup gozden kacar.")]
         public float fxScale = 2f;
 
+        [Header("Carpisma sekli")]
+        [Tooltip("Modelin kendi mesh hull'u yerine basit bir KURE collider kullanilir. Bombanin " +
+                 "emniyet kolu/pimi hull'u duzensiz yapar; boyle bir sekil yere carpinca tahmin " +
+                 "edilemez sekilde ziplar ve saga sola firlar. Kure hem gercekci hem kararlidir.")]
+        public bool simpleCollider = true;
+        [Tooltip("Kure yaricapi (m, silah-lokal). 0 = otomatik: govde mesh'inin sinirlarindan.")]
+        public float colliderRadius = 0f;
+        [Tooltip("Kure merkezi (silah-lokal). Sifir = govde mesh'inin merkezi.")]
+        public Vector3 colliderCenter = Vector3.zero;
+        [Tooltip("Firlattiktan sonra ATANIN kendi collider'lariyla carpismanin kapali kalacagi " +
+                 "sure (sn). VR'da bomba elin icinden dogar; bu pencere olmazsa oyuncunun kendi " +
+                 "govdesine carpip saçma yonlere firlar ve funye aninda baslar. 0 = kapali.")]
+        public float selfCollisionIgnoreSeconds = 0.35f;
+
+        [Header("Pim (bos birakilirsa ad sezgisiyle bulunur: 'ring'/'hook' iceren dugumler)")]
+        [Tooltip("Pimi olusturan cocuk dugum adlari. BOS birakilirsa adinda 'ring' ya da 'hook' " +
+                 "gecen tum dugumler pim sayilir — paketteki uc bombanin da pimi boyle bulunur, " +
+                 "asset doldurmaya gerek yok. Emniyet kolu (handle/flap) bilerek disarida: o " +
+                 "bombada kalir.")]
+        public string[] pinNodes = new string[0];
+        [Tooltip("Pimin cekildikten sonra elde durdugu yer (el anchor'ina gore lokal, metre).")]
+        public Vector3 pinHandLocalPosition = Vector3.zero;
+        [Tooltip("Pimin elde durus acisi (el anchor'ina gore lokal euler).")]
+        public Vector3 pinHandLocalEuler = Vector3.zero;
+        [Tooltip("Pimi cekmek icin bos elin bombaya yaklasmasi gereken mesafe (m).")]
+        public float pinPullReach = 0.45f;
+
         [Header("Nisan yayi (bomba eldeyken thumbstick)")]
         [Tooltip("Kirmizi yorunge yayinin varsaydigi firlatma hizi (m/s). El hizi degil; " +
                  "sabit nisan hizi — throwVelocityScale ile carpilir.")]
