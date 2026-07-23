@@ -119,6 +119,12 @@ namespace VRMultiplayer
         {
             if (leftHand)
             {
+                // AYNI tutus zaten uygulanmissa yeniden tohumlama: WeaponGrip.Evaluate her
+                // replikasyon degisiminde (or. destek elin tak/birakmasi) ana el icin
+                // ApplySlot'u yeniden cagirir; kosulsuz reseed, parmaklari animator'un o
+                // kareki IDLE pozundan yeniden blend'letip her seferinde gorunur bir "pop"
+                // yapiyordu.
+                if (_ovrProfileL == profile && _ovrSupportL == isSupportHand) return;
                 _ovrProfileL = profile;
                 _ovrSupportL = isSupportHand;
                 SeedFingers(_fingersL, _gL, _tL);
@@ -126,6 +132,7 @@ namespace VRMultiplayer
             }
             else
             {
+                if (_ovrProfileR == profile && _ovrSupportR == isSupportHand) return;
                 _ovrProfileR = profile;
                 _ovrSupportR = isSupportHand;
                 SeedFingers(_fingersR, _gR, _tR);
