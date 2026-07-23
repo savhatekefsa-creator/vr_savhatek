@@ -83,10 +83,9 @@ namespace VRMultiplayer
         // 0 = dolum yok. Sunucu SAATIYLE yazilir ki dolum her istemcide ayni anda bitsin.
         readonly NetworkVariable<double> _reloadDoneAt = new NetworkVariable<double>();
 
-        // Sarjor degistirme hareketi — yalnizca silahi TUTAN istemcide islenir.
-        int _flickPhase;            // 0 bekle, 1 asagi iniyor, 2 yukari donuyor
-        float _flickPrevY, _flickTopY, _flickLowY;
-        float _flickStartedAt;
+        // Sarjor degistirme hareketi dedektoru ayri sinifta (saf durum makinesi) —
+        // yalnizca silahi TUTAN istemcide islenir; istek/haptik burada atilir.
+        readonly WeaponReloadGesture _reloadGesture = new WeaponReloadGesture();
         float _nextReloadRequest;
         bool _dryFired;
 
@@ -131,16 +130,14 @@ namespace VRMultiplayer
         static readonly Vector3[][] _normalsPool = new Vector3[MaxPellets + 1][];
         static Vector3[] FromPool(Vector3[][] pool, int n) => pool[n] ?? (pool[n] = new Vector3[n]);
 
-        // Sunucu isin taramasi icin sabit tampon + cache'li karsilastirici: RaycastAll her
-        // pellet'te sonuc dizisi, sort lambda'si da delegate alloc ediyordu. 64 = tek isinin
-        // ayni anda kestigi collider sayisi icin genis tavan (asilirsa fazlasi sessizce dusar).
-        static readonly RaycastHit[] _rayHits = new RaycastHit[64];
-        static readonly IComparer<RaycastHit> _byDistance =
-            Comparer<RaycastHit>.Create((a, b) => a.distance.CompareTo(b.distance));
+        // Bolge hasari cozumu delegate'i bir kez baglanir: her pellet cagrisi icin method
+        // group'tan yeni delegate alloc edilmesin.
+        System.Func<ZoneType, int> _damageFor;
 
         void Awake()
         {
             _grab = GetComponent<GrabbableObject>();
+            _damageFor = DamageFor;
             if (muzzle == null) muzzle = transform.Find("Muzzle");
             ApplyProfile();
             ResolveCombat();
@@ -565,7 +562,8 @@ namespace VRMultiplayer
                 Vector3 dir = dirs[i];
                 if (!IsFinite(dir) || dir.sqrMagnitude < 0.5f) { ends[i] = origin; normals[i] = Vector3.zero; continue; }
                 dir.Normalize();
-                hitboxesSeen += RaycastOne(origin, dir, shooter, shooterTeam,
+                hitboxesSeen += WeaponHitscanServer.RaycastOne(transform, origin, dir,
+                    _cv.range, _cv.pelletDamageScale, _damageFor, shooter, shooterTeam,
                     out ends[i], out normals[i]);
             }
 
@@ -577,62 +575,6 @@ namespace VRMultiplayer
 #endif
 
             FireFxClientRpc(origin, ends, normals);
-        }
-
-        /// <summary>Tek bir rayin otoriter isabet cozumu (pellet basina bir kez cagrilir).
-        /// Donus: bu rayin gordugu dusman hitbox sayisi (teshis logu icin). Hasar pellet
-        /// basina pelletDamageScale ile carpilir — pompalida tanesi zayif, hepsi birden olumcul.</summary>
-        int RaycastOne(Vector3 origin, Vector3 dir, ulong shooter, byte shooterTeam,
-            out Vector3 end, out Vector3 hitNormal)
-        {
-            end = origin + dir * _cv.range;
-            // Sifir = mermi izi birakma. YALNIZCA sabit geometri normal doner: hareketli bir
-            // oyuncuya dunya-uzayi izi cakarsak oyuncu yurudugunde iz havada asili kalirdi.
-            hitNormal = Vector3.zero;
-
-            // NonAlloc + sabit tampon: RaycastAll pellet basina sonuc dizisi, sort lambda'si da
-            // delegate alloc ediyordu. Yakindan-uzaga yurume KORUNUR — "kendi govdeni gecip
-            // devam et" mantigi hit sirasina baglidir.
-            int hitCount = Physics.RaycastNonAlloc(origin + dir * 0.03f, dir, _rayHits, _cv.range,
-                Physics.AllLayers, QueryTriggerInteraction.Collide);
-            System.Array.Sort(_rayHits, 0, hitCount, _byDistance);
-
-            int hitboxesSeen = 0;
-            for (int hi = 0; hi < hitCount; hi++)
-            {
-                var h = _rayHits[hi];
-                if (h.collider.transform.IsChildOf(transform)) continue; // own weapon
-
-                // Regional damage: the ray hits a HitZone (head/torso/arm/leg); the per-region
-                // amount is resolved on the SERVER (clients can't send damage values — security).
-                var zone = h.collider.GetComponentInParent<HitZone>();
-                if (zone != null && zone.health != null)
-                {
-                    var health = zone.health;
-                    // Never hit yourself; keep going past your own body.
-                    if (health.OwnerClientId == shooter) continue;
-                    hitboxesSeen++;
-                    byte t = health.TeamValue;
-                    if (t != 0 && t == shooterTeam)
-                    {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-                        Debug.Log($"[Silah] Isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {health.OwnerClientId}");
-#endif
-                        end = h.point; break; // block, no damage (friendly fire off)
-                    }
-                    int dmg = Mathf.Max(1, Mathf.RoundToInt(DamageFor(zone.zoneType) * _cv.pelletDamageScale));
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-                    Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {health.OwnerClientId} (takim {t}), bolge {zone.zoneName}, {dmg} hasar. Kalan: {Mathf.Max(0, health.Health.Value - dmg)}");
-#endif
-                    health.ServerApplyDamage(dmg, shooter);
-                    end = h.point; break;
-                }
-
-                end = h.point; // first solid/non-player hit stops the ray
-                hitNormal = h.normal;
-                break;
-            }
-            return hitboxesSeen;
         }
 
         /// <summary>Bolge hasari, SILAH-basina: config alani doluysa (>0) o deger, degilse
@@ -734,63 +676,20 @@ namespace VRMultiplayer
         {
             if (!UsesAmmo || _profile == null) { ResetFlick(); return; }
 
-            float y = transform.position.y;
-            float dt = Time.deltaTime;
-            if (dt <= 0f) { _flickPrevY = y; return; }
-            float vy = (y - _flickPrevY) / dt;
-            _flickPrevY = y;
-
-            // Dolu sarjor / zaten dolum var / az once istendi -> hareketi izlemeye bile gerek yok.
-            if (_ammo.Value >= MagazineSize || IsReloading || Time.time < _nextReloadRequest)
+            // Dolu sarjor / zaten dolum var / az once istendi -> hareket izlenmez (y takibi surer).
+            bool eligible = _ammo.Value < MagazineSize && !IsReloading && Time.time >= _nextReloadRequest;
+            if (_reloadGesture.Tick(transform.position.y, eligible,
+                    _profile.reloadFlickSpeed, _profile.reloadFlickTravel, _profile.reloadFlickWindow))
             {
-                _flickPhase = 0;
-                return;
-            }
-
-            float speed = _profile.reloadFlickSpeed;
-            float travel = _profile.reloadFlickTravel;
-            bool expired = Time.time - _flickStartedAt > _profile.reloadFlickWindow;
-
-            switch (_flickPhase)
-            {
-                case 0: // bekle: yeterince hizli bir ASAGI hareket baslatir
-                    if (vy <= -speed)
-                    {
-                        _flickPhase = 1;
-                        _flickTopY = y;
-                        _flickLowY = y;
-                        _flickStartedAt = Time.time;
-                    }
-                    break;
-
-                case 1: // asagi iniyor: dip noktayi takip et, yeterince indiyse donusu bekle
-                    if (expired) { _flickPhase = 0; break; }
-                    if (y < _flickLowY) _flickLowY = y;
-                    if (_flickTopY - _flickLowY >= travel && vy >= speed) _flickPhase = 2;
-                    break;
-
-                case 2: // yukari donuyor: dipten yeterince kalktiysa hareket tamamlandi
-                    if (expired) { _flickPhase = 0; break; }
-                    if (y - _flickLowY >= travel)
-                    {
-                        _flickPhase = 0;
-                        _nextReloadRequest = Time.time + 0.6f; // tek harekette tek istek
-                        ReloadServerRpc();
-                        // Hareket KABUL edildi. Tusa basmadigin icin bunu hissetmen sart:
-                        // yoksa oyuncu algilandi mi bilemez ve silahi sallamaya devam eder.
-                        Buzz(_grab.HolderHand == 0 ? XRNode.LeftHand : XRNode.RightHand, 0.5f, 0.05f);
-                    }
-                    break;
+                _nextReloadRequest = Time.time + 0.6f; // tek harekette tek istek
+                ReloadServerRpc();
+                // Hareket KABUL edildi. Tusa basmadigin icin bunu hissetmen sart:
+                // yoksa oyuncu algilandi mi bilemez ve silahi sallamaya devam eder.
+                Buzz(_grab.HolderHand == 0 ? XRNode.LeftHand : XRNode.RightHand, 0.5f, 0.05f);
             }
         }
 
-        // Silah elde degilken de tazelenir: yoksa silahi kaptigin ILK karede eski/sifir
-        // yukseklikle devasa bir sahte hiz cikar ve hareket kendiliginden tetiklenir.
-        void ResetFlick()
-        {
-            _flickPhase = 0;
-            _flickPrevY = transform.position.y;
-        }
+        void ResetFlick() => _reloadGesture.Reset(transform.position.y);
 
         // Kuru tetik: kisa/zayif titresim + (varsa) bos-tetik sesi. v1'de yalniz TUTAN duyar —
         // bos tetik tutanin geri bildirimidir, RPC maliyeti gerektirmez.
