@@ -317,15 +317,23 @@ namespace VRMultiplayer
             if (_bloom > 0f)
                 _bloom *= Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, _cv.spreadDecayHalfLife));
 
-            // EITHER controller's trigger fires while you hold the weapon — grip hand or
-            // support hand, so two-handed players can use their front-hand trigger too.
-            bool trig = ReadTrigger(XRNode.RightHand, out var rDev);
-            var firedDev = rDev;
+            // Tetik yalnizca BU silahi fiilen kullanan ellerden okunur: tutan el + destek eli
+            // (cift-el oyuncu on-el tetigini kullanabilsin). Onceden HER IKI elin tetigi de
+            // okunuyordu; iki elde iki silah tasinirken tek tetik cekisi IKI silahi birden
+            // ateshiyordu (her silah kendi dogrulanmis atisini tuketiyordu).
+            bool rightAllowed = _grab.HolderHand == 1 || _grab.SupportHand == 1;
+            bool leftAllowed = _grab.HolderHand == 0 || _grab.SupportHand == 0;
+
+            bool trig = false;
+            var firedDev = default(InputDevice);
             var firedNode = XRNode.RightHand;
-            if (!trig)
+            if (rightAllowed)
             {
-                trig = ReadTrigger(XRNode.LeftHand, out var lDev);
-                firedDev = lDev;
+                trig = ReadTrigger(XRNode.RightHand, out firedDev);
+            }
+            if (!trig && leftAllowed)
+            {
+                trig = ReadTrigger(XRNode.LeftHand, out firedDev);
                 firedNode = XRNode.LeftHand;
             }
 
