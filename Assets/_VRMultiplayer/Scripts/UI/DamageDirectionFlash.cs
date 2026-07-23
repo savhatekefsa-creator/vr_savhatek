@@ -107,9 +107,7 @@ namespace VRMultiplayer.UI
         {
             if (_t < 0f) return;
 
-            var rig = XRRigReference.Instance;
-            Transform head = rig != null && rig.head != null ? rig.head
-                           : (Camera.main != null ? Camera.main.transform : null);
+            Transform head = XRRigReference.HeadOrCamera;
             if (head == null) return;
 
             _t += Time.deltaTime;

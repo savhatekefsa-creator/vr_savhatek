@@ -124,10 +124,7 @@ namespace VRMultiplayer
 
             UpdateHudVisibility();
 
-            // VR rig yoksa (Editor'de Game penceresinden test) ana kamera kafa yerine gecer.
-            var rig = XRRigReference.Instance;
-            Transform head = rig != null && rig.head != null ? rig.head
-                           : (Camera.main != null ? Camera.main.transform : null);
+            Transform head = XRRigReference.HeadOrCamera;
             if (head != null)
             {
                 Vector3 fwd = head.forward; fwd.y = 0f;

@@ -126,9 +126,7 @@ namespace VRMultiplayer
 
         string CompassText()
         {
-            var rig = XRRigReference.Instance;
-            Transform head = rig != null && rig.head != null ? rig.head
-                           : (Camera.main != null ? Camera.main.transform : null);
+            Transform head = XRRigReference.HeadOrCamera;
             if (head == null) return "N 0°";
             Vector3 f = head.forward; f.y = 0f;
             if (f.sqrMagnitude < 0.0001f) return "N 0°";
