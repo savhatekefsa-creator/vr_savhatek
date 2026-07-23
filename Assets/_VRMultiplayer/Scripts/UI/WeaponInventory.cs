@@ -103,8 +103,10 @@ namespace VRMultiplayer.UI
             if (nm == null || !(nm.IsServer || nm.IsConnectedClient)) return;
             ulong me = nm.LocalClientId;
 
-            foreach (var g in FindObjectsByType<GrabbableObject>(FindObjectsSortMode.None))
+            var actives = GrabbableObject.Active; // spawn kayit listesi — sahne taramasi + dizi alloc'u yok
+            for (int gi = 0; gi < actives.Count; gi++)
             {
+                var g = actives[gi];
                 if (g.HolderClientId != me) continue; // sadece SU AN benim tuttugum silahlar
                 string key = TypeKey(g);
                 int slot = (int)CategoryOf(key);

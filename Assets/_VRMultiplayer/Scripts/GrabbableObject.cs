@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -54,6 +55,18 @@ namespace VRMultiplayer
         /// prefabs and scene objects need no manual component edits.</summary>
         public static event System.Action<GrabbableObject> AnySpawned;
 
+        // Spawn edilmis grabbable'larin kayit listesi: WeaponInventory / HandGrabber.Reconcile /
+        // silah rafi / silah carki gibi PERIYODIK tuketiciler sahneyi FindObjectsByType ile
+        // taramasin — her cagri tum sahne objelerini gezer ve sonuc dizisini heap'e cikarir
+        // (Quest'te tekrarlayan GC baskisi). Liste spawn/despawn'da guncellenir; tuketiciler
+        // indeksle gezmeli (foreach sirasinda spawn olursa liste buyuyebilir).
+        static readonly List<GrabbableObject> _active = new List<GrabbableObject>();
+        public static IReadOnlyList<GrabbableObject> Active => _active;
+
+        // Domain reload kapali projede play'e her giriste statikler elle sifirlanir.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => _active.Clear();
+
         /// <summary>Owner-side: publish which hand steadies the weapon (0=L, 1=R, NoHand).</summary>
         public void SetSupportHandOwner(byte hand)
         {
@@ -84,6 +97,7 @@ namespace VRMultiplayer
             _supportHand.OnValueChanged += OnStateChanged;
             if (IsServer)
                 NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
+            if (!_active.Contains(this)) _active.Add(this);
             AnySpawned?.Invoke(this);
         }
 
@@ -95,6 +109,7 @@ namespace VRMultiplayer
             _supportHand.OnValueChanged -= OnStateChanged;
             if (IsServer && NetworkManager != null)
                 NetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
+            _active.Remove(this);
         }
 
         void OnStateChanged(ulong _, ulong __) => StateDirty?.Invoke();

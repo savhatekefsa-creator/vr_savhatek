@@ -472,8 +472,10 @@ namespace VRMultiplayer
         {
             if (Time.time < _nextReconcile) return;
             _nextReconcile = Time.time + 1f;
-            foreach (var g in FindObjectsByType<GrabbableObject>(FindObjectsSortMode.None))
+            var actives = GrabbableObject.Active; // spawn kayit listesi — sahne taramasi + dizi alloc'u yok
+            for (int i = 0; i < actives.Count; i++)
             {
+                var g = actives[i];
                 if (g.HolderClientId != NetworkManager.LocalClientId) continue;
                 if ((_left != null && g == _left.held) || (_right != null && g == _right.held)) continue;
                 g.ReleaseServerRpc();

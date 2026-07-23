@@ -398,8 +398,9 @@ namespace VRMultiplayer.UI
         {
             var nm = NetworkManager.Singleton;
             if (nm == null || !(nm.IsServer || nm.IsConnectedClient)) return null;
-            foreach (var g in FindObjectsByType<GrabbableObject>(FindObjectsSortMode.None))
-                if (g.HolderClientId == nm.LocalClientId) return g;
+            var actives = GrabbableObject.Active; // spawn kayit listesi — sahne taramasi + dizi alloc'u yok
+            for (int i = 0; i < actives.Count; i++)
+                if (actives[i].HolderClientId == nm.LocalClientId) return actives[i];
             return null;
         }
 

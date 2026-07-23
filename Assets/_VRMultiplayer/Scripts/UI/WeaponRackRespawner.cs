@@ -79,8 +79,10 @@ namespace VRMultiplayer.UI
         /// yoksa oyuncunun elinden dusen her silah kendini coğaltirdi.</summary>
         void RegisterSceneWeapons()
         {
-            foreach (var g in FindObjectsByType<GrabbableObject>(FindObjectsSortMode.None))
+            var actives = GrabbableObject.Active; // spawn kayit listesi — sahne taramasi + dizi alloc'u yok
+            for (int gi = 0; gi < actives.Count; gi++)
             {
+                var g = actives[gi];
                 if (_registered.Contains(g)) continue;
 
                 var no = g.GetComponent<NetworkObject>();
