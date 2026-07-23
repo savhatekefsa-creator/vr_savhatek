@@ -274,14 +274,20 @@ namespace VRMultiplayer.EditorTools
 
                 var skinned = avatar.GetComponentInChildren<SkinnedMeshRenderer>();
 
-                // Force a URP-compatible material on every slot so the model isn't magenta in
-                // URP and the per-player color tint (via MaterialPropertyBlock) always applies.
+                // URP uyumsuz (magenta) slotlara gri yedek malzeme atanir. Modelin KENDI URP
+                // malzemeleri korunur — aksi halde renkli asker dokulari duz griye ezilir.
+                // Takim tonu MaterialPropertyBlock ile uygulanir; URP/Lit _BaseColor'i destekler.
                 if (skinned != null)
                 {
                     var avatarMat = GetOrCreateMat("Avatar", new Color(0.85f, 0.85f, 0.85f));
-                    int slots = Mathf.Max(1, skinned.sharedMaterials.Length);
+                    var src = skinned.sharedMaterials;
+                    int slots = Mathf.Max(1, src.Length);
                     var mats = new Material[slots];
-                    for (int i = 0; i < slots; i++) mats[i] = avatarMat;
+                    for (int i = 0; i < slots; i++)
+                    {
+                        var m = i < src.Length ? src[i] : null;
+                        mats[i] = IsUrpCompatible(m) ? m : avatarMat;
+                    }
                     skinned.sharedMaterials = mats;
                 }
 
@@ -1219,6 +1225,15 @@ namespace VRMultiplayer.EditorTools
             t.SyncRotAngleX = t.SyncRotAngleY = t.SyncRotAngleZ = true;
             t.SyncScaleX = t.SyncScaleY = t.SyncScaleZ = false; // avatars don't scale
             t.Interpolate = true;                               // smooth remote avatars
+        }
+
+        /// <summary>Malzeme URP'de duzgun cizilir mi? (magenta/eksik shader tespiti)</summary>
+        static bool IsUrpCompatible(Material m)
+        {
+            if (m == null || m.shader == null) return false;
+            string n = m.shader.name;
+            if (n == "Hidden/InternalErrorShader") return false;
+            return n.Contains("Universal Render Pipeline") || n.StartsWith("Shader Graphs/") || n.Contains("URP");
         }
 
         static Material GetOrCreateMat(string key, Color color)
