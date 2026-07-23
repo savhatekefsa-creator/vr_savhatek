@@ -45,6 +45,7 @@ namespace VRMultiplayer
             public Vector3 blendFromPos;    // weapon pose captured at the discontinuity
             public Quaternion blendFromRot;
             public bool legacyAiming;       // legacy path: was two-hand aim engaged last frame?
+            public GrabbableObject pinFrom; // bu el OTEKI eldeki bombanin pimini tutuyor
             public readonly Queue<(Vector3 pos, float t)> trail = new Queue<(Vector3, float)>();
         }
 
@@ -117,6 +118,15 @@ namespace VRMultiplayer
         {
             if (!IsOwner) return;
 
+            // Pimi cekilmis bomba cantaya GERI KONAMAZ. Bu blok olmasa silah carkindan baska bir
+            // sey secmek canli bombayi despawn edip "sondururdu" — pim sisteminin butun anlamini
+            // bosa cikaran kacamak. Once firlatmak zorundasin.
+            if (current != null)
+            {
+                var live = current.GetComponent<GrenadeController>();
+                if (live != null && live.Armed) return;
+            }
+
             // prefab == null -> SADECE yok et (birakma: "cantaya girdi", yerine bir sey gelmez).
             int idx = -1;
             if (prefab != null)
@@ -150,6 +160,10 @@ namespace VRMultiplayer
             if (_right != null && _right.held == current) { _right.held = null; _right.grip = null; _right.confirmed = false; }
             if (_left != null && _left.supporting == current) { _left.supporting = null; _left.supportGrip = null; _left.supportCols = null; }
             if (_right != null && _right.supporting == current) { _right.supporting = null; _right.supportGrip = null; _right.supportCols = null; }
+            // Pimi bu objeden cekilmis el varsa serbest kalsin: obje birazdan yok edilecek,
+            // aksi halde o el "pim tutuyor" sanip bir daha hicbir sey kavrayamazdi.
+            if (_left != null && _left.pinFrom == current) _left.pinFrom = null;
+            if (_right != null && _right.pinFrom == current) _right.pinFrom = null;
 
             var oldRef = current != null && current.NetworkObject != null
                 ? new NetworkObjectReference(current.NetworkObject)
@@ -479,13 +493,35 @@ namespace VRMultiplayer
 
         void TryGrab(HandState h)
         {
-            if (h.held != null || h.supporting != null) return;
+            if (h.held != null || h.supporting != null || h.pinFrom != null) return;
+
+            // BOMBA: oteki eldeki bombaya bos elle yaklasip grip'e basmak destek eli DEGIL, pim
+            // cekmektir. Destek dalindan once bakilir, yoksa bomba "cift elle nisan" moduna
+            // girip pim hic cekilemezdi. Pim, bu el grip'i birakana kadar elde kalir.
+            var o = Other(h);
+            GrenadeController grenade = null;
+            if (o != null && o.held != null && o.confirmed)
+                grenade = o.held.GetComponent<GrenadeController>();
+
+            if (grenade != null && !grenade.Armed)
+            {
+                // Bombanin collider'i konveks olmayan bir MeshCollider olabilir; bounds ile olcmek
+                // hem guvenli hem de kucuk bir objede yeterince hassas.
+                float pinDist = NearestColliderDistance(o.held, h.anchor.position, useBounds: true);
+                if (pinDist >= 0f && pinDist < grenade.PinPullReach)
+                {
+                    grenade.PullPin(h.index);
+                    h.pinFrom = o.held;
+                    return;
+                }
+            }
 
             // If my OTHER hand already holds a snap-style weapon and this hand squeezes near
             // it, this hand becomes the SUPPORT hand (two-handed ready stance) instead of
             // trying to grab something else. Slightly longer reach: the handguard is long.
-            var o = Other(h);
-            if (o != null && o.held != null && o.confirmed && o.held.snapToHand)
+            // Bomba destek eli KABUL ETMEZ: tek elle tutulur, oteki el ya pim ceker ya da
+            // serbesttir (yakindaki baska bir objeyi alabilir).
+            if (o != null && o.held != null && o.confirmed && o.held.snapToHand && grenade == null)
             {
                 float sd = NearestColliderDistance(o.held, h.anchor.position, useBounds: false);
                 if (sd >= 0f && sd < grabRadius * 1.5f)
@@ -549,6 +585,16 @@ namespace VRMultiplayer
 
         void Release(HandState h)
         {
+            // Pimi tutan el birakti -> pim yok olur. Bomba KURULU kalir: pim geri takilmaz,
+            // birakmak bombayi guvenli hale getirmez (bilincli karar, gercekci taraf).
+            if (h.pinFrom != null)
+            {
+                var gc = h.pinFrom.GetComponent<GrenadeController>();
+                if (gc != null) gc.DropPin();
+                h.pinFrom = null;
+                return;
+            }
+
             // Support hand lets go -> back to one-handed carry, weapon stays in the grip hand.
             if (h.supporting != null)
             {
@@ -579,6 +625,17 @@ namespace VRMultiplayer
             if (profiled)
             {
                 g.SetSupportHandOwner(GrabbableObject.NoHand); // clear while we still own it
+
+                // PIMI CEKILMIS BOMBA cantaya GIRMEZ — canli bombayi cebe koymak yok. Grip'i
+                // birakmak onu el hiziyla firlatir (GrenadeController hizi olcekler + takla
+                // ekler). Pimi cekilmemis bomba asagidaki normal silah yolundan cantaya gider.
+                var grenade = g.GetComponent<GrenadeController>();
+                if (grenade != null && grenade.Armed)
+                {
+                    g.ApplyThrow(HandVelocity(h), Vector3.zero);
+                    g.ReleaseServerRpc();
+                    return;
+                }
 
                 // A released WEAPON vanishes — the "went into the bag" look; the selector gallery
                 // brings its type back on demand. Only profiled weapons: rocks and props (no grip
