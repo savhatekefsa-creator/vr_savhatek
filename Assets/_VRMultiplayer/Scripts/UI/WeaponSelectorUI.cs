@@ -77,7 +77,11 @@ namespace VRMultiplayer.UI
 
         int _selected = -1;          // -1 = gosterim yok, 0..2 = dilim
         bool _open;
-        bool _pointed;               // bu acilista stick en az bir kez dilime dogru itildi mi
+        bool _pointed;               // bu acilista bir dilim isaretlendi mi (stick VEYA klavye)
+        bool _pointedByStick;        // birakinca-onay YALNIZCA stick isaretlemesinde calisir:
+                                     // klavyede stick hep (0,0) oldugundan ok tusuna basar
+                                     // basmaz "birakildi" sayilip silah ANINDA degisiyordu;
+                                     // klavye akisi Enter/TAB ile onaylar (dokumante davranis).
         bool _clickPrev;
         UnityEngine.XR.InputDevice _rightHand;
 
@@ -143,12 +147,13 @@ namespace VRMultiplayer.UI
             {
                 _selected = NearestSlice(stick);
                 _pointed = true;
+                _pointedByStick = true;
             }
 
             Layout();
 
             bool commit = click; // tik hala calisir (aliskanlik/yedek), ama sart degil
-            if (_pointed && mag < pointDeadzone * 0.6f) commit = true; // birakti -> onay (histerezis)
+            if (_pointedByStick && mag < pointDeadzone * 0.6f) commit = true; // birakti -> onay (histerezis)
 
             if (commit)
             {
@@ -177,7 +182,7 @@ namespace VRMultiplayer.UI
         {
             if (_open == open) return;
             _open = open;
-            if (open) { EnsureWheel(); _selected = -1; _pointed = false; }
+            if (open) { EnsureWheel(); _selected = -1; _pointed = false; _pointedByStick = false; }
             if (_wheel != null) _wheel.gameObject.SetActive(open);
 
             // Onizlemeler envanterin mali — cark kapaninca hepsini sakla.
