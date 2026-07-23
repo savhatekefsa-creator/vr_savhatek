@@ -69,6 +69,11 @@ namespace VRMultiplayer.UI
         }
     }
 
+    /// <summary>Nisan isareti bicimi — hepsi MERCEK ICINDE cizilir (red-dot mantigi: sadece
+    /// nisan alan gorur, dunyada isik yoktur). Isaret, merminin gercekten gidecegi noktanin
+    /// goruntudeki yerine kayar.</summary>
+    public enum ScopeReticleStyle { Nokta, Arti, Ikisi }
+
     /// <summary>Tek silahin durbunu: mercek konumunu bulur, uzerine RT'li disk + arti katmani
     /// yerlestirir. Agirlik (kamera+RT) yalnizca aktifken yasar.</summary>
     // SIRA 80 = TEPMEDEN SONRA (WeaponRecoil 60). Sirasiz birakilinca durbun kamerasi silahin
@@ -98,17 +103,26 @@ namespace VRMultiplayer.UI
         [Tooltip("Diski namlu ekseninde kaydir (metre; + ileri, - geri). Disk yanlis yerdeyse.")]
         public float lensAxisNudge = 0f;
 
-        [Header("Nisan artisi (askeri tarz: ince, kucuk +)")]
-        [Tooltip("Artinin kol uzunlugu (RT pikseli). Kucuk tut — halka/tam boy cizgi degil, " +
-                 "isabet noktasini isaretleyen sade bir isaret.")]
+        [Header("Nisan isareti (mercek icinde — sadece nisan alan gorur)")]
+        [Tooltip("Nokta = red-dot tarzi yesil benek (ekip istegi). Arti = ince +. Ikisi = her ikisi.")]
+        public ScopeReticleStyle reticleStyle = ScopeReticleStyle.Nokta;
+        [Tooltip("Isaret rengi. Gercek yesil lazer/red-dot tonu (532 nm) — silah oyunlarinin standardi.")]
+        public Color reticleColor = new Color(0.15f, 1f, 0.25f, 1f);
+
+        [Tooltip("NOKTA yaricapi (doku pikseli). Kucuk tut — 4-8 arasi gercekci.")]
+        public int reticleDotPx = 6;
+        [Tooltip("Hale (glow) yaricap carpani: 1 = hale yok, 2.5 = yumusak parlama.")]
+        public float reticleGlow = 2.5f;
+
+        [Tooltip("ARTI kol uzunlugu (doku pikseli).")]
         public int reticleArmPx = 18;
-        [Tooltip("Cizgi kalinligi (RT pikseli).")]
+        [Tooltip("Arti cizgi kalinligi (doku pikseli).")]
         public int reticleLinePx = 2;
-        [Tooltip("Kollarin merkezde birakacagi minik bosluk; 0 = tam kesisir (askeri standart).")]
+        [Tooltip("Arti kollarinin merkezde birakacagi bosluk; 0 = tam kesisir.")]
         public int reticleCenterGapPx = 0;
-        public Color reticleLineColor = new Color(0f, 0f, 0f, 0.9f);
 
         GrabbableObject _grab;
+        NetworkWeapon _weapon;      // nisan isininin kaynagi (Fire ile ayni)
         Transform _camAnchor;
         Vector3 _barrelLocal = Vector3.forward;
         Vector3 _lensCenterLocal;   // silah-lokal mercek merkezi
@@ -118,13 +132,16 @@ namespace VRMultiplayer.UI
         Camera _cam;
         RenderTexture _rt;
         Transform _lens;            // RT'yi gosteren disk
-        Transform _reticle;         // arti/halka katmani — isabet noktasina KAYAR
+        Transform _reticle;         // isaret katmani (mercek uzerinde) — isabet noktasina KAYAR
+        Material _reticleMat;       // rengi canli degistirmek icin
+        ScopeReticleStyle _builtStyle = (ScopeReticleStyle)(-1); // dokusu hangi bicimle uretildi
         Material _lensMat;
         bool _active;
 
         public void Init(GrabbableObject g, string[] glassNames, string matHint, string anchorName, float fov)
         {
             _grab = g;
+            _weapon = g.GetComponent<NetworkWeapon>();
             scopeFov = fov;
 
             var grip = g.GetComponent<WeaponGrip>();
@@ -252,12 +269,27 @@ namespace VRMultiplayer.UI
             // "Yukari" = dunya yukarisi (silah duz tutulunca ufuk duz); namlu dike yakinsa coksun diye yedek.
             Vector3 up = Mathf.Abs(Vector3.Dot(barrelWorld, Vector3.up)) > 0.95f ? _grab.transform.up : Vector3.up;
 
-            // Kamera: merceğin biraz onunde, namlu yonunde.
             Vector3 lensWorld = _grab.transform.TransformPoint(_lensCenterLocal);
+
+            // KAMERA NISAN EKSENINE OTURUR — merceğin icine degil. Sebep: mercek namlunun
+            // USTUNDE; kamerayi oraya koyunca goruntu mermiyle PARALEL ama KAYIK oluyordu ve
+            // isabet noktasinin goruntudeki yeri MESAFEYE gore degisiyordu (elin en ufak
+            // titremesinde nokta kayiyordu). Kamerayi merminin ekseni uzerine alinca goruntunun
+            // MERKEZI = merminin gidecegi yer; isaret sabit durur, mesafe onemsiz.
             if (_cam != null)
             {
-                Vector3 camPos = (_camAnchor != null ? _camAnchor.position : lensWorld) + barrelWorld * camForwardOffset;
-                _cam.transform.SetPositionAndRotation(camPos, Quaternion.LookRotation(barrelWorld, up));
+                Vector3 camPos, camDir;
+                if (_weapon != null)
+                {
+                    _weapon.GetAimRay(out camPos, out camDir);   // Fire() ile ayni is
+                    camPos += camDir * camForwardOffset;
+                }
+                else
+                {
+                    camPos = (_camAnchor != null ? _camAnchor.position : lensWorld) + barrelWorld * camForwardOffset;
+                    camDir = barrelWorld;
+                }
+                _cam.transform.SetPositionAndRotation(camPos, Quaternion.LookRotation(camDir, up));
             }
 
             // Ekran diski: merceğin GOZ tarafinda, atici yuzune donuk. Kamerayla AYNI 'up'
@@ -271,7 +303,7 @@ namespace VRMultiplayer.UI
                 _lens.localScale = Vector3.one * (radius * lensScale);
             }
 
-            AimReticleAtImpact();
+            UpdateReticle();
         }
 
         /// <summary>Nisan halkasini merminin GERCEKTEN gidecegi noktaya kaydirir.
@@ -283,27 +315,16 @@ namespace VRMultiplayer.UI
         /// Fire ile ayni kaynak) alip carptigi noktayi bulmak ve halkayi o noktanin kamera
         /// goruntusundeki yerine koymak. Boylece halka NEREDEYSE mermi ORAYA gider — mesafe,
         /// tepme, montaj farki ne olursa olsun.</summary>
-        void AimReticleAtImpact()
+        /// <summary>Isareti gunceller. Kamera nisan ekseninde oldugu icin isaret SABIT
+        /// MERKEZDE durur — merkez zaten merminin gidecegi yer. (Onceden isabet noktasi hesaplanip
+        /// isaret oraya kaydiriliyordu; kamera mercekte oldugu icin o nokta mesafeyle oynuyor ve
+        /// isaret surekli titriyordu.)</summary>
+        void UpdateReticle()
         {
-            if (_reticle == null || _cam == null) return;
-
-            var nw = _grab.GetComponent<NetworkWeapon>();
-            if (nw == null) { _reticle.localPosition = new Vector3(0f, 0f, -0.003f); return; }
-
-            nw.GetAimRay(out Vector3 origin, out Vector3 dir);
-            float far = Mathf.Max(10f, nw.range);
-            Vector3 hit = Physics.Raycast(origin, dir, out var h, far, Physics.AllLayers, QueryTriggerInteraction.Ignore)
-                ? h.point
-                : origin + dir * far;
-
-            var vp = _cam.WorldToViewportPoint(hit);
-            if (vp.z <= 0f) { _reticle.localPosition = new Vector3(0f, 0f, -0.003f); return; }
-
-            // Goruntu alani (0..1) diskin lokal -1..+1 araligina birebir dusuyor (disk UV'sini
-            // biz uretiyoruz). Disk disina tasmasin diye sinirlanir.
-            Vector2 off = new Vector2((vp.x - 0.5f) * 2f, (vp.y - 0.5f) * 2f);
-            if (off.magnitude > 0.85f) off = off.normalized * 0.85f;
-            _reticle.localPosition = new Vector3(off.x, off.y, -0.003f);
+            if (_reticle == null) return;
+            if (_builtStyle != reticleStyle) ApplyReticleTexture();   // bicim canli degistiyse
+            if (_reticleMat != null) UITheme.SetMaterialColor(_reticleMat, reticleColor);
+            _reticle.localPosition = new Vector3(0f, 0f, -0.003f);
         }
 
         /// <summary>Yalnizca: YEREL oyuncu tutuyor + goz merceğe yakin. XR yoksa (PC testi)
@@ -377,12 +398,10 @@ namespace VRMultiplayer.UI
             _reticle = ret.transform;
             ret.AddComponent<MeshFilter>().sharedMesh = DiscMesh(1f, 40);
             var rmr = ret.AddComponent<MeshRenderer>();
-            var rmat = MakeUnlitMaterial(3001);
-            var overlay = MakeReticleOverlay(rtSize);
-            if (rmat.HasProperty("_BaseMap")) rmat.SetTexture("_BaseMap", overlay);
-            if (rmat.HasProperty("_MainTex")) rmat.SetTexture("_MainTex", overlay);
-            UITheme.SetMaterialColor(rmat, Color.white);
-            rmr.sharedMaterial = rmat;
+            _reticleMat = MakeUnlitMaterial(3001);
+            // Doku SEKLI beyaz cizer, rengi MATERYALDEN gelir -> renk Play'de canli degisir.
+            rmr.sharedMaterial = _reticleMat;
+            ApplyReticleTexture();
 
             _lens.gameObject.SetActive(false);
         }
@@ -433,25 +452,53 @@ namespace VRMultiplayer.UI
 
         /// <summary>Arti dokusu: saydam zemin + merkez bosluklu ince cizgiler + yumusak nokta.
         /// Merkez = namlu ekseni = merminin gidecegi yer (sus degil, gercek nisan).</summary>
+        /// <summary>Isaret dokusunu secili bicime gore uretip materyale takar. Sekil BEYAZ
+        /// cizilir (alfa ile), renk materyalden gelir — boylece rengi Play'de canli degistirebilirsin.</summary>
+        void ApplyReticleTexture()
+        {
+            if (_reticleMat == null) return;
+            var tex = MakeReticleOverlay(rtSize);
+            if (_reticleMat.HasProperty("_BaseMap")) _reticleMat.SetTexture("_BaseMap", tex);
+            if (_reticleMat.HasProperty("_MainTex")) _reticleMat.SetTexture("_MainTex", tex);
+            _builtStyle = reticleStyle;
+        }
+
         Texture2D MakeReticleOverlay(int size)
         {
             var t = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "ScopeReticle" };
             var clear = new Color(0, 0, 0, 0);
-            int cx = size / 2, cy = size / 2;
+            float cx = (size - 1) * 0.5f, cy = (size - 1) * 0.5f;
             int lt = Mathf.Max(1, reticleLinePx);
-            int arm = Mathf.Max(2, reticleArmPx);        // kol uzunlugu
-            int gap = Mathf.Max(0, reticleCenterGapPx);  // merkez bosluğu
+            int arm = Mathf.Max(2, reticleArmPx);
+            int gap = Mathf.Max(0, reticleCenterGapPx);
+            float core = Mathf.Max(1f, reticleDotPx);
+            float halo = core * Mathf.Max(1f, reticleGlow);
+
+            bool wantDot = reticleStyle != ScopeReticleStyle.Arti;
+            bool wantCross = reticleStyle != ScopeReticleStyle.Nokta;
 
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
                 {
-                    int dx = Mathf.Abs(x - cx), dy = Mathf.Abs(y - cy);
-                    // Kucuk +: dikey ve yatay kisa kollar. Halka/tam boy cizgi YOK — arti
-                    // isabet noktasina KAYDIGI icin (bkz. AimReticleAtImpact) tam boy cizgiler
-                    // kaydiginda yamuk gorunuyordu; askeri dürbünlerdeki sade isaret daha dogru.
-                    bool onV = dx < lt && dy <= arm && dy >= gap;
-                    bool onH = dy < lt && dx <= arm && dx >= gap;
-                    t.SetPixel(x, y, (onV || onH) ? reticleLineColor : clear);
+                    float a = 0f;
+
+                    if (wantCross)
+                    {
+                        float dx = Mathf.Abs(x - cx), dy = Mathf.Abs(y - cy);
+                        bool onV = dx < lt && dy <= arm && dy >= gap;
+                        bool onH = dy < lt && dx <= arm && dx >= gap;
+                        if (onV || onH) a = 1f;
+                    }
+
+                    if (wantDot)
+                    {
+                        // Ortasi dolu, kenari sonen benek — red-dot nisangahin parlama hissi.
+                        float d = Vector2.Distance(new Vector2(x, y), new Vector2(cx, cy));
+                        float g = d <= core ? 1f : Mathf.Clamp01(1f - (d - core) / Mathf.Max(0.001f, halo - core));
+                        a = Mathf.Max(a, g * g);
+                    }
+
+                    t.SetPixel(x, y, a > 0.002f ? new Color(1f, 1f, 1f, a) : clear);
                 }
             t.Apply();
             return t;
