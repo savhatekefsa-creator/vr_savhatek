@@ -163,11 +163,26 @@ namespace VRMultiplayer
                 r.enabled = false;
         }
 
+        // Son uygulanan yayilma ofseti. STATIK: rig kalici sahne objesi — instance alani her
+        // yeniden katilimda sifirlanip birikimi gizlerdi.
+        static Vector3 _appliedSpread;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetSpreadStatics() => _appliedSpread = Vector3.zero;
+
         void SpreadSpawn(XRRigReference rig)
         {
+            // Kalibrasyon rig'i ortak fiziksel cerceveye oturttuysa yayilma ZARARLI olur:
+            // paylasilan cercevede herkes gercek konumunda durmali, halka ofseti eklenmemeli.
+            if (CalibrationManager.Calibrated) return;
+
             float angle = (OwnerClientId % 8) * 45f;
             Vector3 offset = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * spawnRingRadius;
-            rig.transform.position += offset;
+            // Once eski ofset geri alinir: rig sahnede yasadigi icin her yeniden katilim
+            // ONCEKININ USTUNE ekliyordu — kopan oyuncu her donusunde 0.9 m daha uzaga dogup
+            // fiziksel cerceveden adim adim kayiyordu.
+            rig.transform.position += offset - _appliedSpread;
+            _appliedSpread = offset;
         }
 
         void LateUpdate()
