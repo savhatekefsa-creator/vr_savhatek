@@ -36,6 +36,26 @@ namespace VRMultiplayer.EditorTools
         [MenuItem("Tools/VR Multiplayer/1. Create NetworkPlayer Prefab")]
         public static GameObject CreateNetworkPlayerPrefab()
         {
+            // KORUMA: Bu menu prefabi SIFIRDAN kurar. Mevcut prefabta sonradan eklenen tum
+            // bilesenler (PlayerHealth, TeamSelector, HandGrabber, avatar...) kaybolur.
+            // Prefab zaten varsa kullaniciya sorulmadan asla ezilmez.
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+            if (existing != null)
+            {
+                bool overwrite = EditorUtility.DisplayDialog(
+                    "NetworkPlayer Prefab zaten var",
+                    "Bu islem prefabi SIFIRDAN kurar: PlayerHealth, TeamSelector, HandGrabber, " +
+                    "avatar gibi sonradan eklenen TUM bilesenler SILINIR.\n\n" +
+                    "Avatar degistirmek icin bunun yerine Adim 3'u kullan.\n\n" +
+                    "Geri donus yolu yoktur (yalnizca git).",
+                    "SIFIRDAN KUR (bilesenleri sil)", "Vazgec");
+                if (!overwrite)
+                {
+                    Selection.activeObject = existing;
+                    return existing;
+                }
+            }
+
             EnsureFolder(PrefabFolder);
 
             var root = new GameObject("NetworkPlayer");
