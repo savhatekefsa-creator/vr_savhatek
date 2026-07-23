@@ -123,6 +123,9 @@ namespace VRMultiplayer
         // PC screen: the only thing the PC does is run the server.
         void OnGUI()
         {
+            // IMGUI kulaklikta hicbir sey cizmez ama layout maliyeti yine de odenirdi;
+            // sunucu butonu zaten yalnizca PC icindir — mobilde tamamen kapali.
+            if (Application.isMobilePlatform) return;
             if (_busy) return;
             GUILayout.BeginArea(new Rect(20, 20, 260, 90), GUI.skin.box);
             GUILayout.Label("LAN VR Multiplayer");

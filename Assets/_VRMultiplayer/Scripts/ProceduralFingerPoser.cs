@@ -278,6 +278,25 @@ namespace VRMultiplayer
 
         Transform Bone(HumanBodyBones b) => _anim.GetBoneTransform(b);
 
+        // Authored poz yolu icin kemik cache'i: ApplyAuthored her kare her eklem icin
+        // Animator.GetBoneTransform cagiriyordu (el basina ~15 engine cagrisi, her oyuncu,
+        // her kare). Iskelet spawn'dan sonra degismez — bir kez cozulur. (Legacy yol zaten
+        // Phalanx.t ile cache'liydi; authored yol ayni muameleyi hic gormemisti.)
+        Transform[] _authBonesL, _authBonesR;
+
+        Transform[] AuthoredBones(bool left)
+        {
+            var arr = left ? _authBonesL : _authBonesR;
+            if (arr == null)
+            {
+                arr = new Transform[HandPoseBones.JointCount];
+                for (int j = 0; j < HandPoseBones.JointCount; j++)
+                    arr[j] = Bone(HandPoseBones.Bone(j, left));
+                if (left) _authBonesL = arr; else _authBonesR = arr;
+            }
+            return arr;
+        }
+
         void LateUpdate()
         {
             // Runs after AvatarIKController (execution order 100), so on the capture frame the
@@ -339,10 +358,11 @@ namespace VRMultiplayer
             var cur = left ? _authL : _authR;
             bool seeded = left ? _authSeededL : _authSeededR;
             bool pulled = indexFollowsTrigger && fp.HasIndexPulled;
+            var bones = AuthoredBones(left);
 
             for (int j = 0; j < HandPoseBones.JointCount; j++)
             {
-                var t = Bone(HandPoseBones.Bone(j, left));
+                var t = bones[j];
                 if (t == null) continue;
 
                 Quaternion target = fp.joints[j];

@@ -111,6 +111,9 @@ namespace VRMultiplayer
         // Editor / desktop fallback so the flow can be tested without a headset.
         void OnGUI()
         {
+            // IMGUI kulaklikta hicbir sey cizmez ama layout maliyeti (event basina 2 gecis)
+            // yine de odenirdi — mobilde tamamen kapali.
+            if (Application.isMobilePlatform) return;
             if (_done || !IsOwner) return;
             GUILayout.BeginArea(new Rect(20, 290, 260, 80), GUI.skin.box);
             GUILayout.Label("Takim sec");
