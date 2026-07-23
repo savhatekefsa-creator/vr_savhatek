@@ -1599,7 +1599,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 7974943901506784399, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1370643745}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 7342945010738435637, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
       insertIndex: -1
@@ -1616,6 +1619,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7342945010738435637, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
       insertIndex: -1
       addedObject: {fileID: 127291546}
+    - targetCorrespondingSourceObject: {fileID: 7342945010738435637, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 127291551}
   m_SourcePrefab: {fileID: 100100000, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
 --- !u!1 &127291542 stripped
 GameObject:
@@ -1758,6 +1764,27 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
+--- !u!4 &127291550 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 7974943901506784399, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
+  m_PrefabInstance: {fileID: 127291541}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &127291551
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 127291542}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98fb3302d2ab6cb45bce70ca2d5d85e0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.NetworkWeapon
+  ShowTopMostFoldoutHeaderGroup: 1
+  fireInterval: 0.18
+  range: 60
+  muzzle: {fileID: 1370643745}
 --- !u!43 &134114506
 Mesh:
   m_ObjectHideFlags: 0
@@ -26080,6 +26107,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 1885109112904519617, guid: dc19cb118b90ce748b19a86b643d1ef5, type: 3}
   m_PrefabInstance: {fileID: 1367990394}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1370643744
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1370643745}
+  m_Layer: 0
+  m_Name: Muzzle
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1370643745
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1370643744}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0.047379132, y: 0.7055177, z: 0.04737913, w: -0.70551777}
+  m_LocalPosition: {x: -0.29304633, y: 0.037609614, z: 0.00007356331}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 127291550}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1375606339
 PrefabInstance:
   m_ObjectHideFlags: 0
