@@ -78,20 +78,9 @@ namespace VRMultiplayer
             _prevY = y;
         }
 
-        // Keep the instruction panel floating in front of the player's face.
-        void FollowHead()
-        {
-            if (status == null || !status.gameObject.activeSelf) return;
-            var r = XRRigReference.Instance;
-            if (r == null || r.head == null) return;
-
-            Vector3 fwd = r.head.forward;
-            fwd.y = 0f;
-            if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
-            fwd.Normalize();
-            status.transform.position = r.head.position + fwd * 1.4f;
-            status.transform.rotation = Quaternion.LookRotation(fwd);
-        }
+        // Panel takibi HeadFollowPanel bileseninde (obje inaktifken calismaz — eski
+        // activeSelf kontrolu ile ayni davranis); burada yalnizca bir kez takilir.
+        void FollowHead() => UI.HeadFollowPanel.Attach(status);
 
         void CapturePoint()
         {

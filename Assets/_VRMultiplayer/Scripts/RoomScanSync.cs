@@ -47,7 +47,6 @@ namespace VRMultiplayer
 
         void Update()
         {
-            FollowHead();
             if (_hidePanelAt > 0f && Time.time > _hidePanelAt) { HidePanel(); }
 
             bool x = XRButtons.Button(XRNode.LeftHand, CommonUsages.primaryButton);
@@ -342,16 +341,7 @@ namespace VRMultiplayer
         void Show(string text, float hideAfter = -1f)
         {
             if (_panel == null)
-            {
-                var go = new GameObject("Room Scan Panel");
-                go.transform.localScale = Vector3.one * 0.16f;
-                _panel = go.AddComponent<TextMesh>();
-                _panel.characterSize = 0.1f;
-                _panel.fontSize = 60;
-                _panel.anchor = TextAnchor.MiddleCenter;
-                _panel.alignment = TextAlignment.Center;
-                _panel.color = new Color(0.5f, 1f, 0.6f);
-            }
+                _panel = UI.HeadFollowPanel.Create("Room Scan Panel", "", new Color(0.5f, 1f, 0.6f));
             _panel.gameObject.SetActive(true);
             _panel.text = text;
             _hidePanelAt = hideAfter > 0f ? Time.time + hideAfter : -1f;
@@ -363,17 +353,5 @@ namespace VRMultiplayer
             _hidePanelAt = -1f;
         }
 
-        void FollowHead()
-        {
-            if (_panel == null || !_panel.gameObject.activeSelf) return;
-            var rig = XRRigReference.Instance;
-            if (rig == null || rig.head == null) return;
-            Vector3 fwd = rig.head.forward;
-            fwd.y = 0f;
-            if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
-            fwd.Normalize();
-            _panel.transform.position = rig.head.position + fwd * 1.4f;
-            _panel.transform.rotation = Quaternion.LookRotation(fwd);
-        }
     }
 }

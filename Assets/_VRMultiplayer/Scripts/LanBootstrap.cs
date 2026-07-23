@@ -66,7 +66,6 @@ namespace VRMultiplayer
             if (!sessionActive && right.isValid)
             {
                 EnsureJoinPanel();
-                FollowHead(statusLabel);
             }
             else if (statusLabel != null && sessionActive)
             {
@@ -95,29 +94,8 @@ namespace VRMultiplayer
         void EnsureJoinPanel()
         {
             if (statusLabel != null) return;
-            var go = new GameObject("Join Panel");
-            go.transform.localScale = Vector3.one * 0.16f;
-            statusLabel = go.AddComponent<TextMesh>();
-            statusLabel.text = "OYUNA KATILMAK ICIN\nB TUSUNA BAS";
-            statusLabel.characterSize = 0.1f;
-            statusLabel.fontSize = 60;
-            statusLabel.anchor = TextAnchor.MiddleCenter;
-            statusLabel.alignment = TextAlignment.Center;
-            statusLabel.color = Color.white;
-        }
-
-        static void FollowHead(TextMesh panel)
-        {
-            if (panel == null) return;
-            var rig = XRRigReference.Instance;
-            if (rig == null || rig.head == null) return;
-
-            Vector3 fwd = rig.head.forward;
-            fwd.y = 0f;
-            if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
-            fwd.Normalize();
-            panel.transform.position = rig.head.position + fwd * 1.4f;
-            panel.transform.rotation = Quaternion.LookRotation(fwd);
+            statusLabel = UI.HeadFollowPanel.Create("Join Panel",
+                "OYUNA KATILMAK ICIN\nB TUSUNA BAS", Color.white);
         }
 
         // PC screen: the only thing the PC does is run the server.

@@ -47,32 +47,13 @@ namespace VRMultiplayer
 
         void CreatePanel()
         {
-            var go = new GameObject("Team Select Panel");
-            go.transform.localScale = Vector3.one * 0.16f;
-            _panel = go.AddComponent<TextMesh>();
-            _panel.text = "TAKIM SEC\n\nA tusu = A TAKIMI (mavi)\nB tusu = B TAKIMI (kirmizi)";
-            _panel.characterSize = 0.1f;
-            _panel.fontSize = 60;
-            _panel.anchor = TextAnchor.MiddleCenter;
-            _panel.alignment = TextAlignment.Center;
-            _panel.color = Color.yellow;
+            _panel = UI.HeadFollowPanel.Create("Team Select Panel",
+                "TAKIM SEC\n\nA tusu = A TAKIMI (mavi)\nB tusu = B TAKIMI (kirmizi)", Color.yellow);
         }
 
         void Update()
         {
             if (_done) return;
-
-            // Keep the panel floating in front of the player's face.
-            var rig = XRRigReference.Instance;
-            if (_panel != null && rig != null && rig.head != null)
-            {
-                Vector3 fwd = rig.head.forward;
-                fwd.y = 0f;
-                if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
-                fwd.Normalize();
-                _panel.transform.position = rig.head.position + fwd * 1.4f;
-                _panel.transform.rotation = Quaternion.LookRotation(fwd);
-            }
 
             bool a = XRButtons.Button(XRNode.RightHand, CommonUsages.primaryButton);
             bool b = XRButtons.Button(XRNode.RightHand, CommonUsages.secondaryButton);
