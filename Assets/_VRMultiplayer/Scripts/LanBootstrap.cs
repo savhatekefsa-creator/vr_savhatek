@@ -32,6 +32,7 @@ namespace VRMultiplayer
 
         bool _busy;
         bool _clientStarted;
+        bool _wasSessionActive;
 
         void Reset() => discovery = GetComponent<NetworkDiscovery>();
 
@@ -45,6 +46,19 @@ namespace VRMultiplayer
             var nm = NetworkManager.Singleton;
             bool connected = nm != null && nm.IsConnectedClient;
             bool sessionActive = nm != null && (nm.IsServer || connected);
+
+            // Oturum bitti (sunucu kapandi / baglanti koptu): _busy kilidini birak ki B tusu ve
+            // PC'deki SUNUCU butonu yeniden calissin. Onceden kilit basarili katilimdan sonra hic
+            // sifirlanmiyordu — panel "B'ye bas" derken tus olu kaliyor, restart gerekiyordu.
+            // JoinAsClient'in arama evresini bozmaz: o evrede sessionActive zaten hep false
+            // oldugundan true->false gecisi olusmaz.
+            if (_wasSessionActive && !sessionActive)
+            {
+                _busy = false;
+                _clientStarted = false;
+                SetStatus("Baglanti koptu / oturum bitti.\nB = YENIDEN KATIL");
+            }
+            _wasSessionActive = sessionActive;
 
             var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
 
