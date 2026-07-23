@@ -854,29 +854,16 @@ namespace VRMultiplayer
         // ------------------------------------------------------------- barrel
 
         // Longest mesh axis = barrel line; the sign toward the mesh's bulk = muzzle side.
-        // Same convention as HandGrabber's snap alignment, so the shot goes where you aim.
+        // Ortak sozlesme WeaponGeometry'de — HandGrabber'in kavrama hizalamasi da ayni
+        // yardimcilari kullanir, boylece atis daima nisan alinan yere gider.
         void ComputeBarrel()
         {
-            MeshFilter biggest = null;
-            float biggestSize = 0f;
-            foreach (var mf in GetComponentsInChildren<MeshFilter>())
-            {
-                if (mf.sharedMesh == null) continue;
-                float s = Vector3.Scale(mf.sharedMesh.bounds.size, mf.transform.lossyScale).sqrMagnitude;
-                if (s > biggestSize) { biggestSize = s; biggest = mf; }
-            }
+            var biggest = WeaponGeometry.FindBiggestMesh(transform);
             if (biggest == null) { _muzzleLocal = Vector3.forward * 0.4f; return; }
 
             Bounds mb = biggest.sharedMesh.bounds;
-            Vector3 size = Vector3.Scale(mb.size, biggest.transform.lossyScale);
-            Vector3 axis = Vector3.right;
-            float extent = mb.extents.x;
-            float len = Mathf.Abs(size.x);
-            if (Mathf.Abs(size.y) > len) { axis = Vector3.up; extent = mb.extents.y; len = Mathf.Abs(size.y); }
-            if (Mathf.Abs(size.z) > len) { axis = Vector3.forward; extent = mb.extents.z; }
-
-            float sign = Mathf.Sign(Vector3.Dot(mb.center, axis));
-            if (sign == 0f) sign = 1f;
+            Vector3 axis = WeaponGeometry.LongestLocalAxis(mb, biggest.transform.lossyScale, out float extent);
+            float sign = WeaponGeometry.BulkSign(mb, axis);
 
             // Profil namlu eksenini soyluyorsa tahmin ONUNLA hizalanir: eksen, profil yonune
             // en yakin ana eksene, isaret de profil isaretine cekilir. "Kutle tarafi = namlu"
@@ -885,11 +872,7 @@ namespace VRMultiplayer
             {
                 Vector3 axisMesh = Quaternion.Inverse(biggest.transform.rotation)
                     * (transform.rotation * _profile.barrelLocalDirection.normalized);
-                axis = Vector3.right; extent = mb.extents.x; float a = Mathf.Abs(axisMesh.x);
-                if (Mathf.Abs(axisMesh.y) > a) { axis = Vector3.up; extent = mb.extents.y; a = Mathf.Abs(axisMesh.y); }
-                if (Mathf.Abs(axisMesh.z) > a) { axis = Vector3.forward; extent = mb.extents.z; }
-                sign = Mathf.Sign(Vector3.Dot(axisMesh, axis));
-                if (sign == 0f) sign = 1f;
+                axis = WeaponGeometry.AxisClosestTo(axisMesh, mb, out extent, out sign);
             }
 
             Vector3 muzzleChild = mb.center + axis * (sign * extent);

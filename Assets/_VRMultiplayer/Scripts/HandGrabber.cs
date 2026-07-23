@@ -599,26 +599,14 @@ namespace VRMultiplayer
             if (g.gripRotationEuler != Vector3.zero)
                 return Quaternion.Euler(g.gripRotationEuler);
 
-            MeshFilter biggest = null;
-            float biggestSize = 0f;
-            foreach (var mf in g.GetComponentsInChildren<MeshFilter>())
-            {
-                if (mf.sharedMesh == null) continue;
-                float s = Vector3.Scale(mf.sharedMesh.bounds.size, mf.transform.lossyScale).sqrMagnitude;
-                if (s > biggestSize) { biggestSize = s; biggest = mf; }
-            }
+            // Namlu sozlesmesi WeaponGeometry'de — NetworkWeapon.ComputeBarrel ile AYNI
+            // yardimcilar, boylece elde hizalanan eksen ile atis ekseni asla ayrisamaz.
+            var biggest = WeaponGeometry.FindBiggestMesh(g.transform);
             if (biggest == null) return Quaternion.identity;
 
             Bounds mb = biggest.sharedMesh.bounds;
-            Vector3 size = Vector3.Scale(mb.size, biggest.transform.lossyScale);
-            Vector3 axis = Vector3.right;
-            float len = Mathf.Abs(size.x);
-            if (Mathf.Abs(size.y) > len) { axis = Vector3.up; len = Mathf.Abs(size.y); }
-            if (Mathf.Abs(size.z) > len) axis = Vector3.forward;
-
-            // Muzzle side = where the mesh's bulk lies relative to the pivot (the grip).
-            float sign = Mathf.Sign(Vector3.Dot(mb.center, axis));
-            if (sign == 0f) sign = 1f;
+            Vector3 axis = WeaponGeometry.LongestLocalAxis(mb, biggest.transform.lossyScale, out _);
+            float sign = WeaponGeometry.BulkSign(mb, axis);
 
             // Into root space, then compute the rotation that maps it onto +Z (hand forward).
             Quaternion childToRoot = Quaternion.Inverse(g.transform.rotation) * biggest.transform.rotation;

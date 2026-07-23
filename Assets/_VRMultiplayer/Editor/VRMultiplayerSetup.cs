@@ -8,6 +8,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
 using UnityEngine.XR;
+using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer.EditorTools
 {
@@ -1006,25 +1007,15 @@ namespace VRMultiplayer.EditorTools
                 muzzleT.SetParent(target.transform, false);
             }
 
-            MeshFilter biggest = null;
-            float biggestSize = 0f;
-            foreach (var mf in target.GetComponentsInChildren<MeshFilter>())
-            {
-                if (mf.sharedMesh == null) continue;
-                float s = Vector3.Scale(mf.sharedMesh.bounds.size, mf.transform.lossyScale).sqrMagnitude;
-                if (s > biggestSize) { biggestSize = s; biggest = mf; }
-            }
+            // Namlu sozlesmesi runtime ile AYNI kaynaktan (WeaponGeometry) — kopyalar
+            // birbirinden saparsa editorde kurulan Muzzle ile atis ekseni ayrisirdi.
+            var biggest = WeaponGeometry.FindBiggestMesh(target.transform);
             if (biggest != null)
             {
                 var mesh = biggest.sharedMesh;
                 Bounds mb = mesh.bounds;
-                Vector3 size = Vector3.Scale(mb.size, biggest.transform.lossyScale);
-                Vector3 axis = Vector3.right;
-                float len = Mathf.Abs(size.x);
-                if (Mathf.Abs(size.y) > len) { axis = Vector3.up; len = Mathf.Abs(size.y); }
-                if (Mathf.Abs(size.z) > len) axis = Vector3.forward;
-                float sign = Mathf.Sign(Vector3.Dot(mb.center, axis));
-                if (sign == 0f) sign = 1f;
+                Vector3 axis = WeaponGeometry.LongestLocalAxis(mb, biggest.transform.lossyScale, out _);
+                float sign = WeaponGeometry.BulkSign(mb, axis);
                 Vector3 a = axis * sign;
 
                 var verts = mesh.vertices;
