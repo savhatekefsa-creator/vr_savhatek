@@ -88,8 +88,8 @@ namespace VRMultiplayer
 
             if (_busy || !right.isValid) return;
 
-            right.TryGetFeatureValue(CommonUsages.secondaryButton, out bool b);  // B
-            if (b) StartCoroutine(JoinAsClient());
+            if (XRButtons.Button(XRNode.RightHand, CommonUsages.secondaryButton))  // B
+                StartCoroutine(JoinAsClient());
         }
 
         void EnsureJoinPanel()

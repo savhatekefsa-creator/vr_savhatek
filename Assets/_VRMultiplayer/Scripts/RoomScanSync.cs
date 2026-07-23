@@ -50,10 +50,7 @@ namespace VRMultiplayer
             FollowHead();
             if (_hidePanelAt > 0f && Time.time > _hidePanelAt) { HidePanel(); }
 
-            var left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-            bool x = false;
-            if (left.isValid)
-                left.TryGetFeatureValue(CommonUsages.primaryButton, out x);
+            bool x = XRButtons.Button(XRNode.LeftHand, CommonUsages.primaryButton);
 
             if (x && !_prevX && !_busy)
                 StartCoroutine(ScanAndSend());

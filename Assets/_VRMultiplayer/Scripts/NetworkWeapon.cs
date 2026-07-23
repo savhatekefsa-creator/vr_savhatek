@@ -529,11 +529,7 @@ namespace VRMultiplayer
         static bool ReadTrigger(XRNode node, out InputDevice dev)
         {
             dev = InputDevices.GetDeviceAtXRNode(node);
-            if (!dev.isValid) return false;
-            dev.TryGetFeatureValue(CommonUsages.triggerButton, out bool trig);
-            if (!trig && dev.TryGetFeatureValue(CommonUsages.trigger, out float t))
-                trig = t > 0.6f;
-            return trig;
+            return XRButtons.HeldWithAxisFallback(dev, CommonUsages.triggerButton, CommonUsages.trigger, 0.6f);
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]

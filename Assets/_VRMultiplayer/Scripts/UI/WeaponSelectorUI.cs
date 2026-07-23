@@ -352,8 +352,8 @@ namespace VRMultiplayer.UI
             if (!_rightHand.isValid)
                 _rightHand = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
             if (!_rightHand.isValid) return true; // VR bagli degil -> sart aranmaz
-            if (_rightHand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.gripButton, out bool b) && b) return true;
-            return _rightHand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.grip, out float g) && g > 0.5f;
+            return XRButtons.HeldWithAxisFallback(_rightHand,
+                UnityEngine.XR.CommonUsages.gripButton, UnityEngine.XR.CommonUsages.grip, 0.5f);
         }
 
         /// <summary>SAG thumbstick tiki — kenar (bu kare basildi). Ac ve sec ayni tus.</summary>

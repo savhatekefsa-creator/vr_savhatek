@@ -74,13 +74,8 @@ namespace VRMultiplayer
                 _panel.transform.rotation = Quaternion.LookRotation(fwd);
             }
 
-            var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            bool a = false, b = false;
-            if (right.isValid)
-            {
-                right.TryGetFeatureValue(CommonUsages.primaryButton, out a);
-                right.TryGetFeatureValue(CommonUsages.secondaryButton, out b);
-            }
+            bool a = XRButtons.Button(XRNode.RightHand, CommonUsages.primaryButton);
+            bool b = XRButtons.Button(XRNode.RightHand, CommonUsages.secondaryButton);
 
             if (!_armed)
             {

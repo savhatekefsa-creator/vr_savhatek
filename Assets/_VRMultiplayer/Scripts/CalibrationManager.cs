@@ -145,21 +145,9 @@ namespace VRMultiplayer
             if (status != null) status.gameObject.SetActive(false);
         }
 
-        bool ReadRightTrigger()
-        {
-            var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            if (right.isValid && right.TryGetFeatureValue(CommonUsages.triggerButton, out bool t))
-                return t;
-            return false;
-        }
+        bool ReadRightTrigger() => XRButtons.Button(XRNode.RightHand, CommonUsages.triggerButton);
 
-        bool ReadLeftY()
-        {
-            var left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-            if (left.isValid && left.TryGetFeatureValue(CommonUsages.secondaryButton, out bool y))
-                return y;
-            return false;
-        }
+        bool ReadLeftY() => XRButtons.Button(XRNode.LeftHand, CommonUsages.secondaryButton);
 
         void SetStatus(string s)
         {

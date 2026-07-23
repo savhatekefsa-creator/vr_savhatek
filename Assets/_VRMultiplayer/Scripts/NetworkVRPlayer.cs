@@ -191,10 +191,8 @@ namespace VRMultiplayer
             var dev = InputDevices.GetDeviceAtXRNode(node);
             if (!dev.isValid) return;
 
-            dev.TryGetFeatureValue(CommonUsages.grip, out float g);
-            if (g <= 0f && dev.TryGetFeatureValue(CommonUsages.gripButton, out bool gb) && gb) g = 1f;
-            dev.TryGetFeatureValue(CommonUsages.trigger, out float t);
-            if (t <= 0f && dev.TryGetFeatureValue(CommonUsages.triggerButton, out bool tb) && tb) t = 1f;
+            float g = XRButtons.Axis01WithButtonFallback(dev, CommonUsages.grip, CommonUsages.gripButton);
+            float t = XRButtons.Axis01WithButtonFallback(dev, CommonUsages.trigger, CommonUsages.triggerButton);
 
             byte gb2 = (byte)Mathf.RoundToInt(Mathf.Clamp01(g) * 255f);
             byte tb2 = (byte)Mathf.RoundToInt(Mathf.Clamp01(t) * 255f);

@@ -255,13 +255,8 @@ namespace VRMultiplayer
             // interaction profiles only deliver the float. Slight hysteresis so a half
             // squeeze doesn't flicker between grab and release.
             var device = InputDevices.GetDeviceAtXRNode(h.node);
-            bool grip = false;
-            if (device.isValid)
-            {
-                device.TryGetFeatureValue(CommonUsages.gripButton, out grip);
-                if (!grip && device.TryGetFeatureValue(CommonUsages.grip, out float g))
-                    grip = g > (h.prevGrip ? 0.35f : 0.55f);
-            }
+            bool grip = XRButtons.HeldWithAxisFallback(device, CommonUsages.gripButton,
+                CommonUsages.grip, h.prevGrip ? 0.35f : 0.55f);
 
             if (grip && !h.prevGrip) TryGrab(h);
             else if (!grip && h.prevGrip) Release(h);
