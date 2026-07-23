@@ -131,6 +131,15 @@ namespace VRMultiplayer
 
             if (IsHeld)
             {
+                // FIRLATMA PENCERESI: IsHeld sunucu-yazmali _holder'i okur; ReleaseServerRpc
+                // sunucuya varana kadar (~1 RTT) ESKI "tutuluyor" degeri gorunur. Bu pencerede
+                // asagidaki dondurma calisirsa firlatma olur olmez geri kinematik yapilir ve
+                // obje el hizasinda havada asili kalir (host'ta gorunmez — RPC lokal islenir,
+                // yalnizca istemcilerde patlar). Pencere kisa ve _flying'e bagli: havada
+                // YAKALANAN objede yakalayanin _flying'i false oldugundan koruma calismaz,
+                // el-ici guvenlik agi aynen surer.
+                if (_flying && Time.time - _thrownAt < ThrowGraceSeconds) return;
+
                 // While in a hand: physics stays OFF, period. Self-heals every physics step
                 // in case another component (e.g. NetworkRigidbody on an ownership change)
                 // flips the body back to dynamic and gravity yanks it out of the hand.
@@ -174,10 +183,16 @@ namespace VRMultiplayer
             _holder.Value = NoHolder;
         }
 
+        // ReleaseServerRpc'nin sunucudan donmesini beklerken firlatmanin korunacagi sure.
+        // Normal RTT ~30-100 ms; 1 sn asilirsa zaten baglanti sorunludur, guvenlik agi devralir.
+        const float ThrowGraceSeconds = 1f;
+        float _thrownAt = float.NegativeInfinity;
+
         /// <summary>Owner-side: on release, either drop-in-place or throw with the hand's velocity.</summary>
         public void ApplyThrow(Vector3 velocity, Vector3 angularVelocity)
         {
             if (_rb == null || !IsOwner) return;
+            _thrownAt = Time.time;
 
             if (velocity.magnitude < 0.6f)
             {
