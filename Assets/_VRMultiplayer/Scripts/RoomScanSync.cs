@@ -262,6 +262,11 @@ namespace VRMultiplayer
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         void SendRoomChunkServerRpc(int index, int total, byte[] data, RpcParams p = default)
         {
+            // Yalnizca bu oyuncu objesinin SAHIBI oda gonderebilir. Kontrolsuz halde herhangi
+            // bir istemci baskasinin objesi uzerinden chunk basabiliyordu: farkli 'total' ile
+            // devam eden transferi sifirlayip bozmak ya da kurbanin adiyla sahte RoomPlan.json
+            // yazdirmak mumkundu (FireServerRpc'deki tutan-el kontrolunun buradaki karsiligi).
+            if (p.Receive.SenderClientId != OwnerClientId) return;
             if (total <= 0 || total > 512 || index < 0 || index >= total) return;
             if (_rxChunks == null || _rxChunks.Length != total)
             {
