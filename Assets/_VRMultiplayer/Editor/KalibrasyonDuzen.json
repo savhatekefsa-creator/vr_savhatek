@@ -1,0 +1,481 @@
+{
+    "floor": {
+        "name": "Kalibrasyon Zemini",
+        "pos": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "rot": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+        },
+        "scale": {
+            "x": 4.0,
+            "y": 4.0,
+            "z": 4.0
+        }
+    },
+    "tableRoot": {
+        "name": "Kalibrasyon Masasi",
+        "pos": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.3083934783935549
+        },
+        "rot": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+        },
+        "scale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+        }
+    },
+    "tableParts": [
+        {
+            "name": "Tabla",
+            "pos": {
+                "x": 3.5420479774475099,
+                "y": 0.9700000286102295,
+                "z": -0.20839357376098634
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+            },
+            "scale": {
+                "x": 6.958381652832031,
+                "y": 0.05999999865889549,
+                "z": 1.4167866706848145
+            }
+        },
+        {
+            "name": "Ayak 1",
+            "pos": {
+                "x": 0.15285706520080567,
+                "y": 0.4699999988079071,
+                "z": -0.8267868757247925
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+            },
+            "scale": {
+                "x": 0.09000000357627869,
+                "y": 0.9399999976158142,
+                "z": 0.09000000357627869
+            }
+        },
+        {
+            "name": "Ayak 2",
+            "pos": {
+                "x": 6.931239128112793,
+                "y": 0.4699999988079071,
+                "z": -0.8267868757247925
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+            },
+            "scale": {
+                "x": 0.09000000357627869,
+                "y": 0.9399999976158142,
+                "z": 0.09000000357627869
+            }
+        },
+        {
+            "name": "Ayak 3",
+            "pos": {
+                "x": 0.15285706520080567,
+                "y": 0.4699999988079071,
+                "z": 0.4099997282028198
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+            },
+            "scale": {
+                "x": 0.09000000357627869,
+                "y": 0.9399999976158142,
+                "z": 0.09000000357627869
+            }
+        },
+        {
+            "name": "Ayak 4",
+            "pos": {
+                "x": 6.931239128112793,
+                "y": 0.4699999988079071,
+                "z": 0.4099997282028198
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+            },
+            "scale": {
+                "x": 0.09000000357627869,
+                "y": 0.9399999976158142,
+                "z": 0.09000000357627869
+            }
+        }
+    ],
+    "weapons": [
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Dmr1.prefab",
+            "pos": {
+                "x": 0.6000000238418579,
+                "y": 1.0020604133605958,
+                "z": 2.0999999046325685
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Grenade 1.prefab",
+            "pos": {
+                "x": 0.8878569602966309,
+                "y": 1.0099999904632569,
+                "z": 2.0999999046325685
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Grenade 2.prefab",
+            "pos": {
+                "x": 1.230356216430664,
+                "y": 1.008469581604004,
+                "z": 2.0933334827423097
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Grenade 3.prefab",
+            "pos": {
+                "x": 1.5871492624282838,
+                "y": 1.0099999904632569,
+                "z": 2.1007072925567629
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Paintball.prefab",
+            "pos": {
+                "x": 1.9194707870483399,
+                "y": 1.1274056434631348,
+                "z": 1.9810137748718262
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -0.7071068286895752,
+                "z": 0.0,
+                "w": 0.7071068286895752
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Pistol.prefab",
+            "pos": {
+                "x": 2.2878568172454836,
+                "y": 1.0099554061889649,
+                "z": 2.0773606300354006
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Pistol 2.prefab",
+            "pos": {
+                "x": 2.637856960296631,
+                "y": 1.0099554061889649,
+                "z": 2.0773606300354006
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Pistol 3.prefab",
+            "pos": {
+                "x": 2.9888720512390138,
+                "y": 1.0059843063354493,
+                "z": 2.098217248916626
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Pistol 4.prefab",
+            "pos": {
+                "x": 3.337973117828369,
+                "y": 1.0088906288146973,
+                "z": 2.023012399673462
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Rifle 1.prefab",
+            "pos": {
+                "x": 3.682748317718506,
+                "y": 1.0091373920440674,
+                "z": 2.0809600353240969
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Rifle 2.prefab",
+            "pos": {
+                "x": 3.9525907039642336,
+                "y": 1.0291283130645753,
+                "z": 2.0999999046325685
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Rifle 3.prefab",
+            "pos": {
+                "x": 4.383790016174316,
+                "y": 1.0537467002868653,
+                "z": 2.1013011932373049
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Rifle_HK416.prefab",
+            "pos": {
+                "x": 4.732217311859131,
+                "y": 1.2011996507644654,
+                "z": 1.9639601707458497
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.7071068286895752,
+                "z": 0.0,
+                "w": 0.7071068286895752
+            },
+            "scale": {
+                "x": 2.0,
+                "y": 2.0,
+                "z": 2.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Shotgun 2.prefab",
+            "pos": {
+                "x": 5.086187362670898,
+                "y": 1.0166027545928956,
+                "z": 2.100796699523926
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Smg 1.prefab",
+            "pos": {
+                "x": 5.362078666687012,
+                "y": 1.1566146612167359,
+                "z": 2.0999999046325685
+            },
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Smg 2.prefab",
+            "pos": {
+                "x": 5.7878570556640629,
+                "y": 1.0048092603683472,
+                "z": 2.1000261306762697
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Smg 3.prefab",
+            "pos": {
+                "x": 6.137856483459473,
+                "y": 1.0593665838241578,
+                "z": 2.0999999046325685
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        {
+            "prefabPath": "Assets/_VRMultiplayer/Resources/WeaponPrefabs/Weapon_Sniper 1.prefab",
+            "pos": {
+                "x": 6.517047882080078,
+                "y": 1.0099108219146729,
+                "z": 2.0999999046325685
+            },
+            "rot": {
+                "x": 0.0,
+                "y": -1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        }
+    ]
+}
