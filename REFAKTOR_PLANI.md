@@ -109,7 +109,14 @@ ve Dmr1GripSetup'taki namlu kodları kopya değil bilinçli farklı algoritma ç
 
 **TEST (Faz 3 genel):** Her bölme sonrası tam derleme + Console sıfır hata; sahnede mevcut prefab referanslarının (NetworkPlayer, silah prefab'ları) kopmadığı kontrol edilir; tek cihaz smoke test (bağlan-tut-ateş-takas) her commit sonrası.
 
-## Faz 4 — Hijyen (backlog)
+## Faz 4 — Hijyen (TAMAMLANDI — branch: `duzeltme/faz4-hijyen`)
+
+**Durum (2026-07-23):** Ana maddeler + görsel cilalar uygulandı (9 commit): profil eşit-skor
+uyarısı, isim-bazlı silah anahtarı, ThirdParty/ düzeni (yol sabitleri dahil), _Recovery
+temizliği, SpreadSpawn birikimi, PC ok-tuşu anında-seçim, parmak poz pop'u, weld fade
+sıçraması, MCP paket manifesti. **Yapılmayanlar:** stash düşürme (kalıcı silme — kullanıcı
+kararı), ServerView ping kolonu (NGO/UTP id eşleme API'si araştırma istiyor), geç katılan
+reload sesi (kozmetik), istemci origin doğrulaması (bilinçli ölç-önce kararı, backlog).
 
 - Profil eşit-skor çakışmasına uyarı logu; silah kimliğini `Resources.LoadAll` indeksi yerine isim anahtarıyla gönder (Editor↔Quest sessiz desync sigortası).
 - Asset paketleri (`P A I N T B A L L...`, `FPS Gun Pack 4K`, `Soldiers-Pack`, `Gece Studio`, `Standout7`) → `Assets/ThirdParty/`.
