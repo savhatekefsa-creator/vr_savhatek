@@ -156,7 +156,8 @@ namespace VRMultiplayer.EditorTools
 
             EnsureFolder(AvatarFolder);
 
-            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            var root = LoadPlayerPrefabOrWarn();
+            if (root == null) return;
             try
             {
                 var headChild = root.transform.Find("Head");
@@ -481,7 +482,8 @@ namespace VRMultiplayer.EditorTools
                     "NetworkPlayer prefab yok. Önce '1'/'2'/'3' adımlarını çalıştır.", "Tamam");
                 return;
             }
-            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            var root = LoadPlayerPrefabOrWarn();
+            if (root == null) return;
             try
             {
                 if (root.GetComponent<TeamSelector>() == null)
@@ -639,7 +641,8 @@ namespace VRMultiplayer.EditorTools
             EditorUtility.SetDirty(ctrl);
             AssetDatabase.SaveAssets();
 
-            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            var root = LoadPlayerPrefabOrWarn();
+            if (root == null) return;
             try
             {
                 var animator = root.GetComponentInChildren<Animator>(true);
@@ -876,7 +879,8 @@ namespace VRMultiplayer.EditorTools
             }
 
             // HandGrabber on the player prefab, wired to the networked hand children.
-            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            var root = LoadPlayerPrefabOrWarn();
+            if (root == null) return;
             try
             {
                 var grabber = root.GetComponent<HandGrabber>();
@@ -939,7 +943,8 @@ namespace VRMultiplayer.EditorTools
             }
 
             // Match the prefab's serialized grab radius to the new, more forgiving default.
-            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            var root = LoadPlayerPrefabOrWarn();
+            if (root == null) return;
             try
             {
                 var grabber = root.GetComponent<HandGrabber>();
@@ -1065,7 +1070,8 @@ namespace VRMultiplayer.EditorTools
                 return;
             }
 
-            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            var root = LoadPlayerPrefabOrWarn();
+            if (root == null) return;
             try
             {
                 var health = root.GetComponent<PlayerHealth>();
@@ -1115,7 +1121,8 @@ namespace VRMultiplayer.EditorTools
         [MenuItem("Tools/VR Multiplayer/19. Add Finger Poser (mevcut avatara)")]
         public static void AddFingerPoser()
         {
-            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            var root = LoadPlayerPrefabOrWarn();
+            if (root == null) return;
             try
             {
                 var avatar = root.transform.Find("Avatar");
@@ -1165,7 +1172,8 @@ namespace VRMultiplayer.EditorTools
                 "carabine", "gun", "camera", "kopyto", "kjjj", "gofra", "cord", "cylinder",
             };
 
-            var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+            var root = LoadPlayerPrefabOrWarn();
+            if (root == null) return;
             try
             {
                 var avatar = root.transform.Find("Avatar");
@@ -1209,7 +1217,8 @@ namespace VRMultiplayer.EditorTools
                     "• Kalan gorsel parca: " + keptNames.Count + "\n\n" +
                     "Kalanlar: " + keptList + "\n\n" +
                     "Iskelet (kemikler + parmaklar) DOKUNULMADI — IK ve parmaklar calisir.\n" +
-                    "Beklenmeyen bir sey silindiyse Ctrl+Z; ya da junk listesinden cikar.\n\n" +
+                    "DIKKAT: Bu silme GERI ALINAMAZ (Ctrl+Z calismaz) — geri donus yalnizca git.\n" +
+                    "Beklenmeyen bir sey silindiyse prefabi git'ten geri al; ya da junk listesinden cikar.\n\n" +
                     "Sonra dokulari ASTC'ye sikistir, sonra build al.", "Tamam");
             }
             finally
@@ -1225,6 +1234,20 @@ namespace VRMultiplayer.EditorTools
             t.SyncRotAngleX = t.SyncRotAngleY = t.SyncRotAngleZ = true;
             t.SyncScaleX = t.SyncScaleY = t.SyncScaleZ = false; // avatars don't scale
             t.Interpolate = true;                               // smooth remote avatars
+        }
+
+        /// <summary>NetworkPlayer.prefab'i duzenlemek icin acar; yoksa exception yerine
+        /// aciklayici diyalog gosterip null doner (cagiran erken cikmali).</summary>
+        static GameObject LoadPlayerPrefabOrWarn()
+        {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) == null)
+            {
+                EditorUtility.DisplayDialog("NetworkPlayer prefab yok",
+                    "NetworkPlayer.prefab bulunamadi.\nOnce '1. Create NetworkPlayer Prefab' ve '2. Setup Current Scene' adimlarini calistir.",
+                    "Tamam");
+                return null;
+            }
+            return PrefabUtility.LoadPrefabContents(PrefabPath);
         }
 
         /// <summary>Malzeme URP'de duzgun cizilir mi? (magenta/eksik shader tespiti)</summary>
