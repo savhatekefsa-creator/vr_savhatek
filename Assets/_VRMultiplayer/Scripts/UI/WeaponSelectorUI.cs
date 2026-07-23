@@ -186,7 +186,9 @@ namespace VRMultiplayer.UI
                     if (e.Preview != null) e.Preview.SetActive(open && _wheel != null);
         }
 
-        void OnDisable() { _open = false; if (_wheel != null) _wheel.gameObject.SetActive(false); }
+        // SetOpen uzerinden kapat: _open'i dogrudan sondurmek onizleme klonlarini atlar ve
+        // cark acikken bilesen kapanirsa 3D silah onizlemeleri sahnede asili kalirdi.
+        void OnDisable() { SetOpen(false); }
 
         // ---------------------------------------------------------------- gorseller
 
