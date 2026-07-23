@@ -12,8 +12,12 @@ namespace VRMultiplayer.UI
     /// </summary>
     public class FlashBlindEffect : MonoBehaviour
     {
-        const float HoldSeconds = 0.25f;   // tepe parlaklikta bekleme
         const float MinVisibleAlpha = 0.004f;
+
+        /// <summary>Sirti donuk / uzaktan yiyende sonumlenme bu oranda hizlanir (tam yiyen 1.0).
+        /// Eskiden tau dogrudan 0.35..1.4 arasinda lerp'leniyordu; oran ayni kalsin diye
+        /// 0.35/1.4 = 0.25 taban olarak korundu.</summary>
+        const float GrazedDecayRatio = 0.25f;
 
         static FlashBlindEffect _instance;
 
@@ -22,9 +26,13 @@ namespace VRMultiplayer.UI
         float _peak;      // bu patlamanin tepe alfasi (0-1)
         float _sinceHit;  // tetikten beri gecen sure
         float _tau;       // sonumlenme sabiti (siddetle uzar)
+        float _hold;      // tepe parlaklikta bekleme (config'ten)
 
-        /// <summary>Her istemcide yerel cagrilir: pos'taki flash icin korluk uygula.</summary>
-        public static void TriggerAt(Vector3 pos, float radius)
+        /// <summary>Her istemcide yerel cagrilir: pos'taki flash icin korluk uygula.
+        /// Sure degerleri bombanin GrenadeConfig'inden gelir (bkz. flashHoldSeconds /
+        /// flashBlindSeconds), boylece korluk suresi kod degistirmeden ayarlanabilir.</summary>
+        public static void TriggerAt(Vector3 pos, float radius,
+                                     float holdSeconds = 0.25f, float blindSeconds = 8f)
         {
             Transform head = Head();
             if (head == null) return;
@@ -44,10 +52,19 @@ namespace VRMultiplayer.UI
             if (intensity <= 0.02f) return;
 
             Ensure();
+
+            // Istenen kor kalma suresinden sonumlenme sabitini cikar: alfa, hold bitiminden
+            // sonra exp(-t/tau) ile duser ve MinVisibleAlpha'ya inince kapanir. Yani
+            // blindSeconds = hold + tau * ln(1 / MinVisibleAlpha).
+            float hold = Mathf.Max(0f, holdSeconds);
+            float fade = Mathf.Max(0.05f, blindSeconds - hold);
+            float tauFull = fade / Mathf.Log(1f / MinVisibleAlpha);
+
             // Ust uste flashlarda en guclusu gecerli; sure sifirlanir.
             _instance._peak = Mathf.Max(_instance._peak, intensity);
             _instance._sinceHit = 0f;
-            _instance._tau = Mathf.Lerp(0.35f, 1.4f, intensity); // tam yiyen ~4 sn kor kalir
+            _instance._hold = hold;
+            _instance._tau = Mathf.Lerp(tauFull * GrazedDecayRatio, tauFull, intensity);
         }
 
         static Transform Head()
@@ -83,9 +100,9 @@ namespace VRMultiplayer.UI
             if (_peak <= 0f) return;
             _sinceHit += Time.deltaTime;
 
-            float a = _sinceHit <= HoldSeconds
+            float a = _sinceHit <= _hold
                 ? _peak
-                : _peak * Mathf.Exp(-(_sinceHit - HoldSeconds) / _tau);
+                : _peak * Mathf.Exp(-(_sinceHit - _hold) / _tau);
 
             if (a < MinVisibleAlpha)
             {

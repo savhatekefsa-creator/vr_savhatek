@@ -40,8 +40,18 @@ namespace VRMultiplayer.Weapons
         [Header("Flash (yalniz type=Flash)")]
         [Tooltip("Korlestirmenin etkili oldugu azami mesafe (m).")]
         public float flashRadius = 15f;
+        [Tooltip("Tepe parlaklikta bekleme suresi (sn) — bu sure boyunca ekran tamamen beyaz " +
+                 "kalir, sonra sonumlenmeye baslar.")]
+        public float flashHoldSeconds = 0.25f;
+        [Tooltip("Flash'i TAM yiyen (patlamaya yakin ve donuk bakan) oyuncunun kor kalma suresi " +
+                 "(sn, bekleme dahil). Uzaktan ya da sirti donukken yiyen dogal olarak daha kisa " +
+                 "surede toparlanir. Korlugu uzatmak icin bu degeri buyut.")]
+        public float flashBlindSeconds = 8f;
 
         [Header("Smoke (yalniz type=Smoke)")]
+        [Tooltip("DIKKAT: bu alan HENUZ BAGLI DEGIL — dumanin suresi su an tamamen explodeFx " +
+                 "prefabinin kendi partikul ayarlarindan geliyor, burayi degistirmek hicbir sey " +
+                 "yapmaz. Sureyi degistirmek icin WarFX duman prefabini duzenle.")]
         public float smokeDuration = 30f;
 
         [Header("Patlama gorseli (prefab referansi — Resources sart degil, referans build'e girer)")]

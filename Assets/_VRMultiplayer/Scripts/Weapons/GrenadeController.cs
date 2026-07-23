@@ -562,8 +562,13 @@ namespace VRMultiplayer.Weapons
             // Korluk YEREL kamerayla hesaplanir (bakis acisi + mesafe + siper) — gc despawn
             // yarisina yenildiyse varsayilan yaricapla yine uygulanir.
             if (type == GrenadeType.Flash)
+            {
+                var cfg = gc != null ? gc._cfg : null;
                 UI.FlashBlindEffect.TriggerAt(pos,
-                    gc != null && gc._cfg != null ? gc._cfg.flashRadius : 15f);
+                    cfg != null ? cfg.flashRadius : 15f,
+                    cfg != null ? cfg.flashHoldSeconds : 0.25f,
+                    cfg != null ? cfg.flashBlindSeconds : 8f);
+            }
 
             Debug.Log($"[Bomba] {type} patladi @ {pos}");
         }
