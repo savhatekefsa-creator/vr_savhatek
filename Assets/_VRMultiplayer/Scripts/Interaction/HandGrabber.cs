@@ -128,13 +128,13 @@ namespace VRMultiplayer
             }
 
             // prefab == null -> SADECE yok et (birakma: "cantaya girdi", yerine bir sey gelmez).
-            int idx = -1;
+            // Kimlik agda ISIM olarak gider (indeks degil) — bkz. WeaponPrefabRegistrar.FindByName.
+            string key = "";
             if (prefab != null)
             {
-                var prefabs = WeaponPrefabRegistrar.Prefabs;
-                for (int i = 0; i < prefabs.Count; i++)
-                    if (prefabs[i] == prefab) { idx = i; break; }
-                if (idx < 0) return; // Resources/WeaponPrefabs disinda -> spawn edilemez
+                if (WeaponPrefabRegistrar.FindByName(prefab.name) != prefab)
+                    return; // Resources/WeaponPrefabs disinda -> spawn edilemez
+                key = prefab.name;
             }
 
             // Yenisi ESKISINI TUTAN ele gitmeli. Onceden kosulsuz "_right ?? _left" secildigi
@@ -168,11 +168,11 @@ namespace VRMultiplayer
             var oldRef = current != null && current.NetworkObject != null
                 ? new NetworkObjectReference(current.NetworkObject)
                 : default;
-            SwapWeaponServerRpc(oldRef, idx, h.index, ammo, spares);
+            SwapWeaponServerRpc(oldRef, key, h.index, ammo, spares);
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        void SwapWeaponServerRpc(NetworkObjectReference oldRef, int prefabIndex, byte hand,
+        void SwapWeaponServerRpc(NetworkObjectReference oldRef, string prefabName, byte hand,
                                  int ammo, int spares, RpcParams p = default)
         {
             ulong sender = p.Receive.SenderClientId;
@@ -185,9 +185,8 @@ namespace VRMultiplayer
                 if (og != null && og.HolderClientId == sender) oldNo.Despawn(true);
             }
 
-            var prefabs = WeaponPrefabRegistrar.Prefabs;
-            if (prefabIndex < 0 || prefabIndex >= prefabs.Count) return;
-            var prefab = prefabs[prefabIndex];
+            // Isim anahtari sunucunun KENDI listesinde cozulur; bos isim = yalniz yok etme.
+            var prefab = WeaponPrefabRegistrar.FindByName(prefabName);
             if (prefab == null) return;
 
             // Spawn at the requester's hand: these anchors are the networked hand carriers, so
