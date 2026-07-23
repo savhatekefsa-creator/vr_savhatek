@@ -41,7 +41,7 @@ namespace VRMultiplayer
         XRNode _burstNode = XRNode.RightHand;
 
         // Sunucu kadans zorlamasi: TOKEN BUCKET (fixed-window degil — pencere sinirinda 2x
-        // patlama acigi olmasin). Kapasite Semi/Auto'da 1, Burst'te burstCount.
+        // patlama acigi olmasin). Kapasite Semi/Auto'da 3 (jitter payi), Burst'te burstCount.
         float _srvTokens = 1f;
         float _srvLastRefill;
         float _srvLastShot = float.NegativeInfinity;
@@ -505,12 +505,17 @@ namespace VRMultiplayer
 
             // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
             // FireServerRpc'yi her karede cagirsa da uzun-vadeli atis hizi config'in uzerine
-            // cikamaz. TOKEN BUCKET: kapasite Semi/Auto'da 1 (eski davranisa birebir iner),
-            // Burst'te burstCount; burst ICI atislar arasina ayrica min-gap konur. %15
-            // tolerans ag jitter'inda mesru atisin dusmesini onler.
+            // cikamaz. TOKEN BUCKET: kapasite Semi/Auto'da 3 — istemci tam fireInterval'de bir
+            // gonderir ama VARIS araliklari Wi-Fi jitter'inda bozulur (100 ms stall sonrasi iki
+            // RPC ust uste gelir); derinlik-1 kova bunlarin ikincisini dusuruyordu ve istemci
+            // sesi/tepmeyi coktan oynattigi icin sessiz hasar-desync'i oluyordu. Derinlik 3
+            // jitter'i emer; DOLUM HIZI degismedigi icin uzun-vadeli atis hizi siniri aynidir
+            // (tek karede 4+ RPC yine reddedilir). Burst'te kapasite burstCount; burst ICI
+            // atislar arasina ayrica min-gap konur. %15 tolerans dolum hizinda kalir.
             float now = Time.time;
-            float cap = _cv.fireMode == FireMode.Burst ? Mathf.Max(1, _cv.burstCount) : 1f;
-            float refill = cap / Mathf.Max(0.005f, _cv.fireInterval * 0.85f);
+            float cap = _cv.fireMode == FireMode.Burst ? Mathf.Max(1, _cv.burstCount) : 3f;
+            float refill = 1f / Mathf.Max(0.005f, _cv.fireInterval * 0.85f);
+            if (_cv.fireMode == FireMode.Burst) refill *= cap; // burst: kuyruk basina dolum
             _srvTokens = Mathf.Min(cap, _srvTokens + (now - _srvLastRefill) * refill);
             _srvLastRefill = now;
             float minGap = _cv.fireMode == FireMode.Burst ? _cv.burstShotInterval * 0.85f : 0f;
