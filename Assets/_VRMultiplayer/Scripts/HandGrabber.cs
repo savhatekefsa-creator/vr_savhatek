@@ -32,6 +32,8 @@ namespace VRMultiplayer
             public GrabbableObject held;
             public GrabbableObject supporting; // two-hand aim: this hand steadies the OTHER hand's weapon
             public WeaponGrip supportGrip;     // cached profile component of `supporting` (null = legacy)
+            public Collider[] supportCols;     // supporting'in collider'lari (engage aninda cache — tutus boyunca degismezler)
+            public float nextSupportCheck;     // birakma-mesafesi kontrolunun bir sonraki calisma zamani (~10 Hz)
             public WeaponGrip grip;            // cached profile component of `held` (null = legacy path)
             public Vector3 aimDir;             // filtered two-hand aim direction (zero = not engaged)
             public float supportSince;         // time the support grip engaged (grace before auto-release)
@@ -56,11 +58,18 @@ namespace VRMultiplayer
         // weapons and fine on others purely by child order.
         // Returns -1 when the weapon has no usable collider.
         static float NearestColliderDistance(GrabbableObject weapon, Vector3 point, bool useBounds)
+            => NearestColliderDistance(weapon.GetComponentsInChildren<Collider>(), point, useBounds);
+
+        // Asil govde cache'lenmis diziyle calisir: destek eli tutarken kosan birakma kontrolu
+        // her cagride GetComponentsInChildren ile heap alloc yapmasin (iki elle nisan Quest'te
+        // varsayilan catisma durusu — kare basi alloc surekli GC baskisiydi). Silah despawn
+        // olursa dizideki collider'lar olebilir; null elemanlar atlanir.
+        static float NearestColliderDistance(Collider[] cols, Vector3 point, bool useBounds)
         {
             float best = -1f;
-            foreach (var c in weapon.GetComponentsInChildren<Collider>())
+            foreach (var c in cols)
             {
-                if (!c.enabled || c.isTrigger) continue;
+                if (c == null || !c.enabled || c.isTrigger) continue;
                 // ClosestPoint throws on a non-convex MeshCollider — fall back to its bounds.
                 var mesh = c as MeshCollider;
                 bool canClosestPoint = mesh == null || mesh.convex;
@@ -139,8 +148,8 @@ namespace VRMultiplayer
             // from posing a weapon that is about to be destroyed.
             if (_left != null && _left.held == current) { _left.held = null; _left.grip = null; _left.confirmed = false; }
             if (_right != null && _right.held == current) { _right.held = null; _right.grip = null; _right.confirmed = false; }
-            if (_left != null && _left.supporting == current) { _left.supporting = null; _left.supportGrip = null; }
-            if (_right != null && _right.supporting == current) { _right.supporting = null; _right.supportGrip = null; }
+            if (_left != null && _left.supporting == current) { _left.supporting = null; _left.supportGrip = null; _left.supportCols = null; }
+            if (_right != null && _right.supporting == current) { _right.supporting = null; _right.supportGrip = null; _right.supportCols = null; }
 
             var oldRef = current != null && current.NetworkObject != null
                 ? new NetworkObjectReference(current.NetworkObject)
@@ -263,6 +272,7 @@ namespace VRMultiplayer
             {
                 h.supporting = null;
                 h.supportGrip = null;
+                h.supportCols = null;
             }
 
             // Profiled weapons: auto-release the support hand only when it truly LEAVES the
@@ -274,15 +284,21 @@ namespace VRMultiplayer
             if (h.supporting != null && h.supportGrip != null && h.supportGrip.Profile != null)
             {
                 var p = h.supportGrip.Profile;
-                if (Time.time - h.supportSince > 0.4f)
+                // ~10 Hz yeterli: birakma tespiti kare hassasiyeti istemez; boylece alloc'suz
+                // kontrol de her kare degil saniyede 10 kez kosar.
+                if (Time.time - h.supportSince > 0.4f && Time.time >= h.nextSupportCheck)
                 {
-                    float nearest = NearestColliderDistance(h.supporting, h.anchor.position, useBounds: true);
+                    h.nextSupportCheck = Time.time + 0.1f;
+                    if (h.supportCols == null)
+                        h.supportCols = h.supporting.GetComponentsInChildren<Collider>();
+                    float nearest = NearestColliderDistance(h.supportCols, h.anchor.position, useBounds: true);
                     float d = nearest >= 0f ? nearest : 0f;
                     // Break threshold is at least the grab reach so grabbing can't instantly undo.
                     if (d > Mathf.Max(p.supportBreakDistance, grabRadius * 1.5f))
                     {
                         h.supporting = null;
                         h.supportGrip = null;
+                        h.supportCols = null;
                     }
                 }
             }
@@ -479,7 +495,11 @@ namespace VRMultiplayer
                 {
                     h.supporting = o.held;
                     h.supportGrip = o.grip; // null for legacy weapons — rail logic then stays off
+                    // Collider listesi tutus boyunca degismez — birakma kontrolu icin bir kez
+                    // cache'lenir (her kare GetComponentsInChildren alloc'u yerine).
+                    h.supportCols = o.held.GetComponentsInChildren<Collider>();
                     h.supportSince = Time.time;
+                    h.nextSupportCheck = 0f;
                     return;
                 }
             }
@@ -537,6 +557,7 @@ namespace VRMultiplayer
             {
                 h.supporting = null;
                 h.supportGrip = null;
+                h.supportCols = null;
                 return;
             }
 
@@ -554,6 +575,7 @@ namespace VRMultiplayer
             {
                 o.supporting = null; // dropped: support ends too
                 o.supportGrip = null;
+                o.supportCols = null;
             }
             if (g.HolderClientId != NetworkManager.LocalClientId) return;
 
