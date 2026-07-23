@@ -118,7 +118,20 @@ namespace VRMultiplayer
                 if (idx < 0) return; // Resources/WeaponPrefabs disinda -> spawn edilemez
             }
 
-            var h = _right ?? _left;
+            // Yenisi ESKISINI TUTAN ele gitmeli. Onceden kosulsuz "_right ?? _left" secildigi
+            // icin sol eldeki silah takasta sag ele isiniyordu; sag el ayrica doluysa equip
+            // atlanip oyuncu iki silahsiz kaliyordu. current yoksa (bos elle galeri secimi)
+            // BOS bir el tercih edilir. Secim, asagidaki lokal birakma blogundan ONCE yapilmali
+            // (blok held referanslarini temizler).
+            HandState h = null;
+            if (current != null)
+            {
+                if (_right != null && _right.held == current) h = _right;
+                else if (_left != null && _left.held == current) h = _left;
+            }
+            if (h == null && _right != null && _right.held == null) h = _right;
+            if (h == null && _left != null && _left.held == null) h = _left;
+            if (h == null) h = _right ?? _left;
             if (h == null) return;
 
             // Let go LOCALLY first: Reconcile releases anything we hold that is in neither hand,
@@ -180,11 +193,29 @@ namespace VRMultiplayer
             if (!IsOwner) return;
             if (!r.TryGet(out var no) || no == null) return;
             var g = no.GetComponent<GrabbableObject>();
-            if (g == null) return;
 
             var h = hand == 1 ? _right : _left;
-            if (h == null || h.held != null) return; // hand filled again mid-flight -> skip
+            if (g == null || h == null || h.held != null)
+            {
+                // El bu arada dolmus (ya da hedef kullanilamaz) -> sunucunun spawn'ladigi silah
+                // SAHIPSIZ kalmasin: iade et ki elde-degil silahlar sahnede birikmesin (her
+                // biri ayrica cantadan dusulmus mermilerin bedava kopyasidir).
+                CancelEquipServerRpc(r);
+                return;
+            }
             Adopt(h, g);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void CancelEquipServerRpc(NetworkObjectReference r, RpcParams p = default)
+        {
+            // Yalnizca GONDERENIN sahibi oldugu ve halen KIMSENIN tutmadigi spawn iptal edilir —
+            // sahte/bayat referansla baskasinin silahi yok edilemez.
+            if (!r.TryGet(out var no) || no == null || !no.IsSpawned) return;
+            if (no.OwnerClientId != p.Receive.SenderClientId) return;
+            var g = no.GetComponent<GrabbableObject>();
+            if (g != null && g.IsHeld) return;
+            no.Despawn(true);
         }
 
         public override void OnNetworkSpawn()

@@ -28,13 +28,19 @@ namespace VRMultiplayer.UI
             var all = FindObjectsByType<AudioListener>(FindObjectsSortMode.None);
             if (all.Length <= 1) return;
 
-            // Tutulacak: Main Camera'ninki; yoksa ilk enabled olan.
+            // Tutulacak: Main Camera'ninki; yoksa ilk enabled olan; o da yoksa ilk bulunan.
             AudioListener keep = Camera.main != null ? Camera.main.GetComponent<AudioListener>() : null;
             if (keep == null)
                 foreach (var l in all) if (l.enabled) { keep = l; break; }
+            if (keep == null) keep = all[0];
 
             foreach (var l in all)
                 if (l != keep && l.enabled) l.enabled = false;
+
+            // "keep" DEVRE DISI bir listener olabilir (or. baska bir arac Main Camera'ninkini
+            // kapattiysa). Sondaki garanti olmadan yukaridaki dongu son etkin listener'i da
+            // kapatip oyunu tamamen sessiz birakabiliyordu.
+            if (!keep.enabled) keep.enabled = true;
         }
     }
 }

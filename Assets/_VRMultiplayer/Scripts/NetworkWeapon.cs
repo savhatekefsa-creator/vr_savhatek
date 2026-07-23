@@ -41,7 +41,7 @@ namespace VRMultiplayer
         XRNode _burstNode = XRNode.RightHand;
 
         // Sunucu kadans zorlamasi: TOKEN BUCKET (fixed-window degil — pencere sinirinda 2x
-        // patlama acigi olmasin). Kapasite Semi/Auto'da 1, Burst'te burstCount.
+        // patlama acigi olmasin). Kapasite Semi/Auto'da 3 (jitter payi), Burst'te burstCount.
         float _srvTokens = 1f;
         float _srvLastRefill;
         float _srvLastShot = float.NegativeInfinity;
@@ -317,15 +317,23 @@ namespace VRMultiplayer
             if (_bloom > 0f)
                 _bloom *= Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, _cv.spreadDecayHalfLife));
 
-            // EITHER controller's trigger fires while you hold the weapon — grip hand or
-            // support hand, so two-handed players can use their front-hand trigger too.
-            bool trig = ReadTrigger(XRNode.RightHand, out var rDev);
-            var firedDev = rDev;
+            // Tetik yalnizca BU silahi fiilen kullanan ellerden okunur: tutan el + destek eli
+            // (cift-el oyuncu on-el tetigini kullanabilsin). Onceden HER IKI elin tetigi de
+            // okunuyordu; iki elde iki silah tasinirken tek tetik cekisi IKI silahi birden
+            // ateshiyordu (her silah kendi dogrulanmis atisini tuketiyordu).
+            bool rightAllowed = _grab.HolderHand == 1 || _grab.SupportHand == 1;
+            bool leftAllowed = _grab.HolderHand == 0 || _grab.SupportHand == 0;
+
+            bool trig = false;
+            var firedDev = default(InputDevice);
             var firedNode = XRNode.RightHand;
-            if (!trig)
+            if (rightAllowed)
             {
-                trig = ReadTrigger(XRNode.LeftHand, out var lDev);
-                firedDev = lDev;
+                trig = ReadTrigger(XRNode.RightHand, out firedDev);
+            }
+            if (!trig && leftAllowed)
+            {
+                trig = ReadTrigger(XRNode.LeftHand, out firedDev);
                 firedNode = XRNode.LeftHand;
             }
 
@@ -393,12 +401,11 @@ namespace VRMultiplayer
                 _recoil.SetSustainedFire(trig && Time.time - _lastFire < _cv.fireInterval * 2f);
         }
 
-        void Fire(InputDevice firedDev, XRNode firedNode)
+        /// <summary>Silahin SU ANKI nisan isini: cikis noktasi + yon (sacilim UYGULANMADAN).
+        /// Fire() ile AYNI kaynak — durbun de bunu okuyup nisan halkasini merminin gercekten
+        /// gidecegi noktaya koyuyor. Tek dogru kaynak olsun diye buraya cikarildi.</summary>
+        public void GetAimRay(out Vector3 origin, out Vector3 dir)
         {
-            _lastFire = Time.time;
-
-            Vector3 origin;
-            Vector3 dir;
             if (muzzle != null)
             {
                 origin = muzzle.position;   // precise barrel tip placed in the editor
@@ -420,6 +427,13 @@ namespace VRMultiplayer
                 origin = transform.TransformPoint(_muzzleLocal);
                 dir = (transform.rotation * _barrelLocal).normalized;
             }
+        }
+
+        void Fire(InputDevice firedDev, XRNode firedNode)
+        {
+            _lastFire = Time.time;
+
+            GetAimRay(out Vector3 origin, out Vector3 dir);
 
             // Sacilim owner'da uygulanir ve RPC'ye SACILMIS yon girer: tracer, sunucu isabeti
             // ve hasar hepsi ayni yonu paylasir, ayrica bir senkron gerekmez. (Configsiz silahta
@@ -510,12 +524,17 @@ namespace VRMultiplayer
 
             // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
             // FireServerRpc'yi her karede cagirsa da uzun-vadeli atis hizi config'in uzerine
-            // cikamaz. TOKEN BUCKET: kapasite Semi/Auto'da 1 (eski davranisa birebir iner),
-            // Burst'te burstCount; burst ICI atislar arasina ayrica min-gap konur. %15
-            // tolerans ag jitter'inda mesru atisin dusmesini onler.
+            // cikamaz. TOKEN BUCKET: kapasite Semi/Auto'da 3 — istemci tam fireInterval'de bir
+            // gonderir ama VARIS araliklari Wi-Fi jitter'inda bozulur (100 ms stall sonrasi iki
+            // RPC ust uste gelir); derinlik-1 kova bunlarin ikincisini dusuruyordu ve istemci
+            // sesi/tepmeyi coktan oynattigi icin sessiz hasar-desync'i oluyordu. Derinlik 3
+            // jitter'i emer; DOLUM HIZI degismedigi icin uzun-vadeli atis hizi siniri aynidir
+            // (tek karede 4+ RPC yine reddedilir). Burst'te kapasite burstCount; burst ICI
+            // atislar arasina ayrica min-gap konur. %15 tolerans dolum hizinda kalir.
             float now = Time.time;
-            float cap = _cv.fireMode == FireMode.Burst ? Mathf.Max(1, _cv.burstCount) : 1f;
-            float refill = cap / Mathf.Max(0.005f, _cv.fireInterval * 0.85f);
+            float cap = _cv.fireMode == FireMode.Burst ? Mathf.Max(1, _cv.burstCount) : 3f;
+            float refill = 1f / Mathf.Max(0.005f, _cv.fireInterval * 0.85f);
+            if (_cv.fireMode == FireMode.Burst) refill *= cap; // burst: kuyruk basina dolum
             _srvTokens = Mathf.Min(cap, _srvTokens + (now - _srvLastRefill) * refill);
             _srvLastRefill = now;
             float minGap = _cv.fireMode == FireMode.Burst ? _cv.burstShotInterval * 0.85f : 0f;

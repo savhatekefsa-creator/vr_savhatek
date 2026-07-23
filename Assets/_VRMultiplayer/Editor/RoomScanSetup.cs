@@ -75,6 +75,12 @@ namespace VRMultiplayer.EditorTools
                 new GameObject("AR Session").AddComponent<ARSession>();
 
             // 3) Player prefab: RoomScanSync (owner presses X to send the room to the PC).
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) == null)
+            {
+                EditorUtility.DisplayDialog("NetworkPlayer prefab yok",
+                    "NetworkPlayer.prefab bulunamadi.\nOnce VR Multiplayer '1'/'2' adimlarini calistir.", "Tamam");
+                return;
+            }
             var root = PrefabUtility.LoadPrefabContents(PrefabPath);
             try
             {

@@ -384,8 +384,16 @@ namespace VRMultiplayer.EditorTools
         static GameObject FindSceneWeapon()
         {
             foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-                if (t.gameObject.scene.IsValid() && WeaponGripBinder.CleanName(t.name) == WeaponName)
-                    return t.gameObject;
+            {
+                if (!t.gameObject.scene.IsValid()) continue;
+                if (WeaponGripBinder.CleanName(t.name) != WeaponName) continue;
+                // "Dmr1" adi prefabin IC dugumunde de gecer — fizik/NetworkObject yalnizca instance
+                // KOKUNE kurulur (GunPhysicsSetup'taki korumanin aynisi). Ic dugume kurulum, ic ice
+                // NetworkObject (NGO'da yasak) + cift Rigidbody (silah duser, alinamaz) demektir.
+                var outermost = PrefabUtility.GetOutermostPrefabInstanceRoot(t.gameObject);
+                if (outermost != null && outermost != t.gameObject) continue;
+                return t.gameObject;
+            }
             return null;
         }
 
