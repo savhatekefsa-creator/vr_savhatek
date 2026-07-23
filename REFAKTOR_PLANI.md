@@ -93,7 +93,13 @@ Her düzeltme **ayrı commit** olarak atılır. Her maddenin sonunda **TEST** sa
 
 **TEST (Faz 2 genel):** Her adım sonrası Quest'te Profiler ile GC Alloc/frame kontrolü; silah takası anında frame spike'ının küçüldüğü doğrulanmalı; iki elle nişan + otomatik ateş kombinasyonu 72 Hz'i korumalı.
 
-## Faz 3 — Mimari (ayrı branch önerilir: `refaktor/modul-yapisi`)
+## Faz 3 — Mimari (TAMAMLANDI — branch: `refaktor/modul-yapisi`)
+
+**Durum (2026-07-23):** Aşağıdaki maddelerin tamamı uygulandı; tek bilinçli sapma:
+`WeaponEquipService` ERTELENDİ — takas RPC'leri bir NetworkBehaviour üzerinde yaşamak
+zorunda, yeni bileşene taşımak NetworkPlayer prefab'ına bileşen eklemeyi gerektirir;
+bu prefab-dokunuşlu iş ayrı ve dikkatli bir oturuma bırakıldı. Ayrıca WeaponPackSetup
+ve Dmr1GripSetup'taki namlu kodları kopya değil bilinçli farklı algoritma çıktı — birleştirilmedi.
 
 1. **Kopya kod birleştirme (önce bu):** `WeaponGeometry` (6 namlu-tespit kopyası tek statik sınıfa), `HeadFollowPanel` (6 panel kopyası), `XRButtons` (7 tuş okuma — eşikler standardize), `XRRigReference.HeadOrCamera` (5 kopya), shader fallback'leri `UITheme`'e (4 kopya).
 2. **`NetworkWeapon` bölme (ayrı commit'ler):** `WeaponFx` (~330 satır istemci FX) → `WeaponHitscanServer` (statik, sahnesiz test edilebilir) → `WeaponReloadGesture`. Geriye ~350 satır NetworkBehaviour kalır.
