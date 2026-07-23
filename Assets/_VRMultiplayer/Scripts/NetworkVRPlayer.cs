@@ -136,8 +136,7 @@ namespace VRMultiplayer
                         {
                             // The cuff is an open mesh; single-sided it reads as a hole when you
                             // look into it. Draw both faces so the glove looks solid.
-                            foreach (var m in r.materials)
-                                m.SetFloat("_Cull", 0f); // 0 = CullMode.Off
+                            MaterialDoubleSided.Apply(r);
                         }
                     }
 

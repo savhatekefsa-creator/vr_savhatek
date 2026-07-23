@@ -73,8 +73,7 @@ namespace VRMultiplayer
                 // don't get frustum-culled, and double-sided faces so the mesh never
                 // reads as a hole when clipped into.
                 smr.updateWhenOffscreen = true;
-                foreach (var m in smr.materials)
-                    m.SetFloat("_Cull", 0f); // 0 = CullMode.Off
+                MaterialDoubleSided.Apply(smr);
             }
 
             // The instance's own armature is dead weight once the renderers point at the
