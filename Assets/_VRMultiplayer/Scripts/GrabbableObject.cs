@@ -84,7 +84,10 @@ namespace VRMultiplayer
                 // Frozen from frame zero — it never falls while resting, even before the network
                 // spawns or on a machine that doesn't own it. Only a throw turns physics on.
                 _rb.isKinematic = true;
-                _rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic; // anti-tunnel
+                // Anti-tunnel: KINEMATIK govde ContinuousDynamic'i desteklemez (Unity her govde
+                // icin uyari basip Speculative'e dusuyordu). El firlatmasi hizlari (~5 m/s)
+                // icin Speculative yeterli — uyari/fallback maliyeti olmadan ayni davranis.
+                _rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
                 _rb.interpolation = RigidbodyInterpolation.Interpolate;
             }
         }
