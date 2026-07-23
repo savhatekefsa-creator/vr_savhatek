@@ -63,7 +63,8 @@ namespace VRMultiplayer.Weapons
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                     Debug.Log($"[Silah] ISABET! atan {shooter} (takim {shooterTeam}) -> hedef {health.OwnerClientId} (takim {t}), bolge {zone.zoneName}, {dmg} hasar. Kalan: {Mathf.Max(0, health.Health.Value - dmg)}");
 #endif
-                    health.ServerApplyDamage(dmg, shooter);
+                    // origin = atisin ciktigi namlu noktasi: kurbanin HUD'u yon flasini bundan cizer.
+                    health.ServerApplyDamage(dmg, shooter, origin);
                     end = h.point; break;
                 }
 

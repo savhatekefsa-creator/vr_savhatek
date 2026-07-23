@@ -8,10 +8,10 @@ namespace VRMultiplayer.UI
     /// yaklasik 0.7 saniyede soner (eski tam ekran flasin yerine gecer). Flas sonerken oyuncu
     /// donerse parlama kaynaga gore kayar, boylece "nereden yedim" hissi verir.
     ///
-    /// PlayerHealth saldiran bilgisini istemciye gecirmedigi icin yon, isabet aninda herkese
-    /// gosterilen mermi izinden (NetworkWeapon'in "Tracer" LineRenderer'i) cikarilir: ucu bize
-    /// degen izin baslangic noktasi = atis yapanin namlusu. Iz bulunamazsa (farkli hasar
-    /// kaynagi vb.) tum kenarlarda hafif bir halka yanar.
+    /// Yon, hasar yolunun kendisinden gelir: PlayerHealth.LocalDamageFrom sahibin istemcisinde
+    /// aticinin namlu noktasiyla tetiklenir (eskiden yon, baska sistemin tracer
+    /// LineRenderer'larini sahneden kazimakla TAHMIN ediliyordu — iskalayip yakinimizdan gecen
+    /// izler yanlis yon gosterebiliyordu). Kaynak bilinmiyorsa tum kenarlarda halka yanar.
     /// </summary>
     public class DamageDirectionFlash : MonoBehaviour
     {
@@ -47,12 +47,18 @@ namespace VRMultiplayer.UI
             q.SetActive(false);
         }
 
+        void OnEnable() => PlayerHealth.LocalDamageFrom += FlashFrom;
+        void OnDisable() => PlayerHealth.LocalDamageFrom -= FlashFrom;
+
         /// <summary>
-        /// Hasar alindiginda cagrilir: bize isabet eden guncel mermi izini birkac kare boyunca
-        /// arar; bulursa yonlu, bulamazsa yonsuz flas oynatir.
+        /// Can dususunde cagrilan YEDEK yol: kisa sure sunucunun kaynak-nokta RPC'sini bekler
+        /// (geldiyse yonlu flas zaten basladi); gelmezse yonsuz halka oynatir. Dev hasari gibi
+        /// kaynaksiz hasarlar boyle gorunur.
         /// </summary>
         public void TriggerFromRecentShot(Vector3 bodyPos)
         {
+            // Yonlu flas zaten oynuyorsa (RPC can dususunden once yetisti) dokunma.
+            if (_t >= 0f && _directional) return;
             StopAllCoroutines();
             StartCoroutine(ResolveRoutine(bodyPos));
         }
@@ -68,21 +74,12 @@ namespace VRMultiplayer.UI
 
         IEnumerator ResolveRoutine(Vector3 bodyPos)
         {
-            // Iz efekti (FireFxClientRpc) ile can degisikligi ayni tick'te gelmeyebilir;
-            // o yuzden birkac kare bekleyip tekrar bakiyoruz. Iz 0.07 sn ekranda kaliyor.
+            // Kaynak-nokta RPC'si can dususuyle ayni tick'te gelmeyebilir; kisa sure bekle.
+            // Gelirse FlashFrom bu korutini zaten durdurup yonlu flasi baslatir.
             float deadline = Time.time + 0.15f;
             while (Time.time < deadline)
             {
-                foreach (var lr in FindObjectsOfType<LineRenderer>())
-                {
-                    if (!lr.enabled || lr.positionCount < 2) continue;
-                    Vector3 origin = lr.GetPosition(0);
-                    Vector3 end = lr.GetPosition(lr.positionCount - 1);
-                    if ((end - bodyPos).sqrMagnitude > 1.6f * 1.6f) continue; // izin ucu bizde degil
-                    if ((origin - bodyPos).sqrMagnitude < 1f) continue;       // kendi silahimizin izi
-                    Begin(origin, true);
-                    yield break;
-                }
+                if (_t >= 0f && _directional) yield break; // RPC yetisti
                 yield return null;
             }
             Begin(bodyPos, false);

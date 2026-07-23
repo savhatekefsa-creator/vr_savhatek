@@ -44,8 +44,22 @@ namespace VRMultiplayer
             }
         }
 
+        /// <summary>Yerel oyuncu hasar aldiginda kaynagin dunya noktasi — YALNIZCA sahibin
+        /// istemcisinde tetiklenir. HUD yon flasi bunu dinler; eskiden yon, baska sistemin
+        /// tracer LineRenderer'larini sahneden kazimakla tahmin ediliyordu (yanlis yon +
+        /// her hasarda FindObjectsOfType maliyeti).</summary>
+        public static event System.Action<Vector3> LocalDamageFrom;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => LocalDamageFrom = null;
+
         /// <summary>Server-only. Reduce health; handle death + scheduled revive.</summary>
         public void ServerApplyDamage(int amount, ulong attacker)
+            => ServerApplyDamage(amount, attacker, Vector3.zero);
+
+        /// <summary>Server-only. sourcePos = hasarin geldigi dunya noktasi (namlu); sifir
+        /// vektor = kaynak bilinmiyor (yon flasi yonsuz halkaya duser).</summary>
+        public void ServerApplyDamage(int amount, ulong attacker, Vector3 sourcePos)
         {
             if (!IsServer || Dead.Value || amount <= 0) return;
             if (Time.time < _invulnUntil) return; // just revived — brief grace
@@ -53,11 +67,21 @@ namespace VRMultiplayer
             Health.Value = Mathf.Max(0, Health.Value - amount);
             _lastDamageTime = Time.time;   // regen bekleme suresini sifirla
             _regenAccumulator = 0f;
+
+            if (sourcePos != Vector3.zero)
+                DamageSourceOwnerRpc(sourcePos, RpcTarget.Single(OwnerClientId, RpcTargetUse.Temp));
+
             if (Health.Value <= 0)
             {
                 Dead.Value = true;
                 StartCoroutine(RespawnAfter());
             }
+        }
+
+        [Rpc(SendTo.SpecifiedInParams)]
+        void DamageSourceOwnerRpc(Vector3 sourcePos, RpcParams p)
+        {
+            if (IsOwner) LocalDamageFrom?.Invoke(sourcePos);
         }
 
         // Server-only. After a lull with no damage (CombatConfig.regenDelay), health climbs back up
