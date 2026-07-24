@@ -73,6 +73,8 @@ namespace VRMultiplayer.UI
         public float weight;
         [Tooltip("Sinir devredeyse avatarin ne kadar yukari tutuldugu (m).")]
         public float clampLift;
+        [Tooltip("Ne olup bittigi — poz calismiyorsa sebebi burada yazar.")]
+        public string durum = "-";
 
         CrouchPoseAsset _pose;
         AvatarIKController _ik;
@@ -166,9 +168,9 @@ namespace VRMultiplayer.UI
             // KALIBRE ediyor (StandingHeight) ve kilit comelmisken alinmissa kendi kendini
             // yukari onariyor. Onceden burada kendi olcumumuz vardi; iki ayri yer ayni seyi
             // bagimsiz hesaplayinca kacinilmaz olarak celisiyorlar. Tek dogru kaynak onunki.
-            if (!_ik.FitLocked) return;              // kalibrasyon bitmeden oran anlamsiz
+            if (!_ik.FitLocked) { durum = "kalibrasyon bekleniyor"; return; }
             float standH = _ik.StandingHeight;
-            if (standH < 0.5f) return;
+            if (standH < 0.5f) { durum = "StandingHeight gecersiz: " + standH.ToString("F2"); return; }
 
             float headY = _ik.headBone.position.y - _ik.groundY;
 
@@ -181,9 +183,6 @@ namespace VRMultiplayer.UI
                 _measured = true;
             }
 
-            if (disableCrouchClip && _crouchLayer >= 0)
-                _anim.SetLayerWeight(_crouchLayer, 0f);
-
             heightRatio = headY / standH;
 
             // Oran 1.0 -> 0.7133 arasinda 0'dan 1'e cikar. InverseLerp azalan araligi da dogru
@@ -191,6 +190,15 @@ namespace VRMultiplayer.UI
             float target = Mathf.InverseLerp(_pose.startsAtHeightRatio, _pose.appliesAtHeightRatio, heightRatio);
             _w = Mathf.Lerp(_w, Mathf.Clamp01(target), 1f - Mathf.Exp(-smooth * Mathf.Max(0.0001f, Time.deltaTime)));
             weight = _w;
+
+            // ONUN COMELME KLIBINI ORANSAL SONDUR — koşulsuz sifirlamak TEHLIKELIYDI: bizim poz
+            // herhangi bir sebeple devreye girmezse (kalibrasyon bitmemis, asset yok, kemik
+            // bulunamamis) ortada HIC comelme kalmiyordu, yani temel halden bile kotu.
+            // Simdi tam bizim agirligimiz kadar soner: biz %0 iken onunki tam calisir, biz
+            // %100 iken tamamen susar, arada ikisi toplamda bir eder. Ustelik biz erken
+            // return edersek bu satira hic gelinmez ve onunki hic bozulmaz.
+            if (disableCrouchClip && _crouchLayer >= 0)
+                _anim.SetLayerWeight(_crouchLayer, _anim.GetLayerWeight(_crouchLayer) * (1f - _w));
 
             // Animatorun urettigi poz -> yakalanan poz. Iki gecerli poz arasi slerp; ara deger
             // de gecerli. Kemigin o anki localRotation'i animator cikisidir (sira 20, animator
@@ -200,7 +208,12 @@ namespace VRMultiplayer.UI
             // koku yukari itiyordu — govde zipliyor, ayak yere basmiyor gibi gorunuyordu
             // (sürüklenme + bozuk diz). Sinir yalnizca pozun devrede oldugu anda gerekli.
             clampLift = 0f;
-            if (_w <= 0.001f) return;
+            if (_w <= 0.001f)
+            {
+                durum = $"ayakta (oran {heightRatio:F2}, esik {_pose.startsAtHeightRatio:F2})";
+                return;
+            }
+            durum = $"poz %{_w * 100f:F0} (oran {heightRatio:F2})";
 
             for (int i = 0; i < _bones.Length; i++)
             {
