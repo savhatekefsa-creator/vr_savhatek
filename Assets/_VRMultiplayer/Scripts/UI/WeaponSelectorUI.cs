@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using VRMultiplayer.Weapons;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -76,7 +77,11 @@ namespace VRMultiplayer.UI
 
         int _selected = -1;          // -1 = gosterim yok, 0..2 = dilim
         bool _open;
-        bool _pointed;               // bu acilista stick en az bir kez dilime dogru itildi mi
+        bool _pointed;               // bu acilista bir dilim isaretlendi mi (stick VEYA klavye)
+        bool _pointedByStick;        // birakinca-onay YALNIZCA stick isaretlemesinde calisir:
+                                     // klavyede stick hep (0,0) oldugundan ok tusuna basar
+                                     // basmaz "birakildi" sayilip silah ANINDA degisiyordu;
+                                     // klavye akisi Enter/TAB ile onaylar (dokumante davranis).
         bool _clickPrev;
         UnityEngine.XR.InputDevice _rightHand;
 
@@ -142,12 +147,13 @@ namespace VRMultiplayer.UI
             {
                 _selected = NearestSlice(stick);
                 _pointed = true;
+                _pointedByStick = true;
             }
 
             Layout();
 
             bool commit = click; // tik hala calisir (aliskanlik/yedek), ama sart degil
-            if (_pointed && mag < pointDeadzone * 0.6f) commit = true; // birakti -> onay (histerezis)
+            if (_pointedByStick && mag < pointDeadzone * 0.6f) commit = true; // birakti -> onay (histerezis)
 
             if (commit)
             {
@@ -176,7 +182,7 @@ namespace VRMultiplayer.UI
         {
             if (_open == open) return;
             _open = open;
-            if (open) { EnsureWheel(); _selected = -1; _pointed = false; }
+            if (open) { EnsureWheel(); _selected = -1; _pointed = false; _pointedByStick = false; }
             if (_wheel != null) _wheel.gameObject.SetActive(open);
 
             // Onizlemeler envanterin mali — cark kapaninca hepsini sakla.
@@ -310,10 +316,7 @@ namespace VRMultiplayer.UI
         /// saydamlik KURMUYOR (olum ekrani opak kaliyor) — blend state'leri burada elle aciliyor.</summary>
         static Material MakeOverlayMaterial(int queue)
         {
-            var sh = Shader.Find("Universal Render Pipeline/Unlit")
-                  ?? Shader.Find("Unlit/Color")
-                  ?? Shader.Find("Sprites/Default");
-            var m = new Material(sh);
+            var m = new Material(UITheme.SafeUnlitShader);
             m.SetFloat("_Surface", 1f);
             m.SetFloat("_Blend", 0f);
             m.SetFloat("_ZWrite", 0f);
@@ -355,8 +358,8 @@ namespace VRMultiplayer.UI
             if (!_rightHand.isValid)
                 _rightHand = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
             if (!_rightHand.isValid) return true; // VR bagli degil -> sart aranmaz
-            if (_rightHand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.gripButton, out bool b) && b) return true;
-            return _rightHand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.grip, out float g) && g > 0.5f;
+            return XRButtons.HeldWithAxisFallback(_rightHand,
+                UnityEngine.XR.CommonUsages.gripButton, UnityEngine.XR.CommonUsages.grip, 0.5f);
         }
 
         /// <summary>SAG thumbstick tiki — kenar (bu kare basildi). Ac ve sec ayni tus.</summary>
@@ -398,8 +401,9 @@ namespace VRMultiplayer.UI
         {
             var nm = NetworkManager.Singleton;
             if (nm == null || !(nm.IsServer || nm.IsConnectedClient)) return null;
-            foreach (var g in FindObjectsByType<GrabbableObject>(FindObjectsSortMode.None))
-                if (g.HolderClientId == nm.LocalClientId) return g;
+            var actives = GrabbableObject.Active; // spawn kayit listesi — sahne taramasi + dizi alloc'u yok
+            for (int i = 0; i < actives.Count; i++)
+                if (actives[i].HolderClientId == nm.LocalClientId) return actives[i];
             return null;
         }
 

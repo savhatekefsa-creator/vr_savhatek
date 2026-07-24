@@ -82,24 +82,13 @@ namespace VRMultiplayer.EditorTools
             }
 
             guessed = true;
-            MeshFilter biggest = null;
-            float biggestSize = 0f;
-            foreach (var mf in weapon.GetComponentsInChildren<MeshFilter>())
-            {
-                if (mf.sharedMesh == null) continue;
-                float s = Vector3.Scale(mf.sharedMesh.bounds.size, mf.transform.lossyScale).sqrMagnitude;
-                if (s > biggestSize) { biggestSize = s; biggest = mf; }
-            }
+            // Namlu sozlesmesi runtime ile AYNI kaynaktan (WeaponGeometry).
+            var biggest = WeaponGeometry.FindBiggestMesh(weapon);
             if (biggest == null) return Vector3.forward;
 
             Bounds mb = biggest.sharedMesh.bounds;
-            Vector3 size = Vector3.Scale(mb.size, biggest.transform.lossyScale);
-            Vector3 axis = Vector3.right;
-            float len = Mathf.Abs(size.x);
-            if (Mathf.Abs(size.y) > len) { axis = Vector3.up; len = Mathf.Abs(size.y); }
-            if (Mathf.Abs(size.z) > len) axis = Vector3.forward;
-            float sign = Mathf.Sign(Vector3.Dot(mb.center, axis));
-            if (sign == 0f) sign = 1f;
+            Vector3 axis = WeaponGeometry.LongestLocalAxis(mb, biggest.transform.lossyScale, out _);
+            float sign = WeaponGeometry.BulkSign(mb, axis);
 
             Quaternion childToWeapon = Quaternion.Inverse(weapon.rotation) * biggest.transform.rotation;
             return (childToWeapon * (axis * sign)).normalized;

@@ -5,8 +5,14 @@ using VRMultiplayer.Weapons;
 namespace VRMultiplayer.UI
 {
     /// <summary>
-    /// LAZER APARATI — modelinde gercek lazer donanimi olan silahlara calisma aninda takilir:
-    /// Pistol 4 (Lazer_main) ve Rifle 3 (laser_barrel).
+    /// LAZER APARATI — ATES EDEBILEN HER SILAHA takilir (ekip/yonetici karari). El bombalarinda
+    /// NetworkWeapon olmadigi icin kendiliginden disarida kalirlar.
+    ///
+    /// Gercek hayatta lazer, ray'a monte edilen bir APARATTIR (AN/PEQ-15 gibi) — silahin
+    /// dogustan ozelligi degil, yani "hepsinde olsun" istegi gercekci. Ama modellerimizin
+    /// yalnizca ikisinde lazer donanimi CIZILI (Pistol 4 = MK23 SOCOM, Rifle 3 = G36C);
+    /// digerlerinde isin namlu ucundan cikar, gorunur bir modul yoktur. Modul mesh'i eklemek
+    /// ayri bir is (secenek C) — bu adim once CALISSIN diye yapildi.
     ///
     /// Durbundeki yesil noktadan FARKLI: bu gercek bir isik. Dunyada benek dusurur ve
     /// HERKES GORUR (ekip karari) — nisan avantaji karsiliginda yerini ele verirsin,
@@ -40,14 +46,18 @@ namespace VRMultiplayer.UI
 
         static void OnSpawned(GrabbableObject g)
         {
+            // Ates edebilen HER silah lazer alir. NetworkWeapon sarti sayesinde el bombalari,
+            // taslar ve esyalar kendiliginden disarida kalir — isim listesi tutmaya gerek yok.
+            if (g.GetComponent<NetworkWeapon>() == null) return;
+            if (g.GetComponent<LaserSight>() != null) return;
+
+            // Donanimi olan silahlarda isin O PARCADAN cikar; digerlerinde namlu ucundan.
             string n = WeaponGripBinder.CleanName(g.name);
-            foreach (var (weapon, parts) in Specs)
-            {
-                if (!n.Contains(weapon)) continue;
-                if (g.GetComponent<LaserSight>() != null) return;
-                g.gameObject.AddComponent<LaserSight>().Init(g, parts);
-                return;
-            }
+            string[] parts = null;
+            foreach (var (weapon, p) in Specs)
+                if (n.Contains(weapon)) { parts = p; break; }
+
+            g.gameObject.AddComponent<LaserSight>().Init(g, parts);
         }
     }
 
@@ -86,25 +96,28 @@ namespace VRMultiplayer.UI
             _grab = g;
             _weapon = g.GetComponent<NetworkWeapon>();
 
-            // Aday parcalari SIRAYLA dene; ilk bulunan kazanir.
-            foreach (var prefix in partPrefixes)
-            {
-                foreach (var t in g.GetComponentsInChildren<Transform>(true))
-                    if (t.name.StartsWith(prefix)) { _origin = t; break; }
-                if (_origin != null) break;
-            }
-            if (_origin == null) _origin = g.transform;
+            // Aday parcalari SIRAYLA dene; ilk bulunan kazanir. partPrefixes null ise bu
+            // silahta lazer donanimi cizili degil — isin namlu ucundan cikacak.
+            if (partPrefixes != null)
+                foreach (var prefix in partPrefixes)
+                {
+                    foreach (var t in g.GetComponentsInChildren<Transform>(true))
+                        if (t.name.StartsWith(prefix)) { _origin = t; break; }
+                    if (_origin != null) break;
+                }
             // Parcanin TRANSFORM konumu mesh'in gercek yerinde OLMAYABILIR (pivot kokte
             // birakilmis modeller): isin kabzadan cikiyordu. Renderer varsa her kare
-            // bounds merkezini kullanacagiz — o gorunen geometrinin gercek yeri.
-            _originRenderer = _origin.GetComponent<Renderer>();
+            // bounds merkezini kullaniriz — o gorunen geometrinin gercek yeri.
+            _originRenderer = _origin != null ? _origin.GetComponent<Renderer>() : null;
 
             var grip = g.GetComponent<WeaponGrip>();
             if (grip != null && grip.Profile != null && grip.Profile.barrelLocalDirection.sqrMagnitude > 0.01f)
                 _barrelLocal = grip.Profile.barrelLocalDirection.normalized;
 
-            Debug.Log($"[Lazer] {g.name}: aparat = '{_origin.name}'" +
-                      (_originRenderer != null ? " (cikis: mesh merkezi)" : " (cikis: transform — mesh bulunamadi)"));
+            Debug.Log(_origin != null
+                ? $"[Lazer] {g.name}: donanim = '{_origin.name}'" +
+                  (_originRenderer != null ? " (cikis: mesh merkezi)" : " (cikis: transform)")
+                : $"[Lazer] {g.name}: modelde lazer donanimi yok — isin namlu ucundan cikacak.");
         }
 
         void LateUpdate()
@@ -125,13 +138,19 @@ namespace VRMultiplayer.UI
 
             // Yon ve cikis: mumkunse silahin GERCEK nisan isini kullan (Fire ile ayni kaynak),
             // yoksa profil namlu ekseni. Boylece benek merminin gidecegi yeri gosterir.
-            Vector3 dir;
-            if (_weapon != null) _weapon.GetAimRay(out _, out dir);
-            else dir = _grab.transform.TransformDirection(_barrelLocal);
+            Vector3 dir, muzzle;
+            if (_weapon != null) _weapon.GetAimRay(out muzzle, out dir);
+            else
+            {
+                dir = _grab.transform.TransformDirection(_barrelLocal);
+                muzzle = _grab.transform.position;
+            }
 
-            // Isin lazer APARATINDAN cikar (gorsel dogru), yonu namlu ekseni.
-            // Cikis noktasi mesh'in GORUNEN merkezi — transform pivotu degil.
-            Vector3 emitter = _originRenderer != null ? _originRenderer.bounds.center : _origin.position;
+            // Cikis noktasi: lazer donanimi VARSA onun mesh merkezi (gorsel dogru), YOKSA
+            // namlu ucu — modelde modul olmadigi icin isinin oradan cikmasi en dogal yer.
+            Vector3 emitter = _originRenderer != null ? _originRenderer.bounds.center
+                            : _origin != null ? _origin.position
+                            : muzzle;
             Vector3 from = emitter + dir * 0.02f; // silahin kendi govdesine carpmasin
 
             bool blocked = Physics.Raycast(from, dir, out var hit, maxDistance,
