@@ -1455,6 +1455,7 @@ GameObject:
   - component: {fileID: 5756330707935964542}
   - component: {fileID: 3976223449438078119}
   - component: {fileID: 5813660218117512092}
+  - component: {fileID: 1208287259268866603}
   m_Layer: 0
   m_Name: Avatar
   m_TagString: Untagged
@@ -1602,6 +1603,20 @@ MonoBehaviour:
   rollSignOverrideLeft: 0
   rollSignOverrideRight: 0
   captureDelayFrames: 3
+--- !u!114 &1208287259268866603
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2867187932953041727}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e14e63341c2158642b7b49cbebf5137e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.AvatarFitDebug
+  showOverlay: 0
+  refreshInterval: 0.15
 --- !u!1 &2888428985747785500
 GameObject:
   m_ObjectHideFlags: 0
