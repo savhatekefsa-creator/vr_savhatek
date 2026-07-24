@@ -36,9 +36,6 @@ namespace VRMultiplayer
         [Tooltip("The humanoid avatar — shown to everyone, including you (first-person body).")]
         [SerializeField] GameObject remoteAvatar;
 
-        [Header("Spawn")]
-        [SerializeField] float spawnRingRadius = 0.9f;
-
         // Hand analog inputs, owner-written and replicated to everyone, so ProceduralFingerPoser
         // can curl each player's fingers on ALL clients. byte = 0..255 quantized grip/trigger;
         // one byte each, cheap. Owner writes directly (no RPC — the player owns this object).
@@ -77,8 +74,6 @@ namespace VRMultiplayer
             _srcLeft = rig.leftHand;
             _srcRight = rig.rightHand;
             _bound = _srcHead != null && head != null;
-
-            SpreadSpawn(rig);
         }
 
         void ApplyVisibility()
@@ -163,27 +158,11 @@ namespace VRMultiplayer
                 r.enabled = false;
         }
 
-        // Son uygulanan yayilma ofseti. STATIK: rig kalici sahne objesi — instance alani her
-        // yeniden katilimda sifirlanip birikimi gizlerdi.
-        static Vector3 _appliedSpread;
-
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetSpreadStatics() => _appliedSpread = Vector3.zero;
-
-        void SpreadSpawn(XRRigReference rig)
-        {
-            // Kalibrasyon rig'i ortak fiziksel cerceveye oturttuysa yayilma ZARARLI olur:
-            // paylasilan cercevede herkes gercek konumunda durmali, halka ofseti eklenmemeli.
-            if (CalibrationManager.Calibrated) return;
-
-            float angle = (OwnerClientId % 8) * 45f;
-            Vector3 offset = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * spawnRingRadius;
-            // Once eski ofset geri alinir: rig sahnede yasadigi icin her yeniden katilim
-            // ONCEKININ USTUNE ekliyordu — kopan oyuncu her donusunde 0.9 m daha uzaga dogup
-            // fiziksel cerceveden adim adim kayiyordu.
-            rig.transform.position += offset - _appliedSpread;
-            _appliedSpread = offset;
-        }
+        // SpreadSpawn KALDIRILDI: oyuncular ust uste dogmasin diye rig'i client id'ye gore bir
+        // cember uzerinde kaydiriyordu. Kolokasyonda bu YANLIS — rig'i koddan oynatmak sanal
+        // konumu fiziksel konumdan ayirir ve oyuncu gercek odada baskasinin icine yurur.
+        // Oyuncular artik <see cref="TeamSpawnZone"/> cemberine FIZIKSEL olarak yuruyerek
+        // girer; dagilimi gercek oda saglar.
 
         void LateUpdate()
         {
