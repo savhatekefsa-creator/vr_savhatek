@@ -7407,7 +7407,6 @@ GameObject:
   - component: {fileID: 415858744}
   - component: {fileID: 415858743}
   - component: {fileID: 415858742}
-  - component: {fileID: 415858738}
   m_Layer: 0
   m_Name: XR Rig
   m_TagString: Untagged
@@ -7428,25 +7427,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.XRTrackingOriginSetup
   maxAttempts: 600
---- !u!114 &415858738
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 415858736}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bbdd9dd425649a04b8b063cf6d18904f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.XRRigLocomotion
-  head: {fileID: 547874472}
-  smoothMoveEnabled: 0
-  moveSpeed: 2.5
-  deadzone: 0.15
-  snapTurnEnabled: 0
-  snapTurnDegrees: 45
-  snapActivation: 0.7
 --- !u!114 &415858739
 MonoBehaviour:
   m_ObjectHideFlags: 0
