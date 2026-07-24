@@ -1,8 +1,10 @@
 // WarFX Shader — URP portu (orijinal: Jean Moreno, (c) 2015)
-// Orijinal CG/built-in shader Unity 6 URP'de cizim uretmiyordu; ayni isim ve
-// property'lerle, ayni blend + fragman formuluyle HLSL'e cevrildi. Boylece
-// malzemeler/prefablar/GUID'ler HIC degismeden calisir. Soft-particle dallari
-// atlandi: SOFTPARTICLES_ON anahtari zaten hicbir zaman set edilmiyordu.
+// "WFX/Multiply Alpha8"in URP karsiligi. Built-in orijinali URP'de dogru cizmiyordu
+// (bkz. "WFX_S Particle Add A8 URP" basligindaki aciklama).
+//
+// Carpma (multiply) blend'i: Blend Zero SrcColor -> ekrandaki renk, shaderin urettigi
+// renkle CARPILIR. Kivilcim/kir lekesi gibi KOYULTAN efektler bunu kullanir.
+// Orijinal formul birebir: i.color * tex.a  (mobil dokularda sekil alfadadir).
 
 Shader "WFX/Multiply Alpha8"
 {
@@ -44,8 +46,7 @@ SubShader
 
         half4 frag(Varyings i) : SV_Target
         {
-            half4 prev = i.color * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).a;
-            return prev;
+            return i.color * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).a;
         }
         ENDHLSL
     }

@@ -50,7 +50,16 @@ SubShader
 
         half4 frag(Varyings i) : SV_Target
         {
-            return 2.0 * i.color * _TintColor * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv);
+            half4 tex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv);
+            // ALFA ILE ONCARPMA: additive blend (One One) yalnizca RGB'yi kullanir, alfayi
+            // gormezden gelir. WarFX dokularinin bir kisminda sekil RGB'de (alev: siyah zemin
+            // uzerine parlak alev), bir kisminda ise ALFADA (duman: WFX_T_SmokeLoopAlpha'nin
+            // RGB'si 122..205, yani HICBIR YERDE siyah degil — sekli alfa tasir). Ikincisinde
+            // ham RGB eklemek quad'i bastan basa gri-beyaz doldurur; patlamada gorulen keskin
+            // kenarli BEYAZ DIKDORTGENLER buydu. rgb *= a hepsini dogru isler: sekli alfada
+            // olan doku maskelenir, alfasi 1 olan (alev) doku degismeden gecer.
+            tex.rgb *= tex.a;
+            return 2.0 * i.color * _TintColor * tex;
         }
         ENDHLSL
     }

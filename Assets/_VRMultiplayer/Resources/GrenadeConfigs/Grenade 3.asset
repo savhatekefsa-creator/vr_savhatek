@@ -22,9 +22,19 @@ MonoBehaviour:
   centerDamage: 80
   damageRadius: 6
   flashRadius: 15
+  flashHoldSeconds: 0.25
+  flashBlindSeconds: 8
   smokeDuration: 30
-  explodeFx: {fileID: 100000, guid: 902406362f09aa2488ee3d65e2fd6aa3, type: 3}
-  fxScale: 2
+  explodeFx: {fileID: 5976245369432224552, guid: 8372b7ab9d7a62147804a82e9b002ec5, type: 3}
+  fxScale: 1.55
+  simpleCollider: 1
+  colliderRadius: 0
+  colliderCenter: {x: 0, y: 0, z: 0}
+  selfCollisionIgnoreSeconds: 0.35
+  pinNodes: []
+  pinHandLocalPosition: {x: 0, y: 0, z: 0}
+  pinHandLocalEuler: {x: 0, y: 0, z: 0}
+  pinPullReach: 0.45
   aimArcSpeed: 9
   pinClip: WeaponSounds/grenade_pin
   bounceClip: WeaponSounds/grenade_bounce

@@ -61,3 +61,10 @@ ModelImporter:
   additionalBone: 1
   animationType: 1
   userData: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 5669
+  packageName: War FX
+  packageVersion: 1.8.1
+  assetPath: Assets/JMO Assets/WarFX/Mesh/Plane1x1.FBX
+  uploadId: 944454

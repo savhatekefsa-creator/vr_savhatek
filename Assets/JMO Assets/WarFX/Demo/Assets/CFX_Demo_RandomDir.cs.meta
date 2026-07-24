@@ -5,3 +5,10 @@ MonoImporter:
   defaultReferences: []
   executionOrder: 0
   icon: {instanceID: 0}
+AssetOrigin:
+  serializedVersion: 1
+  productId: 5669
+  packageName: War FX
+  packageVersion: 1.8.1
+  assetPath: Assets/JMO Assets/WarFX/Demo/Assets/CFX_Demo_RandomDir.cs
+  uploadId: 944454

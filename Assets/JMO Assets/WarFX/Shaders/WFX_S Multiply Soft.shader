@@ -1,8 +1,10 @@
 // WarFX Shader — URP portu (orijinal: Jean Moreno, (c) 2015)
-// Orijinal CG/built-in shader Unity 6 URP'de cizim uretmiyordu; ayni isim ve
-// property'lerle, ayni blend + fragman formuluyle HLSL'e cevrildi. Boylece
-// malzemeler/prefablar/GUID'ler HIC degismeden calisir. Soft-particle dallari
-// atlandi: SOFTPARTICLES_ON anahtari zaten hicbir zaman set edilmiyordu.
+// "WFX/Multiply Soft Tint"in URP karsiligi — sis bombasinin ikinci (koyultan) katmani.
+// Built-in orijinali URP'de dogru cizmiyordu (bkz. "WFX_S Particle Add A8 URP").
+//
+// Blend DstColor SrcColor = "overlay" benzeri yumusak carpma. Notr deger 0.5'tir:
+// fragman, dokunun gorunmez oldugu yerde (alpha 0) 0.5'e lerp'lenir ki o pikselde
+// ekran DEGISMEDEN kalsin. Orijinal formul birebir korundu.
 
 Shader "WFX/Multiply Soft Tint"
 {

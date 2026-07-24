@@ -28,7 +28,6 @@ seni hareket ederken görür. Ekstra RPC gerekmez.
 
 Detaylı script'ler:
 - `Scripts/XRDevicePoseDriver.cs` — kafa/el pozunu gözlükten okur (built-in `UnityEngine.XR`)
-- `Scripts/XRRigLocomotion.cs` — sol analog yürüme, sağ analog snap-turn
 - `Scripts/XRTrackingOriginSetup.cs` — zemin (floor) takip modu
 - `Scripts/XRRigReference.cs` — yerel rig'i avatara bağlayan tekil (singleton)
 - `Scripts/ClientNetworkTransform.cs` — owner-authoritative NetworkTransform

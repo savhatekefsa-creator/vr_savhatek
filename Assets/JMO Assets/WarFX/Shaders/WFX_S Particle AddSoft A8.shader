@@ -1,8 +1,11 @@
 // WarFX Shader — URP portu (orijinal: Jean Moreno, (c) 2015)
-// Orijinal CG/built-in shader Unity 6 URP'de cizim uretmiyordu; ayni isim ve
-// property'lerle, ayni blend + fragman formuluyle HLSL'e cevrildi. Boylece
-// malzemeler/prefablar/GUID'ler HIC degismeden calisir. Soft-particle dallari
-// atlandi: SOFTPARTICLES_ON anahtari zaten hicbir zaman set edilmiyordu.
+// "WFX/Additive (Soft) Alpha8"in URP karsiligi. Built-in orijinali URP'de dogru
+// cizmiyordu (gerekce icin bkz. "WFX_S Particle Add A8.shader" basligi).
+//
+// "Soft additive" = Blend OneMinusDstColor One: zaten aydinlik piksellerde katki
+// azalir, boylece duz additive gibi beyaza DOYMAZ. Aydinlik gunduz sahnesinde
+// patlama parlamalarinin rengini korumasi bu yuzden daha kolaydir.
+// Doku Alpha8'dir (sekil alfa kanalinda); renk parcacigin kendi renginden gelir.
 
 Shader "WFX/Additive (Soft) Alpha8"
 {

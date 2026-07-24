@@ -1,8 +1,14 @@
 // WarFX Shader — URP portu (orijinal: Jean Moreno, (c) 2015)
-// Orijinal CG/built-in shader Unity 6 URP'de cizim uretmiyordu; ayni isim ve
-// property'lerle, ayni blend + fragman formuluyle HLSL'e cevrildi. Boylece
-// malzemeler/prefablar/GUID'ler HIC degismeden calisir. Soft-particle dallari
-// atlandi: SOFTPARTICLES_ON anahtari zaten hicbir zaman set edilmiyordu.
+// "WFX/Scroll/Smoke"un URP karsiligi — patlama sonrasi YER DUMANI icin kullanilir.
+// Built-in orijinali URP'de dogru cizmiyordu (bkz. "WFX_S Particle Add A8.shader").
+//
+// Blend DstColor SrcAlpha = KOYULTAN karisim: additive'in aksine bu ekrani
+// karartabilir, yani gercek KOYU/SIYAH duman ancak boyle elde edilir. Notr deger
+// 0.5'tir; maskenin (doku alfasi x parcacik alfasi) sifir oldugu yerde fragman
+// 0.5'e lerp'lenir ve o piksel degismeden kalir. Doku dikeyde kaydirilarak duman
+// "kabariyor" hissi verir. Orijinal formul birebir korundu; _Time -> _Time.y
+// (orijinaldeki cikarilmis _Time float'i .x'e denk gelip kaydirmayi 20 kat
+// yavaslatiyordu).
 
 Shader "WFX/Scroll/Smoke"
 {
@@ -47,9 +53,10 @@ SubShader
         half4 frag(Varyings i) : SV_Target
         {
             half mask = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).a * i.color.a;
-            float2 uv2 = i.uv;
-            uv2.y -= fmod(_Time.x * _ScrollSpeed, 1);
-            half4 tex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv2);
+
+            float2 scrolled = i.uv;
+            scrolled.y -= fmod(_Time.y * _ScrollSpeed, 1);
+            half4 tex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, scrolled);
             tex.rgb *= i.color.rgb * _TintColor.rgb;
             tex.a = mask;
             tex = lerp(half4(0.5, 0.5, 0.5, 0.5), tex, mask);

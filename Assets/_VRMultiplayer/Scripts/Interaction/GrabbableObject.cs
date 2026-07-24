@@ -92,6 +92,21 @@ namespace VRMultiplayer
             }
         }
 
+        /// <summary>SUNUCU: bu istemcinin tuttugu HER seyi oldugu yerde biraktirir. Olunce
+        /// cagrilir (bkz. <see cref="PlayerHealth"/>) — olu oyuncu silah tasimaya devam
+        /// etmemeli, ayrica dusen silahi baskasi alabilmeli. Yukaridaki <see cref="Active"/>
+        /// kaydini kullanir: bu is icin AYRI bir liste tutmak gereksiz (ikisi de spawn/despawn
+        /// ile guncelleniyordu) ve iki ayri ResetStatics tanimi derlemeyi kiriyordu.</summary>
+        public static void ServerReleaseAllHeldBy(ulong clientId)
+        {
+            for (int i = 0; i < _active.Count; i++)
+            {
+                var g = _active[i];
+                if (g != null && g.IsServer && g._holder.Value == clientId)
+                    g._holder.Value = NoHolder;
+            }
+        }
+
         public override void OnNetworkSpawn()
         {
             _holder.OnValueChanged += OnHolderChanged;
