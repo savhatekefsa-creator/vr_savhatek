@@ -1,107 +1,55 @@
-// WarFX Shader
-// (c) 2015 Jean Moreno
+// WarFX Shader — URP portu (orijinal: Jean Moreno, (c) 2015)
+// "WFX/Multiply Alpha8"in URP karsiligi. Built-in orijinali URP'de dogru cizmiyordu
+// (bkz. "WFX_S Particle Add A8 URP" basligindaki aciklama).
+//
+// Carpma (multiply) blend'i: Blend Zero SrcColor -> ekrandaki renk, shaderin urettigi
+// renkle CARPILIR. Kivilcim/kir lekesi gibi KOYULTAN efektler bunu kullanir.
+// Orijinal formul birebir: i.color * tex.a  (mobil dokularda sekil alfadadir).
 
-Shader "WFX/Multiply Alpha8" {
-Properties {
-	_MainTex ("Particle Texture", 2D) = "white" {}
-	_InvFade ("Soft Particles Factor", Range(0.01,3.0)) = 1.0
+Shader "WFX/Multiply Alpha8"
+{
+Properties
+{
+    _MainTex ("Particle Texture", 2D) = "white" {}
+    _InvFade ("Soft Particles Factor", Range(0.01,3.0)) = 1.0
 }
+SubShader
+{
+    Tags { "Queue"="Transparent" "IgnoreProjector"="True" "RenderType"="Transparent" "RenderPipeline"="UniversalPipeline" "PreviewType"="Plane" }
+    Blend Zero SrcColor
+    Cull Off ZWrite Off
 
-Category {
-	Tags { "Queue"="Transparent" "IgnoreProjector"="True" "RenderType"="Transparent" }
-	Blend Zero SrcColor
-	Cull Off Lighting Off ZWrite Off Fog { Color (1,1,1,1) }
-	BindChannels {
-		Bind "Color", color
-		Bind "Vertex", vertex
-		Bind "TexCoord", texcoord
-	}
-	
-	// ---- Fragment program cards
-	SubShader {
-		Pass {
-		
-			CGPROGRAM
-			#pragma vertex vert
-			#pragma fragment frag
-			#pragma fragmentoption ARB_precision_hint_fastest
-			#pragma multi_compile_particles
+    Pass
+    {
+        HLSLPROGRAM
+        #pragma vertex vert
+        #pragma fragment frag
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-			#include "UnityCG.cginc"
+        TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
+        CBUFFER_START(UnityPerMaterial)
+        float4 _MainTex_ST;
+        float _InvFade;
+        CBUFFER_END
 
-			sampler2D _MainTex;
-			fixed4 _TintColor;
-			
-			struct appdata_t {
-				float4 vertex : POSITION;
-				fixed4 color : COLOR;
-				float2 texcoord : TEXCOORD0;
-			};
+        struct Attributes { float4 positionOS : POSITION; half4 color : COLOR; float2 uv : TEXCOORD0; };
+        struct Varyings  { float4 positionCS : SV_POSITION; half4 color : COLOR; float2 uv : TEXCOORD0; };
 
-			struct v2f {
-				float4 vertex : POSITION;
-				fixed4 color : COLOR;
-				float2 texcoord : TEXCOORD0;
-				#ifdef SOFTPARTICLES_ON
-				float4 projPos : TEXCOORD1;
-				#endif
-			};
-			
-			float4 _MainTex_ST;
+        Varyings vert(Attributes v)
+        {
+            Varyings o;
+            o.positionCS = TransformObjectToHClip(v.positionOS.xyz);
+            o.color = v.color;
+            o.uv = TRANSFORM_TEX(v.uv, _MainTex);
+            return o;
+        }
 
-			v2f vert (appdata_t v)
-			{
-				v2f o;
-				o.vertex = UnityObjectToClipPos(v.vertex);
-				#ifdef SOFTPARTICLES_ON
-				o.projPos = ComputeScreenPos (o.vertex);
-				COMPUTE_EYEDEPTH(o.projPos.z);
-				#endif
-				o.color = v.color;
-				o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
-				return o;
-			}
-
-			sampler2D _CameraDepthTexture;
-			float _InvFade;
-			
-			fixed4 frag (v2f i) : COLOR
-			{
-				#ifdef SOFTPARTICLES_ON
-				float sceneZ = LinearEyeDepth (UNITY_SAMPLE_DEPTH(tex2Dproj(_CameraDepthTexture, UNITY_PROJ_COORD(i.projPos))));
-				float partZ = i.projPos.z;
-				float fade = saturate (_InvFade * (sceneZ-partZ));
-				i.color.a *= fade;
-				#endif
-				
-				half4 prev = i.color * tex2D(_MainTex, i.texcoord).a;
-				return prev;
-			}
-			ENDCG 
-		}
-	} 	
-
-	// ---- Dual texture cards
-	SubShader {
-		Pass {
-			SetTexture [_MainTex] {
-				combine texture alpha * primary
-			}
-			SetTexture [_MainTex] {
-				constantColor (1,1,1,1)
-				combine previous lerp (previous) constant
-			}
-		}
-	}
-	
-	// ---- Single texture cards (does not do particle colors)
-	SubShader {
-		Pass {
-			SetTexture [_MainTex] {
-				constantColor (1,1,1,1)
-				combine texture alpha lerp(texture) constant
-			}
-		}
-	}
+        half4 frag(Varyings i) : SV_Target
+        {
+            return i.color * SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).a;
+        }
+        ENDHLSL
+    }
 }
+Fallback Off
 }
