@@ -163,6 +163,8 @@ namespace VRMultiplayer
         // konumu fiziksel konumdan ayirir ve oyuncu gercek odada baskasinin icine yurur.
         // Oyuncular artik <see cref="TeamSpawnZone"/> cemberine FIZIKSEL olarak yuruyerek
         // girer; dagilimi gercek oda saglar.
+        // NOT: origin/main'deki birikimli-ofset duzeltmesi (009bd56) bilerek ALINMADI —
+        // duzelttigi kod yolu bu dalda tamamen kaldirildi.
 
         void LateUpdate()
         {

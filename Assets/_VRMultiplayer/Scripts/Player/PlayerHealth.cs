@@ -91,7 +91,8 @@ namespace VRMultiplayer
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => LocalDamageFrom = null;
 
-        /// <summary>Server-only. Reduce health; handle death.</summary>
+        /// <summary>Server-only. Reduce health; handle death. Yeniden dogus zamanla DEGIL,
+        /// dogum cemberinde beklenerek olur (bkz. <see cref="TickSpawn"/>).</summary>
         public void ServerApplyDamage(int amount, ulong attacker)
             => ServerApplyDamage(amount, attacker, Vector3.zero);
 

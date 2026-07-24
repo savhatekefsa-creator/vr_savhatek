@@ -116,6 +116,7 @@ namespace VRMultiplayer
                     _health.spawnHoldSeconds);
             }
 
+            // VR rig yoksa (Editor'de Game penceresinden test) ana kamera kafa yerine gecer.
             Transform head = XRRigReference.HeadOrCamera;
             if (head != null)
             {
