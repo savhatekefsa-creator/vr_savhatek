@@ -1,7 +1,14 @@
 # ============ Unity sahne/prefab akilli birlestirme (UnityYAMLMerge) ============
-*.unity merge=unityyamlmerge text eol=lf
-*.prefab merge=unityyamlmerge text eol=lf
-*.asset merge=unityyamlmerge text eol=lf
+# DIKKAT — "text" DEGIL "text=auto": bizim asset'lerimiz Force Text (YAML) ama ucuncu
+# parti paketler IKILI serilestirilmis dosya tasiyabilir (WarFX prefablari Unity 2017
+# binary formatinda geldi). Kosulsuz "text eol=lf" onlari metin sanip CRLF -> LF
+# donusturur ve dosyayi SESSIZCE BOZAR: 170 WarFX prefabinin her birinden 3 bayt
+# kaybolmus, Unity hepsini "BrokenPrefabAsset" yapmis, bomba efektleri hic gorunmemisti.
+# "text=auto" ile git icerige bakip ikili dosyalari oldugu gibi saklar; YAML olanlarda
+# satir sonu normalizasyonu ve akilli birlestirme aynen surer.
+*.unity merge=unityyamlmerge text=auto eol=lf
+*.prefab merge=unityyamlmerge text=auto eol=lf
+*.asset merge=unityyamlmerge text=auto eol=lf
 
 # ============ Buyuk ikili dosyalar -> Git LFS ============
 # 3B modeller
