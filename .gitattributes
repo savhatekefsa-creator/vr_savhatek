@@ -1,7 +1,14 @@
 # ============ Unity sahne/prefab akilli birlestirme (UnityYAMLMerge) ============
-*.unity merge=unityyamlmerge text eol=lf
-*.prefab merge=unityyamlmerge text eol=lf
-*.asset merge=unityyamlmerge text eol=lf
+# "text" DEGIL "text=auto": duz "text" git'e "bu dosya kesinlikle metindir" der ve
+# commit sirasinda CRLF->LF donusumu uygular. Projemizde metin (Force Text) asset'ler
+# var ama ucuncu parti paketler IKILI .prefab/.asset gonderebiliyor — WarFX oyle geldi
+# ve her birinden 0D0A ciftleri silindi, 170 prefab bozuldu (Unity "Unknown error
+# occurred while loading" veriyordu). "text=auto" git'in kendi ikili tespitini
+# devreye sokar: NUL bayti goren dosyaya dokunmaz, gercek YAML'i normalize etmeye
+# devam eder. UnityYAMLMerge de calismaya devam eder.
+*.unity merge=unityyamlmerge text=auto eol=lf
+*.prefab merge=unityyamlmerge text=auto eol=lf
+*.asset merge=unityyamlmerge text=auto eol=lf
 
 # ============ Buyuk ikili dosyalar -> Git LFS ============
 # 3B modeller
