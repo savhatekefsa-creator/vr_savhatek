@@ -92,29 +92,22 @@ namespace VRMultiplayer
             }
         }
 
-        // Spawn olmus tum grabbable'lar. Olum aninda "bu oyuncu ne tutuyor?" sorusunu
-        // FindObjectsByType taramadan cevaplamak icin tutulur.
-        static readonly List<GrabbableObject> _spawned = new List<GrabbableObject>();
-
         /// <summary>SUNUCU: bu istemcinin tuttugu HER seyi oldugu yerde biraktirir. Olunce
         /// cagrilir (bkz. <see cref="PlayerHealth"/>) — olu oyuncu silah tasimaya devam
-        /// etmemeli, ayrica dusen silahi baskasi alabilmeli.</summary>
+        /// etmemeli, ayrica dusen silahi baskasi alabilmeli. Olum aninda sahne taranmasin
+        /// diye yukaridaki <see cref="_active"/> kayit listesi uzerinden gider.</summary>
         public static void ServerReleaseAllHeldBy(ulong clientId)
         {
-            for (int i = 0; i < _spawned.Count; i++)
+            for (int i = 0; i < _active.Count; i++)
             {
-                var g = _spawned[i];
+                var g = _active[i];
                 if (g != null && g.IsServer && g._holder.Value == clientId)
                     g._holder.Value = NoHolder;
             }
         }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => _spawned.Clear();
-
         public override void OnNetworkSpawn()
         {
-            if (!_spawned.Contains(this)) _spawned.Add(this);
             _holder.OnValueChanged += OnHolderChanged;
             _holder.OnValueChanged += OnStateChanged;
             _holderHand.OnValueChanged += OnStateChanged;
@@ -127,7 +120,6 @@ namespace VRMultiplayer
 
         public override void OnNetworkDespawn()
         {
-            _spawned.Remove(this);
             _holder.OnValueChanged -= OnHolderChanged;
             _holder.OnValueChanged -= OnStateChanged;
             _holderHand.OnValueChanged -= OnStateChanged;
