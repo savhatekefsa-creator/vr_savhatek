@@ -1455,6 +1455,7 @@ GameObject:
   - component: {fileID: 5756330707935964542}
   - component: {fileID: 3976223449438078119}
   - component: {fileID: 5813660218117512092}
+  - component: {fileID: 1208287259268866603}
   m_Layer: 0
   m_Name: Avatar
   m_TagString: Untagged
@@ -1558,6 +1559,7 @@ MonoBehaviour:
   armReachRemap: 0
   feetOffset: 0.021316923
   groundY: 0
+  trackingReadyMinHeight: 1
   bodyHeightOffset: 0
   yawDeadzone: 45
   yawSpeed: 220
@@ -1566,12 +1568,15 @@ MonoBehaviour:
   groundProbeDown: 12
   fitToPlayerHeight: 1
   headForwardOffset: 0.07
-  fitLerpSpeed: 8
-  minScale: 0.6
-  maxScale: 1.6
+  calibrationSeconds: 2
+  calibrationTolerance: 0.12
+  recalibrateRise: 0.25
+  recalibrateSeconds: 3
+  minScale: 0.85
+  maxScale: 1.25
   speedParam: Speed
   speedSmoothing: 6
-  crouchStartRatio: 0.92
+  crouchStartRatio: 0.88
   crouchFullRatio: 0.65
   crouchSmoothing: 8
 --- !u!114 &5813660218117512092
@@ -1598,6 +1603,20 @@ MonoBehaviour:
   rollSignOverrideLeft: 0
   rollSignOverrideRight: 0
   captureDelayFrames: 3
+--- !u!114 &1208287259268866603
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2867187932953041727}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e14e63341c2158642b7b49cbebf5137e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.AvatarFitDebug
+  showOverlay: 0
+  refreshInterval: 0.15
 --- !u!1 &2888428985747785500
 GameObject:
   m_ObjectHideFlags: 0
@@ -2761,7 +2780,6 @@ MonoBehaviour:
   - {fileID: 8906104194880399625}
   - {fileID: 1532838691487132950}
   remoteAvatar: {fileID: 2867187932953041727}
-  spawnRingRadius: 0.9
 --- !u!114 &3495332616704675049
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2880,14 +2898,25 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.PlayerHealth
   ShowTopMostFoldoutHeaderGroup: 1
-  respawnDelay: 4
+  spawnHoldSeconds: 5
   reviveInvuln: 2
+  noZoneFallbackSeconds: 5
   Health:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: 100
   Dead:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  SpawnProgress:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  InSpawnZone:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0

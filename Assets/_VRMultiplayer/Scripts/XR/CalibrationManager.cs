@@ -124,6 +124,13 @@ namespace VRMultiplayer
 
             _step = 2;
             Calibrated = true;
+
+            // The player is standing, headset on, holding still to take point B — the one moment
+            // we can be sure a height sample is a STANDING sample. Re-run the avatar height fit
+            // here so a session that started with the headset on a table (or was calibrated
+            // while kneeling) corrects itself without a restart.
+            AvatarIKController.RecalibrateAll();
+
             SetStatus("KALIBRE EDILDI!\nIyi oyunlar.\n(Yeniden kalibre: SOL kumanda Y tusu)");
             StartCoroutine(HideAfter(6f));
         }

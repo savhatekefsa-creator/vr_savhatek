@@ -10,6 +10,12 @@ namespace VRMultiplayer
     /// owner-only XRRigReference. So each client solves the same avatar locally with zero
     /// extra networking.
     ///
+    /// Body height is CALIBRATED ONCE, not servoed: a steady standing sample sets the uniform
+    /// scale that puts the avatar's head bone at the player's eyes, and that scale is then locked
+    /// for the session (<see cref="Recalibrate"/> re-runs it). Dropping below the calibrated
+    /// standing height bends the knees via the Crouch layer; the body is never resized to follow
+    /// the head, and the root always rests on the floor.
+    ///
     /// Attach to the Humanoid model root (same GameObject as its Animator + RigBuilder).
     /// The Editor wizard wires all references.
     /// </summary>
@@ -38,16 +44,16 @@ namespace VRMultiplayer
         public Vector3 rightGripEulerOffset;
         [Tooltip("Wrist sits this far behind the controller so the PALM holds it (not the wrist).")]
         public float palmOffset = 0.09f;
-        [Tooltip("Learn your real max reach and remap distances so a fully extended real arm fully straightens the avatar's arm.")]
-        public bool armReachRemap = true;
+        [Tooltip("Learn your real max reach and remap distances so a fully extended real arm fully straightens the avatar's arm. OFF by default: the shipped NetworkPlayer prefab has always run without it, so the code default matches rather than silently differing.")]
+        public bool armReachRemap = false;
 
         [Header("Body")]
         [Tooltip("Feet position relative to the avatar root (measured by the wizard; usually negative).")]
         public float feetOffset = -0.9f;
         [Tooltip("World Y of the floor the players stand on (usually 0).")]
         public float groundY = 0f;
-        [Tooltip("Avatar body/IK stays frozen until the head is at least this high (m) above the floor -- prevents the spawn-time 'fly up / sink into floor' glitch while the Floor tracking origin settles.")]
-        public float trackingReadyMinHeight = 0.4f;
+        [Tooltip("Avatar body/IK stays frozen until the head is at least this high (m) above the floor -- prevents the spawn-time 'fly up / sink into floor' glitch while the Floor tracking origin settles. Must sit above table height: a headset resting on a desk used to clear the old 0.4 m gate and get measured as the player.")]
+        public float trackingReadyMinHeight = 1f;
         [Tooltip("Fine-tune: nudge the whole body up (+) or down (-).")]
         public float bodyHeightOffset = 0f;
         [Tooltip("Body only turns after the head yaw differs by more than this.")]
@@ -61,15 +67,21 @@ namespace VRMultiplayer
         public float groundProbeDown = 12f;
 
         [Header("Embodiment (wear the avatar)")]
-        [Tooltip("Continuously scale the body so the head bone sits exactly at the player's eyes while the feet stay on the ground. Crouching lowers the body too.")]
+        [Tooltip("Measure the player's standing height ONCE, then scale the body so its head bone sits at their eyes and LOCK that scale. Crouching bends the knees (Crouch layer) instead of resizing the body.")]
         public bool fitToPlayerHeight = true;
         [Tooltip("Eyes sit this far in FRONT of the head bone, so the body hangs slightly behind the camera.")]
         public float headForwardOffset = 0.07f;
-        public float fitLerpSpeed = 8f;
-        [Tooltip("Ignore head-height changes smaller than this (m) so per-frame tracking noise doesn't shimmer the whole body/arms.")]
-        public float heightDeadband = 0.02f;
-        public float minScale = 0.6f;
-        public float maxScale = 1.6f;
+        [Tooltip("Hold a plausible, steady head height for this long (s) before the scale is solved and locked.")]
+        public float calibrationSeconds = 2f;
+        [Tooltip("The sampling window restarts if the head moves more than this (m) during it -- averaging a crouch or a jump into the sample would lock in a wrong height.")]
+        public float calibrationTolerance = 0.12f;
+        [Tooltip("Self-heal: a head held this far (m) ABOVE the locked standing height means the lock was taken too low (calibrated mid-crouch). You can never be taller than standing, so this only ever corrects upwards.")]
+        public float recalibrateRise = 0.25f;
+        [Tooltip("...and held there for this long (s) before the fit is re-solved.")]
+        public float recalibrateSeconds = 3f;
+        [Tooltip("Human proportions only: a bad height reading must never be able to produce a dwarf or a giant.")]
+        public float minScale = 0.85f;
+        public float maxScale = 1.25f;
 
         [Header("Locomotion animation")]
         [Tooltip("Animator float parameter fed with the player's horizontal speed (m/s).")]
@@ -77,17 +89,30 @@ namespace VRMultiplayer
         public float speedSmoothing = 6f;
 
         [Header("Crouch")]
-        [Tooltip("Crouch blending starts when you drop below this fraction of your standing height.")]
-        public float crouchStartRatio = 0.92f;
+        [Tooltip("Crouch blending starts when you drop below this fraction of your standing height. Kept clear of 1.0 so ordinary head bobbing while walking doesn't read as a crouch.")]
+        public float crouchStartRatio = 0.88f;
         [Tooltip("Full crouch pose at this fraction of your standing height.")]
         public float crouchFullRatio = 0.65f;
         public float crouchSmoothing = 8f;
 
+        // A tracked HMD outside this band is not a worn headset (resting on a table, carried by
+        // hand, tracking still settling). Such samples must never reach the height calibration.
+        const float StandMinHeight = 1.0f;
+        const float StandMaxHeight = 2.2f;
+        // Consecutive plausible head poses the startup gate wants before it trusts tracking.
+        const int TrackingReadyFrames = 10;
+
         float _baseScale = 1f;   // authored localScale
         float _baseHeadH;        // head-bone height above the root, at authored scale
-        float _scaleK = 1f;      // current fit multiplier
-        float _heightRef;        // stable (deadbanded) player height feeding the scale servo
+        float _scaleK = 1f;      // fit multiplier -- solved ONCE at calibration, then constant
+        bool _fitLocked;         // true once the height calibration has produced a scale
         bool _trackingValid;     // false until the first plausible head pose (Floor origin settled)
+        int _readyFrames;        // consecutive plausible head poses seen by the startup gate
+
+        // Height-calibration sampling window.
+        float _calibSum, _calibTime, _calibMin, _calibMax;
+        int _calibFrames;
+        float _tallTime;         // how long the head has read above the locked standing height
 
         Animator _animator;
         int _speedHash;
@@ -201,6 +226,86 @@ namespace VRMultiplayer
             return Quaternion.LookRotation(fingersW, palmW) * basisInv * Quaternion.Euler(trimEuler);
         }
 
+        // --- Height calibration (read by AvatarFitDebug) ---
+        public bool FitLocked => _fitLocked;
+        public float StandingHeight => _standingH;
+        public float FitScale => _baseScale * _scaleK;
+        public float CrouchWeight => _smoothCrouch;
+
+        // Raised when the player finishes the room A/B alignment; every avatar this client is
+        // simulating re-measures its player's height. An event (not FindObjectsOfType) so only
+        // live, enabled controllers are touched.
+        static event System.Action RecalibrateRequested;
+
+        /// <summary>Asks every active avatar on this client to re-run its height fit.</summary>
+        public static void RecalibrateAll() => RecalibrateRequested?.Invoke();
+
+        void OnEnable() => RecalibrateRequested += Recalibrate;
+        void OnDisable() => RecalibrateRequested -= Recalibrate;
+
+        /// <summary>Throws away the locked fit so the next steady standing sample re-solves it.</summary>
+        public void Recalibrate()
+        {
+            _fitLocked = false;
+            _standingH = 0f;
+            _tallTime = 0f;
+            _maxReachL = _maxReachR = 0f;
+            ResetCalibrationWindow();
+
+            // Never re-measure out of a squat: the crouch pose would lower the head bone and the
+            // fresh sample would lock in a shorter player than the one standing there.
+            if (_crouchLayer >= 0 && _animator != null)
+            {
+                _smoothCrouch = 0f;
+                _animator.SetLayerWeight(_crouchLayer, 0f);
+            }
+        }
+
+        /// <summary>
+        /// Collects a window of plausible, STEADY head heights and, once it is long enough,
+        /// solves the avatar scale from it and locks it. A window the player moved through is
+        /// discarded rather than averaged, so a crouch or a jump can't set the standing height.
+        /// </summary>
+        void TickCalibration(float ph)
+        {
+            if (ph < StandMinHeight || ph > StandMaxHeight)
+            { ResetCalibrationWindow(); return; }   // on a table / carried / still settling
+
+            if (_calibFrames == 0) { _calibMin = ph; _calibMax = ph; }
+            else { _calibMin = Mathf.Min(_calibMin, ph); _calibMax = Mathf.Max(_calibMax, ph); }
+
+            if (_calibMax - _calibMin > calibrationTolerance)
+            { ResetCalibrationWindow(); return; }   // player moved mid-sample -- start over
+
+            _calibSum += ph;
+            _calibFrames++;
+            _calibTime += Time.deltaTime;
+            if (_calibTime < calibrationSeconds)
+                return;
+
+            _standingH = _calibSum / _calibFrames;
+
+            // Head height of the CURRENT standing pose, normalised to scale 1. Measured live off
+            // the skeleton rather than from the bind pose, which sits a few cm higher than the
+            // idle the avatar actually stands in.
+            float headPerUnit = (headBone.position.y - transform.position.y) / Mathf.Max(0.01f, _scaleK);
+            if (headPerUnit < 0.5f) headPerUnit = _baseHeadH;   // pose not evaluated yet
+
+            if (headPerUnit > 0.5f)
+            {
+                _scaleK = Mathf.Clamp(_standingH / headPerUnit, minScale, maxScale);
+                transform.localScale = Vector3.one * (_baseScale * _scaleK);
+            }
+
+            _fitLocked = true;
+            ResetCalibrationWindow();
+        }
+
+        void ResetCalibrationWindow()
+        {
+            _calibSum = 0f; _calibTime = 0f; _calibFrames = 0; _calibMin = 0f; _calibMax = 0f;
+        }
+
         void Awake()
         {
             _baseScale = transform.localScale.x;
@@ -243,6 +348,10 @@ namespace VRMultiplayer
             if (!_trackingValid)
             {
                 if (headSource.position.y - groundY < trackingReadyMinHeight)
+                { _readyFrames = 0; return; }
+                // A run of good frames, not a single one: a lone spike out of a settling origin
+                // would otherwise open the gate and feed the height calibration a bogus sample.
+                if (++_readyFrames < TrackingReadyFrames)
                     return;
                 _trackingValid = true;
             }
@@ -263,70 +372,64 @@ namespace VRMultiplayer
                 _hasLastHead = true;
             }
 
-            // Learn the player's standing height; seed the per-arm max reach from it
-            // (arm reach ~ 44% of height) so the straighten-arms remap behaves from the start.
             float ph = headSource.position.y - groundY;
-            _standingH = Mathf.Max(_standingH, ph);
-            float reachSeed = _standingH * 0.44f;
-            float reachCap = Mathf.Max(0.5f, _standingH * 0.55f); // human arms never exceed this
-            _maxReachL = Mathf.Clamp(Mathf.MoveTowards(_maxReachL, reachSeed, 0.01f * Time.deltaTime),
-                reachSeed, reachCap); // gentle decay heals a polluted sample (e.g. a calibration jump)
-            _maxReachR = Mathf.Clamp(Mathf.MoveTowards(_maxReachR, reachSeed, 0.01f * Time.deltaTime),
-                reachSeed, reachCap);
 
-            // Real crouching -> crouch pose: blend the Crouch layer in as the player drops
-            // below standing height (knees bend instead of the body shrinking).
-            if (_crouchLayer >= 0 && _animator != null)
+            // Per-arm max reach, seeded from the CALIBRATED standing height (arm reach ~ 44% of
+            // it). _standingH used to be a running Mathf.Max that never decayed, so a single
+            // raised-headset frame inflated the reach -- and the crouch ratio below -- for the
+            // rest of the session. It is now a locked measurement, so both stay put.
+            if (_fitLocked)
             {
-                if (_standingH > 0.8f)
-                {
-                    float ratio = ph / _standingH;
-                    float crouch = Mathf.Clamp01(
-                        (crouchStartRatio - ratio) / Mathf.Max(0.05f, crouchStartRatio - crouchFullRatio));
-                    _smoothCrouch = Mathf.Lerp(_smoothCrouch, crouch, crouchSmoothing * Time.deltaTime);
-                    _animator.SetLayerWeight(_crouchLayer, _smoothCrouch);
-                }
+                float reachSeed = _standingH * 0.44f;
+                float reachCap = Mathf.Max(0.5f, _standingH * 0.55f); // human arms never exceed this
+                _maxReachL = Mathf.Clamp(Mathf.MoveTowards(_maxReachL, reachSeed, 0.01f * Time.deltaTime),
+                    reachSeed, reachCap); // gentle decay heals a polluted sample
+                _maxReachR = Mathf.Clamp(Mathf.MoveTowards(_maxReachR, reachSeed, 0.01f * Time.deltaTime),
+                    reachSeed, reachCap);
+            }
+
+            // Real crouching -> crouch pose: blend the Crouch layer in as the player drops below
+            // their calibrated standing height (knees bend instead of the body shrinking). Gated
+            // on the lock: before it, _standingH means nothing and would squat a standing player.
+            if (_fitLocked && _crouchLayer >= 0 && _animator != null)
+            {
+                float ratio = ph / _standingH;
+                float crouch = Mathf.Clamp01(
+                    (crouchStartRatio - ratio) / Mathf.Max(0.05f, crouchStartRatio - crouchFullRatio));
+                _smoothCrouch = Mathf.Lerp(_smoothCrouch, crouch, crouchSmoothing * Time.deltaTime);
+                _animator.SetLayerWeight(_crouchLayer, _smoothCrouch);
             }
 
             if (fitToPlayerHeight && headBone != null)
             {
-                // Measure the head-bone height LIVE from the current pose (pose-agnostic:
-                // works whether the skeleton is in T-pose, an idle, or anything else).
-                float liveHeadH = headBone.position.y - transform.position.y;
-                if (liveHeadH < 0.2f) liveHeadH = Mathf.Max(0.2f, _baseHeadH * _scaleK);
-
-                // Scale from the TRACKED floor plane (groundY, world y=0) so a bad raycast can
-                // never shrink/grow the body: servo the scale until head height == eye height.
-                // While crouching, the crouch POSE supplies the height drop — freeze the scale
-                // so the body doesn't shrink.
-                float playerH = headSource.position.y - groundY;
-                if (playerH > 0.3f && _smoothCrouch < 0.2f)
+                // ONE-TIME height calibration -> a LOCKED uniform scale.
+                //
+                // This used to be a per-frame servo comparing the player's head height with the
+                // LIVE POSED head bone. Any pose that lowers that bone -- above all the Crouch
+                // layer, which drops it ~0.9 m -- therefore read as "the avatar is too short" and
+                // grew the body, which lowered the bone again: a feedback loop that ended with the
+                // scale frozen at a wrong value and the avatar buried in, or floating above, the
+                // floor. Solved once from a steady standing sample, it cannot drift at all.
+                if (!_fitLocked)
+                    TickCalibration(ph);
+                else if (ph > _standingH + recalibrateRise)
                 {
-                    // Deadband the measured height before it drives the scale servo. Raw head-Y
-                    // carries tracking noise; fed straight in it shimmers the whole skeleton
-                    // (arms and hands included). Hold a stable reference and only chase it once
-                    // the real height moves beyond heightDeadband.
-                    if (_heightRef <= 0f)
-                        _heightRef = playerH;
-                    else if (Mathf.Abs(playerH - _heightRef) > heightDeadband)
-                        _heightRef = Mathf.Lerp(_heightRef, playerH, fitLerpSpeed * Time.deltaTime);
-
-                    float ratio = Mathf.Clamp(_heightRef / liveHeadH, 0.5f, 2f);
-                    float targetK = Mathf.Clamp(_scaleK * ratio, minScale, maxScale);
-                    _scaleK = Mathf.Lerp(_scaleK, targetK, fitLerpSpeed * Time.deltaTime);
-                    transform.localScale = Vector3.one * (_baseScale * _scaleK);
+                    // Nobody is taller than their standing height, so a sustained higher head
+                    // means the lock was taken while crouched or kneeling. Self-heal rather than
+                    // make the player restart the app.
+                    _tallTime += Time.deltaTime;
+                    if (_tallTime >= recalibrateSeconds) Recalibrate();
                 }
+                else _tallTime = 0f;
 
-                // GLUE the head bone to the eyes using the LIVE measurement: the view can never
-                // drift above/below the body. Torso sits slightly behind the eyes.
+                // Feet on the floor, torso just behind the eyes. The root is NO LONGER derived
+                // from the posed head bone: crouching now bends the knees in place instead of
+                // sliding the whole avatar up off the ground.
                 Vector3 look = headSource.forward; look.y = 0f;
                 if (look.sqrMagnitude < 0.01f) look = transform.forward;
                 look.Normalize();
                 Vector3 xz = headSource.position - look * (headForwardOffset * _scaleK);
-                transform.position = new Vector3(
-                    xz.x,
-                    headSource.position.y - liveHeadH + bodyHeightOffset,
-                    xz.z);
+                transform.position = new Vector3(xz.x, groundY + bodyHeightOffset, xz.z);
             }
             else
             {
