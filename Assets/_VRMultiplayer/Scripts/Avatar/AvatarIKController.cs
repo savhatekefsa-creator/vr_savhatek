@@ -78,8 +78,10 @@ namespace VRMultiplayer
         public float trackingReadyMinHeight = 1f;
         [Tooltip("Fine-tune: nudge the whole body up (+) or down (-).")]
         public float bodyHeightOffset = 0f;
-        [Tooltip("Body only turns after the head yaw differs by more than this.")]
-        public float yawDeadzone = 45f;
+        [Tooltip("Govde, kafa yaw'i bu aciyi asinca donmeye BASLAR. Kucuk goz atmalar govdeyi dondurmesin diye.")]
+        public float yawDeadzone = 30f;
+        [Tooltip("Donmeye basladiktan sonra govde bu aciya KADAR takip eder (histerezis). Bu alan olmadan donus tam esik acisinda birakiliyordu, yani govde kalici olarak 20-45 derece yamuk duruyordu: olculdu, 25 saniye boyunca sabit 22.5 derece. Omuz govde merkezinden ~17 cm yanda oldugu icin bu, omzu 7-13 cm yanlis yere koyar ve kol bos yere erisim disina dusmus gorunur.")]
+        public float yawFollowThrough = 5f;
         public float yawSpeed = 220f;
 
         [Header("Ground snap (rests feet on the ground collider if there is one)")]
@@ -295,7 +297,18 @@ namespace VRMultiplayer
         float _peakReachL, _peakReachR;
         bool _newPeak;            // a peak grew this frame -> the settle timer restarts
         float _reachQuiet;        // seconds since the last new peak
-        bool _armFitLocked;       // the one-time arm lengthening has been applied
+        bool _armFitLocked;       // the arm lengthening has been solved at least once
+        float _yawError;          // this frame's torso-vs-head yaw error, degrees
+        bool _yawTurning;         // inside a committed turn (hysteresis latch)
+
+        // A reach sample is only honest while the torso is square with the head. Twisted, the
+        // shoulder is centimetres from where the player's real one is, and the arm would be
+        // lengthened to cover the torso's error instead of the player's proportions.
+        const float ReachSampleMaxYawError = 12f;
+        // Re-solve the stretch if the measured reach later overruns the arm by more than this.
+        // The first solve locks reachSettleSeconds after the last new peak, and a player who
+        // keeps stretching further after that would otherwise be stuck with the early answer.
+        const float RestretchSlack = 0.03f;
 
         // Authored bone offsets, so the stretch is always computed from the model's own
         // proportions rather than compounding on itself, and Recalibrate can undo it exactly.
@@ -574,13 +587,30 @@ namespace VRMultiplayer
                     headSource.position.z);
             }
 
-            // Yaw-follow the head past a deadzone so small head turns don't spin the torso.
+            // Yaw-follow the head, with HYSTERESIS rather than a plain deadzone.
+            //
+            // A plain deadzone stops the turn at the threshold itself, so the torso comes to rest
+            // still twisted by up to the full deadzone and stays there — measured on device: a
+            // dead-constant 22.5 degrees for 25 s, and 39-43 degrees at the moments the player was
+            // reaching hardest. That is not cosmetic. The shoulder sits ~17 cm off the body's
+            // turn axis, so a 22.5 degree twist puts it 6.7 cm from where the player's real
+            // shoulder is, and 45 degrees puts it 13.2 cm out. Every centimetre of that is
+            // subtracted from the arm's usable reach, which is what made a half-bent real arm
+            // read as a fully straight avatar arm.
+            //
+            // Two thresholds fix it without reintroducing the twitch the deadzone was there to
+            // prevent: a glance under yawDeadzone still moves nothing, but once the body commits
+            // to a turn it follows all the way down to yawFollowThrough.
             float curYaw = transform.eulerAngles.y;
             float targetYaw = headSource.eulerAngles.y;
-            if (Mathf.Abs(Mathf.DeltaAngle(curYaw, targetYaw)) > yawDeadzone)
+            _yawError = Mathf.Abs(Mathf.DeltaAngle(curYaw, targetYaw));
+            if (!_yawTurning && _yawError > yawDeadzone) _yawTurning = true;
+            if (_yawTurning)
             {
                 float newYaw = Mathf.MoveTowardsAngle(curYaw, targetYaw, yawSpeed * Time.deltaTime);
                 transform.rotation = Quaternion.Euler(0f, newYaw, 0f);
+                _yawError = Mathf.Abs(Mathf.DeltaAngle(newYaw, targetYaw));
+                if (_yawError <= Mathf.Max(0.5f, yawFollowThrough)) _yawTurning = false;
             }
 
             // Hand IK targets (controller pose + grip offset). Rotation is remapped through the
@@ -650,13 +680,13 @@ namespace VRMultiplayer
             // Free-hand reach peak: feeds both the on-headset read-out and the arm-length fit.
             // Gated on the height lock so _standingH is meaningful, and rejected above a reach no
             // human has for their height — one tracking spike must not stretch the arms.
-            if (!welded && _fitLocked)
+            if (!welded && _fitLocked && _yawError <= ReachSampleMaxYawError)
             {
                 Transform shoulder = left ? _lUpper : _rUpper;
                 if (shoulder != null)
                 {
                     float d = Vector3.Distance(shoulder.position, pos);
-                    if (d <= _standingH * 0.45f)
+                    if (d <= _standingH * 0.5f)
                     {
                         if (left) { if (d > _peakReachL) { _peakReachL = d; _newPeak = true; } }
                         else { if (d > _peakReachR) { _peakReachR = d; _newPeak = true; } }
@@ -690,11 +720,14 @@ namespace VRMultiplayer
         /// </summary>
         void TickArmFit()
         {
-            if (!fitArmLength || _armFitLocked || !_armBaseCaptured || !_fitLocked) return;
+            if (!fitArmLength || !_armBaseCaptured || !_fitLocked) return;
 
             // Still discovering how far this player reaches — hold the measurement open.
             if (_newPeak) { _newPeak = false; _reachQuiet = 0f; return; }
             if (_peakReachL <= 0f && _peakReachR <= 0f) return;
+
+            // Solved, and the arms still cover everything measured since: nothing to do.
+            if (_armFitLocked && !(ArmFallsShort(true) || ArmFallsShort(false))) return;
 
             _reachQuiet += Time.deltaTime;
             if (_reachQuiet < reachSettleSeconds) return;
@@ -702,6 +735,22 @@ namespace VRMultiplayer
             SolveArmStretch(true);
             SolveArmStretch(false);
             _armFitLocked = true;
+        }
+
+        // True when this arm is measurably shorter than the reach seen since it was solved — and
+        // lengthening it further is still allowed. Without the cap check, an arm already pinned at
+        // maxArmStretch would re-solve forever without ever changing.
+        bool ArmFallsShort(bool left)
+        {
+            Transform up = left ? _lUpper : _rUpper;
+            Transform lo = left ? _lLower : _rLower;
+            Transform ha = left ? _lHand : _rHand;
+            if (up == null || lo == null || ha == null) return false;
+            if ((left ? _armStretchL : _armStretchR) >= Mathf.Max(1f, maxArmStretch) - 0.001f) return false;
+
+            float armLen = Vector3.Distance(up.position, lo.position)
+                         + Vector3.Distance(lo.position, ha.position);
+            return (left ? _peakReachL : _peakReachR) > armLen + RestretchSlack;
         }
 
         void SolveArmStretch(bool left)
