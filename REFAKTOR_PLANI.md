@@ -93,7 +93,13 @@ Her düzeltme **ayrı commit** olarak atılır. Her maddenin sonunda **TEST** sa
 
 **TEST (Faz 2 genel):** Her adım sonrası Quest'te Profiler ile GC Alloc/frame kontrolü; silah takası anında frame spike'ının küçüldüğü doğrulanmalı; iki elle nişan + otomatik ateş kombinasyonu 72 Hz'i korumalı.
 
-## Faz 3 — Mimari (ayrı branch önerilir: `refaktor/modul-yapisi`)
+## Faz 3 — Mimari (TAMAMLANDI — branch: `refaktor/modul-yapisi`)
+
+**Durum (2026-07-23):** Aşağıdaki maddelerin tamamı uygulandı; tek bilinçli sapma:
+`WeaponEquipService` ERTELENDİ — takas RPC'leri bir NetworkBehaviour üzerinde yaşamak
+zorunda, yeni bileşene taşımak NetworkPlayer prefab'ına bileşen eklemeyi gerektirir;
+bu prefab-dokunuşlu iş ayrı ve dikkatli bir oturuma bırakıldı. Ayrıca WeaponPackSetup
+ve Dmr1GripSetup'taki namlu kodları kopya değil bilinçli farklı algoritma çıktı — birleştirilmedi.
 
 1. **Kopya kod birleştirme (önce bu):** `WeaponGeometry` (6 namlu-tespit kopyası tek statik sınıfa), `HeadFollowPanel` (6 panel kopyası), `XRButtons` (7 tuş okuma — eşikler standardize), `XRRigReference.HeadOrCamera` (5 kopya), shader fallback'leri `UITheme`'e (4 kopya).
 2. **`NetworkWeapon` bölme (ayrı commit'ler):** `WeaponFx` (~330 satır istemci FX) → `WeaponHitscanServer` (statik, sahnesiz test edilebilir) → `WeaponReloadGesture`. Geriye ~350 satır NetworkBehaviour kalır.
@@ -103,7 +109,14 @@ Her düzeltme **ayrı commit** olarak atılır. Her maddenin sonunda **TEST** sa
 
 **TEST (Faz 3 genel):** Her bölme sonrası tam derleme + Console sıfır hata; sahnede mevcut prefab referanslarının (NetworkPlayer, silah prefab'ları) kopmadığı kontrol edilir; tek cihaz smoke test (bağlan-tut-ateş-takas) her commit sonrası.
 
-## Faz 4 — Hijyen (backlog)
+## Faz 4 — Hijyen (TAMAMLANDI — branch: `duzeltme/faz4-hijyen`)
+
+**Durum (2026-07-23):** Ana maddeler + görsel cilalar uygulandı (9 commit): profil eşit-skor
+uyarısı, isim-bazlı silah anahtarı, ThirdParty/ düzeni (yol sabitleri dahil), _Recovery
+temizliği, SpreadSpawn birikimi, PC ok-tuşu anında-seçim, parmak poz pop'u, weld fade
+sıçraması, MCP paket manifesti. **Yapılmayanlar:** stash düşürme (kalıcı silme — kullanıcı
+kararı), ServerView ping kolonu (NGO/UTP id eşleme API'si araştırma istiyor), geç katılan
+reload sesi (kozmetik), istemci origin doğrulaması (bilinçli ölç-önce kararı, backlog).
 
 - Profil eşit-skor çakışmasına uyarı logu; silah kimliğini `Resources.LoadAll` indeksi yerine isim anahtarıyla gönder (Editor↔Quest sessiz desync sigortası).
 - Asset paketleri (`P A I N T B A L L...`, `FPS Gun Pack 4K`, `Soldiers-Pack`, `Gece Studio`, `Standout7`) → `Assets/ThirdParty/`.
@@ -115,7 +128,7 @@ Her düzeltme **ayrı commit** olarak atılır. Her maddenin sonunda **TEST** sa
 
 ## Bu branch'in kapsamı
 
-Bu branch'te **Faz 0 + Faz 1** uygulanır (11 düzeltme, her biri ayrı commit). Faz 2-3 ayrı branch'lerde yapılır ki inceleme diff'leri okunabilir kalsın.
+Bu branch'te **Faz 0 + Faz 1 + Faz 2** uygulandı (11 düzeltme + 8 performans işi, her biri ayrı commit). Faz 2'de ana 5 kalemin yanında ek üç iş de yapıldı: kinematik gövdede `ContinuousSpeculative`, paylaşımlı çift-yüzlü malzeme varyantları (`MaterialDoubleSided`), oda chunk'larının kare başına ~8'erli gönderimi. Faz 3 ayrı branch'te yapılır ki inceleme diff'leri okunabilir kalsın.
 
 ## Birleştirme öncesi zorunlu test turu
 

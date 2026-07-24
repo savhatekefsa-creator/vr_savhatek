@@ -54,10 +54,7 @@ namespace VRMultiplayer.UI
             if (_quad.gameObject.activeSelf != active) _quad.gameObject.SetActive(active);
             if (!active) return;
 
-            // VR rig yoksa (Editor testi) ana kamera kafa yerine gecer.
-            var rig = XRRigReference.Instance;
-            Transform head = rig != null && rig.head != null ? rig.head
-                           : (Camera.main != null ? Camera.main.transform : null);
+            Transform head = XRRigReference.HeadOrCamera;
             if (head == null) return;
 
             // Hasar flasindan biraz geride dursun ki ust uste binince titreme olmasin.

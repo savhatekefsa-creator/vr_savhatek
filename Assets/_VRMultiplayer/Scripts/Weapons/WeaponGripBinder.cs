@@ -53,12 +53,23 @@ namespace VRMultiplayer.Weapons
 
             WeaponGripProfile best = null;
             int bestScore = 0;
+            bool tie = false;
             foreach (var p in _profiles)
             {
                 if (p == null) continue;
                 int s = p.MatchScore(weaponName);
-                if (s > bestScore) { bestScore = s; best = p; }
+                if (s > bestScore) { bestScore = s; best = p; tie = false; }
+                else if (s == bestScore && s > 0 && p != best) tie = true;
             }
+
+            // ESIT skorlu iki profil = kopya asset tehlikesi: kazanan Resources.LoadAll'un
+            // SIRALAMASINA kalir ve bu sira platformlar arasi garanti degildir — Editor host
+            // ile Quest istemcisi AYNI silaha FARKLI profil baglayip tutus/atis modunu sessizce
+            // ayristirabilir. Uyari her istemcide gorunur ki kopya asset hemen temizlensin.
+            if (tie)
+                Debug.LogWarning($"[WeaponGripBinder] '{weaponName}' icin ESIT skorlu birden fazla profil var" +
+                                 $" (kazanan: {(best != null ? best.name : "?")}, skor {bestScore})." +
+                                 " Kopya profil asset'ini sil — platformlar arasi farkli profil baglanabilir!");
             return best;
         }
     }

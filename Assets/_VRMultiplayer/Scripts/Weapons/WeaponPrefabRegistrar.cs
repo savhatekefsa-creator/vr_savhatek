@@ -18,6 +18,18 @@ namespace VRMultiplayer.Weapons
         /// <summary>Weapon prefabs discovered under Resources/WeaponPrefabs (for the dev spawner).</summary>
         public static IReadOnlyList<GameObject> Prefabs => _prefabs;
 
+        /// <summary>Kayitli silah prefabini ADIYLA bulur. Ag uzerinden silah kimligi ISIM olarak
+        /// tasinir: Resources.LoadAll'un SIRASI platformlar/build tipleri arasi sozlesmeli
+        /// degildir — indeks anahtar olsaydi Editor host ile Android istemci listeyi farkli
+        /// siraladiginda istemci A silahini isteyip B silahini alabilirdi.</summary>
+        public static GameObject FindByName(string prefabName)
+        {
+            if (string.IsNullOrEmpty(prefabName)) return null;
+            for (int i = 0; i < _prefabs.Count; i++)
+                if (_prefabs[i] != null && _prefabs[i].name == prefabName) return _prefabs[i];
+            return null;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Register()
         {

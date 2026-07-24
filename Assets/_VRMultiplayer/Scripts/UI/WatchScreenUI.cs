@@ -126,9 +126,7 @@ namespace VRMultiplayer
 
         string CompassText()
         {
-            var rig = XRRigReference.Instance;
-            Transform head = rig != null && rig.head != null ? rig.head
-                           : (Camera.main != null ? Camera.main.transform : null);
+            Transform head = XRRigReference.HeadOrCamera;
             if (head == null) return "N 0°";
             Vector3 f = head.forward; f.y = 0f;
             if (f.sqrMagnitude < 0.0001f) return "N 0°";
@@ -256,10 +254,7 @@ namespace VRMultiplayer
             var col = q.GetComponent<Collider>();
             if (col != null) Destroy(col);
             q.transform.SetParent(parent, false);
-            var sh = Shader.Find("Universal Render Pipeline/Unlit");
-            if (sh == null) sh = Shader.Find("Unlit/Color");
-            if (sh == null) sh = Shader.Find("Sprites/Default");
-            var m = new Material(sh);
+            var m = new Material(VRMultiplayer.UI.UITheme.SafeUnlitShader);
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
             if (m.HasProperty("_Color")) m.SetColor("_Color", color);
             if (m.HasProperty("_ZWrite")) m.SetInt("_ZWrite", 0);
