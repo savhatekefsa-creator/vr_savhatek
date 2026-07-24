@@ -105,6 +105,14 @@ namespace VRMultiplayer
         public float minScale = 0.85f;
         public float maxScale = 1.25f;
 
+        [Header("Kol uzunlugu (BOY olceginden bagimsiz, tek seferlik)")]
+        [Tooltip("Oyuncunun gercek erisimi avatarin kol boyunu asiyorsa kol KEMIKLERINI uzat. Govde olcegine DOKUNULMAZ -- boy ve goz hizasi bozulmaz, el kumandanin tam ustunde kalir, dirsek acisi seninkini takip eder. Yalnizca UZATIR, asla kisaltmaz.")]
+        public bool fitArmLength = true;
+        [Tooltip("Kol en fazla bu carpanla uzatilabilir. 1.25 = %25. Bozuk bir tracking sicramasi goril kolu yapamasin diye.")]
+        public float maxArmStretch = 1.25f;
+        [Tooltip("Yeni bir erisim tepesi gelmeden bu kadar saniye gecerse olcu kilitlenir ve kol bir kez uzatilir.")]
+        public float reachSettleSeconds = 4f;
+
         [Header("Locomotion animation")]
         [Tooltip("Animator float parameter fed with the player's horizontal speed (m/s).")]
         public string speedParam = "Speed";
@@ -282,8 +290,18 @@ namespace VRMultiplayer
         // --- Reach diagnostics (read by AvatarFitDebug) ---
         // Peak shoulder-to-target distance seen while the hand was FREE. A weapon weld drives the
         // target from the weapon rather than the controller, so those frames would measure the
-        // profile's geometry instead of the player's reach and are skipped.
+        // profile's geometry instead of the player's reach and are skipped. Only sampled after the
+        // height fit locks, so the peak always means "since we knew how tall you are".
         float _peakReachL, _peakReachR;
+        bool _newPeak;            // a peak grew this frame -> the settle timer restarts
+        float _reachQuiet;        // seconds since the last new peak
+        bool _armFitLocked;       // the one-time arm lengthening has been applied
+
+        // Authored bone offsets, so the stretch is always computed from the model's own
+        // proportions rather than compounding on itself, and Recalibrate can undo it exactly.
+        Vector3 _lLowerBase, _lHandBase, _rLowerBase, _rHandBase;
+        bool _armBaseCaptured;
+        float _armStretchL = 1f, _armStretchR = 1f;
 
         /// <summary>
         /// This arm's bone length and the distance from its shoulder to its IK target, both live
@@ -295,6 +313,9 @@ namespace VRMultiplayer
         /// left, something is inflating the shoulder-to-target distance -- the palm offset
         /// pointing the wrong way, or the torso yaw deadzone leaving the shoulder behind.
         /// </summary>
+        public bool ArmFitLocked => _armFitLocked;
+        public float ArmStretch(bool left) => left ? _armStretchL : _armStretchR;
+
         public bool TryGetReach(bool left, out float armLen, out float dist, out float peak)
         {
             armLen = dist = peak = 0f;
@@ -334,7 +355,22 @@ namespace VRMultiplayer
             _standingH = 0f;
             _tallTime = 0f;
             _maxReachL = _maxReachR = 0f;
-            _peakReachL = _peakReachR = 0f;   // fresh reach measurement alongside the fresh fit
+
+            // Fresh reach measurement alongside the fresh fit, and the arms go back to the
+            // model's authored proportions so the next solve starts from the same baseline
+            // instead of compounding on the last stretch.
+            _peakReachL = _peakReachR = 0f;
+            _newPeak = false;
+            _reachQuiet = 0f;
+            _armFitLocked = false;
+            _armStretchL = _armStretchR = 1f;
+            if (_armBaseCaptured)
+            {
+                _lLower.localPosition = _lLowerBase;
+                _lHand.localPosition = _lHandBase;
+                _rLower.localPosition = _rLowerBase;
+                _rHand.localPosition = _rHandBase;
+            }
             ResetCalibrationWindow();
 
             // Never re-measure out of a squat: the crouch pose would lower the head bone and the
@@ -406,6 +442,7 @@ namespace VRMultiplayer
                 animator.runtimeAnimatorController = null;
 
             SetupHandOrientation(animator);
+            CaptureArmBaseline();   // needs the arm bones SetupHandOrientation just resolved
             _rigBuilder = GetComponent<RigBuilder>();
 
             // Locomotion blend: feed the Animator's Speed parameter (if the controller has one).
@@ -548,10 +585,14 @@ namespace VRMultiplayer
 
             // Hand IK targets (controller pose + grip offset). Rotation is remapped through the
             // skeleton's own hand axes so the wrist follows the controller naturally.
+            ReapplyArmStretch();
+
             ApplyHandTarget(ikLeftHandTarget, leftHandSource, true,
                 leftGripPositionOffset, leftGripEulerOffset);
             ApplyHandTarget(ikRightHandTarget, rightHandSource, false,
                 rightGripPositionOffset, rightGripEulerOffset);
+
+            TickArmFit();
 
             if (dynamicElbowHints)
             {
@@ -606,17 +647,105 @@ namespace VRMultiplayer
 
             ikTarget.SetPositionAndRotation(pos, rot);
 
-            // Free-hand reach peak, for the on-headset diagnosis (see TryGetReach).
-            if (!welded && _trackingValid)
+            // Free-hand reach peak: feeds both the on-headset read-out and the arm-length fit.
+            // Gated on the height lock so _standingH is meaningful, and rejected above a reach no
+            // human has for their height — one tracking spike must not stretch the arms.
+            if (!welded && _fitLocked)
             {
                 Transform shoulder = left ? _lUpper : _rUpper;
                 if (shoulder != null)
                 {
                     float d = Vector3.Distance(shoulder.position, pos);
-                    if (left) { if (d > _peakReachL) _peakReachL = d; }
-                    else { if (d > _peakReachR) _peakReachR = d; }
+                    if (d <= _standingH * 0.45f)
+                    {
+                        if (left) { if (d > _peakReachL) { _peakReachL = d; _newPeak = true; } }
+                        else { if (d > _peakReachR) { _peakReachR = d; _newPeak = true; } }
+                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// ARM LENGTH FIT — the answer to "my real elbow is at 130 degrees but the avatar's is
+        /// already straight".
+        ///
+        /// The body scale is not the lever: it is fully determined by your eye height (the head
+        /// bone has to land at your eyes), and this model's arm-to-height proportion already
+        /// matches an average human to within a millimetre. So when a player's reach still
+        /// overruns the arm, the mismatch is in PROPORTION, not size, and one uniform scale
+        /// cannot serve both. Scaling the whole avatar up to lengthen the arms would push the
+        /// head bone above your eyes and you would be looking out of its chest.
+        ///
+        /// Two-bone IK leaves only a bad choice when the target is beyond reach: keep the hand on
+        /// the controller and bottom the elbow out at 180 (today), or keep the elbow angle honest
+        /// and let the hand fall short of the controller (the arm-reach remap). Lengthening the
+        /// arm BONES removes the choice — the target stops being out of reach, so the hand stays
+        /// exactly on the controller AND the elbow tracks yours.
+        ///
+        /// Done by pushing the child bone further out rather than scaling the bone transforms:
+        /// scaling would enlarge the hand and the fingers with it, while moving the offset simply
+        /// stretches the skin between two joints. Applied once, after the height fit has locked
+        /// and the measured reach has stopped growing; it can only ever lengthen, and never past
+        /// <see cref="maxArmStretch"/>.
+        /// </summary>
+        void TickArmFit()
+        {
+            if (!fitArmLength || _armFitLocked || !_armBaseCaptured || !_fitLocked) return;
+
+            // Still discovering how far this player reaches — hold the measurement open.
+            if (_newPeak) { _newPeak = false; _reachQuiet = 0f; return; }
+            if (_peakReachL <= 0f && _peakReachR <= 0f) return;
+
+            _reachQuiet += Time.deltaTime;
+            if (_reachQuiet < reachSettleSeconds) return;
+
+            SolveArmStretch(true);
+            SolveArmStretch(false);
+            _armFitLocked = true;
+        }
+
+        void SolveArmStretch(bool left)
+        {
+            Transform up = left ? _lUpper : _rUpper;
+            Transform lo = left ? _lLower : _rLower;
+            Transform ha = left ? _lHand : _rHand;
+            if (up == null || lo == null || ha == null) return;
+
+            float armLen = Vector3.Distance(up.position, lo.position)
+                         + Vector3.Distance(lo.position, ha.position);
+            float peak = left ? _peakReachL : _peakReachR;
+            if (armLen < 0.2f || peak <= 0f) return;
+
+            float k = Mathf.Clamp(peak / armLen, 1f, Mathf.Max(1f, maxArmStretch));
+            if (left) _armStretchL = k; else _armStretchR = k;
+        }
+
+        // Re-applied every frame, not written once: humanoid retargeting is free to rewrite bone
+        // transforms on any Animator evaluation, and four Vector3 assignments are cheaper than
+        // finding out the hard way that it did.
+        void ReapplyArmStretch()
+        {
+            if (!_armBaseCaptured) return;
+            if (_armStretchL != 1f)
+            {
+                _lLower.localPosition = _lLowerBase * _armStretchL;
+                _lHand.localPosition = _lHandBase * _armStretchL;
+            }
+            if (_armStretchR != 1f)
+            {
+                _rLower.localPosition = _rLowerBase * _armStretchR;
+                _rHand.localPosition = _rHandBase * _armStretchR;
+            }
+        }
+
+        void CaptureArmBaseline()
+        {
+            if (_lLower == null || _lHand == null || _rLower == null || _rHand == null) return;
+            _lLowerBase = _lLower.localPosition;
+            _lHandBase = _lHand.localPosition;
+            _rLowerBase = _rLower.localPosition;
+            _rHandBase = _rHand.localPosition;
+            _armBaseCaptured = true;
         }
 
         /// <summary>

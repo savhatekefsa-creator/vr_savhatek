@@ -79,8 +79,11 @@ namespace VRMultiplayer
             string tag = left ? "sol kol" : "sag kol";
             if (!_ik.TryGetReach(left, out float armLen, out float dist, out float peak) || armLen <= 0f)
                 return tag + "  --";
-            return $"{tag} {dist:F3}/{armLen:F3} %{(dist / armLen * 100f):F0} tepe {peak:F3}"
-                 + (peak >= armLen ? " DIBE VURDU" : "");
+            string stretch = _ik.ArmFitLocked
+                ? $" x{_ik.ArmStretch(left):F3}"
+                : (_ik.fitArmLength ? " olculuyor" : "");
+            return $"{tag} {dist:F3}/{armLen:F3} %{(dist / armLen * 100f):F0} tepe {peak:F3}{stretch}"
+                 + (peak > armLen + 0.005f ? " DIBE VURDU" : "");
         }
 
         // The weld is AddComponent'ed onto this avatar the first time a profiled weapon is
