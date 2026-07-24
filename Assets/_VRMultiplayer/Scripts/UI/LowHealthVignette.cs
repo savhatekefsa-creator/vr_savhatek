@@ -57,8 +57,11 @@ namespace VRMultiplayer.UI
             Transform head = XRRigReference.HeadOrCamera;
             if (head == null) return;
 
-            // Hasar flasindan biraz geride dursun ki ust uste binince titreme olmasin.
-            transform.SetPositionAndRotation(head.position + head.forward * 0.52f, head.rotation);
+            // Katman 2: en geride, hasar flasinin arkasi — ust uste binince titreme olmasin.
+            // Mesafe HeadOverlay'den; sabit 0.52 m durbun merceginin arkasinda kaliyordu ve
+            // durbune bakan oyuncu vinyeti hic gormuyordu.
+            transform.SetPositionAndRotation(
+                head.position + head.forward * HeadOverlay.Distance(HeadOverlay.Vignette), head.rotation);
 
             // Can esikten sifira indikce siddet 0 -> 1 arasi artar.
             float severity = 1f - _ratio / threshold;

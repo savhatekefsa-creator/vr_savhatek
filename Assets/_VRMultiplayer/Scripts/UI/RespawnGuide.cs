@@ -138,8 +138,12 @@ namespace VRMultiplayer.UI
                            : (Camera.main != null ? Camera.main.transform : null);
             if (head == null) return;
 
-            // Perde vignette/hasar flasindan daha ONDE dursun ki onlarla z-cakismasin.
-            _veil.SetPositionAndRotation(head.position + head.forward * 0.45f, head.rotation);
+            // Perde hepsinin ONUNDE (katman 0) — vignette/hasar flasiyla z-cakismasin.
+            // Mesafe HeadOverlay'den: sabit 0.45 m durbun merceginin tam sinirindaydi
+            // (WeaponScope 0.45 m'den yakinda aciliyor), yani durbune bakan olu oyuncu
+            // perdeyi hic gormeyebiliyordu.
+            _veil.SetPositionAndRotation(
+                head.position + head.forward * HeadOverlay.Distance(HeadOverlay.Veil), head.rotation);
 
             // Yazi biraz daha uzakta — VR'da cok yakin metin okunmaz.
             _text.transform.position = head.position + head.forward * 1.2f;

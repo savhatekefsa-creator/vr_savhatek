@@ -115,8 +115,11 @@ namespace VRMultiplayer.UI
             if (head == null) return;
 
             if (!_quad.gameObject.activeSelf) _quad.gameObject.SetActive(true);
-            // Vignette 0.52'de, hasar flasi 0.5'te — korluk hepsinin ONUNDE durur.
-            transform.SetPositionAndRotation(head.position + head.forward * 0.48f, head.rotation);
+            // Korluk perdeden sonra en onde. Mesafe HeadOverlay'den: sabit 0.48 m
+            // durbun mercegiyle cakisiyordu — mercek 0.45 m'den yakin olabildigi icin korluk
+            // beyazinin ONUNE gecip ustune ciziyor, durbune bakan oyuncu flash yemiyordu.
+            transform.SetPositionAndRotation(
+                head.position + head.forward * HeadOverlay.Distance(HeadOverlay.Blind), head.rotation);
             UITheme.SetMaterialColor(_mat, new Color(1f, 1f, 1f, a));
         }
 

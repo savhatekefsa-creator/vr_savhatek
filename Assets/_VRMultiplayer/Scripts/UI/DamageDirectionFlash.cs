@@ -115,7 +115,10 @@ namespace VRMultiplayer.UI
                 return;
             }
 
-            transform.SetPositionAndRotation(head.position + head.forward * 0.5f, head.rotation);
+            // Katman 1: korlugun arkasi, vinyetin onu. Bkz. HeadOverlay — sabit mesafeler
+            // durbun merceginin arkasinda kaliyordu ve durbune bakarken bu flas gorunmuyordu.
+            transform.SetPositionAndRotation(
+                head.position + head.forward * HeadOverlay.Distance(HeadOverlay.DamageFlash), head.rotation);
             if (_directional)
             {
                 // Kaynagin kafaya gore yatay yonu; dokunun parlak (ust) kenari o yone cevrilir:
