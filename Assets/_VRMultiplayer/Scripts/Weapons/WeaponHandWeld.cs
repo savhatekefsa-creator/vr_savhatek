@@ -21,9 +21,10 @@ namespace VRMultiplayer.Weapons
     /// THE WELD IS NOT ALONE. An absolute wrist write on its own drags the wrist to the weapon
     /// while the arm IK still solves toward the controller — the elbow stays bent and the wrist
     /// visibly leaves the forearm. So <see cref="Solve"/> is public through
-    /// <see cref="TryGetWeld"/>: <see cref="AvatarIKController"/> (execution order 50, i.e. after
-    /// HandGrabber has posed the weapon and before this) aims the arm's IK target at the very
-    /// same pose, at the very same weight. One target, one weight, two writers that agree.
+    /// <see cref="TryGetWeld"/>: <see cref="AvatarIKController"/> (execution order 70, i.e. after
+    /// HandGrabber and WeaponRecoil have settled the weapon's pose, and before this) aims the
+    /// arm's IK target at the very same pose, at the very same weight. One target, one weight,
+    /// two writers that agree — and the per-frame cache guarantees they see identical numbers.
     /// </summary>
     [DefaultExecutionOrder(110)]
     public class WeaponHandWeld : MonoBehaviour

@@ -19,13 +19,15 @@ namespace VRMultiplayer
     /// Attach to the Humanoid model root (same GameObject as its Animator + RigBuilder).
     /// The Editor wizard wires all references.
     ///
-    /// Execution order 50: AFTER HandGrabber (10) has posed the weapon the player is holding, so
-    /// a welded hand's IK target can be aimed at this frame's weapon anchor rather than last
-    /// frame's — see <see cref="followWeaponWeld"/>. Still before WeaponGrip (90), the finger
-    /// poser (100) and the weld itself (110). Nothing between 10 and 50 reads the avatar: the
-    /// networked hand carriers HandGrabber works from are siblings of this object, not children.
+    /// Execution order 70, which is the only window that works: after HandGrabber (10) has posed
+    /// the held weapon AND after WeaponRecoil (60) has kicked it, so a welded hand's IK target is
+    /// aimed at the weapon's FINAL pose for the frame (see <see cref="followWeaponWeld"/>) —
+    /// solving before the recoil would leave the hands behind on every shot. Still ahead of
+    /// WeaponGrip (90), the finger poser (100) and the weld itself (110). Nothing in between
+    /// reads the avatar, and the networked hand carriers HandGrabber works from are siblings of
+    /// this object rather than children, so moving off order 0 changes nothing for them.
     /// </summary>
-    [DefaultExecutionOrder(50)]
+    [DefaultExecutionOrder(70)]
     public class AvatarIKController : MonoBehaviour
     {
         [Header("Networked sources (the NetworkPlayer's replicated children)")]
