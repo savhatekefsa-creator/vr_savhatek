@@ -73,8 +73,10 @@ namespace VRMultiplayer.UI
     public class AvatarLegPlant : MonoBehaviour
     {
         [Header("Canli ayar (Play'de oynanabilir)")]
-        [Tooltip("Kapatmak icin: bacaklara hic dokunulmaz, eski davranisa doner.")]
-        public bool plantFeet = true;
+        [Tooltip("VARSAYILAN KAPALI — 24.07.2026 testinde bacaklar inerken 360 derece dondu ve " +
+                 "bir noktada zeminin altina girdi. Bu, duzeltmeye calistigimiz 'kendi icine " +
+                 "katlanma'dan DAHA KOTU. Sebep asagida yazili; duzeltilmeden acilmamali.")]
+        public bool plantFeet = false;
         [Tooltip("Hazir 'CrouchIdle' klibini sustur. Diz artik hesapla bukuluyor; klip de " +
                  "acik kalirsa iki cozum birbiriyle kavga eder.")]
         public bool disableCrouchClip = true;

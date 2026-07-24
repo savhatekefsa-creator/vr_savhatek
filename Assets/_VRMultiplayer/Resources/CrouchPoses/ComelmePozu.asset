@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f8f8c88162964046918f5f6251aea9e, type: 3}
+  m_Name: ComelmePozu
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.UI.CrouchPoseAsset
+  appliesAtHeightRatio: 0.65
+  startsAtHeightRatio: 0.94
+  bones:
+  - bone: 1
+    rotation: {x: 0.75486904, y: -0.14127487, z: 0.0040019155, w: 0.6404672}
+  - bone: 3
+    rotation: {x: 0.8784103, y: -0.03064901, z: -0.012613575, w: 0.47675666}
+  - bone: 5
+    rotation: {x: -0.33334377, y: -0.06418282, z: -0.09610154, w: 0.93569607}
+  - bone: 2
+    rotation: {x: 0.739562, y: 0.11516843, z: 0.008474813, w: 0.6631083}
+  - bone: 4
+    rotation: {x: 0.88823855, y: 0.027724635, z: 0.00153533, w: 0.45854264}
+  - bone: 6
+    rotation: {x: -0.70576495, y: 0.08169634, z: -0.010559202, w: 0.7036405}

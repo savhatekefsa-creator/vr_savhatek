@@ -1,0 +1,21 @@
+# Hatice'nin 24.07.2026'da sahnede ELLE kurdugu comelme pozu — kemik localRotation (kuaterniyon).
+# Unity kapanirsa/sahne kaydedilmezse poz kaybolmasin diye buraya alindi.
+# Bicim: kemik  x  y  z  w
+#
+# NOT: hipsY/headY olcumleri kok konumuna gore ve bu modelde kok ayaklarda DEGIL
+# (AvatarIKController.feetOffset ~ -0.9 diyor), o yuzden derinlik olcusu olarak
+# dogrudan kullanilmamali. Yakalama araci derinligi kendi hesaplayacak.
+
+Hips            0.707107   0.000000   0.000000   0.707107
+Spine           0.000000   0.000000   0.000000   1.000000
+Chest           0.000000   0.000000   0.000000   1.000000
+LeftUpperLeg    0.754869  -0.141275   0.004002   0.640467
+LeftLowerLeg    0.878410  -0.030649  -0.012614   0.476757
+LeftFoot       -0.333344  -0.064183  -0.096102   0.935696
+RightUpperLeg   0.739562   0.115168   0.008475   0.663108
+RightLowerLeg   0.888239   0.027725   0.001535   0.458543
+RightFoot      -0.705765   0.081696  -0.010559   0.703641
+
+# olcum (guvenilmez, bkz. yukaridaki not)
+# hipsY_above_root  1.0340
+# headY_above_root  1.6517
