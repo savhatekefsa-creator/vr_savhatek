@@ -48,9 +48,9 @@ namespace VRMultiplayer.UI
         }
     }
 
-    // SIRA 20 = AvatarIKController'DAN (0) SONRA: o, kok konumunu ve kafa kemigini LateUpdate'te
+    // SIRA 90 = AvatarIKController'DAN (70) SONRA: o, kok konumunu ve kafa kemigini LateUpdate'te
     // yaziyor; biz nihai durumu gormeden orani hesaplayamayiz.
-    [DefaultExecutionOrder(20)]
+    [DefaultExecutionOrder(90)]
     public class AvatarCrouchPose : MonoBehaviour
     {
         [Header("Canli ayar (Play'de oynanabilir)")]

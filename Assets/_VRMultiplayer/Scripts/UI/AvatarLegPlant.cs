@@ -69,7 +69,7 @@ namespace VRMultiplayer.UI
 
     // SIRA 20 = AvatarIKController'DAN (sira 0) SONRA. O, kok konumunu ve el hedeflerini
     // LateUpdate'te yaziyor; biz nihai kok konumunu gormeden bacagi cozemeyiz.
-    [DefaultExecutionOrder(20)]
+    [DefaultExecutionOrder(90)]
     public class AvatarLegPlant : MonoBehaviour
     {
         [Header("Canli ayar (Play'de oynanabilir)")]
