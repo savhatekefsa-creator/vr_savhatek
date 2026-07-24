@@ -25,8 +25,8 @@ MonoBehaviour:
   flashHoldSeconds: 0.25
   flashBlindSeconds: 8
   smokeDuration: 30
-  explodeFx: {fileID: 100008, guid: 06736895ea0a4ff408d25e6684dce797, type: 3}
-  fxScale: 2
+  explodeFx: {fileID: 6383081556406421179, guid: 37284fd840011de4396dfc9be33abb2c, type: 3}
+  fxScale: 1.55
   simpleCollider: 1
   colliderRadius: 0
   colliderCenter: {x: 0, y: 0, z: 0}
