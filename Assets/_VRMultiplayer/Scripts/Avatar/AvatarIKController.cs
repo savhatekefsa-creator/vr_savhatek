@@ -279,6 +279,37 @@ namespace VRMultiplayer
             return Quaternion.LookRotation(fingersW, palmW) * basisInv * Quaternion.Euler(trimEuler);
         }
 
+        // --- Reach diagnostics (read by AvatarFitDebug) ---
+        // Peak shoulder-to-target distance seen while the hand was FREE. A weapon weld drives the
+        // target from the weapon rather than the controller, so those frames would measure the
+        // profile's geometry instead of the player's reach and are skipped.
+        float _peakReachL, _peakReachR;
+
+        /// <summary>
+        /// This arm's bone length and the distance from its shoulder to its IK target, both live
+        /// and scaled, plus the largest free-hand distance seen this session.
+        ///
+        /// dist >= armLen is the whole diagnosis in one comparison: the two-bone solver has
+        /// bottomed out, so the avatar's elbow reads straight no matter how much further the
+        /// player's target travels. If PEAK exceeds armLen while your own arm still has travel
+        /// left, something is inflating the shoulder-to-target distance -- the palm offset
+        /// pointing the wrong way, or the torso yaw deadzone leaving the shoulder behind.
+        /// </summary>
+        public bool TryGetReach(bool left, out float armLen, out float dist, out float peak)
+        {
+            armLen = dist = peak = 0f;
+            Transform up = left ? _lUpper : _rUpper;
+            Transform lo = left ? _lLower : _rLower;
+            Transform ha = left ? _lHand : _rHand;
+            Transform tgt = left ? ikLeftHandTarget : ikRightHandTarget;
+            if (up == null || lo == null || ha == null || tgt == null) return false;
+
+            armLen = Vector3.Distance(up.position, lo.position) + Vector3.Distance(lo.position, ha.position);
+            dist = Vector3.Distance(up.position, tgt.position);
+            peak = left ? _peakReachL : _peakReachR;
+            return true;
+        }
+
         // --- Height calibration (read by AvatarFitDebug) ---
         public bool FitLocked => _fitLocked;
         public float StandingHeight => _standingH;
@@ -303,6 +334,7 @@ namespace VRMultiplayer
             _standingH = 0f;
             _tallTime = 0f;
             _maxReachL = _maxReachR = 0f;
+            _peakReachL = _peakReachR = 0f;   // fresh reach measurement alongside the fresh fit
             ResetCalibrationWindow();
 
             // Never re-measure out of a squat: the crouch pose would lower the head bone and the
@@ -563,14 +595,28 @@ namespace VRMultiplayer
                 ? HandRotation(src, left, eulerOffset)
                 : src.rotation * Quaternion.Euler(eulerOffset);
 
+            bool welded = false;
             if (followWeaponWeld && _weld != null &&
                 _weld.TryGetWeld(left, out Vector3 wp, out Quaternion wr, out float ww) && ww > 0f)
             {
                 pos = Vector3.Lerp(pos, wp, ww);
                 rot = Quaternion.Slerp(rot, wr, ww);
+                welded = true;
             }
 
             ikTarget.SetPositionAndRotation(pos, rot);
+
+            // Free-hand reach peak, for the on-headset diagnosis (see TryGetReach).
+            if (!welded && _trackingValid)
+            {
+                Transform shoulder = left ? _lUpper : _rUpper;
+                if (shoulder != null)
+                {
+                    float d = Vector3.Distance(shoulder.position, pos);
+                    if (left) { if (d > _peakReachL) _peakReachL = d; }
+                    else { if (d > _peakReachR) _peakReachR = d; }
+                }
+            }
         }
 
         /// <summary>

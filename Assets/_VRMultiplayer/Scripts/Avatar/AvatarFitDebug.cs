@@ -21,6 +21,8 @@ namespace VRMultiplayer
         public float refreshInterval = 0.15f;
         [Tooltip("Silahi tutarken bilek kaynagini da goster: kaynak noktasinin kumandadan SAPMASI (m) ve kalan kaynak agirligi. Sapma buyudukce agirlik duser -- 'bilek koptu' goruntusunun sayisal karsiligi budur.")]
         public bool showWeldDivergence = true;
+        [Tooltip("Kol erisimini goster: omuz-hedef mesafesi / avatarin kol boyu, yuzde uzanim ve bu oturumdaki TEPE deger. Tepe kol boyunu asiyorsa iki-kemik IK dibe vurmus demektir -- sen daha uzatabilirken avatarin kolu duz gorunur.")]
+        public bool showReach = true;
 
         AvatarIKController _ik;
         Weapons.WeaponHandWeld _weld;
@@ -59,7 +61,26 @@ namespace VRMultiplayer
                 $"comelme {_ik.CrouchWeight:F2}\n" +
                 $"kok Y   {transform.position.y:F3}\n" +
                 $"kafa Y  {headY:F3}" +
+                ReachLines() +
                 WeldLines();
+        }
+
+        // Omuz-hedef mesafesi kol boyuna DAYANDIYSA (%100) iki-kemik IK dibe vurmustur: hedef
+        // daha da uzaklassa bile dirsek duz kalir. TEPE degeri kol boyunu asiyorsa sorun avatarin
+        // kucuklugu degil, hedefin omuzdan olmasi gerekenden uzaga dusmesidir.
+        string ReachLines()
+        {
+            if (!showReach) return "";
+            return "\n" + ReachLine(true) + "\n" + ReachLine(false);
+        }
+
+        string ReachLine(bool left)
+        {
+            string tag = left ? "sol kol" : "sag kol";
+            if (!_ik.TryGetReach(left, out float armLen, out float dist, out float peak) || armLen <= 0f)
+                return tag + "  --";
+            return $"{tag} {dist:F3}/{armLen:F3} %{(dist / armLen * 100f):F0} tepe {peak:F3}"
+                 + (peak >= armLen ? " DIBE VURDU" : "");
         }
 
         // The weld is AddComponent'ed onto this avatar the first time a profiled weapon is
