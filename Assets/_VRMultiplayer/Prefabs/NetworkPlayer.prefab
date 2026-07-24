@@ -1557,11 +1557,16 @@ MonoBehaviour:
   rightGripEulerOffset: {x: -7.99, y: 150, z: -50.6}
   palmOffset: 0.09
   armReachRemap: 0
+  followWeaponWeld: 1
+  dynamicElbowHints: 0
+  elbowHintOffset: {x: 0.12, y: -0.3, z: -0.18}
+  resolveRigSameFrame: 0
   feetOffset: 0.021316923
   groundY: 0
   trackingReadyMinHeight: 1
   bodyHeightOffset: 0
-  yawDeadzone: 45
+  yawDeadzone: 30
+  yawFollowThrough: 5
   yawSpeed: 220
   snapToGround: 1
   groundProbeUp: 2
@@ -1574,6 +1579,9 @@ MonoBehaviour:
   recalibrateSeconds: 3
   minScale: 0.85
   maxScale: 1.25
+  fitArmLength: 1
+  maxArmStretch: 1.25
+  reachSettleSeconds: 4
   speedParam: Speed
   speedSmoothing: 6
   crouchStartRatio: 0.88
@@ -1617,6 +1625,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.AvatarFitDebug
   showOverlay: 0
   refreshInterval: 0.15
+  showWeldDivergence: 1
+  showReach: 1
 --- !u!1 &2888428985747785500
 GameObject:
   m_ObjectHideFlags: 0
