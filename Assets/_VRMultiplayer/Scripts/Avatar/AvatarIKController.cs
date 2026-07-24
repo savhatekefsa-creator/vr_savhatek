@@ -18,7 +18,14 @@ namespace VRMultiplayer
     ///
     /// Attach to the Humanoid model root (same GameObject as its Animator + RigBuilder).
     /// The Editor wizard wires all references.
+    ///
+    /// Execution order 50: AFTER HandGrabber (10) has posed the weapon the player is holding, so
+    /// a welded hand's IK target can be aimed at this frame's weapon anchor rather than last
+    /// frame's — see <see cref="followWeaponWeld"/>. Still before WeaponGrip (90), the finger
+    /// poser (100) and the weld itself (110). Nothing between 10 and 50 reads the avatar: the
+    /// networked hand carriers HandGrabber works from are siblings of this object, not children.
     /// </summary>
+    [DefaultExecutionOrder(50)]
     public class AvatarIKController : MonoBehaviour
     {
         [Header("Networked sources (the NetworkPlayer's replicated children)")]
@@ -46,6 +53,19 @@ namespace VRMultiplayer
         public float palmOffset = 0.09f;
         [Tooltip("Learn your real max reach and remap distances so a fully extended real arm fully straightens the avatar's arm. OFF by default: the shipped NetworkPlayer prefab has always run without it, so the code default matches rather than silently differing.")]
         public bool armReachRemap = false;
+
+        [Header("Silah tutusu (WeaponHandWeld ile ortak hedef)")]
+        [Tooltip("Bir el silaha kaynaklandiginda o kolun IK hedefini de kaynak noktasina tasi. KAPATMA: kapaliyken bilek silaha cekilir ama kol kumandaya cozulur -- dirsek bukuk kalirken bilek on koldan ayrilir.")]
+        public bool followWeaponWeld = true;
+
+        [Header("Dirsek hint'i (DENEYSEL -- once ana duzeltmeyi cihazda dogrula)")]
+        [Tooltip("Dirsek hint'ini her kare omuz-el hattindan konumlandir. Kapaliyken hint prefabdaki SABIT noktada kalir ve dirsek duzlemi eller nereye giderse gitsin gövdeye cakili durur.")]
+        public bool dynamicElbowHints;
+        [Tooltip("Dirsegi omuz-el orta noktasindan bu kadar it (m, avatar-lokal; X disari, Y asagi, Z geri). Olcekle carpilir. Cihazda ayarlanmali.")]
+        public Vector3 elbowHintOffset = new Vector3(0.12f, -0.30f, -0.18f);
+
+        [Tooltip("DENEYSEL: IK hedefleri yazildiktan SONRA rig'i ayni karede yeniden coz. Animator 'Normal' modda rig'i LateUpdate'ten ONCE isler, yani kol bir onceki karenin hedefine cozulur. Acmak bu bir kare gecikmeyi kapatir ama kare basina ikinci bir graph degerlendirmesi maliyeti getirir -- Quest'te olcmeden acma.")]
+        public bool resolveRigSameFrame;
 
         [Header("Body")]
         [Tooltip("Feet position relative to the avatar root (measured by the wizard; usually negative).")]
@@ -134,6 +154,19 @@ namespace VRMultiplayer
         Transform _lUpper, _lLower, _lHand, _rUpper, _rLower, _rHand;
         float _maxReachL, _maxReachR;
 
+        // Elbow hints, read off the constraints themselves so no name matching or extra prefab
+        // wiring is needed. Only written when dynamicElbowHints is on.
+        Transform _lHint, _rHint;
+
+        // Set by WeaponHandWeld when it is added to this avatar (first grab of a profiled
+        // weapon). Null the rest of the time — no per-frame GetComponent.
+        Weapons.WeaponHandWeld _weld;
+
+        RigBuilder _rigBuilder;
+
+        internal void RegisterWeld(Weapons.WeaponHandWeld w) => _weld = w;
+        internal void UnregisterWeld(Weapons.WeaponHandWeld w) { if (_weld == w) _weld = null; }
+
         void SetupHandOrientation(Animator animator)
         {
             if (animator == null || animator.avatar == null || !animator.avatar.isHuman)
@@ -149,12 +182,16 @@ namespace VRMultiplayer
             _rLower = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
             _rHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
 
-            if (_leftRotOK || _rightRotOK)
-                foreach (var c in GetComponentsInChildren<TwoBoneIKConstraint>(true))
-                {
-                    ref var d = ref c.data;
+            foreach (var c in GetComponentsInChildren<TwoBoneIKConstraint>(true))
+            {
+                ref var d = ref c.data;
+                if (_leftRotOK || _rightRotOK)
                     d.targetRotationWeight = 1f; // wrist now follows the controller
-                }
+
+                // Which arm this constraint drives, from its own root bone — no name matching.
+                if (d.root == _lUpper) _lHint = d.hint;
+                else if (d.root == _rUpper) _rHint = d.hint;
+            }
         }
 
         // Local-space basis of a hand: forward = toward the fingers, up = palm normal.
@@ -215,6 +252,20 @@ namespace VRMultiplayer
             float scale = Mathf.Lerp(1f, armLen / maxReach, blend);
             float mapped = Mathf.Min(dist * scale, armLen);
             return up.position + dir * (mapped / dist);
+        }
+
+        /// <summary>
+        /// Where this hand's wrist would go with NO weapon: the plain controller-derived target.
+        /// <see cref="Weapons.WeaponHandWeld"/> measures its weld target against this to decide how
+        /// far the weapon has dragged the hand away from where the player's hand actually is —
+        /// so both systems judge that distance from the same reference.
+        /// </summary>
+        public bool TryGetFreeHandTargetPos(bool left, out Vector3 pos)
+        {
+            Transform src = left ? leftHandSource : rightHandSource;
+            if (src == null) { pos = Vector3.zero; return false; }
+            pos = HandTargetPos(src, left, left ? leftGripPositionOffset : rightGripPositionOffset);
+            return true;
         }
 
         // Natural grip: fingers point along the controller's forward, palm faces inward.
@@ -321,6 +372,7 @@ namespace VRMultiplayer
                 animator.runtimeAnimatorController = null;
 
             SetupHandOrientation(animator);
+            _rigBuilder = GetComponent<RigBuilder>();
 
             // Locomotion blend: feed the Animator's Speed parameter (if the controller has one).
             _animator = animator;
@@ -462,17 +514,23 @@ namespace VRMultiplayer
 
             // Hand IK targets (controller pose + grip offset). Rotation is remapped through the
             // skeleton's own hand axes so the wrist follows the controller naturally.
-            if (leftHandSource != null && ikLeftHandTarget != null)
-                ikLeftHandTarget.SetPositionAndRotation(
-                    HandTargetPos(leftHandSource, true, leftGripPositionOffset),
-                    _leftRotOK ? HandRotation(leftHandSource, true, leftGripEulerOffset)
-                               : leftHandSource.rotation * Quaternion.Euler(leftGripEulerOffset));
+            ApplyHandTarget(ikLeftHandTarget, leftHandSource, true,
+                leftGripPositionOffset, leftGripEulerOffset);
+            ApplyHandTarget(ikRightHandTarget, rightHandSource, false,
+                rightGripPositionOffset, rightGripEulerOffset);
 
-            if (rightHandSource != null && ikRightHandTarget != null)
-                ikRightHandTarget.SetPositionAndRotation(
-                    HandTargetPos(rightHandSource, false, rightGripPositionOffset),
-                    _rightRotOK ? HandRotation(rightHandSource, false, rightGripEulerOffset)
-                                : rightHandSource.rotation * Quaternion.Euler(rightGripEulerOffset));
+            if (dynamicElbowHints)
+            {
+                PlaceElbowHint(_lHint, _lUpper, ikLeftHandTarget, true);
+                PlaceElbowHint(_rHint, _rUpper, ikRightHandTarget, false);
+            }
+
+            // Close the one-frame arm lag: with Animator update mode Normal the rig is evaluated
+            // in PreLateUpdate, i.e. BEFORE this method, so the arms otherwise solve against the
+            // targets written last frame while the weld writes the wrist from this frame's weapon
+            // pose. Zero delta so the clips don't advance twice — only the constraints re-solve.
+            if (resolveRigSameFrame && _rigBuilder != null)
+                _rigBuilder.Evaluate(0f);
 
             // Head: copy the HMD look direction onto the head bone (after the rig ran).
             if (driveHeadRotation && headBone != null)
@@ -481,6 +539,51 @@ namespace VRMultiplayer
             // First-person: collapse the local player's own head so it isn't in front of the camera.
             if (hideHead && headBone != null)
                 headBone.localScale = new Vector3(0.001f, 0.001f, 0.001f);
+        }
+
+        /// <summary>
+        /// One arm's IK target: the controller pose, blended toward the weapon anchor by the
+        /// weld's own weight when this hand is holding or supporting a profiled weapon.
+        ///
+        /// This blend is the whole point. WeaponHandWeld writes the wrist bone absolutely after
+        /// the rig; if the IK target stayed on the controller, the two would be solving for
+        /// different points and the difference would show up as a wrist detached from a bent
+        /// forearm. Sharing the target means the arm reaches for the grip and the weld only has
+        /// to hold what the arm already got close to.
+        /// </summary>
+        void ApplyHandTarget(Transform ikTarget, Transform src, bool left,
+            Vector3 posOffset, Vector3 eulerOffset)
+        {
+            if (ikTarget == null || src == null) return;
+
+            Vector3 pos = HandTargetPos(src, left, posOffset);
+            Quaternion rot = (left ? _leftRotOK : _rightRotOK)
+                ? HandRotation(src, left, eulerOffset)
+                : src.rotation * Quaternion.Euler(eulerOffset);
+
+            if (followWeaponWeld && _weld != null &&
+                _weld.TryGetWeld(left, out Vector3 wp, out Quaternion wr, out float ww) && ww > 0f)
+            {
+                pos = Vector3.Lerp(pos, wp, ww);
+                rot = Quaternion.Slerp(rot, wr, ww);
+            }
+
+            ikTarget.SetPositionAndRotation(pos, rot);
+        }
+
+        /// <summary>
+        /// Put the elbow hint on the shoulder-to-hand line, pushed out/down/back, so the elbow
+        /// swivel follows the hands. The authored alternative is a hint parented to the rig at a
+        /// fixed body-relative point, which pins the elbow plane no matter where the hands go —
+        /// visible as an elbow stuck bent in the wrong plane when a rifle comes up to eye level.
+        /// </summary>
+        void PlaceElbowHint(Transform hint, Transform shoulder, Transform ikTarget, bool left)
+        {
+            if (hint == null || shoulder == null || ikTarget == null) return;
+            Vector3 mid = Vector3.Lerp(shoulder.position, ikTarget.position, 0.5f);
+            Vector3 o = elbowHintOffset;
+            if (left) o.x = -o.x;   // X is authored as "outward", so it mirrors per side
+            hint.position = mid + transform.rotation * (o * _scaleK);
         }
     }
 }

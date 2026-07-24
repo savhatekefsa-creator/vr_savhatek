@@ -19,8 +19,11 @@ namespace VRMultiplayer
         public bool showOverlay;
         [Tooltip("Refresh interval (s). The panel is for reading, not for per-frame precision.")]
         public float refreshInterval = 0.15f;
+        [Tooltip("Silahi tutarken bilek kaynagini da goster: kaynak noktasinin kumandadan SAPMASI (m) ve kalan kaynak agirligi. Sapma buyudukce agirlik duser -- 'bilek koptu' goruntusunun sayisal karsiligi budur.")]
+        public bool showWeldDivergence = true;
 
         AvatarIKController _ik;
+        Weapons.WeaponHandWeld _weld;
         TextMesh _panel;
         float _nextRefresh;
 
@@ -55,7 +58,29 @@ namespace VRMultiplayer
                 $"olcek   {_ik.FitScale:F4}\n" +
                 $"comelme {_ik.CrouchWeight:F2}\n" +
                 $"kok Y   {transform.position.y:F3}\n" +
-                $"kafa Y  {headY:F3}";
+                $"kafa Y  {headY:F3}" +
+                WeldLines();
+        }
+
+        // The weld is AddComponent'ed onto this avatar the first time a profiled weapon is
+        // grabbed, so it is looked up lazily and stays null until then.
+        string WeldLines()
+        {
+            if (!showWeldDivergence) return "";
+            if (_weld == null) _weld = GetComponent<Weapons.WeaponHandWeld>();
+            if (_weld == null) return "\nkaynak  yok";
+
+            return "\n" + WeldLine(true) + "\n" + WeldLine(false);
+        }
+
+        string WeldLine(bool left)
+        {
+            string tag = left ? "sol " : "sag ";
+            if (!_weld.TryGetDebug(left, out float divergence, out float weight, out bool support))
+                return tag + "  --";
+            // sapma = weld hedefi ile kumandanin gercek yeri arasindaki mesafe. Destek elinde
+            // 6 cm'i asinca agirlik dusmeye baslar, 22 cm'de sifirlanir.
+            return $"{tag} {(support ? "destek" : "ana")} sapma {divergence:F3} agirlik {weight:F2}";
         }
 
         void OnDisable()
