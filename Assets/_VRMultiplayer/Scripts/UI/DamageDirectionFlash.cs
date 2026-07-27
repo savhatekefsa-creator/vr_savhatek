@@ -61,8 +61,10 @@ namespace VRMultiplayer.UI
 
         static readonly Color FlashColor = new Color(1f, 0.12f, 0.08f);
 
-        // Quad'in taban olcegi (gorus alanini kaplar) ve kafadan uzakligi. LowHealthVignette
-        // 0.52'de duruyor — bu katmanlar onun ONUNDE kalmali, yoksa vignette flasi keser.
+        // Quad'in taban olcegi ve aci kalibrasyonunun REFERANS mesafesi. Gercek mesafe artik
+        // HeadOverlay.Distance'tan gelir (durbun merceginin onune); LateUpdate olcegi
+        // dist/HeadDistance oraniyla kucultur ki uv->aci eslemesi birebir korunsun. Katman
+        // sirasi (korluk/flas/vinyet) HeadOverlay'de merkezidir.
         const float BaseScale = 2f;
         const float HeadDistance = 0.5f;
 
@@ -199,18 +201,25 @@ namespace VRMultiplayer.UI
                 return;
             }
 
-            transform.SetPositionAndRotation(head.position + head.forward * HeadDistance, head.rotation);
+            // Mesafe HeadOverlay'den (korlugun arkasi, vinyetin onu): sabit 0.5 m durbun
+            // merceginin ARKASINDA kaliyordu, durbune bakarken flas gorunmuyordu. Yaklasinca
+            // aci kalibrasyonu bozulmasin diye TUM katman olcekleri ayni oranla kuculur —
+            // atan(uv*olcek / mesafe) sabit kalir, sinif dokusundaki 28/45/63 derece esikleri
+            // mesafeden bagimsiz ayni acilara duser.
+            float dist = HeadOverlay.Distance(HeadOverlay.DamageFlash);
+            float k = dist / HeadDistance;
+            transform.SetPositionAndRotation(head.position + head.forward * dist, head.rotation);
 
             float env = Envelope(_t) * _intensity;
             float age = _t / TotalDuration;
 
             // Darbe tonu: yalnizca ilk impactTintDuration icinde, hizla soner.
             float tintK = Mathf.Clamp01(1f - _t / Mathf.Max(0.05f, impactTintDuration));
-            ApplyLayer(_tint, env * impactTintAlpha * tintK, BaseScale);
+            ApplyLayer(_tint, env * impactTintAlpha * tintK, BaseScale * k);
 
             // Kenar halkasi: hafif nabiz + sonerken disa dogru genisleme.
             float pulse = 1f + pulseAmount * Mathf.Sin(_t * 18f);
-            ApplyLayer(_ring, env * edgeAlpha * pulse, BaseScale * (1f + 0.06f * age));
+            ApplyLayer(_ring, env * edgeAlpha * pulse, BaseScale * k * (1f + 0.06f * age));
 
             if (_directional)
             {
@@ -223,9 +232,9 @@ namespace VRMultiplayer.UI
                 _arc.quad.localRotation = rot;
                 _wedge.quad.localRotation = rot;
 
-                ApplyLayer(_arc, env * directionalAlpha, BaseScale);
+                ApplyLayer(_arc, env * directionalAlpha, BaseScale * k);
                 // Merkez gostergesi disa dogru kayarak soner — vurusun "gelis" yonunu vurgular.
-                ApplyLayer(_wedge, env * centerAlpha, BaseScale * (1f + 0.15f * age));
+                ApplyLayer(_wedge, env * centerAlpha, BaseScale * k * (1f + 0.15f * age));
             }
         }
 

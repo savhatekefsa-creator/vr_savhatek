@@ -57,8 +57,15 @@ namespace VRMultiplayer.UI
             Transform head = XRRigReference.HeadOrCamera;
             if (head == null) return;
 
-            // Hasar flasindan biraz geride dursun ki ust uste binince titreme olmasin.
-            transform.SetPositionAndRotation(head.position + head.forward * 0.52f, head.rotation);
+            // Katman 2: en geride, hasar flasinin arkasi — ust uste binince titreme olmasin.
+            // Mesafe HeadOverlay'den; sabit 0.52 m durbun merceginin arkasinda kaliyordu ve
+            // durbune bakan oyuncu vinyeti hic gormuyordu. Quad olcegi mesafeyle AYNI oranla
+            // kuculur: doku esigi (uv 0.30) 0.52 m'ye gore kalibre, atan(uv*olcek/mesafe)
+            // sabit kalmazsa kizarma yine lens disina tasar (Quest FOV dersi geri gelir).
+            float dist = HeadOverlay.Distance(HeadOverlay.Vignette);
+            transform.SetPositionAndRotation(head.position + head.forward * dist, head.rotation);
+            float s = 2f * (dist / 0.52f);
+            _quad.localScale = new Vector3(s, s, 1f);
 
             // Can esikten sifira indikce siddet 0 -> 1 arasi artar.
             float severity = 1f - _ratio / threshold;

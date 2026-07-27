@@ -18,6 +18,10 @@ namespace VRMultiplayer.Weapons
         static readonly IComparer<RaycastHit> _byDistance =
             Comparer<RaycastHit>.Create((a, b) => a.distance.CompareTo(b.distance));
 
+        // Namlunun ICINDE oldugu hitbox'lari yakalamak icin (bkz. MuzzleInsideZone). 16 = ayni
+        // noktada ust uste gelebilecek bolge sayisi icin genis tavan.
+        static readonly Collider[] _overlap = new Collider[16];
+
         /// <summary>Tek bir rayin otoriter isabet cozumu (pellet basina bir kez cagrilir).
         /// Donus: bu rayin gordugu dusman hitbox sayisi (teshis logu icin). Hasar pellet
         /// basina pelletDamageScale ile carpilir — pompalida tanesi zayif, hepsi olumcul.</summary>
@@ -30,9 +34,20 @@ namespace VRMultiplayer.Weapons
             // oyuncuya dunya-uzayi izi cakarsak oyuncu yurudugunde iz havada asili kalirdi.
             hitNormal = Vector3.zero;
 
+            Vector3 start = origin + dir * 0.03f;
+
+            // DIPCIK MESAFESI: Unity'nin raycast'i, baslangic noktasinin ICINDE oldugu collider'i
+            // GORMEZ (belgelenmis davranis). Namlu rakibin govdesine gomuldugunde o oyuncunun
+            // hitbox'i sessizce atlaniyor ve mermi ARKASINDAKINE gidiyordu — en yakin mesafede
+            // atis iskaliyordu. Isini atmadan once baslangici ICINE ALAN bolge var mi bakiyoruz;
+            // varsa mesafesi sifir demektir, her raycast isabetinden once gelir.
+            int inside = MuzzleInsideZone(weaponRoot, start, origin, pelletDamageScale,
+                                          damageFor, shooter, shooterTeam);
+            if (inside > 0) { end = start; return inside; }
+
             // NonAlloc + yakindan-uzaga yurume: "kendi govdeni gecip devam et" mantigi hit
             // sirasina baglidir, sort atlanamaz.
-            int hitCount = Physics.RaycastNonAlloc(origin + dir * 0.03f, dir, _rayHits, range,
+            int hitCount = Physics.RaycastNonAlloc(start, dir, _rayHits, range,
                 Physics.AllLayers, QueryTriggerInteraction.Collide);
             System.Array.Sort(_rayHits, 0, hitCount, _byDistance);
 
@@ -73,6 +88,53 @@ namespace VRMultiplayer.Weapons
                 break;
             }
             return hitboxesSeen;
+        }
+
+        /// <summary>Isinin BASLANGICINI icine alan dusman hitbox'i var mi? Varsa hasari uygular
+        /// ve gorulen hitbox sayisini doner; yoksa 0.</summary>
+        // Raycast'in goremedigi tek durum budur: origin bir collider'in ICINDE. Kucuk bir kure
+        // ile adaylari toplayip gercekten iceride olani ClosestPoint ile dogruluyoruz — sadece
+        // yakininda olanlari saymamak icin. ClosestPoint yalnizca HitZone tasiyan collider'lara
+        // cagriliyor (kure/kapsul); disbukey olmayan MeshCollider'da o cagri exception atar.
+        static int MuzzleInsideZone(Transform weaponRoot, Vector3 start, Vector3 origin,
+            float pelletDamageScale, System.Func<ZoneType, int> damageFor,
+            ulong shooter, byte shooterTeam)
+        {
+            int n = Physics.OverlapSphereNonAlloc(start, 0.02f, _overlap,
+                Physics.AllLayers, QueryTriggerInteraction.Collide);
+
+            for (int i = 0; i < n; i++)
+            {
+                var c = _overlap[i];
+                if (c == null || c.transform.IsChildOf(weaponRoot)) continue;
+
+                var zone = c.GetComponentInParent<HitZone>();
+                if (zone == null || zone.health == null) continue;
+
+                // Yakininda degil, GERCEKTEN icinde mi: icerideki bir nokta icin ClosestPoint
+                // noktanin kendisini doner.
+                if ((c.ClosestPoint(start) - start).sqrMagnitude > 1e-6f) continue;
+
+                var health = zone.health;
+                if (health.OwnerClientId == shooter) continue; // kendi govden: gec
+
+                byte t = health.TeamValue;
+                if (t != 0 && t == shooterTeam)
+                {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    Debug.Log($"[Silah] Dipcikte isabet ENGELLENDI (ayni takim {t}): atan {shooter} -> {health.OwnerClientId}");
+#endif
+                    return 1; // dost: hasar yok ama isin burada durur
+                }
+
+                int dmg = Mathf.Max(1, Mathf.RoundToInt(damageFor(zone.zoneType) * pelletDamageScale));
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log($"[Silah] DIPCIK ISABETI (namlu govdenin icinde)! atan {shooter} -> hedef {health.OwnerClientId}, bolge {zone.zoneName}, {dmg} hasar.");
+#endif
+                health.ServerApplyDamage(dmg, shooter, origin);
+                return 1;
+            }
+            return 0;
         }
     }
 }
