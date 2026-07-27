@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Grenade 1
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.GrenadeConfig
   type: 0
-  fuseSeconds: 1
+  fuseSeconds: 5
   mass: 0.4
   throwVelocityScale: 1.3
   throwSpinDegPerSec: 540
