@@ -15,6 +15,12 @@ dosya kopyasi yok):
   paintball→ pistol4 (susturuculu — marker "puf"una en yakin)
   pistol   → pistol2 (M9 9mm)
 
+Sentez klipler (python ile uretildi — tools/generate_player_sounds.py, yeniden
+uretilebilir/ayarlanabilir):
+  footstep_1..4     : yuruyus adimi, beton uzeri bot (PlayerAudio calisma aninda ekler)
+  equip_generic     : silah/ekipman ele alma "sak" (GrabbableObject; her ilk kavramada)
+  hit_body_1..3     : mermi vucuda girme "tik/puf" — YALNIZ hasar alanin kulaginda (2D)
+
 Klip yokken oyun HATA VERMEZ, ses sadece sessiz kalir.
 Import ayari: Force To Mono + Decompress On Load + ADPCM (kisa SFX icin dogru ayar).
 NOT: Resources klasorundeki HER dosya build'e girer — kullanilmayan klip koymayin.

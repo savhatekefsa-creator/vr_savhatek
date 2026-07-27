@@ -71,6 +71,11 @@ namespace VRMultiplayer
                                  "kontrolu oyuncu KOKUNUN konumuna duser ve muhtemelen hic " +
                                  "tetiklenmez. Prefab yapisini kontrol et (menu 1).");
 
+            // Ayak sesi + kisiye ozel vucuda-mermi sesi: calisma aninda eklenir, prefab
+            // degisikligi yok (sihirbaz prefab'i yeniden kursa da bu satir yeniden kurar).
+            if (GetComponent<VRMultiplayer.Audio.PlayerAudio>() == null)
+                gameObject.AddComponent<VRMultiplayer.Audio.PlayerAudio>();
+
             if (IsServer)
             {
                 Health.Value = MaxHealth;
