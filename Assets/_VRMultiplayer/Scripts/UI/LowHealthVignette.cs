@@ -69,6 +69,11 @@ namespace VRMultiplayer.UI
         }
 
         // Merkezi seffaf, kenarlara dogru opaklasan radyal vignette dokusu.
+        //
+        // ACI ESLEMESI (0.52 m'de 2x2 quad): uv 0.30 ≈ 30°, uv 0.52 ≈ 45° (Quest lens
+        // kenari). Esik eskiden 0.55'ti (~47°) — kizarma Quest'te lensin gorunur alaninin
+        // DISINA ciziliyordu, Editor'de gorunup cihazda gorunmuyordu (ayni ders:
+        // DamageDirectionFlash sinif dokusu).
         static Texture2D MakeVignetteTexture()
         {
             const int S = 256;
@@ -79,8 +84,7 @@ namespace VRMultiplayer.UI
                 for (int x = 0; x < S; x++)
                 {
                     Vector2 v = new Vector2(x - (S - 1) * 0.5f, y - (S - 1) * 0.5f) / (S * 0.5f);
-                    float alpha = Mathf.Clamp01((v.magnitude - 0.55f) / 0.55f);
-                    alpha *= alpha; // yumusak gecis
+                    float alpha = Mathf.Pow(Mathf.Clamp01((v.magnitude - 0.30f) / 0.5f), 1.8f);
                     tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
                 }
             }

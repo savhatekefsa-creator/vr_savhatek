@@ -82,11 +82,12 @@ namespace VRMultiplayer
             }
         }
 
-        /// <summary>Yerel oyuncu hasar aldiginda kaynagin dunya noktasi — YALNIZCA sahibin
-        /// istemcisinde tetiklenir. HUD yon flasi bunu dinler; eskiden yon, baska sistemin
-        /// tracer LineRenderer'larini sahneden kazimakla tahmin ediliyordu (yanlis yon +
-        /// her hasarda FindObjectsOfType maliyeti).</summary>
-        public static event System.Action<Vector3> LocalDamageFrom;
+        /// <summary>Yerel oyuncu hasar aldiginda kaynagin dunya noktasi + hasar miktari —
+        /// YALNIZCA sahibin istemcisinde tetiklenir. HUD yon flasi bunu dinler; eskiden yon,
+        /// baska sistemin tracer LineRenderer'larini sahneden kazimakla tahmin ediliyordu
+        /// (yanlis yon + her hasarda FindObjectsOfType maliyeti). Miktar, flasin siddetini
+        /// olceklemek icin tasinir: siyrik ile tam isabet ayni kirmizilikta gorunmemeli.</summary>
+        public static event System.Action<Vector3, int> LocalDamageFrom;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => LocalDamageFrom = null;
@@ -108,16 +109,16 @@ namespace VRMultiplayer
             _regenAccumulator = 0f;
 
             if (sourcePos != Vector3.zero)
-                DamageSourceOwnerRpc(sourcePos, RpcTarget.Single(OwnerClientId, RpcTargetUse.Temp));
+                DamageSourceOwnerRpc(sourcePos, amount, RpcTarget.Single(OwnerClientId, RpcTargetUse.Temp));
 
             if (Health.Value <= 0)
                 Die();
         }
 
         [Rpc(SendTo.SpecifiedInParams)]
-        void DamageSourceOwnerRpc(Vector3 sourcePos, RpcParams p)
+        void DamageSourceOwnerRpc(Vector3 sourcePos, int amount, RpcParams p)
         {
-            if (IsOwner) LocalDamageFrom?.Invoke(sourcePos);
+            if (IsOwner) LocalDamageFrom?.Invoke(sourcePos, amount);
         }
 
         void Die()

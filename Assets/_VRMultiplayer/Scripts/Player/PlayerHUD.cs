@@ -76,8 +76,9 @@ namespace VRMultiplayer
             RefreshBar(now);
             if (now < prev)
             {
-                // Hasar: geldigi yonde kenar flasi + iki kontrolcuye titresim.
-                if (_dirFlash != null) _dirFlash.TriggerFromRecentShot(transform.position);
+                // Hasar: geldigi yonde kenar flasi + iki kontrolcuye titresim. Miktar da
+                // gecer — flasin siddeti hasara gore olceklenir.
+                if (_dirFlash != null) _dirFlash.TriggerFromRecentShot(transform.position, prev - now);
                 Rumble();
             }
             _lastHealth = now;
@@ -213,7 +214,7 @@ namespace VRMultiplayer
                 Vector2 r = Random.insideUnitCircle.normalized;
                 Vector3 src = transform.position + new Vector3(r.x, 0f, r.y) * 5f + Vector3.up * 1.5f;
                 Debug.Log($"[PlayerHUD] Test flasi (J): kaynak yonu {src - transform.position}");
-                _dirFlash.FlashFrom(src);
+                _dirFlash.FlashFrom(src, 35); // tam siddete yakin: efekt onizlemesi belirgin olsun
             }
         }
 #endif
