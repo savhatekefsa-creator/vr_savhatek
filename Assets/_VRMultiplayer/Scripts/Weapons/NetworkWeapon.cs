@@ -254,13 +254,18 @@ namespace VRMultiplayer
             base.OnNetworkDespawn();
         }
 
+        // Elleclemenin (dolum, bos tetik) duyulma yaricapi: atis sesi degil MEKANIK ses —
+        // gercekte birkac metreden duyulur. soundMaxDistance (120 m) atis icindir; elleclemeye
+        // aynen verilince sunucudaki herkes dolumu "dibinden" duyuyordu.
+        const float HandlingSoundMaxDistance = 25f;
+
         void OnReloadStateChanged(double prev, double now)
         {
             // 0 -> pozitif = dolum basladi. Pozitif -> 0 hem bitis hem iptal olabilir: bitis
             // sesi ReloadDoneClientRpc'den gelir, iptal (silah birakildi) sessiz kalir.
             if (prev <= 0d && now > 0d)
                 WeaponAudioPlayer.PlayAt(_cv.reloadStartClip, transform.position, _cv.reloadVolume,
-                    1f, 1f, _cv.soundMaxDistance, priority: true);
+                    1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance), priority: true);
         }
 
         /// <summary>Sunucu: silahin mermi durumunu belirli bir degere kur. Silah secici bunu
@@ -568,6 +573,10 @@ namespace VRMultiplayer
             var ends = FromPool(_endsPool, pellets);
             var normals = FromPool(_normalsPool, pellets);
             int hitboxesSeen = 0;
+            // Pellet basina "ete isabet" biti (bit i = dirs[i]): istemciler kan efektini bundan
+            // cizer. Ayri dizi yerine bitmask — MaxPellets 16, int'e rahat sigar, RPC'ye dizi
+            // serilestirme maliyeti eklemez.
+            int fleshMask = 0;
             for (int i = 0; i < pellets; i++)
             {
                 Vector3 dir = dirs[i];
@@ -575,7 +584,8 @@ namespace VRMultiplayer
                 dir.Normalize();
                 hitboxesSeen += WeaponHitscanServer.RaycastOne(transform, origin, dir,
                     _cv.range, _cv.pelletDamageScale, _damageFor, shooter, shooterTeam,
-                    out ends[i], out normals[i]);
+                    out ends[i], out normals[i], out bool flesh);
+                if (flesh) fleshMask |= 1 << i;
             }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -585,7 +595,7 @@ namespace VRMultiplayer
                 Debug.Log($"[Silah] Ates edildi ama HIC OYUNCU HITBOX'ina denk gelmedi ({pellets} pellet).");
 #endif
 
-            FireFxClientRpc(origin, ends, normals);
+            FireFxClientRpc(origin, ends, normals, fleshMask);
         }
 
         /// <summary>Bolge hasari, SILAH-basina: config alani doluysa (>0) o deger, degilse
@@ -645,7 +655,7 @@ namespace VRMultiplayer
         }
 
         [Rpc(SendTo.Everyone)]
-        void FireFxClientRpc(Vector3 origin, Vector3[] ends, Vector3[] normals)
+        void FireFxClientRpc(Vector3 origin, Vector3[] ends, Vector3[] normals, int fleshMask)
         {
             // Ates sesi: tutan oyuncu KENDI atisini Fire()'da aninda duydu — burada yalnizca
             // DIGERLERI duyar (cift ses olmasin). Pellet sayisi kac olursa olsun TEK ses.
@@ -656,7 +666,7 @@ namespace VRMultiplayer
                 WeaponAudioPlayer.PlayAt(_cv.fireClip, origin, _cv.fireVolume,
                     _cv.firePitchMin, _cv.firePitchMax, _cv.soundMaxDistance);
 
-            if (_fx != null) _fx.ShowVolley(origin, ends, normals);
+            if (_fx != null) _fx.ShowVolley(origin, ends, normals, fleshMask);
         }
 
         // ------------------------------------------------------------- sarjor
@@ -696,7 +706,7 @@ namespace VRMultiplayer
         {
             // Dolum bitis sesi HERKESTE (tutan filtresinden ONCE); titresim yalniz tutana.
             WeaponAudioPlayer.PlayAt(_cv.reloadEndClip, transform.position, _cv.reloadVolume,
-                1f, 1f, _cv.soundMaxDistance, priority: true);
+                1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance), priority: true);
 
             if (NetworkManager == null || _grab == null || !_grab.IsHeld) return;
             if (_grab.HolderClientId != NetworkManager.LocalClientId) return;
@@ -737,7 +747,7 @@ namespace VRMultiplayer
             if (dev.isValid) dev.SendHapticImpulse(0, 0.25f, 0.03f);
             Vector3 pos = muzzle != null ? muzzle.position : transform.position;
             WeaponAudioPlayer.PlayAt(_cv.dryFireClip, pos, _cv.dryFireVolume,
-                1f, 1f, _cv.soundMaxDistance);
+                1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance));
         }
 
         static void Buzz(XRNode node, float amplitude, float duration)

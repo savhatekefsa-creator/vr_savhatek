@@ -17,6 +17,6 @@ MonoBehaviour:
   armDamage: 3
   legDamage: 3
   regenEnabled: 1
-  regenDelay: 30
-  regenPerSecond: 10
+  regenDelay: 10
+  regenPerSecond: 2
   regenTargetHealth: 100
