@@ -47,6 +47,46 @@ namespace VRMultiplayer
         [Tooltip("Learn your real max reach and remap distances so a fully extended real arm fully straightens the avatar's arm. OFF by default: the shipped NetworkPlayer prefab has always run without it, so the code default matches rather than silently differing.")]
         public bool armReachRemap = false;
 
+        // ---- DIRSEK YONLENDIRME ----
+        // Kolda uc eklem var, ikisi zorunlu: EL kumandanin oldugu yere civili, OMUZ govdeye.
+        // Arada kalan DIRSEK serbest parametre — nereye koyarsan koy el ayni yerde kalir. Yani
+        // dirsegi oynatmak BEDAVADIR: oyuncunun kontrol ettigi hicbir sey bozulmaz, silah ve
+        // nisan zerre kadar kaymaz. Kolun govdeye girmesini duzeltmek icin dogru yer burasi.
+        //
+        // Prefabtaki LeftElbowHint/RightElbowHint SABIT bir noktada duruyordu
+        // (+-0.367, 0.917, -0.300) ve onu runtime'da kimse oynatmiyordu. Sabit hint elin nerede
+        // oldugunu bilmez: eli govdenin KARSI tarafina goturdugunde dirsek hala 30 cm GERIYE
+        // cekiliyor ve on kol gogsun ICINDEN geciyordu. Gercekte sag elini sol omzuna koyarken
+        // sag dirsegin ONE gider, on kol gogsun ONUNDEN gecer — sabit hint'in tam tersi.
+        [Header("Dirsek yonlendirme (kolun govdeye girmesini onler)")]
+        [Tooltip("Dirsek hint'ini her kare ele gore konumlandir. KAPATMA: prefabtaki sabit hint " +
+                 "noktasina doner, yani el govdenin onunden gecerken kol govdenin icinden gecer.")]
+        public bool driveElbowHints = true;
+
+        [Tooltip("Dirsegin asagi sarkma agirligi. Insan dirsegi dinlenirken asagi bakar.")]
+        public float elbowDown = 1f;
+
+        [Tooltip("Dirsegin DISARI (govdeden uzaga) agirligi. Kaburgalardan uzak tutan bilesen.")]
+        public float elbowOut = 0.55f;
+
+        [Tooltip("El kendi tarafindayken dirsegin GERI agirligi (dogal dinlenme durusu).")]
+        public float elbowBack = 0.40f;
+
+        [Tooltip("El govdenin KARSI tarafina gectiginde dirsegin ONE agirligi. Asil duzeltme bu: " +
+                 "on kol gogsun icinden degil ONUNDEN gecer.")]
+        public float elbowForwardOnCross = 0.70f;
+
+        [Tooltip("Bilek govde merkezini bu kadar gectiginde 'tam capraz' sayilir (metre).")]
+        public float crossBlendMeters = 0.12f;
+
+        [Tooltip("Hint'in dirsek-ekseninden uzakligi (metre). Yon belirler, mesafe yalnizca " +
+                 "kararlilik icin — buyugu daha stabil.")]
+        public float elbowHintDistance = 0.30f;
+
+        [Tooltip("GARANTI: dirsek govdenin dusey ekseninden en az bu kadar disarida kalir " +
+                 "(metre). Omuz zaten ~0.20'de, o yuzden bu deger 'tavuk kanadi' yapmaz.")]
+        public float minElbowRadius = 0.20f;
+
         [Header("Body")]
         [Tooltip("Feet position relative to the avatar root (measured by the wizard; usually negative).")]
         public float feetOffset = -0.9f;
@@ -132,6 +172,9 @@ namespace VRMultiplayer
 
         // Arm bones + learned real-world reach (per hand) for the straighten-arms remap.
         Transform _lUpper, _lLower, _lHand, _rUpper, _rLower, _rHand;
+
+        // TwoBoneIK constraint'lerinden cozulur (prefabta LeftElbowHint / RightElbowHint).
+        Transform _lElbowHint, _rElbowHint;
         float _maxReachL, _maxReachR;
 
         void SetupHandOrientation(Animator animator)
@@ -149,12 +192,119 @@ namespace VRMultiplayer
             _rLower = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
             _rHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
 
-            if (_leftRotOK || _rightRotOK)
-                foreach (var c in GetComponentsInChildren<TwoBoneIKConstraint>(true))
-                {
-                    ref var d = ref c.data;
+            foreach (var c in GetComponentsInChildren<TwoBoneIKConstraint>(true))
+            {
+                ref var d = ref c.data;
+                if (_leftRotOK || _rightRotOK)
                     d.targetRotationWeight = 1f; // wrist now follows the controller
+
+                // Dirsek hint'ini KOL KOKUNDEN esliyoruz, prefab ISMINDEN degil: isme guvenmek
+                // bir yeniden adlandirmada sessizce kirilir ve kol eski davranisina duserdi.
+                if (d.root != null && d.root == _lUpper) _lElbowHint = d.hint;
+                else if (d.root != null && d.root == _rUpper) _rElbowHint = d.hint;
+            }
+        }
+
+        /// <summary>Dirsek yonlendirme ayarlari, tek pakette (saf fonksiyona gecirilebilsin diye).</summary>
+        public struct ElbowTuning
+        {
+            public float down, outward, back, forwardOnCross, crossMeters, hintDistance, minRadius;
+        }
+
+        ElbowTuning Tuning => new ElbowTuning
+        {
+            down = elbowDown,
+            outward = elbowOut,
+            back = elbowBack,
+            forwardOnCross = elbowForwardOnCross,
+            crossMeters = crossBlendMeters,
+            hintDistance = elbowHintDistance,
+            minRadius = minElbowRadius,
+        };
+
+        void DriveElbowHint(bool left, Vector3 wrist)
+        {
+            if (!driveElbowHints) return;
+
+            Transform hint = left ? _lElbowHint : _rElbowHint;
+            Transform shoulder = left ? _lUpper : _rUpper;
+            if (hint == null || shoulder == null) return;   // hint'siz rig: eski davranis
+
+            hint.position = ElbowHintPos(shoulder.position, wrist,
+                                         transform.position, transform.rotation,
+                                         left, Tuning, _scaleK);
+        }
+
+        /// <summary>
+        /// Dirsek hint'inin dunya konumu. SAF FONKSIYON — hicbir uye okumaz, her seyi parametre
+        /// alir; boylece editorde sahne kurmadan test edilebilir.
+        ///
+        /// Dirsek, kolun tek SERBEST parametresidir (el kumandaya, omuz govdeye civili), yani
+        /// buradaki hicbir sey oyuncunun kontrol ettigini bozmaz — silah ve nisan hic kaymaz.
+        ///
+        /// Yon uc bilesenden kurulur: ASAGI (dogal sarkma) + DISARI (kaburgalardan uzak) +
+        /// DERINLIK. Derinlik el kendi tarafindayken GERI, karsi tarafa gectikce ONE doner —
+        /// asil duzeltme bu: on kol gogsun icinden degil ONUNDEN gecer. Sonra yon kol eksenine
+        /// dik bilesene indirilir (hint mesafesi erisimle kavga etmesin) ve son olarak dirsegin
+        /// govde ekseninden en az <c>minRadius</c> disarida kalmasi ZORLANIR.
+        /// </summary>
+        /// <param name="bodyPos">Avatar kokunun konumu; yalnizca x/z'si (govdenin dusey ekseni) kullanilir.</param>
+        /// <param name="bodyRot">Avatar kokunun donusu (yaw-only), govde eksenleri buradan.</param>
+        /// <param name="scale">Boy kalibrasyonu carpani: mesafeler kisa/uzun oyuncuda olceklenir.</param>
+        public static Vector3 ElbowHintPos(Vector3 shoulder, Vector3 wrist,
+                                          Vector3 bodyPos, Quaternion bodyRot,
+                                          bool left, ElbowTuning t, float scale)
+        {
+            Vector3 up = bodyRot * Vector3.up;
+            Vector3 fwd = bodyRot * Vector3.forward;
+            float side = left ? -1f : 1f;
+            Vector3 outward = (bodyRot * Vector3.right) * side;
+
+            // Bilek govde merkezini gecti mi? Kendi tarafinda pozitif, karsiya gecince negatif.
+            Vector3 wLocal = Quaternion.Inverse(bodyRot) * (wrist - bodyPos);
+            float lateral = wLocal.x * side;
+            float cross01 = t.crossMeters > 1e-4f
+                ? Mathf.Clamp01(-lateral / t.crossMeters)
+                : (lateral < 0f ? 1f : 0f);
+            float depth = Mathf.Lerp(-t.back, t.forwardOnCross, cross01);
+
+            Vector3 bulge = -up * t.down + outward * t.outward + fwd * depth;
+            if (bulge.sqrMagnitude < 1e-6f) bulge = outward;
+
+            Vector3 armDir = wrist - shoulder;
+            if (armDir.sqrMagnitude > 1e-6f)
+            {
+                armDir.Normalize();
+                bulge -= armDir * Vector3.Dot(bulge, armDir);
+                if (bulge.sqrMagnitude < 1e-6f)
+                {
+                    // Yon kol eksenine paralel cikti (kol tam o yone uzanmis): disariyi dene,
+                    // o da paralelse yukariyi — ikisi ayni anda kol ekseni olamaz.
+                    bulge = outward - armDir * Vector3.Dot(outward, armDir);
+                    if (bulge.sqrMagnitude < 1e-6f) bulge = up - armDir * Vector3.Dot(up, armDir);
                 }
+            }
+            if (bulge.sqrMagnitude < 1e-6f) return (shoulder + wrist) * 0.5f + outward * t.hintDistance;
+            bulge.Normalize();
+
+            Vector3 hint = (shoulder + wrist) * 0.5f + bulge * (t.hintDistance * scale);
+
+            // GARANTI: dirsek govdenin dusey ekseninden en az minRadius kadar disarida.
+            float minR = t.minRadius * scale;
+            float dx = hint.x - bodyPos.x, dz = hint.z - bodyPos.z;
+            float h = Mathf.Sqrt(dx * dx + dz * dz);
+            if (h < minR)
+            {
+                Vector3 o;
+                if (h > 1e-4f) o = new Vector3(dx / h, 0f, dz / h);
+                else
+                {
+                    o = new Vector3(outward.x, 0f, outward.z);
+                    o = o.sqrMagnitude > 1e-6f ? o.normalized : Vector3.forward;
+                }
+                hint += o * (minR - h);
+            }
+            return hint;
         }
 
         // Local-space basis of a hand: forward = toward the fingers, up = palm normal.
@@ -463,16 +613,24 @@ namespace VRMultiplayer
             // Hand IK targets (controller pose + grip offset). Rotation is remapped through the
             // skeleton's own hand axes so the wrist follows the controller naturally.
             if (leftHandSource != null && ikLeftHandTarget != null)
+            {
+                Vector3 wrist = HandTargetPos(leftHandSource, true, leftGripPositionOffset);
                 ikLeftHandTarget.SetPositionAndRotation(
-                    HandTargetPos(leftHandSource, true, leftGripPositionOffset),
+                    wrist,
                     _leftRotOK ? HandRotation(leftHandSource, true, leftGripEulerOffset)
                                : leftHandSource.rotation * Quaternion.Euler(leftGripEulerOffset));
+                DriveElbowHint(true, wrist);
+            }
 
             if (rightHandSource != null && ikRightHandTarget != null)
+            {
+                Vector3 wrist = HandTargetPos(rightHandSource, false, rightGripPositionOffset);
                 ikRightHandTarget.SetPositionAndRotation(
-                    HandTargetPos(rightHandSource, false, rightGripPositionOffset),
+                    wrist,
                     _rightRotOK ? HandRotation(rightHandSource, false, rightGripEulerOffset)
                                 : rightHandSource.rotation * Quaternion.Euler(rightGripEulerOffset));
+                DriveElbowHint(false, wrist);
+            }
 
             // Head: copy the HMD look direction onto the head bone (after the rig ran).
             if (driveHeadRotation && headBone != null)
