@@ -52,8 +52,8 @@ MonoBehaviour:
     leftFingers:
       joints: []
       indexPulled: []
-  supportRailLocalStart: {x: 0.0468, y: -0.0362, z: -0.19060001}
-  supportRailLocalEnd: {x: 0.0468, y: -0.0362, z: -0.22168851}
+  supportRailLocalStart: {x: 0.0468, y: -0.0362, z: -0.1573}
+  supportRailLocalEnd: {x: 0.0468, y: -0.0362, z: -0.1573}
   supportBreakDistance: 0.3
   supportHand:
     wristLocalPosition: {x: 0.0481169, y: 0.043753564, z: -0.05534944}

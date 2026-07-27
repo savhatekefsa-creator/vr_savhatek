@@ -12,7 +12,9 @@ namespace VRMultiplayer.Weapons
     ///
     /// Support hand: the anchor is the closest point on the profile's rail segment to this
     /// hand's networked carrier — owners and remote clients project the same replicated
-    /// position, so everyone sees the hand at the same spot on the handguard.
+    /// position, so everyone sees the hand at the same spot on the handguard. NOT: profillerde
+    /// ray su an bilerek TEK NOKTA (start == end, izdusum hep o nokta) — cihazda kayan el
+    /// "bozuk konum" hissi verdi; kod yolu ileride gerekirse diye duruyor.
     ///
     /// Poses are authored for main=RIGHT / support=LEFT; when the roles are swapped the local
     /// data is mirrored across the weapon's YZ plane. Static (per-hold) values are resolved once
@@ -63,24 +65,15 @@ namespace VRMultiplayer.Weapons
         // the weapon anchor on both engage and release.
         const float WeldBlendSeconds = 0.12f;
 
-        // SAPMA EMNIYETI (support hand only).
+        // SAPMA EMNIYETI DENENDI VE GERI ALINDI (2026-07-27, cihaz karari).
         //
-        // The support anchor is authored data: a point on the weapon at a FIXED distance from
-        // the grip. The player's real hand separation is not fixed. When a profile forces the
-        // support wrist further out than the player is actually holding (measured: 0.43 m on the
-        // HK416, 0.53 m on the Dmr1, against a natural 0.30-0.40 m two-handed hold), the weld
-        // pulls the wrist off the arm. Past DivergenceFull the weld gives way: the hand slides
-        // off the handguard rather than the wrist off the forearm. A hand a few cm off the
-        // weapon reads as a hand; a detached wrist reads as a broken avatar.
-        //
-        // Not applied to the MAIN hand: HandGrabber poses the weapon so the grip anchor lands
-        // exactly on that controller, so its divergence is a property of the authored wrist
-        // offset alone and fading it out would only ever loosen a correct grip.
-        //
-        // Consts, not serialized fields: this component is AddComponent'ed at runtime, so
-        // inspector values would never be read.
-        const float DivergenceFull = 0.06f; // up to here the weld holds at full strength (m)
-        const float DivergenceZero = 0.22f; // beyond here the hand is back on the controller (m)
+        // Bir donem destek kaynagi, oyuncunun gercek eli hedeften uzaklastikca zayiflayip
+        // ~22 cm'de tamamen birakiyordu ("bilek kolu terk etmesin" diye) ve profillerdeki ray
+        // gercek bir dogru parcasiydi (el kundak boyunca kayiyordu). Cihazda ikisinin toplami
+        // "destek eli silahtan kopuyor + konumu bozuk" olarak hissedildi. Karar: destek eli
+        // yakalanan noktaya TAM guclu ve SABIT kaynaklanir; profillerde ray tek noktaya
+        // dondurulda (start == end -> izdusum o noktayi verir). Sapma hala OLCULUR ama yalnizca
+        // kulaklik-ustu gosterge (AvatarFitDebug) icindir — agirliga ASLA karistirma.
 
         HandWeld _left, _right;
         Animator _anim;
@@ -238,13 +231,11 @@ namespace VRMultiplayer.Weapons
                 : Mathf.Clamp01((Time.time - w.blendStart) / WeldBlendSeconds);
             weight = Mathf.SmoothStep(0f, 1f, raw);
 
+            // Yalnizca teshis: kaynak hedefi gercek kontrolcuden ne kadar suruklemis?
+            // (AvatarFitDebug gosterir.) Agirliga bilerek KARISMAZ — bkz. ustteki karar notu.
             float divergence = 0f;
             if (w.isSupport && _ik != null && _ik.TryGetFreeHandTargetPos(left, out Vector3 free))
-            {
                 divergence = Vector3.Distance(pos, free);
-                weight *= 1f - Mathf.SmoothStep(0f, 1f,
-                    Mathf.InverseLerp(DivergenceFull, DivergenceZero, divergence));
-            }
 
             w.solvedFrame = Time.frameCount;
             w.solvedPos = pos;
