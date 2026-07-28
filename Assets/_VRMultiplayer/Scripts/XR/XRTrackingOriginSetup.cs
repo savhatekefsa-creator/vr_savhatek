@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -18,6 +19,13 @@ namespace VRMultiplayer
         readonly List<XRInputSubsystem> _subsystems = new List<XRInputSubsystem>();
         int _attempts;
 
+        /// <summary>Floor modu verildi mi? null = henuz karar verilmedi. Gozlukte log okunamadigi
+        /// icin <see cref="CalibrationAnchor"/> bunu VR panelinde gosterir.</summary>
+        public static bool? FloorGranted { get; private set; }
+
+        /// <summary>Gerceklesen tracking origin modunun adi (teshis icin).</summary>
+        public static string OriginMode { get; private set; } = "?";
+
         void Update()
         {
             SubsystemManager.GetSubsystems(_subsystems);
@@ -28,13 +36,43 @@ namespace VRMultiplayer
             {
                 if (s.TrySetTrackingOriginMode(TrackingOriginModeFlags.Floor))
                 {
+                    LogOriginState(s, true);
                     enabled = false;
                     return;
                 }
             }
 
             if (++_attempts >= maxAttempts)
+            {
+                LogOriginState(_subsystems[0], false);
                 enabled = false; // platform keeps refusing Floor; stop retrying every frame
+            }
+        }
+
+        /// <summary>
+        /// Dikey referansin gercekten kurulup kurulmadigini KAYDA GECIRIR. Sebep: "oyuncu zeminden
+        /// yukarida/asagida doguyor" sikayetinin iki farkli koku var ve ayirt edilmeleri sart —
+        ///   1) SLAM'in dikey origin'i zamanla kaydi  -> DRIFT, CalibrationAnchor bunu duzeltir
+        ///   2) Floor modu hic verilmedi              -> KURULUM HATASI, anchor bunu maskeler ama COZMEZ
+        /// Floor reddedilirse XROrigin rig'i CameraYOffset kadar (~1.12 m) yukari iter; bu sabit
+        /// hatayi drift saniip anchor pesinde kosmak zaman kaybidir.
+        /// </summary>
+        static void LogOriginState(XRInputSubsystem s, bool floorGranted)
+        {
+            var origin = FindFirstObjectByType<XROrigin>();
+            string offset = origin != null ? origin.CameraYOffset.ToString("0.00") : "?";
+            string mode = s != null ? s.GetTrackingOriginMode().ToString() : "?";
+
+            FloorGranted = floorGranted;
+            OriginMode = mode;
+
+            if (floorGranted)
+                Debug.Log($"[XROrigin] Tracking origin = {mode}, CameraYOffset = {offset}. " +
+                          "Dikey referans TAMAM.");
+            else
+                Debug.LogError($"[XROrigin] Floor modu REDDEDILDI! Gecerli mod = {mode}, " +
+                               $"CameraYOffset = {offset}. Oyuncu zeminden yukarida/asagida dogacaktir — " +
+                               "bu DRIFT DEGIL, kurulum hatasidir; anchor duzeltmesi bunu cozmez.");
         }
     }
 }

@@ -13,6 +13,10 @@ namespace VRMultiplayer.UI
         [Tooltip("Panelin kafadan uzakligi (metre).")]
         public float distance = 1.4f;
 
+        [Tooltip("Goz hizasina gore dikey kayma (metre). Ayni anda birden fazla panel varken " +
+                 "ust uste binmesinler diye; 0 = eski davranis.")]
+        public float verticalOffset = 0f;
+
         void LateUpdate()
         {
             var head = XRRigReference.HeadOrCamera;
@@ -21,7 +25,7 @@ namespace VRMultiplayer.UI
             fwd.y = 0f;
             if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
             fwd.Normalize();
-            transform.position = head.position + fwd * distance;
+            transform.position = head.position + fwd * distance + Vector3.up * verticalOffset;
             transform.rotation = Quaternion.LookRotation(fwd);
         }
 

@@ -125,6 +125,12 @@ namespace VRMultiplayer
             _step = 2;
             Calibrated = true;
 
+            // FAZ 1: tek seferlik hizalama bitti — anchor omurgasi devralir ve rig'i bundan
+            // sonra her karede anchor'in SESSION pozundan yeniden turetir, boylece SLAM
+            // kaymasi (drift) surekli telafi edilir. Anchor olusturulamazsa (destek yok /
+            // ozellik kapali) yukaridaki tek seferlik sonuc aynen gecerli kalir — regresyon yok.
+            CalibrationAnchor.Bind(rig, new Pose(sharedOrigin, Quaternion.LookRotation(fwd, Vector3.up)));
+
             // The player is standing, headset on, holding still to take point B — the one moment
             // we can be sure a height sample is a STANDING sample. Re-run the avatar height fit
             // here so a session that started with the headset on a table (or was calibrated
