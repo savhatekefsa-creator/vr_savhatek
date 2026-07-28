@@ -134,9 +134,10 @@ namespace VRMultiplayer
             _holdTimer = 0f;
             _noZoneTimer = 0f;
 
-            // Elinde ne varsa birakir: olu oyuncu silah tasimaya devam etmemeli, ayrica silah
-            // yerde kalirsa baskasi alabilir.
-            GrabbableObject.ServerReleaseAllHeldBy(OwnerClientId);
+            // Elinde ne varsa YOK OLUR (ekip karari). Eskiden yalnizca BIRAKILIYORDU
+            // (ServerReleaseAllHeldBy); birakilan silah kinematik govde olarak sahnede kalir ve
+            // havada asili donabiliyordu. Dirilen oyuncu carktan kendi silahini secer.
+            DeathDisarm.DisarmHolder(OwnerClientId);
         }
 
         void Update()
