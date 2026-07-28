@@ -177,6 +177,11 @@ namespace VRMultiplayer
         {
             ulong sender = p.Receive.SenderClientId;
 
+            // OLU OYUNCU CARKTAN DA SILAH ALAMAZ. Grab RPC'sine engel koymustuk ama cark secici
+            // AYRI yoldan (bu RPC) silah URETIYOR — o kapiyi da kapatiyoruz. Dirilene kadar hicbir
+            // silah edinemez; tek yapabildigi dogum bolgesine yurumek.
+            if (DeathDisarm.IsClientDead(sender)) return;
+
             // Despawn the old one — but only if the sender really held it (never destroy someone
             // else's weapon on a stale/forged reference).
             if (oldRef.TryGet(out var oldNo) && oldNo != null && oldNo.IsSpawned)

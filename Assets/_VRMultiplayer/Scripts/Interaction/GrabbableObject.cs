@@ -184,7 +184,13 @@ namespace VRMultiplayer
             if (_flying)
             {
                 // Thrown arc came to rest -> freeze so it stays put on the ground.
+                // GECIS PAYI: yumusak birakmada ApplyThrow hizi SIFIR veriyor; bu kontrol o
+                // kareyi "yere kondu" sanip yercekimi cekmeden DONDURUYORDU — obje havada asili
+                // kaliyordu (pimi cekilmemis bombayi elin sabitken birakinca dusmuyordu). Atistan
+                // sonra kisa bir sure beklemek yercekimine hizlanmasi icin zaman taniyor; gercekten
+                // yere konunca hiz zaten tekrar ~0 olur ve o zaman donar.
                 if (!_rb.isKinematic &&
+                    Time.time - _thrownAt > RestFreezeGrace &&
                     _rb.linearVelocity.sqrMagnitude < 0.03f &&
                     _rb.angularVelocity.sqrMagnitude < 0.03f)
                 {
@@ -204,6 +210,9 @@ namespace VRMultiplayer
         {
             if (_holder.Value != NoHolder) return; // someone already holds it
             ulong sender = p.Receive.SenderClientId;
+            // OLU OYUNCU HICBIR SEY KAPAMAZ (ekip karari): dirilene kadar tek yapabildigi
+            // dogum bolgesine yurumek. Sunucu-otoriter reddediyoruz — istemci ne isterse istesin.
+            if (DeathDisarm.IsClientDead(sender)) return;
             _holderHand.Value = hand;
             _holder.Value = sender;
             NetworkObject.ChangeOwnership(sender);
@@ -219,6 +228,9 @@ namespace VRMultiplayer
         // ReleaseServerRpc'nin sunucudan donmesini beklerken firlatmanin korunacagi sure.
         // Normal RTT ~30-100 ms; 1 sn asilirsa zaten baglanti sorunludur, guvenlik agi devralir.
         const float ThrowGraceSeconds = 1f;
+        // Birakildiktan sonra "yere kondu" dondurmasi bu kadar geciktirilir — yumusak birakmada
+        // (hiz ~0) yercekiminin cekmeye baslamasi icin zaman. Yere degince zaten tekrar durur.
+        const float RestFreezeGrace = 0.5f;
         float _thrownAt = float.NegativeInfinity;
 
         /// <summary>Owner-side: on release, either drop-in-place or throw with the hand's velocity.</summary>
