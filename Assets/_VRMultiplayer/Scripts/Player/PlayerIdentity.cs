@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -9,6 +10,11 @@ namespace VRMultiplayer
     /// late joiners). The server assigns color/name on spawn; the player picks a team via
     /// <see cref="JoinTeamServerRpc"/> (see <see cref="TeamSelector"/>). Team overrides the
     /// unique color (A = blue, B = red) and prefixes the name tag ("[A] Oyuncu 1").
+    ///
+    /// ISIM GIZLILIGI: isim etiketi YALNIZCA ayni takimdaki oyunculara gorunur. Karsi takim
+    /// (ve henuz takim secmemis herkes) etiketi gormez; kendi etiketini kimse gormez. Avatarin
+    /// TAKIM RENGI herkese acik kalir — dusmani ayirt etmek icin gerekli, gizlenen tek sey isim.
+    /// Bkz. <see cref="NameVisibleToLocal"/>.
     ///
     /// OLU GORUNUMU: <see cref="PlayerHealth.Dead"/> iken avatar griye doner, dirilince eski
     /// haline. Karsidaki oyuncu oldugunu boyle anlar — eskiden olen oyuncu CANLI ile birebir
@@ -35,6 +41,10 @@ namespace VRMultiplayer
 
         MaterialPropertyBlock _mpb;
         PlayerHealth _health;
+        // nameTag'in renderer'i. Isim etiketini takima gore acip kapatan sey bu; her
+        // Refresh'te GetComponent cagirmamak icin Awake'te cache'lenir.
+        MeshRenderer _nameTagRenderer;
+
         // Avatarin TUM parcalari (prefabda 10 SkinnedMeshRenderer). Olu tonu hepsine
         // uygulanmali, yoksa avatar yari gri kalir. BIR KEZ cache'lenir: her olum/dirilis
         // icin GetComponentsInChildren cagirmak Quest'te bosuna dizi alloc'u demekti.
@@ -48,12 +58,21 @@ namespace VRMultiplayer
         Material[][] _ghostMats;
         bool _ghostOn;
 
+        // ISIM GORUNURLUGU TAKIM ESLESMESINE BAGLI oldugu icin karar TEK TARAFLI DEGIL: hem
+        // bakilan oyuncunun hem YEREL oyuncunun takimi gerekiyor. Takim spawn'dan SONRA
+        // seciliyor (bkz. TeamSelector), dolayisiyla yerel takim degistiginde daha once spawn
+        // olmus TUM uzak etiketler yeniden degerlendirilmeli — yoksa yerel takim henuz 0 iken
+        // verilmis 'gizle' karari kalici olur. Kayit OnNetworkSpawn/Despawn'da yapilir.
+        static readonly List<PlayerIdentity> _all = new List<PlayerIdentity>();
+        static PlayerIdentity _local;
+
         void Awake()
         {
             _health = GetComponent<PlayerHealth>();
             // includeInactive: remoteAvatar prefabda KAPALI baslayip spawn'da aciliyor
             // (bkz. NetworkVRPlayer) — kapaliyken de yakalanmali.
             _bodyRenderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            if (nameTag != null) _nameTagRenderer = nameTag.GetComponent<MeshRenderer>();
         }
 
         /// <summary>The color everyone currently sees (team color wins over the unique color).</summary>
@@ -66,6 +85,9 @@ namespace VRMultiplayer
 
         public override void OnNetworkSpawn()
         {
+            _all.Add(this);
+            if (IsOwner) _local = this;
+
             if (IsServer)
             {
                 NetColor.Value = ColorFromId(OwnerClientId);
@@ -80,7 +102,12 @@ namespace VRMultiplayer
             // Initial sync does NOT fire OnValueChanged, so apply the current values now
             // (this is what makes late-joiners show the correct color/name/team — ve olu
             // birinin geç katilana CANLI gorunmesini onleyen sey de budur).
-            Refresh();
+            //
+            // YEREL oyuncu spawn oldugunda TUM etiketler yeniden degerlendirilir: ondan once
+            // spawn olmus uzak oyuncular _local henuz yokken karar vermisti. Yeniden baglanma
+            // durumunda takim ZATEN atanmis gelir ve ilk senkron callback tetiklemez, yani
+            // burasi olmadan o etiketler kalici gizli kalirdi.
+            if (IsOwner) RefreshAll(); else Refresh();
         }
 
         public override void OnNetworkDespawn()
@@ -89,12 +116,44 @@ namespace VRMultiplayer
             NetName.OnValueChanged -= OnNameChanged;
             Team.OnValueChanged -= OnTeamChanged;
             if (_health != null) _health.Dead.OnValueChanged -= OnDeadChanged;
+
+            _all.Remove(this);
+            // Yerel oyuncu gidiyorsa geride kalan etiketler artik takim arkadasi
+            // referansini kaybetti — hepsi yeniden degerlendirilmeli.
+            if (_local == this) { _local = null; RefreshAll(); }
         }
 
         void OnColorChanged(Color _, Color __) => Refresh();
         void OnNameChanged(FixedString32Bytes _, FixedString32Bytes __) => Refresh();
-        void OnTeamChanged(byte _, byte __) => Refresh();
+        // YEREL oyuncunun takimi degistiyse tek basina kendini tazelemek yetmez: herkesin
+        // isim etiketi 'benim takimimla ayni mi' sorusuna bagli, o yuzden hepsi tazelenir.
+        void OnTeamChanged(byte _, byte __)
+        {
+            if (IsOwner) RefreshAll(); else Refresh();
+        }
+
         void OnDeadChanged(bool _, bool __) => Refresh();
+
+        static void RefreshAll()
+        {
+            for (int i = 0; i < _all.Count; i++)
+                if (_all[i] != null) _all[i].Refresh();
+        }
+
+        /// <summary>Bu oyuncunun isim etiketi YEREL kamerada gorunmeli mi? Kendi etiketini
+        /// kimse gormez (mevcut davranis). Digerleri yalnizca AYNI takimdaysa gorunur.
+        /// Takim 0 = henuz secmemis; takim arkadasi SAYILMAZ, yani takim secilene kadar
+        /// kimse kimsenin adini gormez.</summary>
+        bool NameVisibleToLocal
+        {
+            get
+            {
+                if (IsOwner) return false;
+                byte mine = Team.Value;
+                byte localTeam = _local != null ? _local.Team.Value : (byte)0;
+                return mine != 0 && mine == localTeam;
+            }
+        }
 
         /// <summary>Owner asks the server to put them on a team (1 = A, 2 = B).</summary>
         [ServerRpc]
@@ -170,6 +229,13 @@ namespace VRMultiplayer
                 nameTag.color = c;
                 nameTag.text = DisplayName;
             }
+
+            // ISIM YALNIZCA TAKIM ARKADASINA GORUNUR. Karar RENDERER seviyesinde veriliyor,
+            // DisplayName BILEREK bosaltilmiyor: ServerView masaustu gozlemci etiketlerini
+            // ve RoomScanSync 'sentBy' alanini bu ozellikten okuyor, isim bosalirsa onlar da
+            // bozulurdu. Ayrica avatarin TAKIM RENGI herkese acik kalir (dusmani ayirt etmek
+            // icin gerekli) — gizlenen tek sey ISIM.
+            if (_nameTagRenderer != null) _nameTagRenderer.enabled = NameVisibleToLocal;
         }
 
         // Distinct, well-spread hues using the golden-ratio increment.

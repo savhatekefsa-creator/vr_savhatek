@@ -110,6 +110,7 @@ namespace VRMultiplayer
         public override void OnNetworkSpawn()
         {
             _holder.OnValueChanged += OnHolderChanged;
+            _holder.OnValueChanged += OnEquipSound;
             _holder.OnValueChanged += OnStateChanged;
             _holderHand.OnValueChanged += OnStateChanged;
             _supportHand.OnValueChanged += OnStateChanged;
@@ -122,6 +123,7 @@ namespace VRMultiplayer
         public override void OnNetworkDespawn()
         {
             _holder.OnValueChanged -= OnHolderChanged;
+            _holder.OnValueChanged -= OnEquipSound;
             _holder.OnValueChanged -= OnStateChanged;
             _holderHand.OnValueChanged -= OnStateChanged;
             _supportHand.OnValueChanged -= OnStateChanged;
@@ -137,6 +139,17 @@ namespace VRMultiplayer
         {
             if (_holder.Value == clientId)
                 _holder.Value = NoHolder; // dropped where it was
+        }
+
+        // Ele alma sesi: _holder NetworkVariable degisimi zaten HER istemcide tetiklenir,
+        // RPC gerekmez. Yalniz bosta -> tutuldu gecisi calar (el degistirme/birakma sessiz);
+        // ses ekipmanin uzerinde, ellecleme yaricapinda — yakindaki dusman "silah aldi"
+        // bilgisini duyar, haritanin obur ucu duymaz.
+        void OnEquipSound(ulong prev, ulong now)
+        {
+            if (prev == NoHolder && now != NoHolder)
+                VRMultiplayer.Audio.WeaponAudioPlayer.PlayAt("WeaponSounds/equip_generic",
+                    transform.position, 0.55f, 0.95f, 1.05f, 25f);
         }
 
         void OnHolderChanged(ulong _, ulong now)

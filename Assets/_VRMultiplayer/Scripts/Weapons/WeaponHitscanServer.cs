@@ -24,15 +24,19 @@ namespace VRMultiplayer.Weapons
 
         /// <summary>Tek bir rayin otoriter isabet cozumu (pellet basina bir kez cagrilir).
         /// Donus: bu rayin gordugu dusman hitbox sayisi (teshis logu icin). Hasar pellet
-        /// basina pelletDamageScale ile carpilir — pompalida tanesi zayif, hepsi olumcul.</summary>
+        /// basina pelletDamageScale ile carpilir — pompalida tanesi zayif, hepsi olumcul.
+        /// hitFlesh yalnizca HASAR UYGULANAN oyuncu isabetinde true doner (istemciler kan
+        /// efektini bundan cizer); dost-atesi blogu ve duvar isabeti false kalir.</summary>
         public static int RaycastOne(Transform weaponRoot, Vector3 origin, Vector3 dir,
             float range, float pelletDamageScale, System.Func<ZoneType, int> damageFor,
-            ulong shooter, byte shooterTeam, out Vector3 end, out Vector3 hitNormal)
+            ulong shooter, byte shooterTeam, out Vector3 end, out Vector3 hitNormal,
+            out bool hitFlesh)
         {
             end = origin + dir * range;
             // Sifir = mermi izi birakma. YALNIZCA sabit geometri normal doner: hareketli bir
             // oyuncuya dunya-uzayi izi cakarsak oyuncu yurudugunde iz havada asili kalirdi.
             hitNormal = Vector3.zero;
+            hitFlesh = false;
 
             Vector3 start = origin + dir * 0.03f;
 
@@ -42,7 +46,7 @@ namespace VRMultiplayer.Weapons
             // atis iskaliyordu. Isini atmadan once baslangici ICINE ALAN bolge var mi bakiyoruz;
             // varsa mesafesi sifir demektir, her raycast isabetinden once gelir.
             int inside = MuzzleInsideZone(weaponRoot, start, origin, pelletDamageScale,
-                                          damageFor, shooter, shooterTeam);
+                                          damageFor, shooter, shooterTeam, out hitFlesh);
             if (inside > 0) { end = start; return inside; }
 
             // NonAlloc + yakindan-uzaga yurume: "kendi govdeni gecip devam et" mantigi hit
@@ -80,7 +84,9 @@ namespace VRMultiplayer.Weapons
 #endif
                     // origin = atisin ciktigi namlu noktasi: kurbanin HUD'u yon flasini bundan cizer.
                     health.ServerApplyDamage(dmg, shooter, origin);
-                    end = h.point; break;
+                    end = h.point;
+                    hitFlesh = true; // istemciler bu noktada kan cizer (iz/decal degil)
+                    break;
                 }
 
                 end = h.point; // first solid/non-player hit stops the ray
@@ -91,15 +97,16 @@ namespace VRMultiplayer.Weapons
         }
 
         /// <summary>Isinin BASLANGICINI icine alan dusman hitbox'i var mi? Varsa hasari uygular
-        /// ve gorulen hitbox sayisini doner; yoksa 0.</summary>
+        /// ve gorulen hitbox sayisini doner; yoksa 0. hitFlesh = hasar gercekten uygulandi.</summary>
         // Raycast'in goremedigi tek durum budur: origin bir collider'in ICINDE. Kucuk bir kure
         // ile adaylari toplayip gercekten iceride olani ClosestPoint ile dogruluyoruz — sadece
         // yakininda olanlari saymamak icin. ClosestPoint yalnizca HitZone tasiyan collider'lara
         // cagriliyor (kure/kapsul); disbukey olmayan MeshCollider'da o cagri exception atar.
         static int MuzzleInsideZone(Transform weaponRoot, Vector3 start, Vector3 origin,
             float pelletDamageScale, System.Func<ZoneType, int> damageFor,
-            ulong shooter, byte shooterTeam)
+            ulong shooter, byte shooterTeam, out bool hitFlesh)
         {
+            hitFlesh = false;
             int n = Physics.OverlapSphereNonAlloc(start, 0.02f, _overlap,
                 Physics.AllLayers, QueryTriggerInteraction.Collide);
 
@@ -132,6 +139,7 @@ namespace VRMultiplayer.Weapons
                 Debug.Log($"[Silah] DIPCIK ISABETI (namlu govdenin icinde)! atan {shooter} -> hedef {health.OwnerClientId}, bolge {zone.zoneName}, {dmg} hasar.");
 #endif
                 health.ServerApplyDamage(dmg, shooter, origin);
+                hitFlesh = true;
                 return 1;
             }
             return 0;
