@@ -82,18 +82,47 @@ adb devices
 git clone https://github.com/TakashiYoshinaga/QuestArUcoMarkerTracking
 ```
 
-- [ ] README'yi oku ve **hangi sürümü kullanacağına karar ver**:
+### ⚠️ 2026-07-29 ARAŞTIRMA GÜNCELLEMESİ — plan burada değişti
 
-| Sürüm | Gereksinim | Sizin için anlamı |
-|---|---|---|
-| **Yeni** (PassthroughCameraAccess) | Meta XR SDK **v83+** | Kolay çalışır ama SDK bağımlılığı — ana projeye taşıması zor |
-| **Eski** (WebCamTexture) | Meta XR SDK'ya daha az bağımlı | **Sizin için daha değerli** — backend'den bağımsız olabilir |
+**1. WebCamTexture yolu (eski "A yolu") ARTIK ÖNERİLMİYOR.**
+Meta: *"Legacy WebCamTexture helpers have been fully retired. Every sample now talks directly to
+PassthroughCameraAccess component, which is part of the MRUK package."* Teknik olarak hâlâ görüntü
+alınabiliyor ama **kamera pozu + intrinsics** için bakımlı yardımcı kod kalmadı — ve spike'ın asıl
+şartı zaten oydu. Bu yolu kovalamak muhtemelen zaman kaybı.
 
-> **İkisini de dene.** Öncelik **eski/WebCamTexture** yolunda: o çalışırsa ana projeye taşıma
-> sorunu büyük ölçüde çözülmüş olur. Yeni sürüm sadece "çalışıyor mu" sorusunu cevaplar.
+**2. Gerçek yol MRUK / PassthroughCameraAccess.**
 
-- [ ] **OpenCV for Unity** kararı: Asset Store'da ~$95. Ücretsiz alternatif arayacaksan
-      **şimdi** ara, spike'ın ortasında değil. (Karar spike'ın çıktılarından biri.)
+**3. MRUK ile `com.unity.xr.meta-openxr` çakışma riski SANDIĞIMIZDAN DÜŞÜK.**
+Meta kendi dokümanında ikisini **birlikte** kullanmayı anlatıyor (ör. Depth API occlusion için
+`com.unity.xr.meta-openxr@2.1.0` + Meta XR SDK). Yine de sıfır risk değil; toplulukta
+"MRUK Shared: Unable to bind OpenXR function" gibi entegrasyon sancıları var.
+
+**Sonuç — güncellenmiş çalışma yeri kuralı:**
+`spike/apriltag` dalında MRUK'u **kurmayı deneyin**. `manifest.json` git'te izlendiği için paket
+kurulumu geri alınabilir. Room-scan bozulursa (`ARPlaneManager` / `MetaOpenXRSessionSubsystem`)
+dalı atın, ayrı projeye geçin. Ana dala **asla** merge etmeyin.
+
+> Kontrol: MRUK kurduktan sonra **önce room-scan'in hâlâ çalıştığını** doğrulayın (menü 11/12).
+> Bozulduysa orada durun.
+
+---
+
+- [ ] Örneğin **yeni sürümünü** kullan (PassthroughCameraAccess, Meta XR SDK v83+ / MRUK v81+)
+- [ ] MRUK kurulduktan sonra **room-scan regresyon kontrolü** yap (yukarıdaki kutu)
+
+- [ ] **OpenCV kararı — öneri: Asset Store'daki OpenCV for Unity'yi al (~$95).**
+
+| Seçenek | Maliyet | Lisans | Emek |
+|---|---|---|---|
+| **OpenCV for Unity** (Asset Store) | ~$95 | Ticari, sorun yok | Hazır, saatler |
+| OpenCV native Android eklentisi (kendin derle) | Ücretsiz | **Apache 2.0** (temiz) | **2-3 gün** |
+| Bagımsız ArUco kütüphanesi | Ücretsiz | ⛔ **GPLv3** — ticari üründe kodu açmaya zorlar | orta |
+
+> **GPLv3 tuzağına dikkat:** bağımsız ArUco kütüphanesi GPLv3. Kapalı kaynak bir üründe
+> kullanmak lisans ihlali olur. OpenCV'nin kendisi (aruco/objdetect modülü dahil) **Apache 2.0**,
+> orada sorun yok — sorun yalnızca ayrı ArUco kütüphanesinde.
+>
+> $95, 2-3 günlük native eklenti işinden ucuzdur. Bütçe elvermiyorsa Apache 2.0 yolu açık.
 
 ---
 
