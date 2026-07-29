@@ -15,28 +15,35 @@
 
 ---
 
-## 1. Paketleri edinme (Unity Asset Store, ÜCRETSİZ)
+## 1-2. Paketleri kurma — TARAYICIYA GEREK YOK
 
-Tarayıcıdan, Unity hesabınızla giriş yaparak iki paketi hesabınıza ekleyin:
+Projede **Unity 6000.3 (Unity 6.3)** var ve bu sürümde Meta paketleri **Unity'nin içinden**
+kuruluyor. Unity'nin kendi dokümanı:
 
-- [ ] **Meta XR Core SDK** — `com.meta.xr.sdk.core`
-- [ ] **Meta MR Utility Kit** — `com.meta.xr.mrutilitykit`
+> *"In Unity 6.3 and later, you can install Meta packages when you add the Meta Quest build
+> profile using the Platform Browser. **You don't need to install them from the Asset Store.**"*
 
-> Alternatif: **Meta XR All-in-One SDK** tek pakette hepsini getirir, ama fazlasını da kurar
-> (Interaction, Platform, Audio, Voice…). **Sadece ihtiyacımız olan ikisini kurmak daha temiz.**
+Yani Asset Store hesabı, tarayıcı, indirme/import adımı **yok**.
 
-Kaynak repo 78.0.0 sürümünü kullanıyor; daha yeni sürüm gelirse onu alın, sürüm uyumsuzluğu
-çıkarsa 78'e dönersiniz.
+- [ ] Unity'de **File > Build Profiles** (Build Settings) aç
+- [ ] **Meta Quest** platformunu ekle/seç → **Platform Browser** paket listesini gösterir
+- [ ] Listeden **yalnızca şu ikisini** işaretle:
+      - **Meta XR Core SDK** → `com.meta.xr.sdk.core`
+      - **Meta XR Mixed Reality Utility Kit** → `com.meta.xr.mrutilitykit`
+- [ ] Kur, Unity'nin derlemesini bitirmesini bekle (birkaç dakika sürebilir)
 
----
+> **All-in-One'ı seçmeyin.** Interaction, Platform, Audio, Voice, Haptics gibi ihtiyacımız
+> olmayan paketleri de kurar — hem şişirir hem çakışma yüzeyini büyütür.
 
-## 2. Unity'de içe aktarma
+> Platform Browser'ı bulamazsanız alternatif: **Window > Package Manager** içinden aynı
+> paketler görünebilir. İki yol da aynı paketi kurar.
 
-- [ ] Unity'yi aç → **Window > Package Manager**
-- [ ] Sol üstten **My Assets** seç
-- [ ] **Meta XR Core SDK** bul → **Download** → **Import**
-- [ ] **Meta MR Utility Kit** için aynısı
-- [ ] Unity'nin derlemesini bitirmesini bekle (birkaç dakika sürebilir)
+### R1 riski resmen çürüdü
+
+Unity'nin kendi dokümanı: *"You can use Unity's OpenXR plug-in and OpenXR Meta package
+together to develop a cross-platform application that has additional features tailored for
+Meta Quest devices."* — yani `com.unity.xr.meta-openxr` ile Meta XR SDK **birlikte
+desteklenen** bir kurulum. Yine de 4. maddedeki regresyon kontrolünü atlamayın.
 
 ---
 
