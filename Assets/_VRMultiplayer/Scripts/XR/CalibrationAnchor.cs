@@ -1,7 +1,13 @@
+using System;
+using System.Collections.Generic;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using UnityEngine.XR.OpenXR.Features.Meta;
+// Iki pakette de ayni isimde bir tip var (Unity.XR.CoreUtils ve UnityEngine.XR.ARSubsystems);
+// anchor API'sinin bekledigi ARSubsystems olani sabitliyoruz.
+using SerializableGuid = UnityEngine.XR.ARSubsystems.SerializableGuid;
 
 namespace VRMultiplayer
 {
@@ -46,8 +52,15 @@ namespace VRMultiplayer
         public float maxJumpDegrees = 20f;
 
         [Tooltip("Sicrama bu kadar kare ust uste reddedilirse artik GERCEK kabul edilip uygulanir. " +
-                 "Kalici kilitlenmeyi onler (duzgun ele alinmasi FAZ 4'te).")]
+                 "Kalici kilitlenmeyi onler (duzgun ele alinmasi FAZ 4'te). DIKKAT: dikey eksen " +
+                 "bu kurala TABI DEGIL — bkz. maxVerticalCorrection.")]
         public int jumpAcceptAfterFrames = 60;
+
+        [Tooltip("Dikey duzeltmenin kalibrasyon anindaki degerden sapabilecegi EN BUYUK miktar (m). " +
+                 "Fiziksel zemin metrelerce oynamaz; anchor oyle diyorsa yanilan ANCHOR'dir. " +
+                 "Bu sinir olmadan bir relocalization hatasi oyuncuyu tavana ya da zeminin altina " +
+                 "isinlayabiliyor (yasanmis hata).")]
+        public float maxVerticalCorrection = 0.5f;
 
         [Header("VR durum paneli (gozlukte log okunamadigi icin)")]
         [Tooltip("Panel hic gosterilmesin mi? Maca cikarken kapatmak icin.")]
@@ -86,6 +99,8 @@ namespace VRMultiplayer
         float _panelHideAt;
         float _nextHeartbeat;
         bool _wasTracking = true;
+        bool _verticalClamped;
+        string _shareNote;   // paylasim neden olmadi — gozlukte log okunamadigi icin panele yazilir
 
         /// <summary>Rig su an anchor'dan mi suruluyor? False ise A/B tek seferlik hizalama gecerli.</summary>
         public static bool Driving => Instance != null && Instance._driving && Instance._anchor != null;
@@ -181,11 +196,176 @@ namespace VRMultiplayer
                           $"Rig artik anchor'dan SURULUYOR. Dikey duzeltme: " +
                           $"{(correctVertical ? "ACIK" : "KAPALI")}.");
                 ShowStatus(panelSecondsAfterCalibration);
+
+                ShareAnchor(mgr);   // FAZ 2 — ayni odadaki digerlerine ac
             }
             finally
             {
                 _busy = false;
             }
+        }
+
+        // ------------------------------------------------------------------ FAZ 2: paylasim
+
+        /// <summary>
+        /// Anchor'i bir grup GUID'i altinda paylasir ve GUID'i aga duyurur. Boylece ayni fiziksel
+        /// odadaki diger gozlukler AYNI anchor'a kilitlenir — herkes bagimsiz kaydigi icin olusan
+        /// ayrisma biter. Desteklenmiyorsa sessizce gecilir: yerel drift duzeltmesi calismaya
+        /// devam eder, sadece paylasim olmaz.
+        /// </summary>
+        async void ShareAnchor(ARAnchorManager mgr)
+        {
+            if (mgr.subsystem is not MetaOpenXRAnchorSubsystem sub)
+            {
+                _shareNote = "subsystem Meta degil";
+                Debug.LogWarning("[CalibAnchor] Anchor subsystem Meta degil — paylasim yok.");
+                ShowStatus(panelSecondsAfterCalibration);
+                return;
+            }
+            if (sub.isSharedAnchorsSupported != Supported.Supported)
+            {
+                // EN SIK SEBEP: gozlukte "Enhanced Spatial Services" kapali
+                // (Ayarlar > Gizlilik ve Guvenlik > Cihaz Izinleri). Bu ayar olmadan Meta
+                // paylasilan anchor'a izin vermez. Ayrica paylasim Meta sunucularindan gectigi
+                // icin INTERNET de gerekir — internetsiz mekanda bu yol calismaz.
+                _shareNote = "DESTEKLENMIYOR — gozlukte 'Enhanced Spatial Services' ac";
+                Debug.LogWarning($"[CalibAnchor] Shared anchor DESTEKLENMIYOR " +
+                                 $"({sub.isSharedAnchorsSupported}). Gozlukte Ayarlar > Gizlilik ve " +
+                                 "Guvenlik > Cihaz Izinleri > Enhanced Spatial Services acik mi? " +
+                                 "Ayrica paylasim internet gerektirir. Yerel drift duzeltmesi surüyor.");
+                ShowStatus(panelSecondsAfterCalibration);
+                return;
+            }
+
+            var groupId = Guid.NewGuid();
+            sub.sharedAnchorsGroupId = new SerializableGuid(groupId);
+
+            var status = await mgr.TryShareAnchorAsync(_anchor);
+            if (this == null) return;
+
+            if (!status.IsSuccess())
+            {
+                _shareNote = $"paylasim HATASI ({status})";
+                Debug.LogWarning($"[CalibAnchor] Anchor PAYLASILAMADI (status={status}). " +
+                                 "Enhanced Spatial Services ve internet baglantisini kontrol et.");
+                ShowStatus(panelSecondsAfterCalibration);
+                return;
+            }
+
+            _shareNote = null;
+            Debug.Log($"[CalibAnchor] Anchor paylasildi, grup {groupId:N}. Aga duyuruluyor.");
+            CalibrationShareSync.Publish(groupId);
+            ShowStatus(panelSecondsAfterCalibration);
+        }
+
+        /// <summary>
+        /// Agdan bir ortak cerceve GUID'i geldiginde cagrilir: o gruptaki anchor'i yukler ve rig'i
+        /// ondan surmeye baslar. Bu yolu izleyen oyuncu A/B'ye HIC BASMAZ (karar K2).
+        /// </summary>
+        public static void LoadShared(Guid groupId)
+        {
+            var rig = FindRig();
+            if (rig == null)
+            {
+                Debug.LogWarning("[CalibAnchor] Rig bulunamadi — ortak cerceve yuklenemiyor.");
+                return;
+            }
+
+            if (Instance == null)
+            {
+                var go = new GameObject("Calibration Anchor");
+                Instance = go.AddComponent<CalibrationAnchor>();
+            }
+            Instance.LoadSharedInternal(rig, groupId);
+        }
+
+        async void LoadSharedInternal(Transform rig, Guid groupId)
+        {
+            if (_busy) return;
+            _busy = true;
+            try
+            {
+                var mgr = EnsureAnchorManager();
+                if (mgr == null) return;
+                if (mgr.subsystem is not MetaOpenXRAnchorSubsystem sub)
+                {
+                    Debug.LogWarning("[CalibAnchor] Anchor subsystem Meta degil — ortak cerceve yuklenemez.");
+                    return;
+                }
+
+                sub.sharedAnchorsGroupId = new SerializableGuid(groupId);
+
+                var loaded = new List<XRAnchor>();
+                var status = await mgr.TryLoadAllSharedAnchorsAsync(loaded, null);
+                if (this == null) return;
+
+                if (!status.IsSuccess() || loaded.Count == 0)
+                {
+                    // Bos donus BASARILI sayilir (API sozlesmesi) — "henuz paylasilmadi" ya da
+                    // "runtime bu odada henuz localize olmadi" demektir. A/B yedegi devrede kalir.
+                    Debug.LogWarning($"[CalibAnchor] Ortak anchor YUKLENEMEDI " +
+                                     $"(status={status}, adet={loaded.Count}). A/B yedegi gecerli.");
+                    return;
+                }
+
+                // Yuklenen XRAnchor bir VERI yapisi; surus icin ARAnchor BILESENI lazim ve o,
+                // manager'in bir sonraki guncellemesinde olusur — birkac kare bekle.
+                var id = loaded[0].trackableId;
+                ARAnchor comp = null;
+                for (int i = 0; i < 180 && comp == null; i++)
+                {
+                    await Awaitable.NextFrameAsync();
+                    if (this == null) return;
+                    mgr.trackables.TryGetTrackable(id, out comp);
+                }
+                if (comp == null)
+                {
+                    Debug.LogWarning($"[CalibAnchor] Ortak anchor yuklendi ama ARAnchor bileseni " +
+                                     $"olusmadi ({id}).");
+                    return;
+                }
+
+                Adopt(rig, comp);
+            }
+            finally
+            {
+                _busy = false;
+            }
+        }
+
+        /// <summary>Agdan gelen anchor'i sahiplen ve surusu baslat. Hedef poz A/B yolundakiyle
+        /// AYNI sozlesmedir (CalibrationManager.SharedTargetPose).</summary>
+        void Adopt(Transform rig, ARAnchor anchor)
+        {
+            var cm = FindFirstObjectByType<CalibrationManager>();
+            _target = cm != null
+                ? cm.SharedTargetPose
+                : new Pose(Vector3.zero, Quaternion.identity);
+
+            _rig = rig;
+            _baselineRigY = rig.position.y;
+            _rigPosAtCalib = rig.position;
+            _rigYawAtCalib = rig.eulerAngles.y;
+            _lastAnnouncedDrift = 0f;
+            _rejectedFrames = 0;
+            _wasTracking = true;
+            _nextHeartbeat = Time.time + heartbeatSeconds;
+
+            if (_anchor != null && _anchor != anchor) Destroy(_anchor.gameObject);
+            _anchor = anchor;
+            _driving = true;
+
+            Debug.Log($"[CalibAnchor] ORTAK cerceve benimsendi ({anchor.trackableId}). " +
+                      "A/B'ye gerek yok — rig agdan gelen anchor'dan suruluyor.");
+            ShowStatus(panelSecondsAfterCalibration);
+        }
+
+        static Transform FindRig()
+        {
+            var cm = FindFirstObjectByType<CalibrationManager>();
+            if (cm != null && cm.rig != null) return cm.rig;
+            var rigRef = XRRigReference.Instance;
+            return rigRef != null ? rigRef.transform : null;
         }
 
         /// <summary>
@@ -241,7 +421,35 @@ namespace VRMultiplayer
             float yaw = Mathf.DeltaAngle(YawOf(ps.rotation), YawOf(_target.rotation));
             Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
             Vector3 pos = _target.position - rot * ps.position;
-            if (!correctVertical) pos.y = _baselineRigY;
+
+            // DIKEY GUVENLIK KILIDI. Yataydan farkli ele alinir: yatayda buyuk bir duzeltme
+            // israr ederse "demek gercekmis" deyip kabul ediyoruz, ama dikeyde bu YANLISTIR —
+            // zemin yerinde durur. Siniri asan dikey duzeltme kabul edilmez, kirpilir.
+            if (!correctVertical)
+            {
+                pos.y = _baselineRigY;
+            }
+            else
+            {
+                float lo = _baselineRigY - maxVerticalCorrection;
+                float hi = _baselineRigY + maxVerticalCorrection;
+                if (pos.y < lo || pos.y > hi)
+                {
+                    if (!_verticalClamped)
+                    {
+                        _verticalClamped = true;
+                        Debug.LogWarning($"[CalibAnchor] DIKEY duzeltme sinir disi " +
+                                         $"({pos.y - _baselineRigY:0.00} m) — kirpildi. Anchor'in " +
+                                         "dikey referansi bozulmus olabilir (relocalization).");
+                        ShowStatus(8f);
+                    }
+                    pos.y = Mathf.Clamp(pos.y, lo, hi);
+                }
+                else if (_verticalClamped)
+                {
+                    _verticalClamped = false;
+                }
+            }
 
             // Sicrama korumasi: drift yavas birikir, ani buyuk duzeltme supheli demektir.
             float dPos = Vector3.Distance(pos, _rig.position);
@@ -358,13 +566,51 @@ namespace VRMultiplayer
             float dPos = _rig != null ? Vector3.Distance(_rig.position, _rigPosAtCalib) : 0f;
             float dYaw = _rig != null ? Mathf.DeltaAngle(_rigYawAtCalib, _rig.eulerAngles.y) : 0f;
 
+            // DIKEY TESHIS — "tavanda doguyorum" sorununun KAYNAGINI ayirir:
+            //   Kafa ~= gercek boyun     -> tracking saglam, hata rig Y'sinde (KOD)
+            //   Kafa >> gercek boyun     -> gozlugun ZEMIN TAHMINI yanlis (CIHAZ; Alan Kurulumu)
+            // Rig Y ayrica anchor surusunun dikeyde ne yaptigini dogrudan gosterir.
+            var head = XRRigReference.HeadOrCamera;
+            float rigY = _rig != null ? _rig.position.y : 0f;
+            float headH = (head != null && _rig != null)
+                ? head.position.y - _rig.position.y
+                : (head != null ? head.position.y : 0f);
+
+            // FAZ 2: iki gozlugun AYNI grubu gorup gormedigini gozle dogrulamanin tek yolu.
+            // Ilk 6 hane karsilastirmak yeterli.
+            string sharedLine;
+            if (CalibrationShareSync.HasSharedCalibration && CalibrationShareSync.ServerConfirmed)
+            {
+                sharedLine = "ORTAK " + CalibrationShareSync.ActiveGroupId.ToString("N").Substring(0, 6);
+            }
+            else if (CalibrationShareSync.HasSharedCalibration)
+            {
+                // GUID uretildi ama sunucu onaylamadi -> bu cerceve bize OZEL. Eskiden burada da
+                // "ORTAK" yaziyordu ve iki oyuncu da kendini ilk kalibre eden saniyordu.
+                sharedLine = "YALNIZ SEN — sunucu onayi YOK";
+                color = new Color(1f, 0.75f, 0.2f);
+            }
+            else if (!string.IsNullOrEmpty(_shareNote))
+            {
+                sharedLine = "YEREL — " + _shareNote;
+                color = new Color(1f, 0.75f, 0.2f);
+            }
+            else
+            {
+                sharedLine = "yerel (paylasilmadi)";
+            }
+
             _panel.color = color;
             _panel.text =
                 "KALIBRASYON DURUMU\n" +
                 "Anchor: " + anchorLine + "\n" +
+                "Cerceve: " + sharedLine + "\n" +
                 "Dikey ref: " + floorLine + "\n" +
-                "Dikey duzeltme: " + (correctVertical ? "ACIK" : "KAPALI") + "\n" +
-                $"Toplam duzeltme: {dPos * 100f:0.0} cm / {dYaw:0.0} derece";
+                "Dikey duzeltme: " + (correctVertical
+                    ? (_verticalClamped ? "ACIK — SINIRA DAYANDI!" : "ACIK")
+                    : "KAPALI") + "\n" +
+                $"Toplam duzeltme: {dPos * 100f:0.0} cm / {dYaw:0.0} derece\n" +
+                $"Rig Y: {rigY:0.00} m   Kafa: {headH:0.00} m";
         }
 
         /// <summary>Bir donusun YALNIZCA yatay bilesenini (yaw) derece cinsinden verir; egim atilir.</summary>

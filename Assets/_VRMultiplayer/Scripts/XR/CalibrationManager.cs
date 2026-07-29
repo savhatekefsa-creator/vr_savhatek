@@ -29,11 +29,45 @@ namespace VRMultiplayer
         public Vector3 sharedOrigin = Vector3.zero;
         public Vector3 sharedForward = Vector3.forward;
 
+        [Header("Dikey gercek (Quest'in zemin tahmini yanilirsa)")]
+        [Tooltip("ACIK ise A noktasinin OLCULEN yuksekligi dikey referans olur ve gozlugun kendi " +
+                 "zemin tahmini EZILIR. Quest zemini bazen metrelerce yanlis biliyor (olculen: " +
+                 "kafa 2.47 m goruluyordu). KAPALIYKEN eski davranis: dikey hic duzeltilmez.\n\n" +
+                 "ACMADAN ONCE pointAHeight'i metreyle olcup girin — yanlis olcum HERKESI bozar, " +
+                 "cunku duzeltme shared anchor uzerinden digerlerine de gecer.")]
+        public bool useMeasuredPointAHeight = false;
+
+        [Tooltip("A noktasinin ZEMINDEN olculmus yuksekligi (metre). Metreyle olcun, tahmin etmeyin. " +
+                 "Ornek: duvarda gogus hizasinda bir isaret icin ~1.00.")]
+        public float pointAHeight = 1.00f;
+
+        /// <summary>
+        /// Ortak cerceve hedefi: fiziksel A noktasi <see cref="sharedOrigin"/>'e, A->B yonu
+        /// <see cref="sharedForward"/>'a eslenir. HEM A/B yolu HEM de agdan gelen shared anchor
+        /// ayni hedefi kullanir — plan tasarim kurali #4 (ortak cerceve sozlesmesi degismez).
+        /// </summary>
+        public Pose SharedTargetPose
+        {
+            get
+            {
+                Vector3 fwd = new Vector3(sharedForward.x, 0f, sharedForward.z).normalized;
+                if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
+                return new Pose(sharedOrigin, Quaternion.LookRotation(fwd, Vector3.up));
+            }
+        }
+
         bool _started;
         int _step;            // 0 = waiting for A, 1 = waiting for B, 2 = done
         Vector3 _a;
+        [Tooltip("Takim secildikten sonra ORTAK kalibrasyonun agdan gelmesi icin beklenecek sure " +
+                 "(saniye). Bu sure boyunca A/B istenmez. Gelmezse A/B'ye dusulur.")]
+        public float sharedWaitSeconds = 12f;
+
         bool _prevTrigger;
         bool _prevY;
+        bool _manualOverride;   // oyuncu Y ile bilerek yeniden kalibrasyon istedi
+        bool _waitingShared;    // ortak cerceve bekleniyor, A/B henuz istenmedi
+        float _sharedDeadline;
 
         /// <summary>True once this player has completed A/B calibration at least once.
         /// The room-scan sender requires this, otherwise the scan would be recorded in
@@ -52,7 +86,14 @@ namespace VRMultiplayer
             if (_started) return;
             _started = true;
             _step = 0;
-            SetStatus("KALIBRASYON\nSag kumandayi A noktasina koy,\nTETIGE bas.");
+
+            // FAZ 2: once ORTAK cerceveyi bekle. Sunucuda hazir bir kalibrasyon varken oyuncuyu
+            // bos yere A noktasina yollamak yanlisti — ustelik ortak cerceve sonradan gelince
+            // oyuncu iki kez kalibre etmis oluyordu.
+            _waitingShared = true;
+            _sharedDeadline = Time.time + sharedWaitSeconds;
+            SetStatus("ORTAK KALIBRASYON BEKLENIYOR...\n\nBirisi kalibre ettiyse otomatik gelecek.\n" +
+                      "Gelmezse A/B istenecek.");
         }
 
         void Update()
@@ -60,6 +101,31 @@ namespace VRMultiplayer
             if (!_started) return;
 
             FollowHead();
+
+            // FAZ 2 (karar K2): ortak cerceve agdan geldiyse A/B'ye HIC BASMA. Anchor zaten rig'i
+            // suruyorsa kalibrasyon tamamdir; oyuncuyu bos yere A noktasina yollamanin anlami yok.
+            // _manualOverride: oyuncu Y ile BILEREK yeniden kalibrasyon istediyse geri snap etme.
+            // ServerConfirmed sart: onaylanmamis (ag yok) bir cerceveyle A/B atlanirsa oyuncu
+            // "ortak kalibrasyon geldi" sanip aslinda yalniz kalir.
+            bool sharedReady = CalibrationAnchor.Driving &&
+                               CalibrationShareSync.HasSharedCalibration &&
+                               CalibrationShareSync.ServerConfirmed;
+
+            if (_step < 2 && !_manualOverride && sharedReady)
+            {
+                _waitingShared = false;
+                AdoptShared();
+                return;
+            }
+
+            // Bekleme penceresi: bu sure boyunca TETIK DINLENMEZ, oyuncudan A/B istenmez.
+            if (_waitingShared)
+            {
+                if (Time.time < _sharedDeadline) return;
+                _waitingShared = false;
+                SetStatus("ORTAK KALIBRASYON GELMEDI\n\nSag kumandayi A noktasina koy,\nTETIGE bas.");
+                Debug.Log("[Calibration] Ortak cerceve gelmedi — A/B yedegine dusuldu.");
+            }
 
             // The trigger only captures points DURING calibration. Once done it is ignored, so
             // an accidental trigger pull mid-game can never ruin the alignment.
@@ -73,6 +139,7 @@ namespace VRMultiplayer
             if (y && !_prevY && _step == 2)
             {
                 _step = 0;
+                _manualOverride = true;   // agdan gelen cerceve bu istegi ezmesin
                 SetStatus("YENIDEN KALIBRASYON\nSag kumandayi A noktasina koy,\nTETIGE bas.");
             }
             _prevY = y;
@@ -119,7 +186,23 @@ namespace VRMultiplayer
             // then slide (horizontally) so A sits on the shared origin.
             float angle = Vector3.SignedAngle(dir, fwd, Vector3.up);
             rig.RotateAround(a, Vector3.up, angle);
-            Vector3 delta = sharedOrigin - a; delta.y = 0f;
+
+            Vector3 delta = sharedOrigin - a;
+            if (useMeasuredPointAHeight)
+            {
+                // DIKEY GERCEK: kumanda su an fiziksel A noktasinda, ve A'nin zeminden yuksekligini
+                // METREYLE olcup biliyoruz. Gozluk "a.y" icin baska bir sey soyluyorsa yanilan
+                // gozlugun ZEMIN TAHMINIDIR — olcumu ustun tutariz.
+                // Sonucta dunya y=0 GERCEK zemin olur; anchor da oraya konuldugu icin bu duzeltme
+                // shared anchor uzerinden diger oyunculara da gecer.
+                delta.y = (sharedOrigin.y + pointAHeight) - a.y;
+                Debug.Log($"[Calibration] Dikey duzeltme: A olculen {pointAHeight:0.00} m, " +
+                          $"gozlugun dedigi {a.y:0.00} m -> rig {delta.y:+0.00;-0.00} m kaydirildi.");
+            }
+            else
+            {
+                delta.y = 0f;   // eski davranis: dikeyi Floor tracking origin'e birak
+            }
             rig.position += delta;
 
             _step = 2;
@@ -129,7 +212,7 @@ namespace VRMultiplayer
             // sonra her karede anchor'in SESSION pozundan yeniden turetir, boylece SLAM
             // kaymasi (drift) surekli telafi edilir. Anchor olusturulamazsa (destek yok /
             // ozellik kapali) yukaridaki tek seferlik sonuc aynen gecerli kalir — regresyon yok.
-            CalibrationAnchor.Bind(rig, new Pose(sharedOrigin, Quaternion.LookRotation(fwd, Vector3.up)));
+            CalibrationAnchor.Bind(rig, SharedTargetPose);
 
             // The player is standing, headset on, holding still to take point B — the one moment
             // we can be sure a height sample is a STANDING sample. Re-run the avatar height fit
@@ -139,6 +222,23 @@ namespace VRMultiplayer
 
             SetStatus("KALIBRE EDILDI!\nIyi oyunlar.\n(Yeniden kalibre: SOL kumanda Y tusu)");
             StartCoroutine(HideAfter(6f));
+        }
+
+        /// <summary>
+        /// FAZ 2 / karar K2 — ortak cerceve agdan geldi, A/B atlanir.
+        ///
+        /// A/B yolundan farkli olarak <c>AvatarIKController.RecalibrateAll()</c> BILEREK
+        /// cagrilmaz: orada oyuncunun B noktasini alirken dik durdugu bilinir, burada ne yaptigi
+        /// bilinmez. Rastgele bir pozdan boy olcumu yapmak yanlis avatar yuksekligi uretirdi.
+        /// </summary>
+        void AdoptShared()
+        {
+            _step = 2;
+            Calibrated = true;
+            StopAllCoroutines();
+            SetStatus("KALIBRASYON AGDAN GELDI\nA/B'ye gerek yok.\n(Yeniden kalibre: SOL kumanda Y tusu)");
+            StartCoroutine(HideAfter(6f));
+            Debug.Log("[Calibration] Ortak cerceve agdan alindi — A/B atlandi.");
         }
 
         IEnumerator HideAfter(float seconds)
@@ -153,11 +253,14 @@ namespace VRMultiplayer
 
         void SetStatus(string s)
         {
-            if (status != null)
-            {
-                status.gameObject.SetActive(true);
-                status.text = s;
-            }
+            // Panel sahnede ATANMAMISSA runtime'da olustur. Aksi halde kalibrasyon mesajlari
+            // yalnizca log'a giderdi; gozlukte Console olmadigi icin oyuncu HICBIR SEY gormez
+            // ve "kalibre olmus gibi" sanip yanlis cerceveyle oynardi (yasanmis).
+            if (status == null)
+                status = UI.HeadFollowPanel.Create("Calibration Panel", "", Color.white);
+
+            status.gameObject.SetActive(true);
+            status.text = s;
             Debug.Log("[Calibration] " + s);
         }
     }
