@@ -55,6 +55,20 @@ namespace VRMultiplayer
         [Tooltip("Goruntu kucultme carpani. Buyuk deger = hizli ama menzil/dogruluk duser.")]
         public int decimation = 2;
 
+        [Header("Ogrenme modu — tag'in yerini SISTEM olcsun")]
+        [Tooltip("ACIK ise: A/B ile kalibre olduktan sonra tag'e bakin, sistem tag'in ortak " +
+                 "cercevedeki konumunu ve yonunu OLCUP loglar. Cikan sayilari Tag Layout'a " +
+                 "yazip bu modu kapatirsiniz — bir daha A/B'ye gerek kalmaz.\n\n" +
+                 "Elle olcmekten cok daha hassas: 1 m'de jitter 3 mm.")]
+        public bool learnMode = false;
+
+        [Tooltip("Ogrenme icin en fazla bu mesafeden olcum kabul edilir (m). Jitter mesafenin " +
+                 "karesiyle buyudugu icin uzaktan ogrenmek hatayi kalici hale getirir.")]
+        public float learnMaxDistance = 1.5f;
+
+        [Tooltip("Ogrenme icin kac olcumun ortalamasi alinsin. Titremeyi bastirir.")]
+        public int learnSampleCount = 30;
+
         [Header("Kalibrasyon")]
         [Tooltip("Ilk saglam tespitte otomatik kalibre et. Kapaliysa yalnizca olcum yapar " +
                  "(FAZ 0 spike modu).")]
@@ -134,6 +148,9 @@ namespace VRMultiplayer
                 // iyi gordugumuzu bilmek istiyoruz, yerlesimde tanimli olup olmamasi onemsiz.
                 RecordMeasurement(tag.ID, tag.Position.magnitude, worldPos);
 
+                if (learnMode)
+                    Learn(tag.ID, tag.Position.magnitude, worldPos, worldRot);
+
                 // KALIBRASYON ise yalnizca yerlesimde TANIMLI tag ile yapilir: nerede oldugunu
                 // bilmedigimiz bir tag'e gore hizalanmak dunyayi rastgele bir yere oturtur.
                 if (autoCalibrate && !_calibrated)
@@ -179,6 +196,76 @@ namespace VRMultiplayer
             // Buradan sonrasi MEVCUT SISTEM: anchor rig'i surer, paylasilir, kalici olur.
             CalibrationAnchor.Bind(rig, cm.SharedTargetPose);
         }
+
+        // ------------------------------------------------------------------ ogrenme modu
+
+        readonly List<Vector3> _learnPos = new List<Vector3>();
+        readonly List<float> _learnYaw = new List<float>();
+        int _learnId = -1;
+        bool _learnDone;
+
+        /// <summary>
+        /// Tag'in ORTAK CERCEVEDEKI yerini olcup raporlar. Kullanici tag'i elle tarif etmek
+        /// zorunda kalmasin diye: kamera zaten mm hassasiyetinde olcuyor, elle koordinat
+        /// yazmak o hassasiyeti çöpe atmak olurdu.
+        ///
+        /// SART: once A/B ile kalibre olunmus olmali — olculen konum, o ANDAKI cerceveye
+        /// goredir. Kalibre olunmadan ogrenilen deger anlamsizdir.
+        /// </summary>
+        void Learn(int id, float distance, Vector3 worldPos, Quaternion worldRot)
+        {
+            if (_learnDone) return;
+
+            if (!CalibrationManager.Calibrated)
+            {
+                _learnNote = "once A/B ile kalibre ol";
+                return;
+            }
+            if (distance > learnMaxDistance)
+            {
+                _learnNote = $"yaklas ({distance:0.00} > {learnMaxDistance:0.00} m)";
+                return;
+            }
+            if (_learnId >= 0 && id != _learnId)
+                return;   // ogrenme sirasinda tek tag'e odaklan
+
+            _learnId = id;
+            _learnPos.Add(worldPos);
+            _learnYaw.Add(YawOf(worldRot));
+            _learnNote = $"olculuyor {_learnPos.Count}/{learnSampleCount}";
+
+            if (_learnPos.Count < Mathf.Max(5, learnSampleCount)) return;
+
+            // Ortalama: tek olcumun titremesini bastirir.
+            Vector3 pos = Vector3.zero;
+            foreach (var p in _learnPos) pos += p;
+            pos /= _learnPos.Count;
+
+            // Yaw ortalamasi aciyi vektore cevirerek — 359/1 derece sarmasinda duz ortalama
+            // yanlis sonuc verir.
+            Vector2 dir = Vector2.zero;
+            foreach (var y in _learnYaw)
+                dir += new Vector2(Mathf.Sin(y * Mathf.Deg2Rad), Mathf.Cos(y * Mathf.Deg2Rad));
+            float yaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
+
+            _learnedPos = pos;
+            _learnedYaw = yaw;
+            _learnDone = true;
+            _learnNote = "TAMAM";
+
+            Debug.Log(
+                "[AprilTagCalib] === TAG YERI OGRENILDI ===\n" +
+                $"  id   = {id}\n" +
+                $"  pos  = ({pos.x:0.000}, {pos.y:0.000}, {pos.z:0.000})\n" +
+                $"  yaw  = {yaw:0.0} derece\n" +
+                $"  ({_learnPos.Count} olcumun ortalamasi)\n" +
+                "  Bu degerleri Inspector'da Tag Layout'a yaz, Learn Mode'u KAPAT, " +
+                "Auto Calibrate'i AC. Artik A/B'ye gerek yok.");
+        }
+
+        string _learnNote = "";
+        Vector3 _learnedPos;
+        float _learnedYaw;
 
         TagEntry Find(int id)
         {
@@ -255,13 +342,22 @@ namespace VRMultiplayer
 
             if (seen)
             {
+                // Ogrenilen degerler gozlukte de gorunmeli — orada Console yok.
+                string mode = _calibrated ? "KALIBRE EDILDI"
+                            : learnMode    ? "OGRENME: " + _learnNote
+                                           : "olcum modu";
+
                 _panel.text =
                     "APRILTAG\n" +
                     $"Tag: {_lastId}\n" +
                     $"Mesafe: {_lastDistance:0.00} m\n" +
                     $"Jitter: {_jitterMm:0.0} mm\n" +
                     $"Tespit: {_detectHz:0.0} Hz\n" +
-                    (_calibrated ? "KALIBRE EDILDI" : "olcum modu");
+                    mode +
+                    (_learnDone
+                        ? $"\npos {_learnedPos.x:0.00} {_learnedPos.y:0.00} {_learnedPos.z:0.00}" +
+                          $"\nyaw {_learnedYaw:0.0}"
+                        : "");
             }
             else
             {
