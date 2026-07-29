@@ -39,6 +39,18 @@ Multiplayer'da bağıl hata bunun ~2 katı olabilir (her gözlük bağımsız, f
 ⚠️ Tek ölçüm, tek oda, tek oturum. Drift hızı oda dokusuna/ışığa/hareket miktarına göre
 büyük değişir. Yön gösterici, kanun değil. Büyük alanda **yeniden ölçülmeli**.
 
+## 0.2 Sahada öğrenilenler (2026-07-29 test günü)
+
+Kod hatası olmayan ama işi saatlerce tıkayan şeyler — bir daha aynı tuzağa düşmeyin:
+
+| Bulgu | Sonuç |
+|---|---|
+| **A/B noktaları fiziksel olarak İŞARETLİ DEĞİLDİ** (elle yaklaşık alınıyordu) | Co-location'ın tamamı bu noktaların sabitliğine dayanır. Yaklaşık nokta = her oyuncuda farklı çerçeve. **Bantla işaretlenmeli**, ikisi aynı yükseklikte ve 2-3 m arayla (uzun mesafe yaw hatasını küçültür). |
+| **Gözlüğün zemin tahmini ~80 cm bozuktu** (`Kafa: 2.47 m` ölçüldü) | "Tavanda doğma" sorunu. Kodda değil cihazda — **Alan Kurulumu yenilenince düzeldi**. `Floor TAMAM` yazısı "Floor modu verildi" der, "zemin doğru yerde" DEMEZ. Sık takıp çıkarma bu hatayı tetikliyor. |
+| **Unity build'i yalnızca o an bağlı gözlüğe kuruyor** | İki gözlükte farklı sürüm kalıp testleri günlerce yanıltabilir. Her build'den sonra `adb -s <serial> install -r <apk>` ile diğerine de kurun, sürümleri doğrulayın. |
+| **Sunucu sanal adaptör adresi duyuruyordu** (VirtualBox/VMware) | Gözlükler hiç bağlanamıyordu. Düzeltildi (gateway'e göre seçim), ama başka PC'de tekrarlayabilir — log'da seçilen/elenen adresler yazıyor. |
+| **Gözlükte Console yok** | Her teşhis bilgisi VR panelinde görünmeli, yoksa kör kalırsınız. Bu yüzden panele durum/teşhis satırları eklendi. Alternatif: `adb logcat -d -s Unity:V`. |
+
 ---
 
 ## 1. Terimler Sözlüğü
@@ -179,7 +191,12 @@ Sıralama mantığı: **Riski öne al, değeri erken teslim et.** Spike en büy�
 
 ---
 
-### FAZ 1 — Anchor Omurgası (1-1.5 gün) ✅ DÜŞÜK RİSK
+### FAZ 1 — Anchor Omurgası ✔️ TAMAMLANDI (commit `4d40d80`)
+
+> Cihazda doğrulandı: ~8-10 dk oyunda ~4 cm kayma yakalanıp düzeltildi.
+> Kalıcılık (kaydet/yükle) hâlâ YOK — bilinçli ertelendi.
+
+<details><summary>Özgün plan (referans)</summary>
 
 **Neden önce bu:** `com.unity.xr.meta-openxr 2.5.0` **zaten kurulu**. Yeni paket, yeni izin, CV yükü yok. Tek başına bile kazanç sağlıyor.
 
@@ -193,7 +210,26 @@ Sıralama mantığı: **Riski öne al, değeri erken teslim et.** Spike en büy�
 
 ---
 
-### FAZ 2 — Shared Anchor / Multiplayer (0.5-1 gün)
+</details>
+
+---
+
+### FAZ 2 — Shared Anchor / Multiplayer ✔️ TAMAMLANDI (commit `ab9016d`)
+
+> Cihazda doğrulandı: **2. gözlük A/B'ye hiç basmadan kalibre oldu.**
+> Uzun oturum ve iki-gözlük eşzamanlı hiza ölçümü yapılmadı.
+
+**Uygulanan kararlar:** ilk yayınlayan çerçeveyi kilitler (sahibi tazeleyebilir, sahip
+çıkarsa sahiplik serbest kalır ama çerçeve korunur); çerçeveyi alan A/B'ye basmaz;
+takım seçiminden sonra 12 sn ortak çerçeve beklenir.
+
+**⚠️ Mekân planlamasını ilgilendiren kısıt:** Meta'nın dokümanına göre shared spatial
+anchor **Enhanced Spatial Services** ayarını ve nokta bulutu verisi Meta sunucularından
+geçtiği için **internet** gerektiriyor. İnternetsiz bir salonda Faz 2 çalışmaz —
+o durumda ya herkes A/B yapar (Faz 1 yine drift'i düzeltir) ya da **AprilTag** devreye
+girer. Bu, Faz 3'ün önceliğini artırıyor.
+
+<details><summary>Özgün plan (referans)</summary>
 
 **Yapılacak:**
 1. `MetaOpenXRAnchorSubsystem.isSharedAnchorsSupported` kontrolü.
@@ -205,6 +241,10 @@ Sıralama mantığı: **Riski öne al, değeri erken teslim et.** Spike en büy�
 **Kazanç:** Oyuncuların birbirinden ayrışması durur. Herkes tek fiziksel referansta.
 
 **Not:** Shared anchor'lar son paylaşımdan itibaren ~30 gün yaşıyor. Paylaşım geri alınamıyor. Batch işlemler ya hep ya hiç.
+
+---
+
+</details>
 
 ---
 
