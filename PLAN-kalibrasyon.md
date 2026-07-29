@@ -53,8 +53,11 @@ olur. **Faz 1 (drift düzeltmesi) zaten tamamen yereldir, internet gerektirmez.*
 3. ✅ **Kalıcılık** — bir kez kalibre edilir, sunucu hatırlar; ertesi gün kimse kalibre etmez.
 
 **Sırada:**
-4. ⬜ **AprilTag fizibilite testi** (1-2 gün) — [PLAN-faz0-spike.md](PLAN-faz0-spike.md). Karar noktası.
+4. ✅ **AprilTag fizibilite testi** — **YEŞİL**. Cihazda ölçüldü: menzil ≥6 m (sınır odaydı),
+   jitter 1 m'de **3 mm**, mesafe doğruluğu %1-2. Ne lisans ne SDK gerekti.
+   Ayrıntı: [PLAN-faz0-spike.md](PLAN-faz0-spike.md)
 5. ⬜ **AprilTag entegrasyonu** (2-3 gün) — Meta bağımlılığı biter, veri bize geçer.
+   Kütüphane, kamera erişimi ve köprü kod **hazır**; kalan iş tag yerleşimi + yumuşatma.
 6. 🔜 **Büyük alana taşıma** (2-4 gün) — işin ~%90'ı olduğu gibi taşınır.
 
 **Bağımsız ve ucuz ara adım:** A/B noktalarını **bantla işaretlemek**. Şu an elle yaklaşık

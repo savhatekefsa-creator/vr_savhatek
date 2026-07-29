@@ -1,5 +1,43 @@
 # FAZ 0 — Spike Görev Planı (AprilTag / Passthrough Camera fizibilitesi)
 
+---
+
+## ✅ SONUÇ: YEŞİL (2026-07-29, Quest 3, küçük oda)
+
+Spike tamamlandı. **Cihazda ölçülen** değerler:
+
+| Ölçüm | Sonuç | Yorum |
+|---|---|---|
+| **Menzil** | **≥ 6 m** | Sınır ODAYDI, tag değil. Tahmin 3-4 m idi — iki katı çıktı. |
+| **Açı** | Oda köşegeninden okuyor | Eğik bakışta kopmuyor |
+| **Jitter @ 1 m** | **3 mm** | Çok iyi |
+| **Jitter @ 2 m** | 8-15 mm | Mesafenin ~karesiyle büyüyor (beklenen davranış) |
+| **Mesafe doğruluğu** | 1 m → **1.01-1.02** | %1-2; ölçüm belirsizliği içinde. **`tagSize` konvansiyonu DOĞRU** |
+| Tespit hızı | ~10 Hz | Ayarlanan değer |
+| Tag | 14 cm (siyah kare), tag36h11, ID 0, mat kâğıt | |
+
+### Kararlar (bu ölçümlerden çıkan)
+
+1. **Yakından kalibre et.** 1 m'de 3 mm hata, elle A/B dokunmasından (~2-5 cm) **10 kat** daha
+   hassas. Kalibrasyon anında tag'e 1-1.5 m yaklaşılmalı; odanın öbür ucundan kalibre edilmemeli.
+2. **Yumuşatma ZORUNLU.** Jitter mesafenin karesiyle büyüyor: 6 m'de ~10 cm beklenir. Ham
+   değerle sürmek titretir. (Faz 4 — One Euro filter.)
+3. **Tag adedi endişesi kalktı.** ≥6 m menzil, 25 m²'lik oda için 1-2 tag demek. Önceki plandaki
+   8-12 tahmini fazlaydı.
+4. **Büyük alan için büyük tag.** Jitter tag'in görüntüdeki büyüklüğüne bağlı; 20 cm tag 6 m'de,
+   14 cm tag'in 4.2 m'deki performansını verir. A3 baskı büyük alanda değerli.
+5. **Lisans/SDK gerekmedi.** Ne OpenCV ($95) ne Meta XR SDK kuruldu — bkz.
+   [KARAR-apriltag-kutuphanesi.md](KARAR-apriltag-kutuphanesi.md),
+   [PLAN-apriltag-uyarlama.md](PLAN-apriltag-uyarlama.md).
+
+### Ölçülmeyenler
+
+- Loş ışıkta menzil
+- 6 m üstü (oda yetmedi)
+- Uzun süreli kararlılık / ısınma
+
+---
+
 > Üst plan: [PLAN-kalibrasyon.md](PLAN-kalibrasyon.md)
 > Bu bir **spike**: kod atılacak, ürün kalitesi aranmayacak. Amaç kod değil **bilgi**.
 > **Zaman kutusu: 2 gün.** Sonuç ne olursa olsun dur ve değerlendir.

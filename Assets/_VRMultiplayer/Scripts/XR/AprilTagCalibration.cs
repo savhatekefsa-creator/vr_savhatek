@@ -80,7 +80,12 @@ namespace VRMultiplayer
         int _lastId = -1;
         float _lastDistance;
         float _jitterMm;
-        float _lastDetectTime = -1f;
+
+        // DIKKAT — iki AYRI zaman: tespit turu her seferinde calisir, ama tag her turda
+        // BULUNMAZ. Ilk surumde ikisi karistirilmisti ve panel, arada duvar olsa bile
+        // "goruyorum" deyip son mesafeyi donduruyordu.
+        float _lastPassTime = -1f;   // tespit turu (Hz hesabi icin)
+        float _lastTagTime = -1f;    // YALNIZCA tag gercekten bulundugunda
         float _detectHz;
 
         TextMesh _panel;
@@ -114,8 +119,8 @@ namespace VRMultiplayer
             _detector.ProcessImage(_pixels, fovVertical, tagSizeMeters);
 
             float now = Time.time;
-            if (_lastDetectTime > 0f) _detectHz = 1f / Mathf.Max(0.0001f, now - _lastDetectTime);
-            _lastDetectTime = now;
+            if (_lastPassTime > 0f) _detectHz = 1f / Mathf.Max(0.0001f, now - _lastPassTime);
+            _lastPassTime = now;
 
             var camPose = PassthroughCameraUtils.GetCameraPoseInWorld(_camMgr.Eye);
 
@@ -207,6 +212,7 @@ namespace VRMultiplayer
         {
             _lastId = id;
             _lastDistance = distance;
+            _lastTagTime = Time.time;   // tag GERCEKTEN bulundu
 
             _recent.Enqueue(worldPos);
             while (_recent.Count > RecentMax) _recent.Dequeue();
@@ -233,17 +239,41 @@ namespace VRMultiplayer
             }
             _panel.gameObject.SetActive(true);
 
-            bool seen = _lastDetectTime > 0f && Time.time - _lastDetectTime < 1f && _lastId >= 0;
+            // Tag SU AN goruluyor mu — tespit turunun calismasi degil, tag'in BULUNMASI olcut.
+            bool seen = _lastTagTime > 0f && Time.time - _lastTagTime < 0.4f;
+            bool cameraRunning = _lastPassTime > 0f && Time.time - _lastPassTime < 2f;
+
+            // Tag kaybolduysa jitter kuyrugunu bosalt: eski konumlar, tag geri gelince
+            // olcumu kirletir ve olmayan bir titreme gosterir.
+            if (!seen && _recent.Count > 0 && Time.time - _lastTagTime > 1f)
+            {
+                _recent.Clear();
+                _jitterMm = 0f;
+            }
+
             _panel.color = seen ? new Color(0.45f, 1f, 0.5f) : new Color(1f, 0.75f, 0.2f);
 
-            _panel.text = seen
-                ? "APRILTAG\n" +
-                  $"Tag: {_lastId}\n" +
-                  $"Mesafe: {_lastDistance:0.00} m\n" +
-                  $"Jitter: {_jitterMm:0.0} mm\n" +
-                  $"Tespit: {_detectHz:0.0} Hz\n" +
-                  (_calibrated ? "KALIBRE EDILDI" : "olcum modu")
-                : "APRILTAG\nTag GORUNMUYOR\n\n(kamera izni verildi mi?\ntag kadrajda mi?)";
+            if (seen)
+            {
+                _panel.text =
+                    "APRILTAG\n" +
+                    $"Tag: {_lastId}\n" +
+                    $"Mesafe: {_lastDistance:0.00} m\n" +
+                    $"Jitter: {_jitterMm:0.0} mm\n" +
+                    $"Tespit: {_detectHz:0.0} Hz\n" +
+                    (_calibrated ? "KALIBRE EDILDI" : "olcum modu");
+            }
+            else
+            {
+                string since = _lastTagTime > 0f
+                    ? $"son gorulme: {Time.time - _lastTagTime:0} sn once"
+                    : "hic gorulmedi";
+                _panel.text =
+                    "APRILTAG\n" +
+                    "Tag GORUNMUYOR\n" +
+                    since + "\n" +
+                    (cameraRunning ? "kamera: calisiyor" : "KAMERA YOK (izin?)");
+            }
         }
 
         static float YawOf(Quaternion q)
