@@ -17,6 +17,52 @@
 
 ---
 
+## 0.0 DURUM VE YOL HARİTASI (yönetime anlatmak için)
+
+### Veri şu an nerede duruyor?
+
+| Ne | Nerede | Kimin |
+|---|---|---|
+| **Uzamsal veri** (anchor / nokta bulutu) | **Meta'nın sunucuları** | Meta ⚠️ |
+| Grup kimliği (sadece bir isim) | Bizim PC'miz, diskte | Biz |
+| Konum hesabı | Her gözlükte, yerel — ağa çıkmaz | Biz |
+
+**Tek cümle:** *Konum verisi Meta'nın sunucularından geçiyor; bizim sunucumuz yalnızca bir
+kimlik numarası taşıyor.* Bu bir tasarım tercihi değil — Meta'nın Shared Spatial Anchor
+API'si uzamsal veriyi kendi bulutundan geçirir, dışarı vermez.
+
+**Bedeli:** internet zorunlu · anchor ~30 günde düşüyor · mekânın uzamsal verisi Meta'ya gidiyor.
+
+### Sunucu tarafına taşımak istenirse → AprilTag
+
+| | Meta'ya giden | İnternet | Ömür | Veri sahibi |
+|---|---|---|---|---|
+| **Shared Anchor** (bugünkü) | Uzamsal veri | Zorunlu | ~30 gün | Meta |
+| **AprilTag** (Faz 3) | **Hiçbir şey** | **Gerekmez** | **Sınırsız** | **Biz** |
+
+AprilTag'de tag yerleşimi (hangi ID nerede) bizim sunucumuzda bir JSON dosyasıdır; her gözlük
+duvardaki işareti kendi kamerasıyla okur ve konumunu yerel hesaplar. Sunucu-otoriter dağıtım,
+kalıcılık ve kilit mantığı aynen kalır — sadece dağıtılan şey "grup GUID" yerine "tag yerleşimi"
+olur. **Faz 1 (drift düzeltmesi) zaten tamamen yereldir, internet gerektirmez.**
+
+### Yol haritası
+
+**Bitti (2026-07-29):**
+1. ✅ **Drift düzeltmesi** — oyun ortasında bozulma çözüldü (~27 cm/saat birikim telafi ediliyor). *Tamamen yerel.*
+2. ✅ **Ortak kalibrasyon** — bir kişi kalibre eder, diğerleri ağdan alır. *Meta bulutunu kullanır.*
+3. ✅ **Kalıcılık** — bir kez kalibre edilir, sunucu hatırlar; ertesi gün kimse kalibre etmez.
+
+**Sırada:**
+4. ⬜ **AprilTag fizibilite testi** (1-2 gün) — [PLAN-faz0-spike.md](PLAN-faz0-spike.md). Karar noktası.
+5. ⬜ **AprilTag entegrasyonu** (2-3 gün) — Meta bağımlılığı biter, veri bize geçer.
+6. 🔜 **Büyük alana taşıma** (2-4 gün) — işin ~%90'ı olduğu gibi taşınır.
+
+**Bağımsız ve ucuz ara adım:** A/B noktalarını **bantla işaretlemek**. Şu an elle yaklaşık
+alınıyor; co-location'ın tamamı o noktaların sabitliğine dayanıyor. Aynı yükseklikte iki işaret,
+2-3 m arayla. AprilTag'e giden yolun da ilk adımı.
+
+---
+
 ## 0.1 ÖLÇÜLEN: Drift hızı (2026-07-28, Quest 3, küçük oda)
 
 Faz 1 cihaz testinde ölçüldü — **tahmin değil, gerçek sayı**:
