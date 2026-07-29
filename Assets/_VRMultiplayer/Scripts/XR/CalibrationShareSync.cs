@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -31,6 +32,10 @@ namespace VRMultiplayer
         const string MsgPub = "CalibSharePub";   // istemci -> sunucu: yayinla
         const float PullRetrySeconds = 5f;
         const float LoadRetrySeconds = 10f;
+
+        // Meta paylasilan anchor'i son paylasimdan ~30 gun sonra dusuruyor. Guvenli tarafta
+        // kalmak icin daha erken uyariyoruz; yine de denenir, yuklenemezse A/B'ye dusulur.
+        const int WarnAfterDays = 25;
 
         // --- sunucu durumu (otorite) ---
         static Guid _serverGroupId;
@@ -92,6 +97,7 @@ namespace VRMultiplayer
                 _serverHooked = true;
                 nm.OnClientConnectedCallback += OnClientConnected;
                 nm.OnClientDisconnectCallback += OnClientDisconnected;
+                LoadFromDisk();   // gecen oturumun cercevesi varsa geri getir
             }
 
             if (!nm.IsServer) TickClientPull(nm);
@@ -212,6 +218,7 @@ namespace VRMultiplayer
 
             Debug.Log($"[CalibShare] Ortak cerceve {(refresh ? "TAZELENDI" : "KILITLENDI")} " +
                       $"— sahip {senderId}, grup {groupId:N}. Herkese yayinlaniyor.");
+            SaveToDisk(groupId);
             PushToAll();
         }
 
@@ -303,6 +310,94 @@ namespace VRMultiplayer
             _activeGroupId = groupId;
             Debug.Log($"[CalibShare] Ortak cerceve agdan alindi: {groupId:N}");
             CalibrationAnchor.LoadShared(groupId);
+        }
+
+        // ------------------------------------------------------------------ kalicilik
+
+        [Serializable]
+        class SavedFrame
+        {
+            public string groupId;   // GUID "N" formatinda
+            public string savedAt;   // yyyy-MM-dd HH:mm:ss
+        }
+
+        static string DiskPath =>
+            Path.Combine(Application.persistentDataPath, "SharedCalibration.json");
+
+        /// <summary>
+        /// Ortak cerceveyi diske yazar. Anchor'in KENDISI Meta tarafinda zaten ~30 gun yasiyor;
+        /// burada yalnizca HANGI GRUBA bakacagimizi hatirliyoruz. Bu yuzden kalicilik ucuz:
+        /// sonraki oturumda kimsenin yeniden kalibre olmasina gerek kalmaz.
+        /// </summary>
+        static void SaveToDisk(Guid groupId)
+        {
+            try
+            {
+                var data = new SavedFrame
+                {
+                    groupId = groupId.ToString("N"),
+                    // InvariantCulture: yazan ve okuyan makinenin yerel ayari farkli olabilir.
+                    savedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss",
+                        System.Globalization.CultureInfo.InvariantCulture),
+                };
+                File.WriteAllText(DiskPath, JsonUtility.ToJson(data, true));
+                Debug.Log($"[CalibShare] Ortak cerceve diske kaydedildi: {DiskPath}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[CalibShare] Cerceve diske YAZILAMADI: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Sunucu acilisinda gecen oturumun cercevesini geri getirir.
+        ///
+        /// SAHIPLIK ATANMAZ: cerceve aktif ama sahipsiz baslar. Boylece bu oturumda ilk kalibre
+        /// olan kisi devralip tazeleyebilir — kaydedilmis cerceve yanlissa kimsenin elinde
+        /// kalmamis bir kilit yuzunden mahsur kalinmaz.
+        /// </summary>
+        static void LoadFromDisk()
+        {
+            if (_serverGroupId != Guid.Empty) return;   // bu oturumda zaten yayinlanmis
+            try
+            {
+                if (!File.Exists(DiskPath))
+                {
+                    Debug.Log($"[CalibShare] Kayitli ortak cerceve yok ({DiskPath}). " +
+                              "Ilk kalibre olan cerceveyi kuracak.");
+                    return;
+                }
+
+                var data = JsonUtility.FromJson<SavedFrame>(File.ReadAllText(DiskPath));
+                if (data == null || !Guid.TryParseExact(data.groupId, "N", out var g))
+                {
+                    Debug.LogWarning("[CalibShare] Kayitli cerceve dosyasi bozuk, yok sayildi.");
+                    return;
+                }
+
+                _serverGroupId = g;
+                _serverHasPublisher = false;   // aktif ama SAHIPSIZ
+
+                string age = "";
+                if (DateTime.TryParse(data.savedAt,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out var when))
+                {
+                    int days = (int)(DateTime.Now - when).TotalDays;
+                    age = $" ({days} gun once kaydedildi)";
+                    if (days >= WarnAfterDays)
+                        Debug.LogWarning($"[CalibShare] Kayitli cerceve {days} GUNLUK — Meta " +
+                                         "paylasilan anchor'lari ~30 gunde dusuruyor. Yuklenemezse " +
+                                         "oyuncular A/B'ye dusecek; yeniden kalibre etmek gerekebilir.");
+                }
+
+                Debug.Log($"[CalibShare] Kayitli ortak cerceve YUKLENDI: {g:N}{age}. " +
+                          "Baglanan herkese yayinlanacak — kimsenin kalibre olmasina gerek yok.");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[CalibShare] Kayitli cerceve okunamadi: {e.Message}");
+            }
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
