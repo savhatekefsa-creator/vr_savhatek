@@ -14,10 +14,11 @@ namespace VRMultiplayer.UI
     /// digerlerinde isin namlu ucundan cikar, gorunur bir modul yoktur. Modul mesh'i eklemek
     /// ayri bir is (secenek C) — bu adim once CALISSIN diye yapildi.
     ///
-    /// Durbundeki yesil noktadan FARKLI: bu gercek bir isik. Dunyada benek dusurur ve
-    /// HERKES GORUR (ekip karari) — nisan avantaji karsiliginda yerini ele verirsin,
-    /// Rainbow Six / CoD dengesi. Bu yuzden ag kodu gerekmiyor: her istemci silahin
-    /// IsHeld durumunu ve pozunu zaten agdan biliyor, lazeri kendi tarafinda cizer.
+    /// Durbundeki yesil noktadan FARKLI: bu gercek bir isik, dunyada benek dusurur.
+    /// GORUNURLUK: yalnizca silahi TUTAN oyuncu kendi lazerini gorur; karsidaki oyuncular
+    /// gormez (eski davranis "herkes gorur" idi, bilerek degistirildi). Ag kodu yine
+    /// gerekmiyor: her istemci silahin tutucusunu ve pozunu zaten agdan biliyor, lazeri
+    /// kendi tarafinda cizer — cizmeme karari da ayni yerel bilgiyle veriliyor.
     ///
     /// Acma/kapama tusu yok: silah eldeyken acik, birakinca kapali. Tuslar dolu ve
     /// thumbstick tiki durbun/secici tarafindan kullaniliyor.
@@ -120,13 +121,26 @@ namespace VRMultiplayer.UI
                 : $"[Lazer] {g.name}: modelde lazer donanimi yok — isin namlu ucundan cikacak.");
         }
 
+        /// <summary>Silahi tutan kisi BU istemcinin oyuncusu mu? Adanmis sunucuda / tutucu
+        /// yokken false — o zaman lazer hic cizilmez.</summary>
+        bool HeldByLocalPlayer
+        {
+            get
+            {
+                var nm = NetworkManager.Singleton;
+                return nm != null && _grab.HolderClientId == nm.LocalClientId;
+            }
+        }
+
         void LateUpdate()
         {
             if (_grab == null) return;
 
-            // Elde degilse kapali. IsHeld agda senkron oldugu icin bu kontrol HER istemcide
-            // ayni sonucu verir — lazeri herkes ayni anda gorur/gormez.
-            bool want = _grab.IsHeld;
+            // Elde degilse KAPALI, baskasinin elindeyse de KAPALI: lazeri yalnizca silahi
+            // tutan oyuncu gorur. _holder agda senkron oldugu icin her istemci bu karari
+            // kendi tarafinda dogru verir; tutucu degisimi (alma/birakma/kopma) bir sonraki
+            // karede buraya yansir ve isin sonup yanar.
+            bool want = _grab.IsHeld && HeldByLocalPlayer;
             if (want != _on)
             {
                 _on = want;
