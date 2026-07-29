@@ -31777,6 +31777,91 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4336372140196885871, guid: 498111f52cd07b0488c3e9f997ea115c, type: 3}
   m_PrefabInstance: {fileID: 1562331860}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1565593140
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1565593144}
+  - component: {fileID: 1565593143}
+  - component: {fileID: 1565593142}
+  - component: {fileID: 1565593141}
+  m_Layer: 0
+  m_Name: AprilTag
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1565593141
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565593140}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e654c74ebcf3f5846974c231203b9717, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.AprilTagCalibration
+  tagSizeMeters: 0.14
+  tagLayout:
+  - id: 0
+    position: {x: 0, y: 1, z: 0}
+    yawDegrees: 0
+  detectionsPerSecond: 10
+  decimation: 2
+  autoCalibrate: 0
+  correctVertical: 1
+  showPanel: 1
+--- !u!114 &1565593142
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565593140}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef9a7893e57c04c0db4114c70954b915, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PassthroughCameraSamples.WebCamTextureManager
+  Eye: 0
+  RequestedResolution: {x: 0, y: 0}
+  CameraPermissions: {fileID: 1565593143}
+--- !u!114 &1565593143
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565593140}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f5e9631f3cd04da0acc02bc5b51f5d4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PassthroughCameraSamples.PassthroughCameraPermissions
+  PermissionRequestsOnStartup:
+  - com.oculus.permission.USE_SCENE
+--- !u!4 &1565593144
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565593140}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1566356967
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -44179,3 +44264,4 @@ SceneRoots:
   - {fileID: 766894627}
   - {fileID: 2137178719}
   - {fileID: 305932078}
+  - {fileID: 1565593144}

@@ -121,17 +121,21 @@ namespace VRMultiplayer
 
             foreach (var tag in _detector.DetectedTags)
             {
-                var entry = Find(tag.ID);
-                if (entry == null) continue;   // yerlesimde tanimli degil, yok say
-
                 // Tag'in DUNYA pozu (mevcut, muhtemelen kaymis rig'e gore).
                 Vector3 worldPos = camPose.position + camPose.rotation * tag.Position;
                 Quaternion worldRot = camPose.rotation * tag.Rotation;
 
+                // OLCUM her tag icin yapilir — spike'ta hangi tag'i gordugumuzu ve ne kadar
+                // iyi gordugumuzu bilmek istiyoruz, yerlesimde tanimli olup olmamasi onemsiz.
                 RecordMeasurement(tag.ID, tag.Position.magnitude, worldPos);
 
+                // KALIBRASYON ise yalnizca yerlesimde TANIMLI tag ile yapilir: nerede oldugunu
+                // bilmedigimiz bir tag'e gore hizalanmak dunyayi rastgele bir yere oturtur.
                 if (autoCalibrate && !_calibrated)
-                    Calibrate(entry, worldPos, worldRot);
+                {
+                    var entry = Find(tag.ID);
+                    if (entry != null) Calibrate(entry, worldPos, worldRot);
+                }
 
                 break; // tek tag yeter; coklu tag FAZ 5
             }
