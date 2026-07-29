@@ -249,17 +249,48 @@ namespace VRMultiplayer
         {
             try
             {
-                var candidates = NetworkInterface.GetAllNetworkInterfaces()
+                // GERCEK LAN adaptorunu ayirt etmek icin adres araligina BAKMAK YETMEZ: sanal
+                // adaptorler (VirtualBox host-only 192.168.56.x, VMware VMnet, Hyper-V) de
+                // private adres kullanir. Bunlar siralamada once gelirse sunucu ULASILAMAYAN
+                // bir adres duyurur ve gozlukler baglanamaz (yasanmis hata).
+                // AYIRAC: sanal host-only adaptorlerin VARSAYILAN AG GECIDI yoktur.
+                var ifaces = NetworkInterface.GetAllNetworkInterfaces()
                     .Where(ni => ni.OperationalStatus == OperationalStatus.Up)
-                    .SelectMany(ni => ni.GetIPProperties().UnicastAddresses)
-                    .Select(ua => ua.Address)
-                    .Where(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a))
+                    .Where(ni => ni.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                    .Select(ni =>
+                    {
+                        var p = ni.GetIPProperties();
+                        return new
+                        {
+                            Name = ni.Name,
+                            HasGateway = p.GatewayAddresses.Any(g =>
+                                g.Address != null &&
+                                g.Address.AddressFamily == AddressFamily.InterNetwork &&
+                                !g.Address.Equals(IPAddress.Any)),
+                            Addr = p.UnicastAddresses
+                                .Select(ua => ua.Address)
+                                .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork
+                                                     && !IPAddress.IsLoopback(a)),
+                        };
+                    })
+                    .Where(x => x.Addr != null)
+                    .OrderByDescending(x => x.HasGateway)          // once GERCEK ag
+                    .ThenByDescending(x => IsPrivate(x.Addr))      // sonra private LAN
                     .ToList();
 
-                // Prefer a private LAN address (192.168.x / 10.x / 172.16-31.x).
-                var lan = candidates.FirstOrDefault(IsPrivate);
-                if (lan != null) return lan.ToString();
-                if (candidates.Count > 0) return candidates[0].ToString();
+                if (ifaces.Count > 0)
+                {
+                    var pick = ifaces[0];
+                    if (ifaces.Count > 1)
+                    {
+                        string others = string.Join(", ",
+                            ifaces.Skip(1).Select(x => $"{x.Addr} ({x.Name})"));
+                        Debug.Log($"[LanBootstrap] Sunucu adresi: {pick.Addr} ({pick.Name}, " +
+                                  $"gateway={(pick.HasGateway ? "var" : "YOK")}). " +
+                                  $"Elenenler: {others}");
+                    }
+                    return pick.Addr.ToString();
+                }
             }
             catch { }
             return "127.0.0.1";
