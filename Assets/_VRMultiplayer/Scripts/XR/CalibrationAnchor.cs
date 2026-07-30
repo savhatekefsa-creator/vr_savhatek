@@ -63,8 +63,10 @@ namespace VRMultiplayer
         public float maxVerticalCorrection = 0.5f;
 
         [Header("VR durum paneli (gozlukte log okunamadigi icin)")]
-        [Tooltip("Panel hic gosterilmesin mi? Maca cikarken kapatmak icin.")]
-        public bool showPanel = true;
+        [Tooltip("Teshis paneli. VARSAYILAN KAPALI — oyun sirasinda goruş alanini kapatmasin. " +
+                 "Kalibrasyonda bir sorun kovalarken ACIN: anchor durumu, dikey referans ve " +
+                 "toplam duzeltme miktarini gosterir.")]
+        public bool showPanel = false;
 
         [Tooltip("Kalibrasyondan sonra panel kac saniye gorunsun.")]
         public float panelSecondsAfterCalibration = 20f;

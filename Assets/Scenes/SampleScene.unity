@@ -31820,7 +31820,11 @@ MonoBehaviour:
   learnSampleCount: 30
   autoCalibrate: 1
   correctVertical: 1
-  showPanel: 1
+  calibrateSampleCount: 15
+  calibrateMaxDistance: 2
+  correctionDeadzoneMeters: 0.02
+  correctionYawDeadzoneDegrees: 1.5
+  showPanel: 0
 --- !u!114 &1565593142
 MonoBehaviour:
   m_ObjectHideFlags: 0
