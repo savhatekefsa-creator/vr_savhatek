@@ -78,6 +78,14 @@ namespace VRMultiplayer
                  "gozlugun zemin tahminindeki hatayi da duzeltir.")]
         public bool correctVertical = true;
 
+        [Tooltip("Kalibrasyon icin kac kare ortalanacak. TEK KARE titrek olabilir ve kalibrasyonu " +
+                 "o hatayla kilitler (yasanmis: bir dogru, bir 15 cm kayma). Ortalama bunu bastirir.")]
+        public int calibrateSampleCount = 15;
+
+        [Tooltip("Kalibrasyon yalnizca tag bu mesafeden YAKINken yapilir (m). Jitter mesafeyle " +
+                 "buyudugu icin yakindan kalibre etmek cok daha dogru — spike: 1 m'de 3 mm, 2 m'de 15 mm.")]
+        public float calibrateMaxDistance = 2f;
+
         [Header("Spike olcum paneli")]
         public bool showPanel = true;
 
@@ -153,10 +161,12 @@ namespace VRMultiplayer
 
                 // KALIBRASYON ise yalnizca yerlesimde TANIMLI tag ile yapilir: nerede oldugunu
                 // bilmedigimiz bir tag'e gore hizalanmak dunyayi rastgele bir yere oturtur.
+                // Tek kare degil, birkac kare ORTALANIR (bkz. AccumulateCalibration).
                 if (autoCalibrate && !_calibrated)
                 {
                     var entry = Find(tag.ID);
-                    if (entry != null) Calibrate(entry, worldPos, worldRot);
+                    if (entry != null)
+                        AccumulateCalibration(entry, tag.Position.magnitude, worldPos, worldRot);
                 }
 
                 break; // tek tag yeter; coklu tag FAZ 5
@@ -165,10 +175,52 @@ namespace VRMultiplayer
             TickPanel();
         }
 
+        // Kalibrasyon icin biriktirilen olcumler (ortalama alinacak).
+        readonly List<Vector3> _calibPos = new List<Vector3>();
+        readonly List<float> _calibYaw = new List<float>();
+        int _calibId = -1;
+        string _calibNote = "";
+
         /// <summary>
-        /// Rig'i, olculen tag hedeflenen yerine denk gelecek sekilde hizalar; sonra mevcut
-        /// anchor omurgasina devreder. Mantik <see cref="CalibrationManager.Apply"/> ile ayni:
-        /// once yaw etrafinda dondur, sonra otele — egim ASLA uygulanmaz.
+        /// TEK KARE yerine birkac kareyi ortalayarak kalibre eder ve yalnizca tag YAKINken
+        /// yapar. Sebep: jitter mesafeyle buyuyor ve tek titrek kare kalibrasyonu o hatayla
+        /// kilitliyordu (yasanmis: bir dogru, bir 15 cm kayma). Ogrenme modu ayni sebeple
+        /// zaten 30 kare ortaliyordu; kalibrasyon da ayni olmali.
+        /// </summary>
+        void AccumulateCalibration(TagEntry entry, float distance, Vector3 worldPos, Quaternion worldRot)
+        {
+            if (distance > calibrateMaxDistance)
+            {
+                _calibNote = $"yaklas ({distance:0.00} > {calibrateMaxDistance:0.00} m)";
+                _calibPos.Clear(); _calibYaw.Clear();   // uzaklasinca biriktirmeyi sifirla
+                return;
+            }
+            if (_calibId >= 0 && entry.id != _calibId) return;   // tek tag'e odaklan
+            _calibId = entry.id;
+
+            _calibPos.Add(worldPos);
+            _calibYaw.Add(YawOf(worldRot));
+            _calibNote = $"olculuyor {_calibPos.Count}/{calibrateSampleCount}";
+
+            if (_calibPos.Count < Mathf.Max(5, calibrateSampleCount)) return;
+
+            Vector3 avgPos = Vector3.zero;
+            foreach (var p in _calibPos) avgPos += p;
+            avgPos /= _calibPos.Count;
+
+            // Yaw ortalamasi vektorle — 359/1 sarmasinda duz ortalama yanlis olur.
+            Vector2 dir = Vector2.zero;
+            foreach (var y in _calibYaw)
+                dir += new Vector2(Mathf.Sin(y * Mathf.Deg2Rad), Mathf.Cos(y * Mathf.Deg2Rad));
+            float avgYaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
+
+            Calibrate(entry, avgPos, Quaternion.Euler(0f, avgYaw, 0f));
+        }
+
+        /// <summary>
+        /// Rig'i, olculen (ORTALANMIS) tag hedeflenen yerine denk gelecek sekilde hizalar; sonra
+        /// mevcut anchor omurgasina devreder. Mantik <see cref="CalibrationManager.Apply"/> ile
+        /// ayni: once yaw etrafinda dondur, sonra otele — egim ASLA uygulanmaz.
         /// </summary>
         void Calibrate(TagEntry entry, Vector3 measuredPos, Quaternion measuredRot)
         {
@@ -343,9 +395,10 @@ namespace VRMultiplayer
             if (seen)
             {
                 // Ogrenilen degerler gozlukte de gorunmeli — orada Console yok.
-                string mode = _calibrated ? "KALIBRE EDILDI"
-                            : learnMode    ? "OGRENME: " + _learnNote
-                                           : "olcum modu";
+                string mode = _calibrated   ? "KALIBRE EDILDI"
+                            : learnMode      ? "OGRENME: " + _learnNote
+                            : autoCalibrate  ? "KALIBRE: " + _calibNote   // "olculuyor X/15" ya da "yaklas"
+                                             : "olcum modu";
 
                 _panel.text =
                     "APRILTAG\n" +
