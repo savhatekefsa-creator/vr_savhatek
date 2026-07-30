@@ -56,8 +56,22 @@ olur. **Faz 1 (drift düzeltmesi) zaten tamamen yereldir, internet gerektirmez.*
 4. ✅ **AprilTag fizibilite testi** — **YEŞİL**. Cihazda ölçüldü: menzil ≥6 m (sınır odaydı),
    jitter 1 m'de **3 mm**, mesafe doğruluğu %1-2. Ne lisans ne SDK gerekti.
    Ayrıntı: [PLAN-faz0-spike.md](PLAN-faz0-spike.md)
-5. ⬜ **AprilTag entegrasyonu** (2-3 gün) — Meta bağımlılığı biter, veri bize geçer.
-   Kütüphane, kamera erişimi ve köprü kod **hazır**; kalan iş tag yerleşimi + yumuşatma.
+5. 🟩 **AprilTag entegrasyonu — ÇALIŞIYOR** (2026-07-30, cihazda doğrulandı)
+
+   Tag'e bakınca rig hizalanıyor; **A/B'ye, sunucuya, Meta bulutuna gerek yok.**
+   Kritik sınav geçildi: gözlük kafadan çıkarılıp (uyku) tag'in **görünmediği** bambaşka bir
+   noktada takıldı → kalibrasyon doğru kaldı. Tag çerçeveyi kuruyor, Quest'in kendi tracking'i
+   taşıyor.
+
+   **Tasarımın kalbi — tek seferlik değil, sürekli:** tag her görüldüğünde hiza kontrol edilir,
+   ölü bölgeyi (2 cm) aşan sapma düzeltilir. Tek seferlik kilit uyku sonrası toparlanmayı
+   engelliyordu ve panel bayat "KALIBRE EDILDI" gösteriyordu.
+
+   **Ölçüm kalitesi kararları:** kalibrasyon yalnızca tag 2 m'den yakınken ve birkaç karenin
+   ortalamasıyla yapılır. Tek kare kullanıldığında sonuç tutarsızdı (bir doğru, bir ~15 cm kayma)
+   — jitter mesafeyle büyüdüğü için.
+
+   **Denenmeyen:** uzun oturum drift'i, çoklu gözlükte tag ile ortak çerçeve.
 6. 🔜 **Büyük alana taşıma** (2-4 gün) — işin ~%90'ı olduğu gibi taşınır.
 
 **Bağımsız ve ucuz ara adım:** A/B noktalarını **bantla işaretlemek**. Şu an elle yaklaşık
