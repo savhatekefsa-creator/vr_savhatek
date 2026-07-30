@@ -31815,6 +31815,9 @@ MonoBehaviour:
     yawDegrees: 0
   detectionsPerSecond: 10
   decimation: 2
+  learnMode: 1
+  learnMaxDistance: 1.5
+  learnSampleCount: 30
   autoCalibrate: 0
   correctVertical: 1
   showPanel: 1
