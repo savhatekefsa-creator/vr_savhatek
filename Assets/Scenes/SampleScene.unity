@@ -31811,14 +31811,14 @@ MonoBehaviour:
   tagSizeMeters: 0.14
   tagLayout:
   - id: 0
-    position: {x: 0, y: 1, z: 0}
-    yawDegrees: 0
+    position: {x: 0.39, y: 1.35, z: -0.05}
+    yawDegrees: 176.6
   detectionsPerSecond: 10
   decimation: 2
-  learnMode: 1
+  learnMode: 0
   learnMaxDistance: 1.5
   learnSampleCount: 30
-  autoCalibrate: 0
+  autoCalibrate: 1
   correctVertical: 1
   showPanel: 1
 --- !u!114 &1565593142
