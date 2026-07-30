@@ -86,6 +86,13 @@ namespace VRMultiplayer
                  "buyudugu icin yakindan kalibre etmek cok daha dogru — spike: 1 m'de 3 mm, 2 m'de 15 mm.")]
         public float calibrateMaxDistance = 2f;
 
+        [Tooltip("Tag olmasi gereken yerden bu kadar SAPINCA rig duzeltilir (m). Altinda dokunulmaz " +
+                 "— jitter'dan surekli snap olmasin. Ust sinir yoksa uyku sonrasi buyuk sapmayi da toparlar.")]
+        public float correctionDeadzoneMeters = 0.02f;
+
+        [Tooltip("Yaw icin olu bolge (derece).")]
+        public float correctionYawDeadzoneDegrees = 1.5f;
+
         [Header("Spike olcum paneli")]
         public bool showPanel = true;
 
@@ -94,7 +101,6 @@ namespace VRMultiplayer
         Color32[] _pixels;
         int _texW, _texH;
         float _nextDetectAt;
-        bool _calibrated;
 
         // Olcum (FAZ 0): son tespitler uzerinden menzil ve jitter
         readonly Queue<Vector3> _recent = new Queue<Vector3>();
@@ -159,14 +165,15 @@ namespace VRMultiplayer
                 if (learnMode)
                     Learn(tag.ID, tag.Position.magnitude, worldPos, worldRot);
 
-                // KALIBRASYON ise yalnizca yerlesimde TANIMLI tag ile yapilir: nerede oldugunu
-                // bilmedigimiz bir tag'e gore hizalanmak dunyayi rastgele bir yere oturtur.
-                // Tek kare degil, birkac kare ORTALANIR (bkz. AccumulateCalibration).
-                if (autoCalibrate && !_calibrated)
+                // KALIBRASYON: yalnizca yerlesimde TANIMLI tag ile. Tek seferlik DEGIL — tag her
+                // gorulduginde hiza kontrol edilir, gerekiyorsa duzeltilir. Boylece uyku / konum
+                // degisimi / drift sonrasi kendini onarir. (Eski tek-seferlik kilit, uyku sonrasi
+                // yeniden kalibrasyonu blokluyordu ve panel "KALIBRE EDILDI" yalanini gosteriyordu.)
+                if (autoCalibrate)
                 {
                     var entry = Find(tag.ID);
                     if (entry != null)
-                        AccumulateCalibration(entry, tag.Position.magnitude, worldPos, worldRot);
+                        ContinuousCorrect(entry, tag.Position.magnitude, worldPos, worldRot);
                 }
 
                 break; // tek tag yeter; coklu tag FAZ 5
@@ -175,78 +182,96 @@ namespace VRMultiplayer
             TickPanel();
         }
 
-        // Kalibrasyon icin biriktirilen olcumler (ortalama alinacak).
+        // Kayan pencere: son yakin olcumler (ortalanir). Duzeltme uygulaninca temizlenir —
+        // cunku duzeltme rig'i oynatir, eski ornekler eski cerceveye aittir.
         readonly List<Vector3> _calibPos = new List<Vector3>();
         readonly List<float> _calibYaw = new List<float>();
         int _calibId = -1;
         string _calibNote = "";
+        Transform _rig;
 
         /// <summary>
-        /// TEK KARE yerine birkac kareyi ortalayarak kalibre eder ve yalnizca tag YAKINken
-        /// yapar. Sebep: jitter mesafeyle buyuyor ve tek titrek kare kalibrasyonu o hatayla
-        /// kilitliyordu (yasanmis: bir dogru, bir 15 cm kayma). Ogrenme modu ayni sebeple
-        /// zaten 30 kare ortaliyordu; kalibrasyon da ayni olmali.
+        /// SUREKLI, kendini onaran hizalama. Tag her gorulduginde:
+        ///   - yakin degilse "yaklas" (jitter mesafeyle buyur, uzaktan hizalama kotu)
+        ///   - birkac kare biriktir + ortala (tek titrek kareye guvenme)
+        ///   - tag olmasi gereken yerden SAPMISSA (olu bolgeden fazla) rig'i duzelt
+        ///   - sapma olu bolge icindeyse DOKUNMA (jitter'dan snap yapmasin)
+        /// Tek seferlik kilit YOK: uyku / konum degisimi / drift sonrasi kendini toparlar.
         /// </summary>
-        void AccumulateCalibration(TagEntry entry, float distance, Vector3 worldPos, Quaternion worldRot)
+        void ContinuousCorrect(TagEntry entry, float distance, Vector3 worldPos, Quaternion worldRot)
         {
             if (distance > calibrateMaxDistance)
             {
                 _calibNote = $"yaklas ({distance:0.00} > {calibrateMaxDistance:0.00} m)";
-                _calibPos.Clear(); _calibYaw.Clear();   // uzaklasinca biriktirmeyi sifirla
+                _calibPos.Clear(); _calibYaw.Clear();
                 return;
             }
-            if (_calibId >= 0 && entry.id != _calibId) return;   // tek tag'e odaklan
+            if (_calibId >= 0 && entry.id != _calibId) { _calibPos.Clear(); _calibYaw.Clear(); }
             _calibId = entry.id;
 
+            // Kayan pencereye ekle, en fazla calibrateSampleCount tut.
             _calibPos.Add(worldPos);
             _calibYaw.Add(YawOf(worldRot));
-            _calibNote = $"olculuyor {_calibPos.Count}/{calibrateSampleCount}";
+            while (_calibPos.Count > calibrateSampleCount) { _calibPos.RemoveAt(0); _calibYaw.RemoveAt(0); }
 
-            if (_calibPos.Count < Mathf.Max(5, calibrateSampleCount)) return;
+            int need = Mathf.Min(5, calibrateSampleCount);
+            if (_calibPos.Count < need)
+            {
+                _calibNote = $"olculuyor {_calibPos.Count}/{need}";
+                return;
+            }
 
+            // Ortalanmis olculen tag pozu.
             Vector3 avgPos = Vector3.zero;
             foreach (var p in _calibPos) avgPos += p;
             avgPos /= _calibPos.Count;
-
-            // Yaw ortalamasi vektorle — 359/1 sarmasinda duz ortalama yanlis olur.
             Vector2 dir = Vector2.zero;
             foreach (var y in _calibYaw)
                 dir += new Vector2(Mathf.Sin(y * Mathf.Deg2Rad), Mathf.Cos(y * Mathf.Deg2Rad));
             float avgYaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
 
-            Calibrate(entry, avgPos, Quaternion.Euler(0f, avgYaw, 0f));
+            // Tag olmasi gereken yerden ne kadar sapmis?
+            float dev = Vector3.Distance(avgPos, entry.position);
+            float yawDev = Mathf.Abs(Mathf.DeltaAngle(avgYaw, entry.yawDegrees));
+
+            if (dev <= correctionDeadzoneMeters && yawDev <= correctionYawDeadzoneDegrees)
+            {
+                _calibNote = $"HIZALI ({dev * 100f:0.0} cm)";
+                return;   // tolerans icinde — dokunma, jitter'dan snap olmasin
+            }
+
+            ApplyCorrection(entry, avgPos, avgYaw, dev);
+
+            // Rig oynadi: pencere artik eski cerceveye ait, temizle — yeni cercevede dolsun.
+            _calibPos.Clear(); _calibYaw.Clear();
         }
 
         /// <summary>
-        /// Rig'i, olculen (ORTALANMIS) tag hedeflenen yerine denk gelecek sekilde hizalar; sonra
-        /// mevcut anchor omurgasina devreder. Mantik <see cref="CalibrationManager.Apply"/> ile
-        /// ayni: once yaw etrafinda dondur, sonra otele — egim ASLA uygulanmaz.
+        /// Rig'i, olculen (ortalanmis) tag olmasi gereken yere denk gelecek sekilde hizalar.
+        /// Mantik <see cref="CalibrationManager.Apply"/> ile ayni: once yaw etrafinda dondur,
+        /// sonra otele — egim ASLA uygulanmaz. Anchor'a devretmez; tag'in KENDISI surekli
+        /// referans (anchor tracking'i 'None' oldugunda ise yaramiyordu, ustelik LateUpdate'te
+        /// tag'in duzeltmesini eziyordu).
         /// </summary>
-        void Calibrate(TagEntry entry, Vector3 measuredPos, Quaternion measuredRot)
+        void ApplyCorrection(TagEntry entry, Vector3 measuredPos, float measuredYaw, float dev)
         {
-            var cm = FindFirstObjectByType<CalibrationManager>();
-            if (cm == null || cm.rig == null) return;
-            var rig = cm.rig;
+            if (_rig == null)
+            {
+                var cm = FindFirstObjectByType<CalibrationManager>();
+                _rig = cm != null ? cm.rig : null;
+                if (_rig == null) return;
+            }
 
-            Quaternion wantedRot = Quaternion.Euler(0f, entry.yawDegrees, 0f);
-            float yawDelta = Mathf.DeltaAngle(YawOf(measuredRot), YawOf(wantedRot));
+            float yawDelta = Mathf.DeltaAngle(measuredYaw, entry.yawDegrees);
+            _rig.RotateAround(measuredPos, Vector3.up, yawDelta);
 
-            // Olculen tag konumu etrafinda dondur: o nokta yerinde kalir, geri kalan dunya doner.
-            rig.RotateAround(measuredPos, Vector3.up, yawDelta);
-
-            // Sonra tag'i olmasi gereken yere otele.
             Vector3 delta = entry.position - measuredPos;
             if (!correctVertical) delta.y = 0f;
-            rig.position += delta;
+            _rig.position += delta;
 
-            _calibrated = true;
-
-            Debug.Log($"[AprilTagCalib] Tag {entry.id} ile kalibre edildi. " +
-                      $"Yaw duzeltmesi {yawDelta:0.0} derece, oteleme {delta.magnitude:0.000} m " +
-                      $"(dikey {(correctVertical ? delta.y.ToString("0.000") + " m" : "KAPALI")}).");
-
-            // Buradan sonrasi MEVCUT SISTEM: anchor rig'i surer, paylasilir, kalici olur.
-            CalibrationAnchor.Bind(rig, cm.SharedTargetPose);
+            _calibNote = $"duzeltildi ({dev * 100f:0.0} cm)";
+            Debug.Log($"[AprilTagCalib] Tag {entry.id} duzeltme: sapma {dev * 100f:0.0} cm, " +
+                      $"yaw {yawDelta:0.0} derece, oteleme {delta.magnitude:0.000} m.");
         }
 
         // ------------------------------------------------------------------ ogrenme modu
@@ -394,11 +419,11 @@ namespace VRMultiplayer
 
             if (seen)
             {
-                // Ogrenilen degerler gozlukte de gorunmeli — orada Console yok.
-                string mode = _calibrated   ? "KALIBRE EDILDI"
-                            : learnMode      ? "OGRENME: " + _learnNote
-                            : autoCalibrate  ? "KALIBRE: " + _calibNote   // "olculuyor X/15" ya da "yaklas"
-                                             : "olcum modu";
+                // Canli durum — tek seferlik "KALIBRE EDILDI" degil, surekli hiza:
+                //   "HIZALI (1.2 cm)" / "duzeltildi (6.3 cm)" / "yaklas" / "olculuyor X/5"
+                string mode = learnMode     ? "OGRENME: " + _learnNote
+                            : autoCalibrate ? "TAG: " + _calibNote
+                                            : "olcum modu";
 
                 _panel.text =
                     "APRILTAG\n" +
