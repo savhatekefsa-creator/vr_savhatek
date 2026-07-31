@@ -31811,9 +31811,10 @@ MonoBehaviour:
   tagSizeMeters: 0.14
   tagLayout:
   - id: 0
-    position: {x: 0.39, y: 1.35, z: -0.05}
-    yawDegrees: 176.6
+    position: {x: 0.39, y: 1.36, z: 0}
+    yawDegrees: 175.2
   detectionsPerSecond: 3
+  idleDetectionsPerSecond: 1
   decimation: 3
   learnMode: 0
   learnMaxDistance: 1.5
@@ -31824,7 +31825,7 @@ MonoBehaviour:
   calibrateMaxDistance: 2
   correctionDeadzoneMeters: 0.02
   correctionYawDeadzoneDegrees: 1.5
-  showPanel: 0
+  showPanel: 1
 --- !u!114 &1565593142
 MonoBehaviour:
   m_ObjectHideFlags: 0

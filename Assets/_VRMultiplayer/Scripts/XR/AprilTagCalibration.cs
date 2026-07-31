@@ -48,9 +48,14 @@ namespace VRMultiplayer
         public TagEntry[] tagLayout = { new TagEntry() };
 
         [Header("Tespit")]
-        [Tooltip("Saniyede kac kez tespit calissin. Her karede calistirmak pil/CPU yer; " +
-                 "duvarda sabit bir marker icin 5-10 fazlasiyla yeter.")]
-        public float detectionsPerSecond = 10f;
+        [Tooltip("Duzeltme GEREKIRKEN saniyede kac tespit (tag gorunuyor ama hiza bozuk). " +
+                 "Tespit pahalidir: her turda tam cozunurluklu GetPixels32 + tag arama.")]
+        public float detectionsPerSecond = 3f;
+
+        [Tooltip("BOSTAKI hiz: tag gorunmuyorken ya da hiza zaten iyiyken. Macin buyuk kisminda " +
+                 "tag'e bakilmaz — o sure boyunca tam hizda taramak bosuna CPU/pil yakar. " +
+                 "Tag'e bakildiginda ~1 sn icinde fark edilir, sonra otomatik hizlanir.")]
+        public float idleDetectionsPerSecond = 1f;
 
         [Tooltip("Goruntu kucultme carpani. Buyuk deger = hizli ama menzil/dogruluk duser.")]
         public int decimation = 2;
@@ -101,6 +106,7 @@ namespace VRMultiplayer
         Color32[] _pixels;
         int _texW, _texH;
         float _nextDetectAt;
+        bool _alignedNow;   // son olcumde hiza olu bolge icinde miydi (tespit hizini belirler)
 
         // Olcum (FAZ 0): son tespitler uzerinden menzil ve jitter
         readonly Queue<Vector3> _recent = new Queue<Vector3>();
@@ -128,7 +134,14 @@ namespace VRMultiplayer
         void Update()
         {
             if (Time.time < _nextDetectAt) { TickPanel(); return; }
-            _nextDetectAt = Time.time + 1f / Mathf.Max(1f, detectionsPerSecond);
+
+            // UYARLANIR HIZ: tespit pahali (tam cozunurluklu GetPixels32 + tag arama, ana
+            // is parcaciginda). Macin buyuk kisminda tag kadrajda degil ya da hiza zaten iyi —
+            // o sure boyunca tam hizda taramak bosuna. Is varken hizlan, yokken yavasla.
+            bool tagFresh = _lastTagTime > 0f && Time.time - _lastTagTime < 2f;
+            bool busy = tagFresh && !_alignedNow;          // gorunuyor ama duzeltme gerekiyor
+            float rate = busy ? detectionsPerSecond : idleDetectionsPerSecond;
+            _nextDetectAt = Time.time + 1f / Mathf.Max(0.2f, rate);
 
             var tex = GetCameraTexture();
             if (tex == null || tex.width <= 16) { TickPanel(); return; }
@@ -142,7 +155,17 @@ namespace VRMultiplayer
             // Dogrusu: fy'den turetilen dikey fov.
             var intr = PassthroughCameraUtils.GetCameraIntrinsics(_camMgr.Eye);
             float fy = intr.FocalLength.y > 1f ? intr.FocalLength.y : intr.FocalLength.x;
+
             float fovVertical = 2f * Mathf.Atan(tex.height / (2f * fy));
+
+            // DIKKAT — cozunurluk dusurulecekse burasi da degismeli. fy sabit bir referans
+            // cozunurluge gore verilir; tex.height ise okudugumuz doku. Su an ikisi de
+            // maksimum oldugu icin dogru calisiyor (spike: 1 m -> 1.01, cihazda dogrulandi).
+            // RequestedResolution kucultulurse tex.height duser ama fy dusmez, fovVertical
+            // yanlis cikar ve TUM mesafeler kayar — tag 1 m'de "2 m'den uzak" gorunup
+            // calibrateMaxDistance esigine takilir, hic kalibre etmez.
+            // Denendi: refHeight'i intr.Resolution.y yapmak — cihazda mesafeyi bozdu, geri alindi.
+            // Dogrusu once GetOutputSizes'tan gercek referansi OLCUP dogrulamak.
 
             _detector.ProcessImage(_pixels, fovVertical, tagSizeMeters);
 
@@ -204,6 +227,7 @@ namespace VRMultiplayer
             {
                 _calibNote = $"yaklas ({distance:0.00} > {calibrateMaxDistance:0.00} m)";
                 _calibPos.Clear(); _calibYaw.Clear();
+                _alignedNow = true;   // bu mesafede yapilacak is yok -> tespit hizlanmasin
                 return;
             }
             if (_calibId >= 0 && entry.id != _calibId) { _calibPos.Clear(); _calibYaw.Clear(); }
@@ -237,9 +261,11 @@ namespace VRMultiplayer
             if (dev <= correctionDeadzoneMeters && yawDev <= correctionYawDeadzoneDegrees)
             {
                 _calibNote = $"HIZALI ({dev * 100f:0.0} cm)";
+                _alignedNow = true;    // is yok -> tespit yavaslasin
                 return;   // tolerans icinde — dokunma, jitter'dan snap olmasin
             }
 
+            _alignedNow = false;       // duzeltme gerekiyor -> tespit hizlansin
             ApplyCorrection(entry, avgPos, avgYaw, dev);
 
             // Rig oynadi: pencere artik eski cerceveye ait, temizle — yeni cercevede dolsun.
@@ -403,13 +429,19 @@ namespace VRMultiplayer
             }
             _panel.gameObject.SetActive(true);
 
-            // Tag SU AN goruluyor mu — tespit turunun calismasi degil, tag'in BULUNMASI olcut.
-            bool seen = _lastTagTime > 0f && Time.time - _lastTagTime < 0.4f;
+            // Tag SU AN goruluyor mu — olcut: SON TESPIT TURU onu buldu mu. Sabit zaman
+            // penceresi KULLANILMAZ: uyarlanir hizda (hizaliyken 1 Hz) 0.4 sn'lik pencere
+            // tespitler ARASINDA doluyordu, tag gozunuzun onunde dururken panel saniyede bir
+            // "GORUNMUYOR" diye yanip soner ve olmayan bir sorun varmis gibi gorunurdu.
+            bool seen = _lastTagTime > 0f && _lastTagTime >= _lastPassTime;
             bool cameraRunning = _lastPassTime > 0f && Time.time - _lastPassTime < 2f;
 
             // Tag kaybolduysa jitter kuyrugunu bosalt: eski konumlar, tag geri gelince
             // olcumu kirletir ve olmayan bir titreme gosterir.
-            if (!seen && _recent.Count > 0 && Time.time - _lastTagTime > 1f)
+            // 2 sn: bos gezerken tespit araligi 1 sn oldugu icin 1 sn'lik esik her turda
+            // tetikleniyordu — kuyruk surekli bosalip birkac ornekle dolunca panel gercekte
+            // olandan daha kotu bir jitter gosteriyordu.
+            if (!seen && _recent.Count > 0 && Time.time - _lastTagTime > 2f)
             {
                 _recent.Clear();
                 _jitterMm = 0f;
