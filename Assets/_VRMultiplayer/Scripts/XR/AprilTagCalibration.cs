@@ -212,6 +212,7 @@ namespace VRMultiplayer
         int _calibId = -1;
         string _calibNote = "";
         Transform _rig;
+        CalibrationManager _cm;   // rig + CompleteFromTag icin; ilk duzeltmede bir kez bulunur
 
         /// <summary>
         /// SUREKLI, kendini onaran hizalama. Tag her gorulduginde:
@@ -281,10 +282,10 @@ namespace VRMultiplayer
         /// </summary>
         void ApplyCorrection(TagEntry entry, Vector3 measuredPos, float measuredYaw, float dev)
         {
+            if (_cm == null) _cm = FindFirstObjectByType<CalibrationManager>();
             if (_rig == null)
             {
-                var cm = FindFirstObjectByType<CalibrationManager>();
-                _rig = cm != null ? cm.rig : null;
+                _rig = _cm != null ? _cm.rig : null;
                 if (_rig == null) return;
             }
 
@@ -294,6 +295,13 @@ namespace VRMultiplayer
             Vector3 delta = entry.position - measuredPos;
             if (!correctVertical) delta.y = 0f;
             _rig.position += delta;
+
+            // Rig hizalandi -> kalibrasyon DURUMUNU da tamamla. Bu satir olmadan tag dogru
+            // hizalasa bile oyun "kalibre degil" sanip A/B ekraninda bekletiyordu: bayragi
+            // kaldiran tek yol Bind zinciriydi ve o zincir d1176d6'da (hakli olarak) koparildi.
+            // CompleteFromTag rig'e DOKUNMAZ ve anchor'i uyandirmaz — yalnizca durumu isaretler,
+            // zaten kalibreyse hicbir sey yapmaz. Boylece tag tek referans olmaya devam eder.
+            if (_cm != null) _cm.CompleteFromTag();
 
             _calibNote = $"duzeltildi ({dev * 100f:0.0} cm)";
             Debug.Log($"[AprilTagCalib] Tag {entry.id} duzeltme: sapma {dev * 100f:0.0} cm, " +

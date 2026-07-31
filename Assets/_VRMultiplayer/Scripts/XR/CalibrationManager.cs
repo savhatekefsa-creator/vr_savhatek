@@ -241,6 +241,39 @@ namespace VRMultiplayer
             Debug.Log("[Calibration] Ortak cerceve agdan alindi — A/B atlandi.");
         }
 
+        /// <summary>
+        /// FAZ 3 — cerceve TAG'den kuruldu. <see cref="AprilTagCalibration"/> rig'i ZATEN
+        /// hizaladi; burada yalnizca kalibrasyon DURUMU tamamlanir, rig'e dokunulmaz.
+        ///
+        /// Neden gerekli: d1176d6 <c>CalibrationAnchor.Bind</c> cagrisini cihazda dogrulayarak
+        /// KALDIRDI (anchor tracking 'None' iken ise yaramiyor, ustelik LateUpdate'te tag'in
+        /// duzeltmesini eziyordu). Ama <see cref="Calibrated"/> bayragini kaldiran tek yol o
+        /// zincirdi (Bind -> paylas -> sunucu -> geri push -> AdoptShared). Zincir kopunca tag
+        /// dogru hizalasa bile oyun "kalibre degil" sanip A/B ekraninda bekletiyordu.
+        ///
+        /// <see cref="CalibrationAnchor.Bind"/> BILEREK cagrilmaz — kaldirilma gerekcesi hala
+        /// gecerli. Tag'in KENDISI surekli referans; anchor omurgasi uyandirilmaz.
+        ///
+        /// <c>AvatarIKController.RecalibrateAll()</c> de cagrilmaz, <see cref="AdoptShared"/>
+        /// ile ayni gerekce: A/B'de oyuncunun B noktasini alirken dik durdugu BILINIR, tag'e
+        /// bakarken ne yaptigi (egilmis, uzanmis) bilinmez. Rastgele pozdan boy olcmek yanlis
+        /// avatar yuksekligi uretirdi.
+        /// </summary>
+        public void CompleteFromTag()
+        {
+            if (Calibrated) return;   // zaten kalibre (A/B ya da agdan) — tag duzeltmeye devam eder
+            _step = 2;
+            Calibrated = true;
+            _waitingShared = false;
+            if (_started)
+            {
+                StopAllCoroutines();
+                SetStatus("TAG ILE KALIBRE EDILDI!\nIyi oyunlar.\n(Yeniden kalibre: SOL kumanda Y tusu)");
+                StartCoroutine(HideAfter(6f));
+            }
+            Debug.Log("[Calibration] Cerceve TAG'den kuruldu — A/B atlandi.");
+        }
+
         IEnumerator HideAfter(float seconds)
         {
             yield return new WaitForSeconds(seconds);
