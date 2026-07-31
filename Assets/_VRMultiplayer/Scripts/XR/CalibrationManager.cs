@@ -85,6 +85,21 @@ namespace VRMultiplayer
         {
             if (_started) return;
             _started = true;
+
+            // FAZ 3: TAG oyuncu katilmadan ONCE kalibre etmis olabilir — AprilTagCalibration
+            // sahne basindan beri calisir, takim secimini beklemez. Asagidaki sifirlama o
+            // durumda oyuncuyu bekleme ekranina ve A/B'ye GERI DONDURUYORDU (Calibrated true
+            // kalsa bile _step 0'a dusunce tetik yeniden A/B noktasi yakalamaya baslardi).
+            if (Calibrated)
+            {
+                _step = 2;
+                _waitingShared = false;
+                SetStatus("TAG ILE KALIBRE EDILDI!\nIyi oyunlar.\n(Yeniden kalibre: SOL kumanda Y tusu)");
+                StartCoroutine(HideAfter(6f));
+                Debug.Log("[Calibration] Katilimda zaten kalibreydi (tag) — A/B istenmedi.");
+                return;
+            }
+
             _step = 0;
 
             // FAZ 2: once ORTAK cerceveyi bekle. Sunucuda hazir bir kalibrasyon varken oyuncuyu
