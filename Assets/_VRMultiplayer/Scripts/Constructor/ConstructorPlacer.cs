@@ -19,9 +19,12 @@ namespace VRMultiplayer.Constructor
     /// happen to be standing, which is why this is the primary interaction and the dollhouse
     /// view (step 10) is only a convenience on top.
     ///
-    /// GECICI TUS DUZENI: insa modu SOL thumbstick TIKI ile aciliyor — projedeki tek bos
-    /// baglanti o. Adim 9'da kol saati menusune tasinacak; o zamana kadar kazara basilabilir,
-    /// bu yuzden silah girisleri insa modunda sessize alinmiyor (henuz mod sistemi yok).
+    /// KAPI: insa modu YALNIZCA yaratici modda acilir (bkz. <see cref="OnModeChosen"/>). Modu
+    /// secmek editoru kendiliginden acar; ayrica SOL thumbstick TIKI ile kapatilip acilabilir —
+    /// projedeki tek bos baglanti o. Adim 9'da kol saati menusune tasinacak.
+    ///
+    /// OYUNCU modunda o tus OLUDUR: mac ortasinda kazara basilip duvar orulmesin diye. (Bu not
+    /// once "henuz mod sistemi yok" diyordu; mod sistemi geldi, kapi da takildi.)
     /// </summary>
     public class ConstructorPlacer : MonoBehaviour
     {
@@ -1062,13 +1065,42 @@ namespace VRMultiplayer.Constructor
             _beamDot = null;
         }
 
+        void OnEnable()
+        {
+            AppMode.Chosen += OnModeChosen;
+            // Bootstrap sahne yuklenirken dogar, mod ise SONRA secilir — normalde olayi
+            // yakalariz. Yine de zaten secilmis olma ihtimaline karsi (bilesen sonradan
+            // eklenirse) durumu bir kez okuyoruz.
+            OnModeChosen(AppMode.Current);
+        }
+
         void OnDisable()
         {
+            AppMode.Chosen -= OnModeChosen;
             DestroyGhost();
             DestroyStatusPanel();
             DestroyPointerVisual();
             // Kapiyi MUTLAKA birak: burada kalirsa oyuncu silahsiz ve elleri tutmaz halde kalir.
             XRButtons.GameplayInputSuppressed = false;
+        }
+
+        /// <summary>
+        /// Yaratici mod editörun kapisi (bkz. <see cref="AppMode"/> — o dosyanin tarif ettigi
+        /// TEK baglanti noktasi burasi).
+        ///
+        /// YARATICI: insa modu KENDILIGINDEN acilir; kullanici hangi tusun editoru actigini
+        /// bilmek zorunda kalmasin — modu secmek zaten "harita tasarlayacagim" demek.
+        /// Oda taramasi yoksa <see cref="SetBuildMode"/> sebebi gosterip istegi acik tutar,
+        /// tarama gelince <see cref="Update"/> modu kendi acar.
+        ///
+        /// OYUNCU / ANA MENU: acik kalmis insa modu kapatilir (kaydederek). Girisin kendisi
+        /// <see cref="TogglePressed"/> icinde ayrica kilitli — yani maci yarida birakip
+        /// yanlislikla duvar oren kimse olmaz.
+        /// </summary>
+        void OnModeChosen(AppMode.Mode m)
+        {
+            if (m == AppMode.Mode.Creative) SetBuildMode(true);
+            else if (BuildMode || _wantBuildMode) SetBuildMode(false);
         }
 
         // ------------------------------------------------------------- input
@@ -1292,7 +1324,18 @@ namespace VRMultiplayer.Constructor
 #endif
         }
 
-        bool TogglePressed() => Edge(ToggleHeld(), ref _prevToggle);
+        bool TogglePressed()
+        {
+            // Kenari HER KARE oku, mod ne olursa olsun: yalnizca yaratici modda okusaydik,
+            // OYUNCU modunda basili tutulan stick "_prevToggle = false" olarak donar ve moda
+            // gecer gecmez HAYALET bir basis uretirdi.
+            bool edge = Edge(ToggleHeld(), ref _prevToggle);
+
+            // OYUNCU modunda insa moduna giris YOK. Sinif basindaki "gecici tus duzeni" notu
+            // tam bunu bekliyordu: sol stick tiki mac ortasinda kazara basilabilecek bir tustu
+            // ve mod sistemi henuz yoktu. Artik var — kapi yalnizca YARATICI modda aciliyor.
+            return edge && AppMode.IsCreative;
+        }
 
         /// <summary>
         /// Right thumbstick click. The LEFT one already toggles build mode, so this was the only
