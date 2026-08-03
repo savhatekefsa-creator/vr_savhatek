@@ -3,9 +3,12 @@ using UnityEngine;
 namespace VRMultiplayer.UI
 {
     /// <summary>
-    /// Oyuncunun ilk gordugu ekran: ADINI SEC. Klavyeden kendi ismini yazar ya da RASTGELE
-    /// ISIM tusuyla hazir cagri adlarindan birini alir. Onaylayana kadar oyuna katilamaz
-    /// (<see cref="LanBootstrap"/> B tusunu bekletir).
+    /// Oyuncunun ilk gordugu ekranin AKISI: <see cref="PlayerEntryPanel"/>'i kurar, lazer
+    /// imleci besler, isim/takim secimini <see cref="PlayerProfile"/>'a yazar ve OYUNA BASLA
+    /// ile baglantiyi baslatir.
+    ///
+    /// ISIM VE TAKIM ZORUNLU: ikisi tamamlanmadan OYUNA BASLA pasif; yani oyuna isimsiz ya da
+    /// takimsiz girilemez.
     ///
     /// BAGLANTIDAN ONCE, tamamen YEREL calisir. Uc sebep:
     ///  - Netcode'a hic dokunmaz; panel acikken spawn/RPC/trafik yok.
@@ -21,24 +24,23 @@ namespace VRMultiplayer.UI
     /// gorus alanindan cikacak kadar (bkz. <see cref="RecenterAngle"/>) donunce yumusakca
     /// onune geri gelir.
     /// </summary>
-    public class NameEntryUI : MonoBehaviour
+    public class PlayerEntryUI : MonoBehaviour
     {
         [Tooltip("Panelin kafadan uzakligi (metre).")]
         public float distance = 1.4f;
         [Tooltip("Panel merkezinin goz hizasina gore dusuklugu (metre) — masaya bakar gibi.")]
-        public float heightDrop = 0.12f;
+        public float heightDrop = 0.10f;
         [Tooltip("Panelin one dogru yatma acisi (derece).")]
-        public float tiltDegrees = 12f;
+        public float tiltDegrees = 10f;
 
         /// <summary>Panel bu acidan fazla yana kalirsa onune geri getirilir.</summary>
         const float RecenterAngle = 38f;
         const float RecenterSpeed = 3.5f;
 
-        VRKeyboardPanel _panel;
+        PlayerEntryPanel _panel;
         VRPointer _pointer;
         bool _recentering;
         bool _placed;      // kafa transformu hazir olana kadar yerlestirme ANLIK kalir
-        string _message;
         float _messageUntil;
 
         // Masaustu yedegi icin (gozluksuz iterasyon).
@@ -47,19 +49,18 @@ namespace VRMultiplayer.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
         {
-            var go = new GameObject("~NameEntryUI");
+            var go = new GameObject("~PlayerEntryUI");
             DontDestroyOnLoad(go);
-            go.AddComponent<NameEntryUI>();
+            go.AddComponent<PlayerEntryUI>();
         }
 
         void Start()
         {
-            if (PlayerName.Confirmed) { Destroy(gameObject); return; }
+            if (PlayerProfile.Confirmed) { Destroy(gameObject); return; }
 
-            var panelGo = new GameObject("Name Entry Panel");
+            var panelGo = new GameObject("Player Entry Panel");
             panelGo.transform.SetParent(transform, false);
-            _panel = panelGo.AddComponent<VRKeyboardPanel>();
-            _panel.maxLength = PlayerName.MaxLength;
+            _panel = panelGo.AddComponent<PlayerEntryPanel>();
 
             var pointerGo = new GameObject("UI Pointer");
             pointerGo.transform.SetParent(transform, false);
@@ -67,90 +68,106 @@ namespace VRMultiplayer.UI
 
             // Kayitli isim varsa dolu gelir (ikinci acilista tek tusla gecilir); yoksa hazir
             // bir cagri adi onerilir — oyuncu bos ekranla karsilasmaz.
-            string start = PlayerName.Current;
-            if (string.IsNullOrEmpty(start)) start = PlayerName.NextGenerated();
+            string start = PlayerProfile.Name;
+            if (string.IsNullOrEmpty(start)) start = PlayerProfile.NextGeneratedName();
             _guiName = start;
             _panel.SetText(start);
+            _panel.SetTeam(PlayerProfile.Team);   // takim da hatirlanir
 
             _panel.ActionPressed += OnAction;
-            _panel.TextChanged += _ => { _guiName = _panel.Text; ShowHint(); };
+            _panel.Changed += OnChanged;
 
-            _panel.SetSubtitle("Kendi adini yaz ya da RASTGELE ISIM'e bas");
             PlacePanel(instant: true);
-            ShowHint();
+            RefreshHint();
         }
 
         void OnDestroy()
         {
-            if (_panel != null) _panel.ActionPressed -= OnAction;
+            if (_panel == null) return;
+            _panel.ActionPressed -= OnAction;
+            _panel.Changed -= OnChanged;
+        }
+
+        void OnChanged()
+        {
+            _guiName = _panel.Text;
+            RefreshHint();
         }
 
         void OnAction(string action)
         {
             switch (action)
             {
-                case VRKeyboardPanel.ActionRandom:
-                    _panel.SetText(PlayerName.NextGenerated());
+                case PlayerEntryPanel.ActionRandom:
+                    _panel.SetText(PlayerProfile.NextGeneratedName());
                     break;
 
-                case VRKeyboardPanel.ActionClear:
+                case PlayerEntryPanel.ActionClear:
                     _panel.SetText(string.Empty);
                     break;
 
-                case VRKeyboardPanel.ActionConfirm:
-                    Confirm(_panel.Text);
+                case PlayerEntryPanel.ActionStart:
+                    StartGame(_panel.Text, _panel.SelectedTeam);
                     break;
             }
         }
 
-        void Confirm(string raw)
+        void StartGame(string rawName, byte team)
         {
-            string clean = PlayerName.Sanitize(raw);
+            string clean = PlayerProfile.Sanitize(rawName);
 
-            if (!PlayerName.IsValid(clean))
+            if (!PlayerProfile.Confirm(clean, team))
             {
-                // Reddi SEBEBIYLE birlikte soyle; sessiz reddedilen tus bozuk sanilir.
-                Message(clean.Length < PlayerName.MinLength
-                    ? "EN AZ " + PlayerName.MinLength + " KARAKTER GEREKLI"
-                    : "GECERSIZ ISIM");
+                // Reddi SEBEBIYLE birlikte soyle; sessiz reddedilen buton bozuk sanilir.
+                Message(!PlayerProfile.IsValidName(clean)
+                    ? "En az " + PlayerProfile.MinLength + " harf gir."
+                    : "Bir takim sec.");
                 return;
             }
 
-            if (!PlayerName.Confirm(clean))
-            {
-                Message("ISIM KAYDEDILEMEDI");
-                return;
-            }
+            Debug.Log($"[PlayerEntryUI] Giris tamam: '{clean}', takim {team}. Baglanti baslatiliyor.");
 
-            Debug.Log("[NameEntryUI] Isim onaylandi: " + clean);
+            // OYUNA BASLA gercekten OYUNA BASLATIR: ayrica B'ye basmak gerekmez. B tusu
+            // LanBootstrap'te yeniden deneme olarak duruyor (baglanti koparsa ise yarar).
+            var boot = FindFirstObjectByType<LanBootstrap>();
+            if (boot != null) boot.StartCoroutine(boot.JoinAsClient());
+            else Debug.LogWarning("[PlayerEntryUI] LanBootstrap yok — baglanti baslatilamadi.");
+
             Destroy(gameObject);   // panel + imlec cocuk oldugu icin birlikte gider
         }
 
         void Message(string s)
         {
-            _message = s;
             _messageUntil = Time.unscaledTime + 2.5f;
-            if (_panel != null) _panel.SetTitle(s, warning: true);
+            _panel.SetHint(s, warning: true);
         }
 
-        void ShowHint()
+        // Alt ipucu her zaman SIRADAKI eksigi soyler; hepsi tamamsa oyuna davet eder.
+        void RefreshHint()
         {
-            if (Time.unscaledTime < _messageUntil) return;
-            _message = null;
-            if (_panel == null) return;
-            _panel.SetTitle("ADINI SEC");
-            _panel.SetSubtitle("Kendi adini yaz ya da RASTGELE ISIM'e bas");
+            if (_panel == null || Time.unscaledTime < _messageUntil) return;
+
+            if (!PlayerProfile.IsValidName(PlayerProfile.Sanitize(_panel.Text)))
+                _panel.SetHint("En az " + PlayerProfile.MinLength + " harf gir.");
+            else if (_panel.SelectedTeam == PlayerProfile.TeamNone)
+                _panel.SetHint("Bir takim sec.");
+            else
+                _panel.SetHint("Hazirsin — OYUNA BAŞLA'ya bas.");
         }
 
         void Update()
         {
             if (_panel == null) return;
 
-            // Isim baska bir yoldan onaylandiysa (kayitli isimle acilis, test/konsol) panel
-            // ortada kalmasin — bileşenin degismez kurali "onaylandiysa ben yokum".
-            if (PlayerName.Confirmed) { Destroy(gameObject); return; }
+            // Giris baska bir yoldan tamamlandiysa (kayitli profille acilis, test/konsol) panel
+            // ortada kalmasin — bilesenin degismez kurali "onaylandiysa ben yokum".
+            if (PlayerProfile.Confirmed) { Destroy(gameObject); return; }
 
-            if (_message != null && Time.unscaledTime >= _messageUntil) ShowHint();
+            if (_messageUntil > 0f && Time.unscaledTime >= _messageUntil)
+            {
+                _messageUntil = 0f;
+                RefreshHint();
+            }
 
             PlacePanel(instant: false);
             _panel.Tick(_pointer);
@@ -195,7 +212,6 @@ namespace VRMultiplayer.UI
                 Vector3.Lerp(t.position, targetPos, k),
                 Quaternion.Slerp(t.rotation, targetRot, k));
 
-            // Hedefe yeterince yaklastiysa sabitlemeye geri don.
             if ((t.position - targetPos).sqrMagnitude < 0.0004f) _recentering = false;
         }
 
@@ -205,21 +221,24 @@ namespace VRMultiplayer.UI
             // IMGUI kulaklikta hicbir sey cizmez ama layout maliyeti odenirdi (bkz. TeamSelector).
             if (Application.isMobilePlatform || _panel == null) return;
 
-            GUILayout.BeginArea(new Rect(20, 120, 300, 150), GUI.skin.box);
-            GUILayout.Label("Adini sec (3-" + PlayerName.MaxLength + " karakter)");
+            GUILayout.BeginArea(new Rect(20, 120, 320, 190), GUI.skin.box);
+            GUILayout.Label("Oyuncu girisi (isim + takim zorunlu)");
 
-            GUI.SetNextControlName("nameField");
-            _guiName = GUILayout.TextField(_guiName ?? "", PlayerName.MaxLength);
-
-            if (!string.IsNullOrEmpty(_message)) GUILayout.Label(_message);
+            string typed = GUILayout.TextField(_guiName ?? "", PlayerProfile.MaxLength);
+            if (typed != _guiName) { _guiName = typed; _panel.SetText(typed); }
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Rastgele"))
-            {
-                _guiName = PlayerName.NextGenerated();
-                _panel.SetText(_guiName);
-            }
-            if (GUILayout.Button("ONAYLA")) Confirm(_guiName);
+            if (GUILayout.Button(_panel.SelectedTeam == PlayerProfile.TeamBlue ? "[MAVI]" : "MAVI"))
+                _panel.SetTeam(PlayerProfile.TeamBlue);
+            if (GUILayout.Button(_panel.SelectedTeam == PlayerProfile.TeamRed ? "[KIZIL]" : "KIZIL"))
+                _panel.SetTeam(PlayerProfile.TeamRed);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Rastgele")) _panel.SetText(PlayerProfile.NextGeneratedName());
+            GUI.enabled = _panel.Ready;
+            if (GUILayout.Button("OYUNA BASLA")) StartGame(_panel.Text, _panel.SelectedTeam);
+            GUI.enabled = true;
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }

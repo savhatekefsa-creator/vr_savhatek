@@ -87,9 +87,11 @@ namespace VRMultiplayer
 
             if (_busy || !right.isValid) return;
 
-            // Isim onaylanmadan katilim yok (bkz. NameEntryUI). PC'nin SUNUCU butonu bu kapiya
-            // TAKILMAZ: sunucu avatar spawn etmiyor, isme ihtiyaci yok.
-            if (!PlayerName.Confirmed) return;
+            // Isim + takim onaylanmadan katilim yok (bkz. UI.PlayerEntryUI). Normal akista
+            // katilimi zaten OYUNA BASLA butonu baslatir; B burada YENIDEN DENEME olarak kalir
+            // (baglanti koparsa ya da sunucu bulunamazsa). PC'nin SUNUCU butonu bu kapiya
+            // TAKILMAZ: sunucu avatar spawn etmiyor, profile ihtiyaci yok.
+            if (!PlayerProfile.Confirmed) return;
 
             if (XRButtons.Button(XRNode.RightHand, CommonUsages.secondaryButton))  // B
                 StartCoroutine(JoinAsClient());
@@ -97,9 +99,10 @@ namespace VRMultiplayer
 
         void EnsureJoinPanel()
         {
-            // Once ISIM. Isim paneli aciktayken katilim panelini kurmayiz: iki panel ust uste
-            // biner ve oyuncu daha adini secmeden B'ye basip isimsiz spawn olurdu.
-            if (!PlayerName.Confirmed) return;
+            // Once GIRIS EKRANI (isim + takim). O ekran aciktayken katilim panelini kurmayiz:
+            // iki panel ust uste biner ve oyuncu daha secimini yapmadan B'ye basip isimsiz/
+            // takimsiz spawn olurdu.
+            if (!PlayerProfile.Confirmed) return;
             if (statusLabel != null) return;
             statusLabel = UI.HeadFollowPanel.Create("Join Panel",
                 "OYUNA KATILMAK ICIN\nB TUSUNA BAS", Color.white);
@@ -181,6 +184,9 @@ namespace VRMultiplayer
         {
             if (_busy) yield break;
             _busy = true;
+            // Paneli BURADA kur: cagri OYUNA BASLA'dan gelmis olabilir, o durumda Update
+            // henuz panelini kurmamis olur ve durum yazisi hicbir yere yazilamazdi.
+            EnsureJoinPanel();
             SetStatus("Sunucu araniyor...");
 
             string ip = null;

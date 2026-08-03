@@ -5,27 +5,36 @@ using UnityEngine;
 namespace VRMultiplayer
 {
     /// <summary>
-    /// Oyuncunun KENDI ismi: yerel depo (<see cref="PlayerPrefs"/>), otomatik isim uretici ve
-    /// hem istemcinin hem SUNUCUNUN kullandigi temizleme kurallari.
+    /// Oyuncunun BAGLANTIDAN ONCE sectigi kimlik: isim ve takim. Yerel depo
+    /// (<see cref="PlayerPrefs"/>), otomatik isim uretici ve hem istemcinin hem SUNUCUNUN
+    /// kullandigi temizleme kurallari burada.
     ///
     /// Neden tek dosya: temizleme kuralinin iki tarafta AYNI olmasi sart. Istemci "MetaShadow"
     /// gosterip sunucu baska bir seye kirparsa oyuncu adini panelde farkli gorur. Kural burada
-    /// bir kez yazilir, <see cref="NameEntryUI"/> ve <see cref="PlayerIdentity"/> ayni metodu
-    /// cagirir. Sunucu yine de kendi tarafinda TEKRAR temizler — istemciye guvenilmez.
+    /// bir kez yazilir, <see cref="UI.PlayerEntryPanel"/> ve <see cref="PlayerIdentity"/> ayni
+    /// metodu cagirir. Sunucu yine de kendi tarafinda TEKRAR temizler — istemciye guvenilmez.
     ///
     /// Ag alani <c>FixedString32Bytes</c>, yani UTF-8 yuku 29 BAYT. Karakter sayisi degil bayt
     /// sayisi sinirliyor: ASCII disi bir harf 2 bayt yer kaplar. <see cref="Sanitize"/> ikisini
     /// de uygular.
+    ///
+    /// ISIM DE TAKIM DA ZORUNLU: ikisi secilmeden <see cref="IsReady"/> false kalir,
+    /// "OYUNA BASLA" pasif durur ve oyuna giris baslamaz.
     /// </summary>
-    public static class PlayerName
+    public static class PlayerProfile
     {
-        public const int MinLength = 3;
+        /// <summary>Tasarimdaki "En az 2 harf gir." ile ayni.</summary>
+        public const int MinLength = 2;
         public const int MaxLength = 16;
 
         /// <summary>FixedString32Bytes'in tasiyabildigi UTF-8 yuku.</summary>
         public const int MaxUtf8Bytes = 29;
 
-        const string PrefKey = "vrmp_player_name";
+        // Takim numaralari PlayerIdentity ile AYNI olmali: 1 = A (mavi), 2 = B (kirmizi).
+        public const byte TeamNone = 0, TeamBlue = 1, TeamRed = 2;
+
+        const string NameKey = "vrmp_player_name";
+        const string TeamKey = "vrmp_player_team";
 
         /// <summary>Otomatik isim havuzu. Bilerek ASCII: klavyede Turkce tus yok, ag alani
         /// bayt bazli ve kirik glif riski sifir kalsin. Begenmedigin ismi bu satirlarda
@@ -45,43 +54,50 @@ namespace VRMultiplayer
         static int _cycle;          // kacinci deste: 1 = duz isimler, 2+ = 2 haneli sonekli tur
         static string _lastGiven;
 
-        static string _current;
+        static string _name;
+        static byte _team;
         static bool _loaded;
 
-        /// <summary>Oyuncunun secili ismi. Ilk eriste PlayerPrefs'ten yuklenir; hic kayit
-        /// yoksa bos doner (panel o zaman otomatik bir isim onerir).</summary>
-        public static string Current
+        static void Load()
         {
-            get
-            {
-                if (!_loaded)
-                {
-                    _current = Sanitize(PlayerPrefs.GetString(PrefKey, string.Empty));
-                    _loaded = true;
-                }
-                return _current;
-            }
+            if (_loaded) return;
+            _name = Sanitize(PlayerPrefs.GetString(NameKey, string.Empty));
+            byte t = (byte)PlayerPrefs.GetInt(TeamKey, TeamNone);
+            _team = t <= TeamRed ? t : TeamNone;
+            _loaded = true;
         }
 
-        /// <summary>Oyuncu ismi ONAYLADI mi? <see cref="LanBootstrap"/> bunu bekler: isim
-        /// secilmeden oyuna katilim baslamaz.</summary>
+        /// <summary>Secili isim. Hic kayit yoksa bos doner (panel o zaman otomatik bir isim
+        /// onerir).</summary>
+        public static string Name { get { Load(); return _name; } }
+
+        /// <summary>Secili takim: 0 = yok, 1 = MAVI, 2 = KIZIL.</summary>
+        public static byte Team { get { Load(); return _team; } }
+
+        /// <summary>Oyuncu girisi TAMAMLANDI mi? <see cref="LanBootstrap"/> bunu bekler.</summary>
         public static bool Confirmed { get; private set; }
 
-        /// <summary>Ismi kalicilastirir ve onayli isaretler. Gecersiz isim kabul edilmez.</summary>
-        public static bool Confirm(string name)
+        /// <summary>Isim ve takim birlikte gecerli mi — "OYUNA BASLA" bununla aktiflesir.</summary>
+        public static bool IsReady(string name, byte team) => IsValidName(name) && team != TeamNone;
+
+        /// <summary>Girisi kalicilastirir ve onayli isaretler. Eksik/gecersizse kabul edilmez.</summary>
+        public static bool Confirm(string name, byte team)
         {
             string clean = Sanitize(name);
-            if (!IsValid(clean)) return false;
+            if (!IsReady(clean, team)) return false;
 
-            _current = clean;
-            _loaded = true;
+            Load();
+            _name = clean;
+            _team = team;
             Confirmed = true;
-            PlayerPrefs.SetString(PrefKey, clean);
+
+            PlayerPrefs.SetString(NameKey, clean);
+            PlayerPrefs.SetInt(TeamKey, team);
             PlayerPrefs.Save();
             return true;
         }
 
-        public static bool IsValid(string s) =>
+        public static bool IsValidName(string s) =>
             !string.IsNullOrEmpty(s) && s.Length >= MinLength && s.Length <= MaxLength;
 
         /// <summary>
@@ -129,7 +145,7 @@ namespace VRMultiplayer
 
         /// <summary>Siradaki otomatik isim. Deste bitince yeniden karistirilir ve isimler
         /// 2 haneli sonekle doner (IronWolf47) — sonsuza kadar taze his verir.</summary>
-        public static string NextGenerated()
+        public static string NextGeneratedName()
         {
             if (_deck.Count == 0 || _deckPos >= _deck.Count) Reshuffle();
 
@@ -166,13 +182,14 @@ namespace VRMultiplayer
         }
 
         // Domain reload kapaliyken statikler oyunlar arasi tasinir: onceki oturumun "onaylandi"
-        // bayragi kalirsa isim paneli hic acilmaz.
+        // bayragi kalirsa giris paneli hic acilmaz.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
         {
             Confirmed = false;
             _loaded = false;
-            _current = null;
+            _name = null;
+            _team = TeamNone;
             _deck.Clear();
             _deckPos = 0;
             _cycle = 0;

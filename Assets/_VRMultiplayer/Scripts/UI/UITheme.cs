@@ -174,6 +174,44 @@ namespace VRMultiplayer.UI
             return q.transform;
         }
 
+        /// <summary>Hazir bir mesh'i (yuvarlatilmis dikdortgen, ikon — bkz. <see cref="UIMesh"/>)
+        /// arayuz yuzeyi olarak sahneye koyar. Collider yok, golge yok, sahnenin ustune cizer.</summary>
+        public static Transform MakeShape(Transform parent, string name, Mesh mesh, Color color, int renderQueue = 0)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+
+            var m = CreateOverlayMaterial(color);
+            if (renderQueue > 0) m.renderQueue = renderQueue;
+
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = m;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            return go.transform;
+        }
+
+        /// <summary>Yuvarlatilmis dikdortgen yuzey — panel zemini, tus, kart, buton.
+        /// Boyut MESH'e islenir (olcek 1 kalir) ki kose yaricapi her boyutta ayni gorunsun.</summary>
+        public static Transform MakeRounded(Transform parent, string name, Vector2 center, Vector2 size,
+            float radius, Color color, float z, int renderQueue = 0)
+        {
+            var t = MakeShape(parent, name, UIMesh.RoundedRect(size.x, size.y, radius), color, renderQueue);
+            t.localPosition = new Vector3(center.x, center.y, z);
+            return t;
+        }
+
+        /// <summary>Cerceveli yuzey: disarida vurgu renginde bir kart, uzerinde bir tik kucuk
+        /// dolgu. Tasarimdaki 1-2 piksellik kenarlik boyle uretilir (shader'siz).</summary>
+        public static void MakeOutlined(Transform parent, string name, Vector2 center, Vector2 size,
+            float radius, Color border, Color fill, float thickness, float z, int queueBorder, int queueFill)
+        {
+            MakeRounded(parent, name + " Border", center, size, radius, border, z, queueBorder);
+            MakeRounded(parent, name + " Fill", center, size - Vector2.one * (thickness * 2f),
+                Mathf.Max(0f, radius - thickness), fill, z - 0.0005f, queueFill);
+        }
+
         /// <summary>Dunya-uzayi yazi. Font otomatik atanir (bkz. <see cref="ApplyFont"/>);
         /// boyut <see cref="SizeText"/> ile METRE cinsinden verilir.</summary>
         public static TextMesh MakeText(Transform parent, string text, Color color,

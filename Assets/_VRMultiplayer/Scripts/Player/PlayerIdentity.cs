@@ -120,10 +120,20 @@ namespace VRMultiplayer
             // burasi olmadan o etiketler kalici gizli kalirdi.
             if (IsOwner) RefreshAll(); else Refresh();
 
-            // Oyuncunun kendi sectigi ismi sunucuya bildir (bkz. NameEntryUI). Sunucu yine de
-            // kendi tarafinda dogrular — istemciden gelen metne guvenilmez.
-            if (IsOwner && PlayerName.Confirmed && !string.IsNullOrEmpty(PlayerName.Current))
-                SetNameServerRpc(new FixedString32Bytes(PlayerName.Current));
+            // Oyuncunun giris ekraninda sectigi isim ve TAKIM sunucuya bildirilir
+            // (bkz. UI.PlayerEntryUI). Sunucu ikisini de kendi tarafinda dogrular —
+            // istemciden gelen degere guvenilmez.
+            //
+            // Takim eskiden spawn'dan SONRA TeamSelector paneliyle seciliyordu; artik giris
+            // ekraninda secildigi icin burada gonderiliyor. TeamSelector yalnizca yedek yol
+            // olarak duruyor (bkz. o dosya).
+            if (IsOwner && PlayerProfile.Confirmed)
+            {
+                if (!string.IsNullOrEmpty(PlayerProfile.Name))
+                    SetNameServerRpc(new FixedString32Bytes(PlayerProfile.Name));
+                if (PlayerProfile.Team != PlayerProfile.TeamNone)
+                    JoinTeamServerRpc(PlayerProfile.Team);
+            }
         }
 
         public override void OnNetworkDespawn()
@@ -175,7 +185,9 @@ namespace VRMultiplayer
         [ServerRpc]
         public void JoinTeamServerRpc(byte team)
         {
-            if (team <= 2)
+            // team = 0 KABUL EDILMEZ: takimsiz oyuncu dost-atesi filtresini bypass ederdi
+            // (WeaponHitscanServer yalnizca t != 0 && t == shooterTeam ise engelliyor).
+            if (team >= 1 && team <= 2)
                 Team.Value = team;
         }
 
@@ -192,8 +204,8 @@ namespace VRMultiplayer
         {
             if (_nameSet) return;
 
-            string clean = PlayerName.Sanitize(requested.ToString());
-            if (!PlayerName.IsValid(clean)) clean = "Oyuncu " + OwnerClientId;
+            string clean = PlayerProfile.Sanitize(requested.ToString());
+            if (!PlayerProfile.IsValidName(clean)) clean = "Oyuncu " + OwnerClientId;
 
             NetName.Value = new FixedString32Bytes(MakeUnique(clean));
             _nameSet = true;
@@ -211,11 +223,11 @@ namespace VRMultiplayer
                 // Sonek icin yer ac: sinir karakter DEGIL bayt bazli oldugundan kirpmayi
                 // Sanitize'a yaptiriyoruz (tek kural, tek yer).
                 string baseName = wanted;
-                string candidate = PlayerName.Sanitize(baseName + suffix);
+                string candidate = PlayerProfile.Sanitize(baseName + suffix);
                 while (!candidate.EndsWith(suffix) && baseName.Length > 1)
                 {
                     baseName = baseName.Substring(0, baseName.Length - 1);
-                    candidate = PlayerName.Sanitize(baseName + suffix);
+                    candidate = PlayerProfile.Sanitize(baseName + suffix);
                 }
 
                 if (!IsTaken(candidate)) return candidate;
