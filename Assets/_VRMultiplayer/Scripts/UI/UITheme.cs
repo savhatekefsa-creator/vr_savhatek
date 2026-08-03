@@ -15,6 +15,31 @@ namespace VRMultiplayer.UI
         public static readonly Color HealthMid = Color.yellow;
         public static readonly Color HealthLow = Color.red;
 
+        // --- Menu / HUD paneli paleti (TEK KAYNAK) ---
+        //
+        // Bu degerler oyuncu giris ekraninin (PlayerEntryPanel) paletidir; olum ekrani da
+        // buradan besleniyor. Baslangicta renkler iki dosyaya KOPYALANMISTI ve birbirinden
+        // kaydilar: olum karti kol saatinin teal'ini (0.40,0.80,0.72) ve yari saydam bir zemin
+        // kullaniyordu, giris ekrani ise camgobegi ve TAM OPAK zemin. Aydinlik odanin uzerinde
+        // yari saydam panel solup ucuz duruyordu. Yeni panel yazan herkes buradan alsin.
+        public static readonly Color PanelBg     = new Color(0.027f, 0.047f, 0.071f, 1f);
+        public static readonly Color PanelEdge   = new Color(0.090f, 0.150f, 0.210f, 0.90f);
+        /// <summary>Panel icindeki cukur yuzey (isim alani, alt seritler).</summary>
+        public static readonly Color SurfaceFill = new Color(0.047f, 0.078f, 0.114f, 1f);
+        public static readonly Color SurfaceEdge = new Color(0.106f, 0.157f, 0.212f, 1f);
+
+        public static readonly Color AccentCyan   = new Color(0.27f, 0.88f, 0.86f, 1f);
+        public static readonly Color AccentPurple = new Color(0.65f, 0.55f, 0.98f, 1f);
+
+        public static readonly Color TextPrimary = new Color(0.90f, 0.94f, 0.98f, 1f);
+        public static readonly Color TextMuted   = new Color(0.36f, 0.41f, 0.46f, 1f);
+        public static readonly Color TextDim     = new Color(0.27f, 0.33f, 0.38f, 1f);
+
+        public static readonly Color TeamRedEdge  = new Color(0.88f, 0.34f, 0.42f, 1f);
+        public static readonly Color TeamRedText  = new Color(0.94f, 0.48f, 0.53f, 1f);
+        public static readonly Color TeamBlueEdge = new Color(0.29f, 0.50f, 0.91f, 1f);
+        public static readonly Color TeamBlueText = new Color(0.50f, 0.65f, 0.94f, 1f);
+
         // --- Fonts ---
         public const float NameCharacterSize = 0.06f;
         public const int NameFontSize = 60;

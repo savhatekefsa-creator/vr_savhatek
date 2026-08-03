@@ -69,24 +69,28 @@ namespace VRMultiplayer.UI
                     ZHover = 0.002f, ZIcon = 0.001f, ZText = 0f;
 
         // ------------------------------------------------------------------ palet
-        // Tam opak: tasarimdaki panel de opak. Saydam birakmak passthrough'da odayi
-        // gostermeye devam ederdi ama arkadaki parlak yuzeyler yaziyi okunmaz yapiyordu.
-        static readonly Color Backdrop   = new Color(0.027f, 0.047f, 0.071f, 1f);
-        static readonly Color PanelEdge  = new Color(0.09f, 0.15f, 0.21f, 0.9f);
+        // Ortak renkler UITheme'de TEK KAYNAK; olum ekrani da oradan besleniyor. Buraya
+        // yeni bir ham renk yazmadan once oraya bak — iki ekranin birbirinden kaymasi
+        // tam olarak renklerin kopyalanmasindan cikmisti.
+        //
+        // Zemin TAM OPAK: saydam birakmak passthrough'da odayi gostermeye devam ederdi ama
+        // arkadaki parlak yuzeyler paneli soldurup yaziyi okunmaz yapiyordu.
+        static readonly Color Backdrop   = UITheme.PanelBg;
+        static readonly Color PanelEdge  = UITheme.PanelEdge;
 
-        static readonly Color FieldFill  = new Color(0.047f, 0.078f, 0.114f, 0.98f);
-        static readonly Color FieldEdge  = new Color(0.106f, 0.157f, 0.212f, 1f);
-        static readonly Color NameCol    = new Color(0.90f, 0.94f, 0.98f, 1f);
-        static readonly Color Placeholder= new Color(0.27f, 0.33f, 0.38f, 1f);
-        static readonly Color Counter    = new Color(0.36f, 0.41f, 0.46f, 1f);
+        static readonly Color FieldFill  = UITheme.SurfaceFill;
+        static readonly Color FieldEdge  = UITheme.SurfaceEdge;
+        static readonly Color NameCol    = UITheme.TextPrimary;
+        static readonly Color Placeholder= UITheme.TextDim;
+        static readonly Color Counter    = UITheme.TextMuted;
         static readonly Color TinyLabel  = new Color(0.24f, 0.29f, 0.34f, 1f);
 
         static readonly Color KeyFill    = new Color(0.110f, 0.137f, 0.173f, 1f);
         static readonly Color KeyEdge    = new Color(0.063f, 0.086f, 0.118f, 1f);
         static readonly Color KeyText    = new Color(0.90f, 0.93f, 0.96f, 1f);
 
-        static readonly Color TitleA     = new Color(0.27f, 0.88f, 0.86f, 1f);  // camgobegi
-        static readonly Color TitleB     = new Color(0.65f, 0.55f, 0.98f, 1f);  // mor
+        static readonly Color TitleA     = UITheme.AccentCyan;
+        static readonly Color TitleB     = UITheme.AccentPurple;
 
         static readonly Color RandomEdge = new Color(0.43f, 0.31f, 0.84f, 1f);
         static readonly Color RandomFill = new Color(0.090f, 0.071f, 0.165f, 1f);
@@ -96,21 +100,21 @@ namespace VRMultiplayer.UI
         static readonly Color DelFill    = new Color(0.110f, 0.051f, 0.067f, 1f);
         static readonly Color DelText    = new Color(0.90f, 0.50f, 0.56f, 1f);
 
-        static readonly Color RedEdge    = new Color(0.88f, 0.34f, 0.42f, 1f);
+        static readonly Color RedEdge    = UITheme.TeamRedEdge;
         static readonly Color RedFill    = new Color(0.090f, 0.035f, 0.051f, 1f);
-        static readonly Color RedText    = new Color(0.94f, 0.48f, 0.53f, 1f);
+        static readonly Color RedText    = UITheme.TeamRedText;
 
-        static readonly Color BlueEdge   = new Color(0.29f, 0.50f, 0.91f, 1f);
+        static readonly Color BlueEdge   = UITheme.TeamBlueEdge;
         static readonly Color BlueFill   = new Color(0.039f, 0.067f, 0.125f, 1f);
-        static readonly Color BlueText   = new Color(0.50f, 0.65f, 0.94f, 1f);
+        static readonly Color BlueText   = UITheme.TeamBlueText;
 
         static readonly Color StartOff   = new Color(0.078f, 0.102f, 0.133f, 1f);
         static readonly Color StartOffTx = new Color(0.31f, 0.36f, 0.42f, 1f);
-        static readonly Color StartOnEdge= new Color(0.27f, 0.88f, 0.86f, 1f);
+        static readonly Color StartOnEdge= UITheme.AccentCyan;
         static readonly Color StartOnFill= new Color(0.043f, 0.212f, 0.243f, 1f);
         static readonly Color StartOnTx  = new Color(0.62f, 0.95f, 0.93f, 1f);
 
-        static readonly Color Hint       = new Color(0.36f, 0.41f, 0.46f, 1f);
+        static readonly Color Hint       = UITheme.TextMuted;
         static readonly Color SectionLbl = new Color(0.42f, 0.48f, 0.53f, 1f);
         static readonly Color HoverCol   = new Color(0.35f, 0.62f, 0.75f, 0.30f);
 

@@ -39,15 +39,19 @@ namespace VRMultiplayer.UI
         // oldugunu ayirt eder.
         static readonly Color DeathTint = new Color(0.55f, 0.05f, 0.04f);
 
-        // Giris ekraniyla (PlayerEntryPanel) ayni palet.
-        static readonly Color CardFill  = new Color(0.027f, 0.047f, 0.071f, 0.93f);
-        static readonly Color CardEdge  = new Color(0.40f, 0.80f, 0.72f, 0.55f);
-        static readonly Color TitleDead = new Color(0.95f, 0.42f, 0.40f);
-        static readonly Color TitleWait = new Color(0.45f, 0.88f, 0.84f);
-        static readonly Color BodyCol   = new Color(0.80f, 0.86f, 0.90f);
-        static readonly Color MutedCol  = new Color(0.48f, 0.56f, 0.62f);
-        static readonly Color DistCol   = new Color(0.92f, 0.96f, 0.98f);
-        static readonly Color RingDim   = new Color(0.20f, 0.28f, 0.33f);
+        // Giris ekraniyla AYNI palet — degerler UITheme'de tek kaynak. Buraya ham renk
+        // yazmak, iki ekranin birbirinden kaymasi demektir; bir kez oldu (kart kol saatinin
+        // teal'ini ve yari saydam bir zemin kullaniyordu, giris ekrani camgobegi ve opak).
+        static readonly Color CardFill  = UITheme.PanelBg;      // TAM OPAK
+        static readonly Color CardEdge  = UITheme.PanelEdge;
+        static readonly Color InsetFill = UITheme.SurfaceFill;  // alt seridin cukur yuzeyi
+        static readonly Color InsetEdge = UITheme.SurfaceEdge;
+        static readonly Color TitleDead = UITheme.TeamRedText;
+        static readonly Color TitleWait = UITheme.AccentCyan;
+        static readonly Color BodyCol   = UITheme.TextPrimary;
+        static readonly Color MutedCol  = UITheme.TextMuted;
+        static readonly Color DistCol   = UITheme.TextPrimary;
+        static readonly Color RingDim   = UITheme.SurfaceEdge;
 
         const int QCard = 3040, QText = 3052;   // olum vinyeti/perde 3000'de kalir, kart ustunde
         const float CardW = 0.50f, CardH = 0.29f;
@@ -105,21 +109,30 @@ namespace VRMultiplayer.UI
             UITheme.MakeRounded(_card, "Card Fill", Vector2.zero,
                 new Vector2(CardW - 0.005f, CardH - 0.005f), 0.016f, CardFill, 0.003f, QCard + 1);
 
-            _title    = Text("", TitleDead, 0.046f, new Vector3(0f, 0.088f, 0f));
-            _killer   = Text("", MutedCol,  0.022f, new Vector3(0f, 0.042f, 0f));
-            _body     = Text("", BodyCol,   0.025f, new Vector3(0f, -0.006f, 0f));
-            _distance = Text("", DistCol,   0.040f, new Vector3(0.035f, -0.086f, 0f));
-            _count    = Text("", DistCol,   0.048f, new Vector3(0f, -0.070f, 0f));
+            // Baslik altinda vurgu cizgisi + altta cukur serit: giris ekraninin katmanli
+            // dili. Duz tek renk bir kutu "prototip" duruyordu, derinligi bunlar veriyor.
+            UITheme.MakeRounded(_card, "Header Line", new Vector2(0f, 0.062f),
+                new Vector2(CardW * 0.80f, 0.0022f), 0.001f, UITheme.AccentCyan, 0.0025f, QCard + 2);
+            UITheme.MakeRounded(_card, "Inset Edge", new Vector2(0f, -0.080f),
+                new Vector2(CardW - 0.030f, 0.072f), 0.012f, InsetEdge, 0.0028f, QCard + 2);
+            UITheme.MakeRounded(_card, "Inset Fill", new Vector2(0f, -0.080f),
+                new Vector2(CardW - 0.034f, 0.068f), 0.011f, InsetFill, 0.0026f, QCard + 3);
+
+            _title    = Text("", TitleDead, 0.046f, new Vector3(0f, 0.093f, 0f));
+            _killer   = Text("", MutedCol,  0.021f, new Vector3(0f, 0.040f, 0f));
+            _body     = Text("", BodyCol,   0.025f, new Vector3(0f, -0.008f, 0f));
+            _distance = Text("", DistCol,   0.040f, new Vector3(0.035f, -0.080f, 0f));
+            _count    = Text("", DistCol,   0.030f, new Vector3(0f, -0.080f, 0f));
 
             _arrow = UITheme.MakeShape(_card, "Direction Arrow", UIMesh.Arrow(), Color.white, QText);
             _arrowMat = _arrow.GetComponent<MeshRenderer>().sharedMaterial;
-            _arrow.localPosition = new Vector3(-0.10f, -0.086f, 0f);
+            _arrow.localPosition = new Vector3(-0.10f, -0.080f, 0f);
             _arrow.localScale = Vector3.one * 0.075f;
 
             // Halka: LineRenderer yayi — TeamSpawnZone zeminde ayni teknigi kullaniyor, mesh'i
             // her kare yeniden uretmeye gerek yok.
-            _ringBg = Ring("Ring Bg", RingDim, 0.006f, out _ringBgMat);
-            _ringFill = Ring("Ring Fill", TitleWait, 0.010f, out _ringFillMat);
+            _ringBg = Ring("Ring Bg", RingDim, 0.005f, out _ringBgMat);
+            _ringFill = Ring("Ring Fill", TitleWait, 0.008f, out _ringFillMat);
             WriteArc(_ringBg, 1f);
         }
 
@@ -134,7 +147,7 @@ namespace VRMultiplayer.UI
         {
             var go = new GameObject(name);
             go.transform.SetParent(_card, false);
-            go.transform.localPosition = new Vector3(0f, -0.070f, 0f);
+            go.transform.localPosition = new Vector3(0f, -0.080f, 0f);
             var lr = go.AddComponent<LineRenderer>();
             lr.useWorldSpace = false;
             lr.alignment = LineAlignment.TransformZ;
@@ -150,7 +163,8 @@ namespace VRMultiplayer.UI
 
         static void WriteArc(LineRenderer lr, float fraction)
         {
-            const float R = 0.052f;
+            // Alttaki cukur seridin (yukseklik 0.072) ICINE sigmali; 0.052 tasiyordu.
+            const float R = 0.028f;
             int used = Mathf.Max(2, Mathf.CeilToInt(RingSegments * Mathf.Clamp01(fraction)) + 1);
             lr.positionCount = used;
             for (int i = 0; i < used; i++)
