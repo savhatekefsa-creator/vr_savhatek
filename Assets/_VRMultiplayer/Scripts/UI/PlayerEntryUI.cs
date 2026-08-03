@@ -3,9 +3,10 @@ using UnityEngine;
 namespace VRMultiplayer.UI
 {
     /// <summary>
-    /// Oyuncunun ilk gordugu ekranin AKISI: <see cref="PlayerEntryPanel"/>'i kurar, lazer
+    /// OYUNCU modunun ilk ekraninin AKISI: <see cref="PlayerEntryPanel"/>'i kurar, lazer
     /// imleci besler, isim/takim secimini <see cref="PlayerProfile"/>'a yazar ve OYUNA BASLA
-    /// ile baglantiyi baslatir.
+    /// ile baglantiyi baslatir. Kendisinden once MOD SECIMI gelir (<see cref="ModeSelectUI"/>);
+    /// bu ekran ancak <see cref="AppMode.Mode.Player"/> secilince dogar.
     ///
     /// ISIM VE TAKIM ZORUNLU: ikisi tamamlanmadan OYUNA BASLA pasif; yani oyuna isimsiz ya da
     /// takimsiz girilemez.
@@ -46,8 +47,22 @@ namespace VRMultiplayer.UI
         // Masaustu yedegi icin (gozluksuz iterasyon).
         string _guiName = "";
 
+        // ARTIK KENDILIGINDEN ACILMAZ: uygulamanin ilk ekrani mod secimi
+        // (bkz. <see cref="ModeSelectUI"/>). Bootstrap kendini kurmak yerine yalnizca ABONE
+        // olur; ekran ancak OYUNCU modu secilince dogar. Yaratici modda hic dogmamasi sart —
+        // yoksa harita tasarlarken isim/takim paneli ortada kalirdi.
+        //
+        // Aboneligi AppMode.ResetStatics temizler: domain reload kapaliyken abonelik listesi
+        // oyunlar arasi tasinir ve ikinci Play'de IKI giris ekrani dogardi.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        static void Bootstrap()
+        static void Bootstrap() => AppMode.Chosen += OnModeChosen;
+
+        static void OnModeChosen(AppMode.Mode m)
+        {
+            if (m == AppMode.Mode.Player) Create();
+        }
+
+        static void Create()
         {
             var go = new GameObject("~PlayerEntryUI");
             DontDestroyOnLoad(go);
