@@ -251,6 +251,15 @@ namespace VRMultiplayer.Constructor
             Debug.Log($"[Constructor] Oturum acildi: '{Layout.name}' — {applied} yerlestirme, " +
                       $"izgara {Grid.Cols}x{Grid.Rows}, {Grid.Report().free} oda-ici bos hucre " +
                       $"(+{Grid.OutsideMargin:0.0} m oda disi pay).");
+
+            // Pay haritaya YAZILI. Varsayilan buyudugunde eski harita yine kendi dar sinirinda
+            // aciliyor — dogru davranis (hucre koordinatlari kaymasin diye), ama disaridan
+            // "hala koyamiyorum"dan ayirt edilemiyor. Sebebi ve cikis yolu bir kez soylensin.
+            if (Layout.buildMargin < RoomGrid.DefaultOutsideMargin - 0.01f)
+                Debug.LogWarning($"[Constructor] '{Layout.name}' {Layout.buildMargin:0.0} m oda disi payla " +
+                                 $"kaydedilmis, guncel varsayilan {RoomGrid.DefaultOutsideMargin:0.0} m. " +
+                                 "Insa sinirini genisletmek icin: Tools > VR Multiplayer > " +
+                                 "32. Haritayi Guncel Izgaraya Tasi");
             Changed?.Invoke();
             return true;
         }

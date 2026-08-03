@@ -56,20 +56,33 @@ namespace VRMultiplayer.Constructor
         /// Odanin DISINA ne kadar insa edilebilecegi (m). Harita fiziksel oyun alaniyla sinirli
         /// degil: duvarin otesine agac/siper koyup uzerinden ates edilebilir, oyuncu oraya
         /// yurumese de.
+        ///
+        /// 5 m'den bes katina cikarildi. Bes metre odayi ceviren ince bir seritti: uzaga bir
+        /// siper hatti ya da silue kurmaya calisirken isin daha oraya varmadan hayalet kirmizi
+        /// oluyordu, ve "buraya neden konmuyor" sorusunun cevabi gorunur hicbir yerde yazmiyordu.
+        /// Bedeli hucre sayisi: izgara ALANLA, yani payin KARESIYLE buyuyor. O yuzden iki sey
+        /// birlikte degisti — <see cref="MaxCellsPerAxis"/> tavani ve <see cref="FromPlan"/>'in
+        /// poligon testini yalnizca odanin sinir kutusuna yapmasi.
         /// </summary>
-        public const float DefaultOutsideMargin = 5f;
+        public const float DefaultOutsideMargin = 25f;
 
         /// <summary>
         /// Ceiling against a corrupt scan producing a giant grid and eating memory. Counted in
-        /// CELLS, so it is raised whenever <see cref="DefaultCellSize"/> gets finer to keep the
-        /// same physical reach (512 x 0.0625 m = 32 m per axis).
+        /// CELLS, so it is raised whenever <see cref="DefaultCellSize"/> gets finer or
+        /// <see cref="DefaultOutsideMargin"/> gets wider, to keep the same physical reach
+        /// (1024 x 0.0625 m = 64 m per axis).
         ///
         /// At 240 the halved cell landed on 239 x 219 for this room — inside the limit by one
         /// cell, which is not a margin, it is a coincidence waiting to clip somebody's grid the
-        /// first time they scan a bigger room. A byte per cell means even 512 x 512 is a quarter
-        /// of a megabyte; the guard is here to catch a corrupt scan, not to ration memory.
+        /// first time they scan a bigger room. The 25 m pay took the same room to ~880 cells per
+        /// axis, so 512 would have CLIPPED it — and clipping is not symmetric: the origin is the
+        /// minimum corner, so the half that gets cut is all on the +X/+Z side and the map would
+        /// quietly grow in two directions only.
+        ///
+        /// Three bytes per cell (state, base state, level mask) means even 1024 x 1024 is 3 MB;
+        /// the guard is here to catch a corrupt scan, not to ration memory.
         /// </summary>
-        public const int MaxCellsPerAxis = 512;
+        public const int MaxCellsPerAxis = 1024;
 
         /// <summary>
         /// How many build levels a cell can hold. Eight because occupancy is one BYTE per cell —
@@ -141,6 +154,10 @@ namespace VRMultiplayer.Constructor
                 if (p.y > maxZ) maxZ = p.y;
             }
 
+            // Odanin KENDI sinir kutusu, pay eklenmeden. Asagida hangi hucrelere poligon testi
+            // yapilacagini bu belirliyor.
+            float roomMinX = minX, roomMaxX = maxX, roomMinZ = minZ, roomMaxZ = maxZ;
+
             // Izgara odanin DISINA da tasar: harita fiziksel alandan buyuk olabilir.
             float pad = Mathf.Max(0f, outsideMargin);
             minX -= pad; maxX += pad;
@@ -170,16 +187,32 @@ namespace VRMultiplayer.Constructor
             grid._cells = new CellState[grid.Cols * grid.Rows];
             grid._levels = new byte[grid.Cols * grid.Rows];
 
+            // Poligon testleri yalnizca odanin sinir kutusundaki hucrelere yapilir. Kutunun
+            // disindaki bir noktanin poligonun icinde OLAMAYACAGI kesin, yani sonuc birebir ayni;
+            // degisen tek sey kac kez soruldugu. Pay buyudukce fark ucuyor: 25 m payla 5 m'lik bir
+            // odada hucrelerin ~%1'i kutunun icinde kaliyor, kalan %99'u iki tamsayi
+            // karsilastirmasiyla eleniyor. Aksi halde insa moduna girerken izgara kurulumu payin
+            // karesiyle uzardi.
+            int boxMinCx = Mathf.FloorToInt((roomMinX - grid.Origin.x) / cellSize) - 1;
+            int boxMaxCx = Mathf.CeilToInt((roomMaxX - grid.Origin.x) / cellSize) + 1;
+            int boxMinCz = Mathf.FloorToInt((roomMinZ - grid.Origin.y) / cellSize) - 1;
+            int boxMaxCz = Mathf.CeilToInt((roomMaxZ - grid.Origin.y) / cellSize) + 1;
+
             // 1) Her hucre insa edilebilir; ayrim YURUNEBILIR mi degil mi. Oda icinde ve
             //    duvardan uzaksa Free (guvenli oyun alani), degilse FreeOutside.
             for (int cz = 0; cz < grid.Rows; cz++)
             {
+                bool zInBox = cz >= boxMinCz && cz <= boxMaxCz;
                 for (int cx = 0; cx < grid.Cols; cx++)
                 {
-                    Vector2 c = grid.CellCenter2D(cx, cz);
-                    bool inside = PointInPolygon(c, poly) &&
-                                  (grid.WallMargin <= 0f ||
-                                   DistanceToPolygonEdge(c, poly) >= grid.WallMargin);
+                    bool inside = false;
+                    if (zInBox && cx >= boxMinCx && cx <= boxMaxCx)
+                    {
+                        Vector2 c = grid.CellCenter2D(cx, cz);
+                        inside = PointInPolygon(c, poly) &&
+                                 (grid.WallMargin <= 0f ||
+                                  DistanceToPolygonEdge(c, poly) >= grid.WallMargin);
+                    }
                     grid._cells[cz * grid.Cols + cx] = inside ? CellState.Free : CellState.FreeOutside;
                 }
             }
