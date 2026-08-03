@@ -23,7 +23,11 @@ namespace VRMultiplayer.UI
         static readonly Dictionary<long, Mesh> _rounded = new Dictionary<long, Mesh>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => _rounded.Clear();
+        static void ResetStatics()
+        {
+            _rounded.Clear();
+            _outline.Clear();
+        }
 
         /// <summary>Merkezi orijinde, XY duzleminde yuvarlatilmis dikdortgen.</summary>
         /// <param name="w">Genislik (metre).</param>
@@ -85,6 +89,77 @@ namespace VRMultiplayer.UI
                 float a = Mathf.Lerp(a0, a1, i / (float)seg) * Mathf.Deg2Rad;
                 ring.Add(new Vector3(c.x + Mathf.Cos(a) * r, c.y + Mathf.Sin(a) * r, 0f));
             }
+        }
+
+        static readonly Dictionary<long, Mesh> _outline = new Dictionary<long, Mesh>();
+
+        /// <summary>Yuvarlatilmis dikdortgen CERCEVE — ici bos bir halka.
+        ///
+        /// NEDEN AYRI BIR MESH: saydam bir panelin cercevesi iki dolu dikdortgenle
+        /// yapilamaz. <see cref="UITheme.MakeOutlined"/> kenari tam boy cizip dolguyu
+        /// ustune bindirir; opak renklerde sorun degil ama saydamda ORTADA iki katman
+        /// ust uste gelir ve bilesik alfa hedefi asar (0.5 kenar + 0.35 zemin = 0.675).
+        /// Istenen alfayi verecek bir dolgu alfasi da yoktur — kenar tek basina zaten
+        /// hedeften opaktir. Gercek halka tek dogru cozum.
+        ///
+        /// Dis ve ic halka AYNI acisal bolutlemeyle uretilir, aralari seritle kapatilir.
+        /// Sarim yonu <see cref="RoundedRect"/> ile ayni tutuldu (ic nokta once), yoksa
+        /// yuzey arkaya bakip gorunmez olurdu.</summary>
+        /// <param name="thickness">Cerceve kalinligi (metre).</param>
+        public static Mesh RoundedRectOutline(float w, float h, float radius, float thickness, int seg = 4)
+        {
+            float half = Mathf.Min(w, h) * 0.5f;
+            radius = Mathf.Clamp(radius, 0f, half);
+            thickness = Mathf.Clamp(thickness, 0.0001f, half);
+            seg = Mathf.Clamp(seg, 1, 12);
+
+            long key = (long)Mathf.RoundToInt(w * 10000f) * 100000000L
+                     + (long)Mathf.RoundToInt(h * 10000f) * 1000L
+                     + Mathf.RoundToInt(radius * 10000f) * 13L
+                     + Mathf.RoundToInt(thickness * 10000f) * 7L + seg;
+            if (_outline.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var outer = new List<Vector3>((seg + 1) * 4);
+            var inner = new List<Vector3>((seg + 1) * 4);
+            Ring(outer, w, h, radius, seg);
+            Ring(inner, w - thickness * 2f, h - thickness * 2f,
+                Mathf.Max(0f, radius - thickness), seg);
+
+            int n = outer.Count;
+            var verts = new Vector3[n * 2];
+            for (int i = 0; i < n; i++)
+            {
+                verts[i] = outer[i];
+                verts[n + i] = inner[i];
+            }
+
+            var tris = new int[n * 6];
+            for (int i = 0; i < n; i++)
+            {
+                int j = (i + 1) % n;
+                int t = i * 6;
+                tris[t]     = n + i; tris[t + 1] = i;     tris[t + 2] = j;
+                tris[t + 3] = n + i; tris[t + 4] = j;     tris[t + 5] = n + j;
+            }
+
+            var m = new Mesh { name = $"RoundedRectOutline {w:F3}x{h:F3}r{radius:F3}t{thickness:F3}" };
+            m.SetVertices(verts);
+            m.SetTriangles(tris, 0);
+            m.RecalculateBounds();
+            _outline[key] = m;
+            return m;
+        }
+
+        /// <summary>Yuvarlatilmis dikdortgenin cevre noktalari (saat yonu tersi).</summary>
+        static void Ring(List<Vector3> ring, float w, float h, float radius, int seg)
+        {
+            float hw = Mathf.Max(0f, w * 0.5f), hh = Mathf.Max(0f, h * 0.5f);
+            radius = Mathf.Clamp(radius, 0f, Mathf.Min(hw, hh));
+
+            AddCorner(ring, new Vector2(hw - radius,  hh - radius), radius,   0f,  90f, seg);
+            AddCorner(ring, new Vector2(-hw + radius, hh - radius), radius,  90f, 180f, seg);
+            AddCorner(ring, new Vector2(-hw + radius,-hh + radius), radius, 180f, 270f, seg);
+            AddCorner(ring, new Vector2(hw - radius, -hh + radius), radius, 270f, 360f, seg);
         }
 
         // ------------------------------------------------------------------ ikonlar

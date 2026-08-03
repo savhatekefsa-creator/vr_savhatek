@@ -5,9 +5,13 @@ using UnityEngine;
 namespace VRMultiplayer.UI
 {
     /// <summary>
-    /// Gorusun SOL UST kosesinde duran kill paneli: kim kimi oldurdu, ustunde takim skoru.
+    /// Gorusun SOL UST kosesinde duran kill paneli: kim kimi oldurdu.
     /// <see cref="PlayerHealth.KillReported"/> olayini dinler; sahibe ozel, <see cref="PlayerHUD"/>
     /// tarafindan uretilir.
+    ///
+    /// TAKIM SKORU BURADA DEGIL: panelin ustunde bir skor basligi vardi, <see cref="MatchBarUI"/>
+    /// gelince ayni bilgi iki yerde yazilir oldu. Skor ust-ortadaki bara tasindi, panel yalnizca
+    /// "kim kimi oldurdu" isini yapiyor — daha temiz bir sorumluluk ayrimi.
     ///
     /// KONUM KARARI: panel bilerek gorus merkezinden UZAGA, sol ust kosede duruyor (~-26 yatay,
     /// ~+19 dikey derece). Amaci "goz ucuyla surekli takip" degil — ust uste olumlerde nisan
@@ -69,7 +73,6 @@ namespace VRMultiplayer.UI
         [Header("Opaklik")]
         [Range(0f, 1f)] public float bgAlpha = 0.25f;
         [Range(0f, 1f)] public float textAlpha = 0.90f;
-        [Range(0f, 1f)] public float headerAlpha = 0.45f;
 
         [Header("Renk")]
         [Tooltip("Acik: mavi = senin takimin, kirmizi = rakip (standart FPS). " +
@@ -116,8 +119,6 @@ namespace VRMultiplayer.UI
         readonly List<Row> _pool = new List<Row>();
 
         Transform _panel;
-        TextMesh _scoreMine, _scoreSep, _scoreTheirs;
-        float _nextScoreRefresh;
         bool _placed;
         byte _colorTeam = 255;   // satir renkleri HANGI yerel takima gore yazildi
 
@@ -126,7 +127,6 @@ namespace VRMultiplayer.UI
             _panel = new GameObject("Feed Panel").transform;
             _panel.SetParent(transform, false);
 
-            BuildHeader();
             for (int i = 0; i < maxRows; i++) _pool.Add(BuildRow(i));
 
             PlayerHealth.KillReported += OnKill;
@@ -135,22 +135,6 @@ namespace VRMultiplayer.UI
         void OnDestroy() => PlayerHealth.KillReported -= OnKill;
 
         // ------------------------------------------------------------------- kurulum
-
-        void BuildHeader()
-        {
-            float y = rowHeight * 1.2f;
-            _scoreMine = UITheme.MakeText(_panel, "0", Friendly, textHeight * 0.85f,
-                TextAnchor.MiddleRight, QText);
-            _scoreMine.transform.localPosition = new Vector3(-0.014f, y, 0f);
-
-            _scoreSep = UITheme.MakeText(_panel, "-", Dim, textHeight * 0.85f,
-                TextAnchor.MiddleCenter, QText);
-            _scoreSep.transform.localPosition = new Vector3(0f, y, 0f);
-
-            _scoreTheirs = UITheme.MakeText(_panel, "0", Enemy, textHeight * 0.85f,
-                TextAnchor.MiddleLeft, QText);
-            _scoreTheirs.transform.localPosition = new Vector3(0.014f, y, 0f);
-        }
 
         Row BuildRow(int index)
         {
@@ -296,12 +280,6 @@ namespace VRMultiplayer.UI
                 ApplyFade(e, now, ease);
             }
 
-            if (now >= _nextScoreRefresh)
-            {
-                _nextScoreRefresh = now + 0.5f;   // skor icin 2 Hz fazlasiyla yeter
-                RefreshScore();
-            }
-
             Follow();
         }
 
@@ -348,32 +326,6 @@ namespace VRMultiplayer.UI
         {
             var local = PlayerIdentity.Local;
             return local != null ? local.Team.Value : (byte)0;
-        }
-
-        void RefreshScore()
-        {
-            byte mine = LocalTeam();
-
-            // Takim secilmeden "senin takimin" diye bir sey yok — mutlak gosterime dus.
-            if (!viewerRelativeColors || mine == 0)
-            {
-                SetScore(PlayerIdentity.TeamScore(1), PlayerIdentity.TeamScore(2),
-                    PlayerIdentity.TeamAColor, PlayerIdentity.TeamBColor);
-                return;
-            }
-
-            byte theirs = mine == 1 ? (byte)2 : (byte)1;
-            SetScore(PlayerIdentity.TeamScore(mine), PlayerIdentity.TeamScore(theirs),
-                Friendly, Enemy);
-        }
-
-        void SetScore(int a, int b, Color ca, Color cb)
-        {
-            _scoreMine.text = a.ToString();
-            _scoreMine.color = new Color(ca.r, ca.g, ca.b, headerAlpha);
-            _scoreSep.color = new Color(Dim.r, Dim.g, Dim.b, headerAlpha * 0.8f);
-            _scoreTheirs.text = b.ToString();
-            _scoreTheirs.color = new Color(cb.r, cb.g, cb.b, headerAlpha);
         }
 
         /// <summary>Rengi BAKAN oyuncuya gore secer (bkz. <see cref="viewerRelativeColors"/>).</summary>
