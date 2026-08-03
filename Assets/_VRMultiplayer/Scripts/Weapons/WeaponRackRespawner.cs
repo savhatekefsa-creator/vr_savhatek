@@ -28,18 +28,121 @@ namespace VRMultiplayer.Weapons
             public Quaternion Rot;
             public GameObject Prefab;
             public GrabbableObject Current; // su an yuvada duran (null = yenisi lazim)
+            public uint OwnerId;            // 0 = sahneye elle konmus; >0 = insa modu rafi
         }
 
         readonly List<RackSlot> _slots = new List<RackSlot>();
         readonly HashSet<GrabbableObject> _registered = new HashSet<GrabbableObject>();
         float _next;
 
+        /// <summary>
+        /// Ceiling on weapons a BUILT map may hold, across every rack in it.
+        ///
+        /// Each one is a NetworkObject with a ClientNetworkTransform, and the constructor's whole
+        /// design is the opposite of that — scenery syncs as layout data precisely so a room full
+        /// of props costs nothing on the wire. Weapons are the deliberate exception, so the
+        /// exception gets a number. Sixteen is the full set this project ships, and still fewer
+        /// than the hand-placed weapons already standing in the scene.
+        /// </summary>
+        public const int MaxConstructorWeapons = 16;
+
+        /// <summary>Weapon slots currently claimed by build-mode racks.</summary>
+        public static int ConstructorWeaponCount { get; private set; }
+
+        static WeaponRackRespawner _instance;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
         {
             var go = new GameObject("~WeaponRackRespawner");
             DontDestroyOnLoad(go);
-            go.AddComponent<WeaponRackRespawner>();
+            _instance = go.AddComponent<WeaponRackRespawner>();
+        }
+
+        // ------------------------------------------------------------- insa modu raflari
+
+        /// <summary>
+        /// Adopts the slots of a rack the player just built, so the refill loop starts feeding
+        /// them exactly as it feeds the hand-placed weapons in the scene.
+        ///
+        /// SERVER ONLY, like everything else here — the rack MESH is built on every peer from
+        /// the map layout, but the weapons standing in it are real networked objects and only
+        /// the server may mint those. Returns how many slots were taken, which is fewer than
+        /// asked for when <see cref="MaxConstructorWeapons"/> is reached.
+        /// </summary>
+        public static int RegisterConstructorRack(uint instanceId, GameObject builtRack)
+        {
+            if (_instance == null || builtRack == null || instanceId == 0) return 0;
+
+            var nm = NetworkManager.Singleton;
+            if (nm != null && nm.IsClient && !nm.IsServer) return 0;   // raf sunucunun mali
+
+            int taken = 0;
+            foreach (var slot in builtRack.GetComponentsInChildren<WeaponRackSlot>(true))
+            {
+                if (ConstructorWeaponCount >= MaxConstructorWeapons)
+                {
+                    Debug.LogWarning($"[WeaponRack] Harita silah siniri dolu " +
+                                     $"({MaxConstructorWeapons}) — '{slot.weaponPrefabName}' bos kaldi.");
+                    break;
+                }
+
+                var prefab = slot.Resolve();
+                if (prefab == null)
+                {
+                    Debug.LogWarning($"[WeaponRack] '{slot.weaponPrefabName}' kalibi yok — yuva atlandi.");
+                    continue;
+                }
+
+                _instance._slots.Add(new RackSlot
+                {
+                    Pos = slot.transform.position,
+                    Rot = slot.transform.rotation,
+                    Prefab = prefab,
+                    OwnerId = instanceId,
+                    Current = null,          // ilk donguda dolar
+                });
+                ConstructorWeaponCount++;
+                taken++;
+            }
+            return taken;
+        }
+
+        /// <summary>
+        /// Drops a built rack's slots and clears out the weapons still sitting in them.
+        ///
+        /// A weapon a player is HOLDING is left alone: it stopped being the rack's the moment
+        /// they picked it up, and yanking it out of someone's hand because a wall was deleted
+        /// elsewhere is not a thing a game should do.
+        /// </summary>
+        public static void UnregisterConstructorRack(uint instanceId)
+        {
+            if (_instance == null || instanceId == 0) return;
+
+            var slots = _instance._slots;
+            for (int i = slots.Count - 1; i >= 0; i--)
+            {
+                if (slots[i].OwnerId != instanceId) continue;
+
+                var held = slots[i].Current;
+                if (held != null && !held.IsHeld && held.isActiveAndEnabled)
+                {
+                    var no = held.GetComponent<NetworkObject>();
+                    if (no != null && no.IsSpawned) no.Despawn();
+                    else Destroy(held.gameObject);
+                }
+
+                slots.RemoveAt(i);
+                ConstructorWeaponCount = Mathf.Max(0, ConstructorWeaponCount - 1);
+            }
+        }
+
+        /// <summary>Forgets every built rack — the map is being torn down and rebuilt.</summary>
+        public static void ClearConstructorRacks()
+        {
+            if (_instance == null) return;
+            _instance._slots.RemoveAll(s => s.OwnerId != 0);
+            ConstructorWeaponCount = 0;
         }
 
         void Update()

@@ -83,3 +83,20 @@ crashlytics-build.properties
 # Yerel planlama / analiz raporlari
 PLAN_*.md
 unused_textures_report.csv
+
+# ============ Constructor: gelistiriciye OZEL calisma verisi ============
+# Oda taramasi kisiye ozeldir — icinde o gelistiricinin odasinin olculeri ve mobilyasi
+# durur. Depoda tutulursa herkesin taramasi pull'da bir baskasininkiyle ezilir ve dosya
+# surekli "degismis" gorunur. Herkes kendi odasini tarar; uygulama dosyayi yeniden uretir.
+[Aa]ssets/_VRMultiplayer/RoomPlans/RoomPlan.json
+[Aa]ssets/_VRMultiplayer/RoomPlans/RoomPlan.json.meta
+# Kayitli haritalar da ayni sekilde yerel calisma verisi: Current.json canli uzerinde
+# calisilan harita, Test.json ise menu 27 ile her an yeniden uretilebilir. Ustelik ikisi de
+# yazildigi odanin planini ICINDE tasir, yani baskasinin odasina ait veriyi taşırlar.
+[Aa]ssets/_VRMultiplayer/Maps/
+[Aa]ssets/_VRMultiplayer/Maps.meta
+
+# Sahne/plan yedekleri: bir seyi silmeden once alinan geri donus noktalari. Assets'in
+# DISINDA duruyorlar ki Unity onlari ikinci bir sahne diye ice aktarmasin, ve surumleme
+# disinda ki 1.7 MB'lik sahne kopyalari gecmisi sismansin.
+_SceneBackups/

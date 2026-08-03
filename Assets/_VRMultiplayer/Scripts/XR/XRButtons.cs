@@ -11,6 +11,16 @@ namespace VRMultiplayer
     /// </summary>
     public static class XRButtons
     {
+        /// <summary>
+        /// Oyun girislerini gecici olarak susturan mod kapisi. Insa modu (Constructor) bunu
+        /// kaldirir: proje neredeyse tum tuslari kullandigi icin insa modu ayni tuslari yeniden
+        /// anlamlandirmak ZORUNDA — tetik hem ates hem "koy", grip hem tutma hem palet olamaz.
+        ///
+        /// Okuyan taraflar: NetworkWeapon (tetik), HandGrabber (el girisleri), WeaponSelectorUI
+        /// (silah carki). Yeni bir oyun girisi eklendiginde burayi da kontrol etmeli.
+        /// </summary>
+        public static bool GameplayInputSuppressed { get; set; }
+
         /// <summary>Bool buton okumasi; cihaz gecersizse false.</summary>
         public static bool Button(XRNode node, InputFeatureUsage<bool> usage)
         {

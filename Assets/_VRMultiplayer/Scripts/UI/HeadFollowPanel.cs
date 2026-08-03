@@ -13,6 +13,11 @@ namespace VRMultiplayer.UI
         [Tooltip("Panelin kafadan uzakligi (metre).")]
         public float distance = 1.4f;
 
+        [Tooltip("Goz hizasina gore dikey kaydirma (metre). Surekli acik kalan paneller " +
+                 "(or. insa modu durumu) asagi alinmali — goz hizasinda dururlarsa oyuncunun " +
+                 "tam bakmak istedigi yeri kapatirlar.")]
+        public float heightOffset = 0f;
+
         void LateUpdate()
         {
             var head = XRRigReference.HeadOrCamera;
@@ -21,7 +26,7 @@ namespace VRMultiplayer.UI
             fwd.y = 0f;
             if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
             fwd.Normalize();
-            transform.position = head.position + fwd * distance;
+            transform.position = head.position + fwd * distance + Vector3.up * heightOffset;
             transform.rotation = Quaternion.LookRotation(fwd);
         }
 

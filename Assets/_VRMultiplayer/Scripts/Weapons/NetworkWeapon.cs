@@ -489,6 +489,9 @@ namespace VRMultiplayer
         static bool ReadTrigger(XRNode node, out InputDevice dev)
         {
             dev = InputDevices.GetDeviceAtXRNode(node);
+            // Insa modunda tetik "prop koy" demek — silah ates etmemeli. Tetigin okundugu TEK
+            // yer burasi oldugu icin kapi da burada.
+            if (XRButtons.GameplayInputSuppressed) return false;
             return XRButtons.HeldWithAxisFallback(dev, CommonUsages.triggerButton, CommonUsages.trigger, 0.6f);
         }
 
