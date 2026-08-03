@@ -29,6 +29,12 @@ namespace VRMultiplayer.UI
         Material _veilMat;
         TextMesh _text;
 
+        // Yazinin altindaki YANIP SONEN pusula oku. Ayri bir dunya-uzayi gostergesi
+        // (SpawnRouteGuide) zaten var ama o zeminde duruyor ve oyuncunun bakis acisina
+        // bagli; bu ok yazinin hemen altinda, KAFAYA KILITLI — kacirilmasi mumkun degil.
+        Transform _arrow;
+        Material _arrowMat;
+
         bool _active;
         TeamSpawnZone _zone;
 
@@ -56,6 +62,11 @@ namespace VRMultiplayer.UI
             _text.alignment = TextAlignment.Center;
             _text.color = Color.white;
             t.transform.localScale = Vector3.one * 0.16f;
+
+            // Ok HUD elemani: gri perdenin (kuyruk 3000, kafaya 0.12 m) USTUNDE cizilsin ve
+            // duvar tarafindan ortulmesin — bu yuzden overlay malzeme + yuksek kuyruk.
+            _arrow = UITheme.MakeShape(transform, "Direction Arrow", UIMesh.Arrow(), Color.white, 3050);
+            _arrowMat = _arrow.GetComponent<MeshRenderer>().sharedMaterial;
 
             gameObject.SetActive(false);
         }
@@ -156,6 +167,54 @@ namespace VRMultiplayer.UI
             // Yazi biraz daha uzakta — VR'da cok yakin metin okunmaz.
             _text.transform.position = head.position + head.forward * 1.2f;
             _text.transform.rotation = Quaternion.LookRotation(_text.transform.position - head.position);
+
+            UpdateArrow(head);
+        }
+
+        /// <summary>
+        /// Yazinin altindaki pusula oku: hedefin BAGIL yonunu gosterir.
+        /// ileri = yukari, sag = saga, ARKA = asagi.
+        ///
+        /// Neden ekran duzleminde (pusula) ve neden dunya yonunde bir 3B ok degil: goz
+        /// hizasinda duran yatay bir ok, hedef tam onde ya da tam arkadayken kameraya UCUNDAN
+        /// bakildigi icin cizgiye doner ve yon okunamaz. Ekran duzleminde donen ok hicbir acida
+        /// bozulmaz.
+        ///
+        /// Yerdeki rota/ok (bkz. <see cref="SpawnRouteGuide"/>) mekansal ipucu verir; bu ok ise
+        /// GARANTI gorunur — oyuncu zaten bu yaziyi okuyor.
+        /// </summary>
+        void UpdateArrow(Transform head)
+        {
+            if (_arrow == null) return;
+
+            if (_zone == null)
+            {
+                if (_arrow.gameObject.activeSelf) _arrow.gameObject.SetActive(false);
+                return;
+            }
+            if (!_arrow.gameObject.activeSelf) _arrow.gameObject.SetActive(true);
+
+            Vector3 fwd = head.forward; fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
+            fwd.Normalize();
+
+            Vector3 to = _zone.transform.position - head.position; to.y = 0f;
+            float bearing = to.sqrMagnitude > 0.0025f
+                ? Vector3.SignedAngle(fwd, to.normalized, Vector3.up)
+                : 0f;
+
+            // Yazinin bir tik altinda, ayni duzlemde.
+            Vector3 pos = _text.transform.position - _text.transform.up * 0.115f;
+            _arrow.position = pos;
+
+            // Panel donusu + ekran duzleminde bearing kadar cevir. Ok mesh'i +X'e baktigi icin
+            // once 90 derece ile yukari cevriliyor (bearing 0 = ileri = yukari).
+            _arrow.rotation = _text.transform.rotation * Quaternion.Euler(0f, 0f, 90f - bearing);
+            _arrow.localScale = Vector3.one * 0.085f;
+
+            Color c = _zone.TeamColor;
+            float blink = 0.35f + 0.65f * (0.5f + 0.5f * Mathf.Sin(Time.time * 1.6f * Mathf.PI * 2f));
+            UITheme.SetMaterialColor(_arrowMat, new Color(c.r, c.g, c.b, blink));
         }
     }
 }

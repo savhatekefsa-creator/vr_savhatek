@@ -59,10 +59,17 @@ namespace VRMultiplayer.UI
         public float fadeDistance = 1.6f;
 
         [Header("Yon oku (yol bulunamadiginda)")]
-        [Tooltip("Okun oyuncunun onunde durdugu mesafe (metre).")]
-        public float arrowDistance = 1.1f;
+        [Tooltip("Okun goz hizasina gore ASAGI acisi (derece). Mesafe bundan ve oyuncunun " +
+                 "boyundan hesaplanir; sabit mesafe verilirse uzun boylu oyuncuda ok " +
+                 "gorus alaninin altina duser.")]
+        [Range(15f, 45f)] public float arrowViewAngle = 25f;
+        [Tooltip("Guvenlik siniri: hesaplanan mesafe bu araliga kirpilir (metre).")]
+        public float arrowMinDistance = 1.2f;
+        public float arrowMaxDistance = 3.2f;
         [Tooltip("Okun boyu (metre).")]
-        public float arrowSize = 0.55f;
+        public float arrowSize = 0.8f;
+        [Tooltip("Yanip sonme hizi (saniyedeki tam donus).")]
+        public float blinkHz = 1.6f;
 
         [Range(0f, 1f)] public float lineAlpha = 0.85f;
 
@@ -242,12 +249,19 @@ namespace VRMultiplayer.UI
         }
 
         /// <summary>
-        /// Yedek gosterge: oyuncunun BAKTIGI yonde, zeminde duran ve hedefi gosteren kisa ok.
+        /// Yedek gosterge: zeminde duran, hedefi gosteren yanip sonen ok.
         ///
-        /// Konum bakis yonunde, DONUS ise hedefe dogru: boylece ok her zaman gorunur kalir ve
-        /// hedef arkadayken geriyi gosterir — "arkani don" mesaji da bedavaya gelir. Okun
-        /// hedefin YONUNDE konumlandirilmasi denenirse hedef arkadayken ok da arkada kalir ve
-        /// oyuncu hicbir sey gormez.
+        /// Konum BAKIS yonunde, DONUS hedefe dogru: boylece ok her zaman gorunur kalir ve hedef
+        /// arkadayken geriyi gosterir — "arkani don" mesaji bedavaya gelir. Okun hedefin
+        /// YONUNDE konumlandirilmasi denenirse hedef arkadayken ok da arkada kalir ve oyuncu
+        /// hicbir sey gormez.
+        ///
+        /// MESAFE SABIT DEGIL, ACIDAN hesaplanir. Sabit 1.1 m denendi ve KULLANILAMAZ cikti:
+        /// kafa zeminden ~1.5 m yukarida oldugu icin ok goz hizasinin 54 derece altina, yani
+        /// Quest 3'un dikey gorus alaninin (merkezden ~48 derece) DISINA dusuyordu — ayaklarinin
+        /// dibinde kalip hic gorunmuyordu. Simdi mesafe, oyuncunun O ANKI goz yuksekliginden
+        /// <see cref="arrowViewAngle"/> acisiyla cozuluyor: boy ne olursa olsun ok ayni rahat
+        /// acida durur.
         /// </summary>
         void DrawArrow(TeamSpawnZone zone, Transform head, Color c, float alpha)
         {
@@ -260,14 +274,24 @@ namespace VRMultiplayer.UI
             if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
             fwd.Normalize();
 
+            float floorY = zone.transform.position.y;
+            float eyeHeight = Mathf.Max(0.6f, head.position.y - floorY);
+            float dist = eyeHeight / Mathf.Tan(arrowViewAngle * Mathf.Deg2Rad);
+            dist = Mathf.Clamp(dist, arrowMinDistance, arrowMaxDistance);
+
+            // Duvarin ARKASINA dusmesin: onde bir engel varsa ok berisine cekilir.
+            if (Physics.Raycast(head.position, fwd, out var hit, dist + 0.4f,
+                    Physics.AllLayers, QueryTriggerInteraction.Ignore))
+                dist = Mathf.Max(arrowMinDistance * 0.6f, hit.distance - 0.4f);
+
+            Vector3 target = head.position + fwd * dist;
+            target.y = floorY + groundOffset;
+
             if (!_arrow.gameObject.activeSelf)
             {
                 _arrow.gameObject.SetActive(true);
-                _arrow.position = head.position + fwd * arrowDistance;
+                _arrow.position = target;   // ilk karede uzaktan kaymasin
             }
-
-            Vector3 target = head.position + fwd * arrowDistance;
-            target.y = zone.transform.position.y + groundOffset;
 
             // Sonumlu takip: kafayla birlikte sicramasin.
             float k = 1f - Mathf.Exp(-8f * Time.deltaTime);
@@ -276,10 +300,14 @@ namespace VRMultiplayer.UI
             // Yuzu YUKARI baksin (ileri = +Y), sonra ucu hedefe cevrilsin.
             _arrow.rotation = Quaternion.LookRotation(Vector3.up, toTarget) * Quaternion.Euler(0f, 0f, 90f);
 
-            float pulse = 0.78f + 0.22f * Mathf.Sin(Time.time * 3.5f);
-            float s = arrowSize * (0.95f + 0.05f * Mathf.Sin(Time.time * 3.5f));
+            // Uzaklikla birlikte buyut: 3 m'deki ok 1.2 m'dekiyle ayni boyda cizilirse
+            // gorunurde kucucuk kalir.
+            float s = arrowSize * Mathf.Clamp(dist / 2.0f, 0.7f, 1.6f);
             _arrow.localScale = new Vector3(s, s, 1f);
-            UITheme.SetMaterialColor(_arrowMat, new Color(c.r, c.g, c.b, alpha * pulse));
+
+            // Belirgin YANIP SONME (istenen buydu): silik bir nabiz degil, acik/kapali salinim.
+            float blink = 0.35f + 0.65f * (0.5f + 0.5f * Mathf.Sin(Time.time * blinkHz * Mathf.PI * 2f));
+            UITheme.SetMaterialColor(_arrowMat, new Color(c.r, c.g, c.b, alpha * blink));
         }
 
         // ------------------------------------------------------------------ yol
