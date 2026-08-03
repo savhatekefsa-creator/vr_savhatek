@@ -211,6 +211,40 @@ namespace VRMultiplayer
         readonly List<float> _calibYaw = new List<float>();
         int _calibId = -1;
         string _calibNote = "";
+
+        // ---- TESHIS (gecici, sorun cozulunce kaldirilabilir) ------------------------------
+        // Belirti: panel "duzeltildi -> 0/5 -> duzeltildi" dongusune giriyor, yani duzeltme
+        // uygulaniyor ama sapma bir turlu olu bolgenin altina inmiyor. Duzeltmeyi geri alan
+        // birileri var; hangi EKSENDE oldugunu bilmeden dogru yeri aramak tahmin olur.
+        //
+        // Bu uc deger her degerlendirmede yazilir ve panelde KALICI durur (_calibNote gibi
+        // aninda ezilmez), boylece duzeltme sonrasi sapmanin kapanip kapanmadigi okunabilir.
+        //   dy kapanmiyor  -> dikeyi ezen var (XROrigin floor offset supheli)
+        //   dx/dz kapanmiyor -> yatayda baska bir yazici var
+        //   hepsi kapaniyor ama yine duzeltiyor -> esik/gurultu sorunu
+        Vector3 _diagMeasured, _diagExpected, _diagDelta;
+        float _diagYawMeasured, _diagYawExpected, _diagYawDev;
+        bool _diagValid;
+
+        // ---- NOKTA OKUYUCU (gecici) ------------------------------------------------------
+        // Tag'in yerlesimdeki konumunu bulmak icin: tag'den kalibre ol, sonra SAG KUMANDAYI
+        // bilinen bir fiziksel noktaya (orn. eski sifir isareti) DEGDIR ve bu satiri oku.
+        // Okunan deger, o noktanin TAG cercevesindeki yeridir; tag'in o noktaya gore yeri
+        // bunun ters isaretlisidir.
+        //
+        // Neden kumanda, kafa degil: noktaya degdirmek mm hassasiyetinde, uzerinde durmak
+        // 5-10 cm. A/B'nin nokta yakalama yontemi de ayni gerekceyle kumanda kullaniyor.
+        // Neden serit metre degil: eski cercevenin +X/+Z eksenlerinin nereye baktigini
+        // bilmeden elle olculen "1 m solda" bilgisi yerlesime yazilamaz.
+        Transform _rightHandDiag;
+
+        // Canli okuma yetmiyor: kumandayi noktaya degdirip panele bakmak icin eli oynatinca
+        // sayi degisiyor ve yanlis deger okunuyor (yasandi — 2.55 m okundu, gercegi ~1.4 m).
+        // TETIK, o andaki konumu DONDURUR; sonra rahatca okunur.
+        Vector3 _probeCaptured;
+        bool _probeHasCapture;
+        bool _probePrevTrigger;
+
         Transform _rig;
         CalibrationManager _cm;   // rig + CompleteFromTag icin; ilk duzeltmede bir kez bulunur
 
@@ -258,6 +292,16 @@ namespace VRMultiplayer
             // Tag olmasi gereken yerden ne kadar sapmis?
             float dev = Vector3.Distance(avgPos, entry.position);
             float yawDev = Mathf.Abs(Mathf.DeltaAngle(avgYaw, entry.yawDegrees));
+
+            // TESHIS: olculen / beklenen / eksen bazli sapma. Duzeltme yapilsin yapilmasin
+            // yazilir — "duzeltti ama kapanmadi" durumunu gormek icin ikisi de gerekli.
+            _diagMeasured = avgPos;
+            _diagExpected = entry.position;
+            _diagDelta = entry.position - avgPos;
+            _diagYawMeasured = avgYaw;
+            _diagYawExpected = entry.yawDegrees;
+            _diagYawDev = yawDev;
+            _diagValid = true;
 
             if (dev <= correctionDeadzoneMeters && yawDev <= correctionYawDeadzoneDegrees)
             {
@@ -472,6 +516,18 @@ namespace VRMultiplayer
                     $"Jitter: {_jitterMm:0.0} mm\n" +
                     $"Tespit: {_detectHz:0.0} Hz\n" +
                     mode +
+                    // TESHIS bloku — sapma kapaniyor mu, hangi eksende takiliyor?
+                    (_diagValid
+                        ? $"\n--- teshis ---" +
+                          $"\nOlculen : {_diagMeasured.x:+0.00;-0.00} {_diagMeasured.y:+0.00;-0.00} {_diagMeasured.z:+0.00;-0.00}" +
+                          $"\nBeklenen: {_diagExpected.x:+0.00;-0.00} {_diagExpected.y:+0.00;-0.00} {_diagExpected.z:+0.00;-0.00}" +
+                          $"\nSapma dx {_diagDelta.x:+0.00;-0.00} dy {_diagDelta.y:+0.00;-0.00} dz {_diagDelta.z:+0.00;-0.00}" +
+                          // Konum esigi (2 cm) gecse bile YAW esigi (1.5 derece) tutmazsa
+                          // duzeltme yine tetiklenir — "HIZALI" icin IKISI birden gerekir.
+                          $"\nYaw olc {_diagYawMeasured:0.0} bek {_diagYawExpected:0.0} " +
+                          $"sapma {_diagYawDev:0.0} (esik 1.5)"
+                        : "") +
+                    ProbeLine() +
                     (_learnDone
                         ? $"\npos {_learnedPos.x:0.00} {_learnedPos.y:0.00} {_learnedPos.z:0.00}" +
                           $"\nyaw {_learnedYaw:0.0}"
@@ -486,8 +542,52 @@ namespace VRMultiplayer
                     "APRILTAG\n" +
                     "Tag GORUNMUYOR\n" +
                     since + "\n" +
-                    (cameraRunning ? "kamera: calisiyor" : "KAMERA YOK (izin?)");
+                    (cameraRunning ? "kamera: calisiyor" : "KAMERA YOK (izin?)") +
+                    // Okuyucu BURADA da olmali: olculecek fiziksel nokta (orn. eski sifir
+                    // isareti) tag'den uzakta olabilir, o zaman tag kadrajdan cikar. Kalibrasyon
+                    // zaten yapilmis oldugu icin okunan deger gecerlidir — tag'i GORMEK
+                    // gerekmez, bir kez kalibre olmus olmak yeter.
+                    ProbeLine();
             }
+        }
+
+        /// <summary>
+        /// Sag kumandanin DUNYA konumu — bilinen bir fiziksel noktaya degdirip okunmak icin.
+        /// Kalibrasyon tag'den geldigi icin bu deger TAG cercevesindedir.
+        ///
+        /// Kullanim: kumandayi eski sifir isaretine degdir, ciktiyi oku. Diyelim (1.03, 0.00,
+        /// 0.18) — bu, eski sifirin tag cercevesindeki yeridir. O halde TAG, eski cercevede
+        /// (-1.03, h, -0.18)'dedir; yerlesime yazilacak sayi budur.
+        ///
+        /// Rig'in KENDISINI degil kumandayi okuyoruz: kumanda gercek bir fiziksel noktaya
+        /// degdirilebilir, rig soyut bir referanstir.
+        /// </summary>
+        string ProbeLine()
+        {
+            if (_rightHandDiag == null)
+            {
+                var rigRef = XRRigReference.Instance;
+                _rightHandDiag = rigRef != null ? rigRef.rightHand : null;
+                if (_rightHandDiag == null) return "";
+            }
+
+            // Tetigin YUKSELEN kenari yakalar. Basili tutmak tekrar tekrar yakalamaz.
+            bool trig = XRButtons.Button(UnityEngine.XR.XRNode.RightHand,
+                                         UnityEngine.XR.CommonUsages.triggerButton);
+            if (trig && !_probePrevTrigger)
+            {
+                _probeCaptured = _rightHandDiag.position;
+                _probeHasCapture = true;
+            }
+            _probePrevTrigger = trig;
+
+            Vector3 p = _rightHandDiag.position;
+            return $"\n--- nokta okuyucu ---" +
+                   $"\nCanli   : {p.x:+0.00;-0.00} {p.y:+0.00;-0.00} {p.z:+0.00;-0.00}" +
+                   (_probeHasCapture
+                       ? $"\nYAKALANDI: {_probeCaptured.x:+0.00;-0.00} {_probeCaptured.y:+0.00;-0.00} {_probeCaptured.z:+0.00;-0.00}" +
+                         $"\n  yatay mesafe: {new Vector2(_probeCaptured.x, _probeCaptured.z).magnitude:0.00} m"
+                       : "\n(tetige bas = yakala)");
         }
 
         static float YawOf(Quaternion q)

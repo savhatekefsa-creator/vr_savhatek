@@ -40,6 +40,29 @@ namespace VRMultiplayer
     {
         public static CalibrationAnchor Instance { get; private set; }
 
+        // ---- RIG SURUCUSU: KAPALI (PLAN-apriltag.md karar #4) ----------------------------
+        // Anchor ve AprilTag AYNI rig'i yaziyordu, aralarinda hakem yoktu:
+        //
+        //   AprilTagCalibration.Update()   -> rig.RotateAround(...) + rig.position += ...  (goreli)
+        //   CalibrationAnchor.LateUpdate() -> rig.SetPositionAndRotation(pos, rot)         (MUTLAK)
+        //
+        // LateUpdate sonra kostugu icin anchor, tag'in duzeltmesini AYNI KAREDE tamamen
+        // siliyordu. Belirti: "tag'e bakiyorum, sadece olcuyor, hicbir sey yapmiyor" — dogru,
+        // rig uzerinde kalici etkisi yoktu.
+        //
+        // d1176d6 bunu fark edip tag'in KENDI Bind() cagrisini kaldirmisti, ama anchor'i
+        // uyandiran IKINCI kapi (agdan/disten gelen paylasilan cerceve) acik kalmisti. Bu
+        // bayrak iki kapiyi birden kapatir: _driving artik ancak driveRig ACIKSA true olur.
+        //
+        // YAN ETKI (bilincli): Driving false kalinca CalibrationManager'daki sharedReady de
+        // false olur, yani AdoptShared() hic calismaz ve "KALIBRASYON AGDAN GELDI" ekrani
+        // cikmaz. Istenen budur — kalibrasyonun tag'den geldigi SUPHEYE yer birakmadan
+        // gorulsun. Anchor olusturma/paylasma kodu yerinde durur, yalnizca surucu degildir.
+        [Header("Rig surucusu — KAPALI (tag tek otorite)")]
+        [Tooltip("ACMA. Acik oldugunda anchor rig'i her karede MUTLAK yazar ve AprilTag'in " +
+                 "duzeltmesini ezer. Yalnizca tag'siz bir kuruluma geri donulecekse acilir.")]
+        public bool driveRig = false;
+
         [Tooltip("Dikey (Y) drift duzeltmesi. Kapaliyken rig'in Y'si kalibrasyon anindaki degerde " +
                  "sabit kalir (bugunku davranis). Cihazda acik/kapali karsilastirmak icin.")]
         public bool correctVertical = true;
@@ -193,10 +216,13 @@ namespace VRMultiplayer
 
                 _anchor = result.value;
                 _rejectedFrames = 0;
-                _driving = true;
+                _driving = driveRig;   // KAPI 1 — bkz. driveRig notu
                 Debug.Log($"[CalibAnchor] Anchor olusturuldu ({_anchor.trackableId}). " +
-                          $"Rig artik anchor'dan SURULUYOR. Dikey duzeltme: " +
-                          $"{(correctVertical ? "ACIK" : "KAPALI")}.");
+                          (driveRig
+                              ? $"Rig artik anchor'dan SURULUYOR. Dikey duzeltme: " +
+                                $"{(correctVertical ? "ACIK" : "KAPALI")}."
+                              : "Rig SURULMUYOR (driveRig kapali) — tag tek otorite. " +
+                                "Anchor yalnizca paylasim/kalicilik icin duruyor."));
                 ShowStatus(panelSecondsAfterCalibration);
 
                 ShareAnchor(mgr);   // FAZ 2 — ayni odadaki digerlerine ac
@@ -355,10 +381,12 @@ namespace VRMultiplayer
 
             if (_anchor != null && _anchor != anchor) Destroy(_anchor.gameObject);
             _anchor = anchor;
-            _driving = true;
+            _driving = driveRig;   // KAPI 2 — agdan/diskten gelen cerceve de rig'i SURMEZ
 
             Debug.Log($"[CalibAnchor] ORTAK cerceve benimsendi ({anchor.trackableId}). " +
-                      "A/B'ye gerek yok — rig agdan gelen anchor'dan suruluyor.");
+                      (driveRig
+                          ? "A/B'ye gerek yok — rig agdan gelen anchor'dan suruluyor."
+                          : "Rig SURULMUYOR (driveRig kapali) — kalibrasyon tag'den gelir."));
             ShowStatus(panelSecondsAfterCalibration);
         }
 
