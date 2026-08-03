@@ -47,6 +47,9 @@ namespace VRMultiplayer.UI
             var t = new GameObject("Respawn Text");
             t.transform.SetParent(transform, false);
             _text = t.AddComponent<TextMesh>();
+            // FONT SART (bkz. UITheme.DefaultFont): bu olmadan olum/dogum yazisi Quest'te
+            // hic cizilmiyordu — oyuncu neden olu bekledigini goremiyordu.
+            UITheme.ApplyFont(_text);
             _text.characterSize = 0.06f;
             _text.fontSize = 60;
             _text.anchor = TextAnchor.MiddleCenter;
@@ -57,10 +60,15 @@ namespace VRMultiplayer.UI
             gameObject.SetActive(false);
         }
 
-        /// <summary>PlayerHUD'daki ozel font secimi burada da gecerli olsun (bos = varsayilan).</summary>
+        /// <summary>PlayerHUD'daki ozel font secimi burada da gecerli olsun (bos = varsayilan).
+        /// Materyal de degismeli: yalnizca tm.font yazmak yaziyi ESKI fontun atlasiyla cizmeye
+        /// devam ettirir (yanlis glifler / bos kutu).</summary>
         public void SetFont(Font f)
         {
-            if (f != null && _text != null) _text.font = f;
+            if (f == null || _text == null) return;
+            _text.font = f;
+            var mr = _text.GetComponent<MeshRenderer>();
+            if (mr != null) mr.sharedMaterial = f.material;
         }
 
         void OnDestroy()

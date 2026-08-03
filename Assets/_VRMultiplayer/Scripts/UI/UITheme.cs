@@ -19,6 +19,61 @@ namespace VRMultiplayer.UI
         public const float NameCharacterSize = 0.06f;
         public const int NameFontSize = 60;
 
+        static Font _defaultFont;
+        static readonly System.Collections.Generic.Dictionary<int, Material> _fontMats =
+            new System.Collections.Generic.Dictionary<int, Material>();
+
+        /// <summary>Calisma aninda uretilen HER TextMesh'in kullanmasi gereken font.
+        ///
+        /// Unity 6 varsayilan TextMesh fontunu KALDIRDI: font atanmayan bir TextMesh editorde
+        /// (fontun bellekte oldugu ortamda) gorunur ama Quest build'inde HICBIR SEY cizmez.
+        /// Katilim, takim secme, kalibrasyon, oda tarama ve olum panelleri bu yuzden cihazda
+        /// bostu. Tek kaynak burasi — yeni panel yazan herkes ApplyFont cagirmali.</summary>
+        public static Font DefaultFont
+        {
+            get
+            {
+                if (_defaultFont == null)
+                    _defaultFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                return _defaultFont;
+            }
+        }
+
+        /// <summary>TextMesh'e fontu VE font materyalini atar. Ikisi de sart: tm.font yazmak
+        /// MeshRenderer'in materyalini kendiliginden ayarlamaz, materyalsiz kalan yazi cizilmez.
+        ///
+        /// renderQueue > 0 verilirse o kuyruk icin materyal PAYLASILIR (kuyruk basina tek kopya,
+        /// yazi basina degil) — boylece "her zaman ustte ciz" istegi batching'i bozmaz.</summary>
+        public static void ApplyFont(TextMesh tm, int renderQueue = 0)
+        {
+            if (tm == null) return;
+            var font = DefaultFont;
+            if (font == null) return;   // built-in kaynak yoksa mevcut davranista birak
+
+            tm.font = font;
+
+            var mr = tm.GetComponent<MeshRenderer>();
+            if (mr == null) return;
+
+            if (renderQueue <= 0) { mr.sharedMaterial = font.material; return; }
+
+            if (!_fontMats.TryGetValue(renderQueue, out var mat) || mat == null)
+            {
+                mat = new Material(font.material) { renderQueue = renderQueue };
+                _fontMats[renderQueue] = mat;
+            }
+            mr.sharedMaterial = mat;
+        }
+
+        // Domain reload kapaliyken statikler oyunlar arasi tasinir; yok edilmis materyale
+        // tutunmus sozluk ikinci Play'de "MissingReference" verirdi.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics()
+        {
+            _defaultFont = null;
+            _fontMats.Clear();
+        }
+
         /// <summary>Build'de garanti bulunan unlit shader zinciri — calisma aninda malzeme
         /// ureten HER yer bunu kullanmali (4 ayri kopyasi vardi). URP/Unlit sahnede referanssiz
         /// kalirsa build'den strip edilebilir; URP/Lit oda malzemeleri sayesinde hep gemidedir.</summary>
@@ -59,6 +114,101 @@ namespace VRMultiplayer.UI
             return ratio > 0.5f
                 ? Color.Lerp(HealthMid, HealthFull, (ratio - 0.5f) * 2f)
                 : Color.Lerp(HealthLow, HealthMid, ratio * 2f);
+        }
+
+        // --- Dunya-uzayi panel yapi taslari ---
+
+        /// <summary>
+        /// HUD/menu yuzeyi: sahne geometrisinin USTUNE cizen saydam malzeme.
+        ///
+        /// NEDEN BU SHADER: "her zaman ustte ciz" icin dogal refleks URP/Unlit'e
+        /// <c>_ZTest = Always</c> yazmaktir — AMA URP/Unlit'in pass'inde ZTest hic tanimli
+        /// degil ve boyle bir property YOK; <c>SetInt("_ZTest", 8)</c> sessizce hicbir sey
+        /// yapmaz. Yerinde olculdu: URP/Unlit quad'lar zemine takilip kayboluyordu, ayni
+        /// paneldeki YAZILAR ise duruyordu — cunku TextMesh'in font materyali bu shader'i
+        /// kullaniyor. Sonuc: zemin yok, yazi havada. Panelin tamami ayni shader'a alindi.
+        ///
+        /// STRIP RISKI YOK: oyun zaten yazi ciziyor, yani bu shader her build'de gemide.
+        /// Custom bir shader yazmak Resources'a koymayi ya da Always Included listesine
+        /// eklemeyi gerektirirdi.
+        ///
+        /// Beyaz 1x1 doku + <c>_Color</c>: renk _Color'dan, alfa _Color.a'dan gelir.
+        /// SRP batcher ile uyumlu DEGIL (quad basina cizim) — menu/HUD olceginde sorun
+        /// olmadigi olculdu, ama yuzlerce quad'lik bir yuzey icin uygun degildir.
+        /// </summary>
+        public static Material CreateOverlayMaterial(Color color)
+        {
+            var sh = Shader.Find("GUI/Text Shader");
+            if (sh == null) return CreateTransparentMaterial(color);   // olmamali; yine de duselim
+
+            var m = new Material(sh);
+            m.SetTexture("_MainTex", Texture2D.whiteTexture);
+            m.SetColor("_Color", color);
+            return m;
+        }
+
+        /// <summary>Panel zemini / tus yuzeyi icin colliderSIZ, golgesiz quad. Collider
+        /// BILEREK silinir: sahne mermi raycast'leri ve bomba linecast'leriyle dolu, UI'in o
+        /// sorgulara gorunmesi yanlis isabet/siper demek olurdu (imlec analitik calisir,
+        /// collider'a zaten ihtiyaci yok — bkz. <see cref="VRPointer"/>).
+        ///
+        /// <paramref name="overlay"/> true ise yuzey sahnenin USTUNE cizilir
+        /// (bkz. <see cref="CreateOverlayMaterial"/>) — kolokasyonlu oyunda gercek duvar
+        /// cogu zaman panelden yakin oldugu icin HUD/menu icin dogru olan budur.</summary>
+        public static Transform MakeQuad(Transform parent, string name, Color color,
+            int renderQueue = 0, bool overlay = true)
+        {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = name;
+            var col = q.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+            q.transform.SetParent(parent, false);
+
+            var m = overlay ? CreateOverlayMaterial(color) : CreateTransparentMaterial(color);
+            if (renderQueue > 0) m.renderQueue = renderQueue;
+
+            var mr = q.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = m;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            return q.transform;
+        }
+
+        /// <summary>Dunya-uzayi yazi. Font otomatik atanir (bkz. <see cref="ApplyFont"/>);
+        /// boyut <see cref="SizeText"/> ile METRE cinsinden verilir.</summary>
+        public static TextMesh MakeText(Transform parent, string text, Color color,
+            float worldLineHeight, TextAnchor anchor = TextAnchor.MiddleCenter, int renderQueue = 0)
+        {
+            var go = new GameObject("T_" + (string.IsNullOrEmpty(text) ? "empty" : text));
+            go.transform.SetParent(parent, false);
+
+            var tm = go.AddComponent<TextMesh>();
+            ApplyFont(tm, renderQueue);
+            tm.text = text;
+            tm.color = color;
+            tm.anchor = anchor;
+            tm.alignment = anchor == TextAnchor.MiddleLeft || anchor == TextAnchor.UpperLeft
+                ? TextAlignment.Left : TextAlignment.Center;
+            SizeText(tm, worldLineHeight);
+
+            var mr = go.GetComponent<MeshRenderer>();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            return tm;
+        }
+
+        /// <summary>Yaziyi ISTENEN SATIR YUKSEKLIGINE (metre) olcekler.
+        ///
+        /// TextMesh'te satir yuksekligi ~ characterSize * fontSize / 10 yerel birimdir. Projede
+        /// cihazda dogrulanmis degerler (characterSize 0.1 / fontSize 60) sabit tutulup olcek
+        /// transformdan veriliyor — boylece cagiran taraf "kac punto" degil "kac santim"
+        /// dusunur, ki VR'da okunabilirligi belirleyen sey gorme acisi, punto degil.</summary>
+        public static void SizeText(TextMesh tm, float worldLineHeight)
+        {
+            if (tm == null) return;
+            tm.fontSize = 60;
+            tm.characterSize = 0.1f;                       // -> 0.6 yerel birim satir yuksekligi
+            tm.transform.localScale = Vector3.one * (worldLineHeight / 0.6f);
         }
 
         // --- Health Bar Gradient ---

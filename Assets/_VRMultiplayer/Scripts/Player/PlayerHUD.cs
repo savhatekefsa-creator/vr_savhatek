@@ -31,6 +31,7 @@ namespace VRMultiplayer
         DamageDirectionFlash _dirFlash; // hasarin geldigi yonde kenar parlamasi
         LowHealthVignette _vignette;    // dusuk canda kenar kizarmasi
         RespawnGuide _respawnGuide;     // olu/bekleyen ekrani: gri perde + bolge yonlendirmesi
+        KillFeedUI _killFeed;           // sol ust: kim kimi oldurdu + takim skoru
         int _lastHealth = PlayerHealth.MaxHealth;
         float _targetRatio = 1f;
         float _displayedRatio = -1f;   // -1: ilk deger henuz uygulanmadi (animasyonsuz atanir)
@@ -68,6 +69,7 @@ namespace VRMultiplayer
             if (_respawnGuide != null) Destroy(_respawnGuide.gameObject);
             if (_dirFlash != null) Destroy(_dirFlash.gameObject);
             if (_vignette != null) Destroy(_vignette.gameObject);
+            if (_killFeed != null) Destroy(_killFeed.gameObject);
         }
 
         void OnHealthChanged(int prev, int now)
@@ -238,6 +240,11 @@ namespace VRMultiplayer
             // Olu / dogum bekleyen ekrani: gri perde + takim bolgesine yonlendirme + geri sayim.
             _respawnGuide = new GameObject("Respawn Guide").AddComponent<RespawnGuide>();
             _respawnGuide.SetFont(countdownFont);
+
+            // Kill paneli: _root'un ALTINDA DEGIL. _root can degisimine gore kuculup kayboluyor
+            // ve olurken gizleniyor; panel ise olu oyuncuya da gorunmeli (kim kimi olduruyor,
+            // dogum bolgesine yururken de takip edilir).
+            _killFeed = new GameObject("Kill Feed").AddComponent<KillFeedUI>();
             Debug.Log("[PlayerHUD] BuildHud tamamlandi.");
         }
     }

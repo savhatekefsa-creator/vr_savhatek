@@ -52,9 +52,10 @@ namespace VRMultiplayer
         const int QueueBase = 3000;
 
         PlayerHealth _health;
+        PlayerIdentity _identity;   // K/Ö sayaci icin
         HandGrabber _grabber;
         Transform _face;
-        TextMesh _clock, _compass, _battery, _healthT, _ammo;
+        TextMesh _clock, _compass, _battery, _healthT, _ammo, _kd;
         Transform _healthBar;
         float _nextRefresh;
 
@@ -64,6 +65,7 @@ namespace VRMultiplayer
         void Start()
         {
             _health = GetComponentInParent<PlayerHealth>(); // avatar bağlıysa bulur, değilse null
+            _identity = GetComponentInParent<PlayerIdentity>(); // öldürme/ölme sayacı
             _grabber = GetComponentInParent<HandGrabber>(); // elindeki silahın mermisi için
             Build();
         }
@@ -102,6 +104,11 @@ namespace VRMultiplayer
             }
 
             _ammo.text = AmmoText();
+
+            // Kisisel skor. Mac/tur mantigi YOK — yalnizca bu oturumdaki sayac.
+            _kd.text = _identity != null
+                ? "K " + _identity.Kills.Value + "   Ö " + _identity.Deaths.Value
+                : "K 0   Ö 0";
         }
 
         /// <summary>Elindeki silah mermi sayıyorsa gerçek sayı; saymıyorsa (silahsızsın ya da
@@ -181,6 +188,8 @@ namespace VRMultiplayer
             _compass = MakeText(_face, "N 0°",  new Vector3( 0.00f, 0.375f, 0f), TextAnchor.MiddleCenter, Accent,     0.10f);
             _battery = MakeText(_face, "84%",   new Vector3( 0.71f, 0.375f, 0f), TextAnchor.MiddleRight,  ScreenText, 0.095f);
             _healthT = MakeText(_face, "100%",  new Vector3(-0.64f, 0.06f,  0f), TextAnchor.MiddleLeft,   HealthColor, 0.24f);
+            // Can yazisi ile can barinin ARASINDAKI bos serit: yerlesim degistirmeden sigar.
+            _kd      = MakeText(_face, "K 0   Ö 0", new Vector3(-0.64f, -0.09f, 0f), TextAnchor.MiddleLeft, Muted, 0.105f);
             MakeText(_face, "MERMI", new Vector3(0.38f, 0.10f, 0f), TextAnchor.MiddleCenter, Muted, 0.095f);
             _ammo = MakeText(_face, "∞", new Vector3(0.38f, -0.16f, 0f), TextAnchor.MiddleCenter, ScreenText, 0.34f);
 
@@ -223,19 +232,10 @@ namespace VRMultiplayer
             go.transform.localPosition = pos;
             go.transform.localScale = Vector3.one * size;
             var tm = go.AddComponent<TextMesh>();
-            // Unity 6 varsayilan TextMesh fontunu kaldirdi; elle ata yoksa yazi gorunmez.
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font != null)
-            {
-                tm.font = font;
-                var mr = go.GetComponent<MeshRenderer>();
-                if (mr != null)
-                {
-                    // Yazilar her zaman en ustte cizilsin (font materyalinin kopyasi, paylasilani bozmadan).
-                    var tmat = new Material(font.material) { renderQueue = QueueBase + 20 };
-                    mr.sharedMaterial = tmat;
-                }
-            }
+            // Font + materyal tek kaynaktan (bkz. UITheme.DefaultFont). Kuyruk veriliyor ki
+            // yazilar saatin katmanlarinin ustunde kalsin; materyal kuyruk basina PAYLASILIR,
+            // yani ekrandaki 6 yazi eskisi gibi 6 ayri materyal uretmez.
+            VRMultiplayer.UI.UITheme.ApplyFont(tm, QueueBase + 20);
             tm.text = text;
             tm.anchor = anchor;
             tm.alignment = TextAlignment.Center;

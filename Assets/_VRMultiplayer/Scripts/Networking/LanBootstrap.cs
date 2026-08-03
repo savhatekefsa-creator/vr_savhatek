@@ -87,12 +87,19 @@ namespace VRMultiplayer
 
             if (_busy || !right.isValid) return;
 
+            // Isim onaylanmadan katilim yok (bkz. NameEntryUI). PC'nin SUNUCU butonu bu kapiya
+            // TAKILMAZ: sunucu avatar spawn etmiyor, isme ihtiyaci yok.
+            if (!PlayerName.Confirmed) return;
+
             if (XRButtons.Button(XRNode.RightHand, CommonUsages.secondaryButton))  // B
                 StartCoroutine(JoinAsClient());
         }
 
         void EnsureJoinPanel()
         {
+            // Once ISIM. Isim paneli aciktayken katilim panelini kurmayiz: iki panel ust uste
+            // biner ve oyuncu daha adini secmeden B'ye basip isimsiz spawn olurdu.
+            if (!PlayerName.Confirmed) return;
             if (statusLabel != null) return;
             statusLabel = UI.HeadFollowPanel.Create("Join Panel",
                 "OYUNA KATILMAK ICIN\nB TUSUNA BAS", Color.white);
