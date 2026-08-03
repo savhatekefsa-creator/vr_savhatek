@@ -115,6 +115,24 @@ namespace VRMultiplayer.UI
             return Build("IconBolt", v, t);
         }
 
+        /// <summary>Yon oku: govde + baslik, +X'e bakar. Icbukey oldugu icin ucgenleri elle
+        /// veriliyor (merkez yelpazesi icbukey poligonda yanlis yuzey uretir).</summary>
+        public static Mesh Arrow()
+        {
+            var v = new[]
+            {
+                new Vector3(-0.50f, -0.14f, 0f), // 0 govde
+                new Vector3( 0.05f, -0.14f, 0f), // 1
+                new Vector3( 0.05f,  0.14f, 0f), // 2
+                new Vector3(-0.50f,  0.14f, 0f), // 3
+                new Vector3( 0.00f, -0.34f, 0f), // 4 baslik
+                new Vector3( 0.50f,  0.00f, 0f), // 5
+                new Vector3( 0.00f,  0.34f, 0f), // 6
+            };
+            var t = new[] { 0, 1, 2,  0, 2, 3,  4, 5, 6 };
+            return Build("IconArrow", v, t);
+        }
+
         /// <summary>Geri silme oku (SIL): sola bakan besgen.</summary>
         public static Mesh Backspace() => FromPolygon("IconBackspace", new[]
         {

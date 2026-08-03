@@ -32,6 +32,7 @@ namespace VRMultiplayer
         LowHealthVignette _vignette;    // dusuk canda kenar kizarmasi
         RespawnGuide _respawnGuide;     // olu/bekleyen ekrani: gri perde + bolge yonlendirmesi
         KillFeedUI _killFeed;           // sol ust: kim kimi oldurdu + takim skoru
+        SpawnRouteGuide _route;         // zeminde dogum bolgesine giden rota
         int _lastHealth = PlayerHealth.MaxHealth;
         float _targetRatio = 1f;
         float _displayedRatio = -1f;   // -1: ilk deger henuz uygulanmadi (animasyonsuz atanir)
@@ -70,6 +71,7 @@ namespace VRMultiplayer
             if (_dirFlash != null) Destroy(_dirFlash.gameObject);
             if (_vignette != null) Destroy(_vignette.gameObject);
             if (_killFeed != null) Destroy(_killFeed.gameObject);
+            if (_route != null) Destroy(_route.gameObject);
         }
 
         void OnHealthChanged(int prev, int now)
@@ -109,14 +111,17 @@ namespace VRMultiplayer
 
             // Olu / henuz oyuna girmemis oyuncunun ekrani. Mesafe ve geri sayim her kare
             // degistigi icin durum olay bazli degil, surekli beslenir.
-            if (_respawnGuide != null && _health != null)
+            if (_health != null)
             {
-                _respawnGuide.SetState(
-                    _health.Dead.Value,
-                    _identity != null ? _identity.Team.Value : (byte)0,
-                    _health.InSpawnZone.Value,
-                    _health.SpawnProgress.Value,
-                    _health.spawnHoldSeconds);
+                bool dead = _health.Dead.Value;
+                byte team = _identity != null ? _identity.Team.Value : (byte)0;
+                bool inZone = _health.InSpawnZone.Value;
+
+                if (_respawnGuide != null)
+                    _respawnGuide.SetState(dead, team, inZone,
+                        _health.SpawnProgress.Value, _health.spawnHoldSeconds);
+
+                if (_route != null) _route.SetState(dead, team, inZone);
             }
 
             // VR rig yoksa (Editor'de Game penceresinden test) ana kamera kafa yerine gecer.
@@ -245,6 +250,10 @@ namespace VRMultiplayer
             // ve olurken gizleniyor; panel ise olu oyuncuya da gorunmeli (kim kimi olduruyor,
             // dogum bolgesine yururken de takip edilir).
             _killFeed = new GameObject("Kill Feed").AddComponent<KillFeedUI>();
+
+            // Dogum bolgesine giden zemin rotasi. RespawnGuide "bolgene git + x.x m" YAZAR,
+            // bu ise YOLU gosterir — ikisi birbirini tamamlar, ayni durumla beslenirler.
+            _route = new GameObject("Spawn Route").AddComponent<SpawnRouteGuide>();
             Debug.Log("[PlayerHUD] BuildHud tamamlandi.");
         }
     }
