@@ -72,6 +72,8 @@ namespace VRMultiplayer.UI
         {
             _defaultFont = null;
             _fontMats.Clear();
+            _vignette = null;
+            _healthGradient = null;
         }
 
         /// <summary>Build'de garanti bulunan unlit shader zinciri — calisma aninda malzeme
@@ -114,6 +116,64 @@ namespace VRMultiplayer.UI
             return ratio > 0.5f
                 ? Color.Lerp(HealthMid, HealthFull, (ratio - 0.5f) * 2f)
                 : Color.Lerp(HealthLow, HealthMid, ratio * 2f);
+        }
+
+        // --- Kenar vinyeti ---
+
+        static Texture2D _vignette;
+
+        /// <summary>
+        /// Merkezi seffaf, kenarlara dogru opaklasan radyal vinyet dokusu. Kafa onune
+        /// kilitlenen tam-ekran efektlerin ortak dokusu (dusuk can, olum ekrani).
+        ///
+        /// ACI ESLEMESI (0.52 m'de 2x2 quad): uv 0.30 ≈ 30 derece, uv 0.52 ≈ 45 derece
+        /// (Quest lens kenari). Esik bir ara 0.55'ti (~47 derece) ve kararma Quest'te lensin
+        /// GORUNUR alaninin disina cizilip Editor'de gorunup cihazda gorunmuyordu. Bu
+        /// kalibrasyon o dersin sonucu — degistirirken quad'in olcegini de ayni oranda tut,
+        /// yoksa aci esleme kayar.
+        /// </summary>
+        public static Texture2D VignetteTexture
+        {
+            get
+            {
+                if (_vignette != null) return _vignette;
+
+                const int S = 256;
+                _vignette = new Texture2D(S, S, TextureFormat.RGBA32, false)
+                {
+                    wrapMode = TextureWrapMode.Clamp,
+                };
+                for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    Vector2 v = new Vector2(x - (S - 1) * 0.5f, y - (S - 1) * 0.5f) / (S * 0.5f);
+                    float a = Mathf.Pow(Mathf.Clamp01((v.magnitude - 0.30f) / 0.5f), 1.8f);
+                    _vignette.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+                _vignette.Apply();
+                return _vignette;
+            }
+        }
+
+        /// <summary>Kafa onune kilitlenen vinyet quad'i uretir (colliderSiz, golgesiz).</summary>
+        public static Transform MakeVignetteQuad(Transform parent, string name, Color color,
+            out Material mat)
+        {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = name;
+            var col = q.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+            q.transform.SetParent(parent, false);
+
+            mat = CreateTransparentMaterial(color);
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", VignetteTexture);
+            if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", VignetteTexture);
+
+            var mr = q.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = mat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            return q.transform;
         }
 
         // --- Dunya-uzayi panel yapi taslari ---
