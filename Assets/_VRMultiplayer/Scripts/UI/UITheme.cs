@@ -392,6 +392,80 @@ namespace VRMultiplayer.UI
             return m;
         }
 
+        // --- Radyal menu parcalari ---
+        // NOT: WeaponSelectorUI ayni uc yardimciyi kendi icinde PRIVATE tutuyor (bu ortak surum
+        // ondan sonra dogdu). Silah carki calisan ve ince ayarlanmis bir sistem oldugu icin
+        // dokunulmadi; ileride oradaki kopyalar buraya baglanabilir.
+
+        /// <summary>
+        /// Ic/dis yaricapli yay (pasta dilimi) mesh'i, XY duzleminde. Iki yuzu de cizer —
+        /// carkin arkasindan bakildiginda kaybolmasin.
+        /// </summary>
+        public static Mesh ArcMesh(float innerRadius, float outerRadius, float fromDeg, float toDeg, int segments)
+        {
+            var m = new Mesh();
+            var v = new Vector3[(segments + 1) * 2];
+            var t = new int[segments * 12];
+            for (int i = 0; i <= segments; i++)
+            {
+                float a = Mathf.Deg2Rad * Mathf.Lerp(fromDeg, toDeg, (float)i / segments);
+                var dir = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+                v[i * 2] = dir * innerRadius;
+                v[i * 2 + 1] = dir * outerRadius;
+            }
+            for (int i = 0; i < segments; i++)
+            {
+                int b = i * 2, k = i * 12;
+                t[k] = b; t[k + 1] = b + 1; t[k + 2] = b + 2;
+                t[k + 3] = b + 1; t[k + 4] = b + 3; t[k + 5] = b + 2;
+                t[k + 6] = b + 2; t[k + 7] = b + 1; t[k + 8] = b;
+                t[k + 9] = b + 2; t[k + 10] = b + 3; t[k + 11] = b + 1;
+            }
+            m.vertices = v;
+            m.triangles = t;
+            m.RecalculateBounds();
+            return m;
+        }
+
+        /// <summary>
+        /// Yari saydam, isiktan etkilenmeyen, DERINLIK YAZMAYAN overlay materyali.
+        /// <see cref="CreateTransparentMaterial"/>'dan farki: renderQueue elle verilebilir, yani
+        /// dilim / gobek / yazi katmanlari birbirinin ustune belirli sirayla cizilir.
+        /// </summary>
+        public static Material CreateOverlayMaterial(Color color, int renderQueue)
+        {
+            var m = CreateTransparentMaterial(color);
+            if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);   // iki yuz
+            m.renderQueue = renderQueue;
+            return m;
+        }
+
+        /// <summary>
+        /// Dunya-uzayi yazi etiketi. Unity 6'da TextMesh VARSAYILAN FONTSUZ gelir — font
+        /// atanmazsa yazi hic gorunmez (kol saatinde ogrenilen ders); burada bir kez halledildi.
+        /// </summary>
+        public static TextMesh CreateLabel(Transform parent, string text, Vector3 localPosition,
+            float characterSize, int renderQueue)
+        {
+            var go = new GameObject("Label_" + text);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPosition;
+
+            var tm = go.AddComponent<TextMesh>();
+            tm.text = text;
+            tm.characterSize = characterSize;
+            tm.fontSize = 64;
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.alignment = TextAlignment.Center;
+            tm.color = Text;
+            tm.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+            var mr = go.GetComponent<MeshRenderer>();
+            if (tm.font != null) mr.material = tm.font.material;
+            mr.material.renderQueue = renderQueue;
+            return tm;
+        }
+
         /// <summary>
         /// Dokunun yalnizca sol [0..ratio] bolumunu gosterecek sekilde tiling ayarlar; boylece
         /// bar kisaldikca degrade "sıkışmaz", soldan itibaren acilir/kapanir.

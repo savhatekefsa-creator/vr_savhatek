@@ -254,6 +254,11 @@ namespace VRMultiplayer
 
         void LateUpdate()
         {
+            // Insa modu: grip "palet" demek. Bu blogu atlamak, gripin DUSEN kenarinda
+            // Release(h) calisip elindeki silahi yere dusurmesini engeller — el neyi
+            // tutuyorsa tutmaya devam eder, moddan cikinca normal davranis geri gelir.
+            if (XRButtons.GameplayInputSuppressed) return;
+
             if (_left != null) UpdateHand(_left);
             if (_right != null) UpdateHand(_right);
             Reconcile();
