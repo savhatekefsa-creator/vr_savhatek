@@ -357,6 +357,7 @@ namespace VRMultiplayer
 
         Transform _rig;
         CalibrationManager _cm;   // rig + CompleteFromTag icin; ilk duzeltmede bir kez bulunur
+        float _nextStateDiagAt;   // teshis yazimini kisitlar (bkz. ApplyCorrection)
 
         /// <summary>
         /// SUREKLI, kendini onaran hizalama. Tag her gorulduginde:
@@ -432,11 +433,18 @@ namespace VRMultiplayer
             {
                 _switchPending = false;
                 _switchDelta = _diagDelta;
+                // GECIS = iki tag'in yerlesim degerlerinin BIRBIRIYLE uyusmazligi. Panelde
+                // gorunuyordu ama diske yazilmiyordu; en cok ihtiyac duyulan sayi bu.
                 // ISARETLI: duzeltmeyi uygulayabilmek icin yonu de lazim. yawDev mutlak deger
                 // oldugu icin "1.8 derece" hangi yone bilinmiyordu.
                 _switchYawDev = Mathf.DeltaAngle(avgYaw, entry.yawDegrees);
                 _switchTo = entry.id;
                 _hasSwitch = true;
+
+                WriteDiag($"GECIS  tag {_switchFrom} -> {_switchTo}  " +
+                          $"dx {_switchDelta.x:+0.000;-0.000} dy {_switchDelta.y:+0.000;-0.000} " +
+                          $"dz {_switchDelta.z:+0.000;-0.000}  toplam {_switchDelta.magnitude:0.000} m  " +
+                          $"yaw {_switchYawDev:+0.00;-0.00}");
             }
 
             if (dev <= correctionDeadzoneMeters && yawDev <= correctionYawDeadzoneDegrees)
@@ -486,6 +494,18 @@ namespace VRMultiplayer
             // HEMEN yerine oturmasini ister, saniyelerce suzulmesini degil.
             bool snap = dev > snapThresholdMeters || Mathf.Abs(yawDelta) > snapThresholdDegrees;
             float rate = snap ? 1f : Mathf.Clamp01(smallCorrectionRate);
+
+            // Duzeltmeler saniyede 3'e kadar tetiklenir; hepsini yazmak dosyayi bogar.
+            // SNAP her zaman yazilir (nadir ve onemli), normal hiza 5 saniyede bir.
+            if (snap)
+            {
+                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawDelta:+0.00;-0.00}");
+            }
+            else if (Time.time >= _nextStateDiagAt)
+            {
+                _nextStateDiagAt = Time.time + 5f;
+                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawDelta:+0.00;-0.00}");
+            }
 
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
 
