@@ -61,20 +61,29 @@ kapatır.
               │
               ▼
     ┌────────────────────┐  PC "MACI BASLAT"  ┌──────────────────┐
-    │   WARMUP           │ ─────────────────► │   PLAYING        │
-    │ isinma: ates VAR   │                    │ 3:00 geri sayim  │
-    │ hasar YOK          │                    │ hasar VAR        │
+    │   WARMUP           │ ─────────────────► │   STARTING (5sn) │
+    │ isinma: ates VAR   │                    │ 3 . 2 . 1 . BASLA│
+    │ hasar YOK          │                    │ hasar YOK        │
+    │ DOGUM ACIK         │                    │ DOGUM ACIK       │
     └────────────────────┘                    └────────┬─────────┘
-              ▲                                        │ sure doldu
-              │ endScreenSeconds sonra                 │
-              │ (skorlar sifirlanir)                   ▼
+              ▲                                        │
+              │ endScreenSeconds sonra                 ▼
+              │ (skorlar sifirlanir)         ┌────────────────────┐
+              │                              │   PLAYING          │
+              │                              │ 3:00 geri sayim    │
+              │                              │ hasar VAR          │
+              │                              └────────┬───────────┘
+              │                                       │ sure doldu
+              │                                       ▼
               │                              ┌────────────────────┐
               └──────────────────────────────│   ENDED (12 sn)    │
                                              │ kazanan ilan       │
                                              │ ates VAR, hasar YOK│
+                                             │ DOGUM KAPALI       │
                                              └────────────────────┘
 
-        HASAR YALNIZCA "PLAYING" FAZINDA GECER.
+        HASAR  yalnizca PLAYING'de gecer.
+        DOGUM  yalnizca ENDED'de kapali.   <-- IKISI AYRI KAPI, bkz. 8.8
 ```
 
 ### Replike edilen durum (hepsi `NetworkVariable`, sunucu yazar)
@@ -183,6 +192,18 @@ beslenebiliyor.
 6. **Fontsuz `TextMesh` Quest'te çizilmez** — sonuç başlığı `UITheme.MakeText` ile.
 7. **Passthrough kapalı** (`ConstructorPassthrough.DisableAtStartup`) — sonuç başlığı yarı
    saydam olabilir, alfa kısıtı kalktı.
+
+8. **⚠ HASAR KAPISI İLE DOĞUM KAPISI AYRIDIR — bu tuzağa düşüldü ve cihazda yakalandı.**
+   Bu oyunda oyuncu **ölü katılır**: `PlayerHealth.OnNetworkSpawn` `Dead = true` yazar,
+   *"İLK DOĞUŞ da çember mekanizmasından geçer"*. İlk sürümde `TickSpawn` `DamageAllowed`
+   kapısına bağlanmıştı — sonuç: ısınmada kimse oyuna giremiyor, çembere gelen oyuncuya
+   "bölgene git" yazıp duruyor, dolayısıyla **silah da alamıyor**. Doğru kural:
+   - `DamageAllowed`  → yalnızca `Playing`
+   - `RespawnAllowed` → `Ended` **dışında her yerde açık**
+
+9. **Fazın kendisi görünür olmalı.** Maç katmanı eklendiğinde durumu görmenin tek yolu B
+   ile skorbordu açmaktı; oyuncu ısınmada ateş edip "kimse ölmüyor, oyun bozuk" sanıyordu.
+   `MatchStatusUI` bu yüzden var — ve VR'da **ses** yazıdan güçlü bir kanal.
 
 ---
 

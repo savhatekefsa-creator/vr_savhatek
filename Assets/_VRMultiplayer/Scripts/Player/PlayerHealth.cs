@@ -265,10 +265,11 @@ namespace VRMultiplayer
 
         void TickSpawn()
         {
-            // AYNI KAPI: mac disinda ne hasar gecer ne dogum isler. Mac bitince olen ayakta
-            // dirilmez, sonucu olu izler (ekip karari). Isinmaya gecerken MatchManager zaten
-            // herkesi ayaga kaldirdigi icin kimse burada takili kalmaz.
-            if (!Match.MatchManager.DamageAllowed)
+            // DOGUM KAPISI HASAR KAPISINDAN AYRIDIR. Oyuncu OLU KATILIR (bkz. OnNetworkSpawn:
+            // "ILK DOGUS da cember mekanizmasindan gecer") — yani dogum isinmada da islemeli,
+            // yoksa mac baslamadan kimse oyuna giremez ve silah alamaz. Yalnizca mac SONU
+            // ekraninda kapali: olen ayakta dirilmez, sonucu olu izler (ekip karari).
+            if (!Match.MatchManager.RespawnAllowed)
             {
                 ResetSpawnCounters();
                 return;

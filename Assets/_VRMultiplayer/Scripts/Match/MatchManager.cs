@@ -29,12 +29,17 @@ namespace VRMultiplayer.Match
     {
         public enum Phase : byte
         {
-            /// <summary>Mac baslamadi. PC'deki "MACI BASLAT" bekleniyor. Ates var, hasar yok.</summary>
+            /// <summary>Mac baslamadi. PC'deki "MACI BASLAT" bekleniyor. Ates var, hasar yok,
+            /// DOGUM ACIK — oyuncular oyuna girip silahlarini alabilsin.</summary>
             Warmup = 0,
+            /// <summary>Baslangic geri sayimi (3-2-1). Hasar hala yok: butona basildigi an
+            /// kimse hazirliksiz yakalanmasin — biri sirti donuk, biri sarjor degistiriyor
+            /// olabilir.</summary>
+            Starting = 1,
             /// <summary>Mac suruyor. Geri sayim isliyor, hasar gecer.</summary>
-            Playing = 1,
-            /// <summary>Mac bitti, sonuc ekranda. Ates var, hasar yok.</summary>
-            Ended = 2,
+            Playing = 2,
+            /// <summary>Mac bitti, sonuc ekranda. Ates var, hasar yok, olen DIRILMEZ.</summary>
+            Ended = 3,
         }
 
         public static MatchManager Instance { get; private set; }
@@ -63,9 +68,20 @@ namespace VRMultiplayer.Match
             }
         }
 
-        /// <summary>Hasar su an gecer mi? MatchManager YOKSA true doner — mac katmani olmadan
-        /// (tek basina test, eski kayit) oyun eskisi gibi calismaya devam etsin.</summary>
+        /// <summary>Hasar su an gecer mi? YALNIZCA <see cref="Phase.Playing"/>'de.
+        /// MatchManager YOKSA true doner — mac katmani olmadan (tek basina test, eski kayit)
+        /// oyun eskisi gibi calismaya devam etsin.</summary>
         public static bool DamageAllowed => Instance == null || Instance.IsPlaying;
+
+        /// <summary>Dogum/dirilis su an isliyor mu? Hasar kapisindan AYRI olmasi SART:
+        /// bu oyunda oyuncu OLU KATILIR ve dogum cemberinde bekleyerek oyuna girer
+        /// (bkz. <see cref="PlayerHealth.OnNetworkSpawn"/>). Ikisi ayni kapiya baglanınca
+        /// isinmada kimse oyuna GIREMIYOR, dolayisiyla silah da alamiyordu — cemberde
+        /// bekleyen oyuncuya "bolgene git" yazip duruyordu.
+        ///
+        /// Yalnizca <see cref="Phase.Ended"/>'de kapali: mac bitince olen ayakta dirilmez,
+        /// sonucu olu izler (ekip karari).</summary>
+        public static bool RespawnAllowed => Instance == null || Instance.Current != Phase.Ended;
 
         /// <summary>Takimin mac skoru. MatchManager varsa KALICI sayac, yoksa oyunculardan
         /// toplanan eski hesap. Eski hesabin bilinen sinirini (oyuncu cikinca skoru dusuyor)
@@ -95,7 +111,11 @@ namespace VRMultiplayer.Match
             if (nm == null || !nm.IsListening) return;
             double now = nm.ServerTime.Time;
 
-            if (Current == Phase.Playing)
+            if (Current == Phase.Starting)
+            {
+                if (now >= PhaseEndsAt.Value) BeginPlay();
+            }
+            else if (Current == Phase.Playing)
             {
                 var cfg = MatchConfig.Instance;
                 bool timeUp = now >= PhaseEndsAt.Value;
@@ -112,10 +132,12 @@ namespace VRMultiplayer.Match
 
         // ------------------------------------------------------------------ faz gecisleri
 
-        /// <summary>PC'deki "MACI BASLAT" butonu cagirir. Zaten oynaniyorsa hicbir sey yapmaz.</summary>
+        /// <summary>PC'deki "MACI BASLAT" butonu cagirir. Maci HEMEN baslatmaz: once
+        /// <see cref="Phase.Starting"/> geri sayimina sokar. Zaten oynaniyorsa / sayiyorsa
+        /// hicbir sey yapmaz.</summary>
         public void ServerStartMatch()
         {
-            if (!IsServer || Current == Phase.Playing) return;
+            if (!IsServer || Current == Phase.Playing || Current == Phase.Starting) return;
 
             var nm = NetworkManager.Singleton;
             if (nm == null || !nm.IsListening) return;
@@ -123,10 +145,20 @@ namespace VRMultiplayer.Match
             ScoreBlue.Value = 0;
             ScoreRed.Value = 0;
             Winner.Value = 0;
+            // Sifirlama geri sayimin BASINDA: oyuncular 3-2-1 boyunca tam canla, ayakta ve
+            // temiz skorla bekler; "BASLA" dendiginde hazir olurlar.
             ResetPlayers(clearPersonalStats: true);
 
+            PhaseRaw.Value = (byte)Phase.Starting;
+            PhaseEndsAt.Value = nm.ServerTime.Time + MatchConfig.Instance.startCountdownSeconds;
+            Debug.Log("[Match] GERI SAYIM — " + MatchConfig.Instance.startCountdownSeconds + " sn.");
+        }
+
+        void BeginPlay()
+        {
             PhaseRaw.Value = (byte)Phase.Playing;
-            PhaseEndsAt.Value = nm.ServerTime.Time + MatchConfig.Instance.matchSeconds;
+            PhaseEndsAt.Value = NetworkManager.Singleton.ServerTime.Time
+                              + MatchConfig.Instance.matchSeconds;
             Debug.Log("[Match] MAC BASLADI — " + MatchConfig.Instance.matchSeconds + " sn.");
         }
 

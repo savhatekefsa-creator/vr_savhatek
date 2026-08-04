@@ -21,6 +21,10 @@ namespace VRMultiplayer.Match
         [Tooltip("Mac bitince sonuc ekraninin ekranda kalma suresi. Sonrasinda isinmaya donulur.")]
         public float endScreenSeconds = 12f;
 
+        [Tooltip("PC butona bastiktan sonraki 3-2-1 geri sayimi. Butona basildigi an mac " +
+                 "baslasaydi biri sirti donuk, biri sarjor degistiriyor olabilirdi.")]
+        public float startCountdownSeconds = 5f;
+
         [Header("Bitis kosulu")]
         [Tooltip("0 = KAPALI (yalnizca sure). >0 ise bir takim bu skora ulasinca mac erken biter.")]
         public int scoreLimit = 0;

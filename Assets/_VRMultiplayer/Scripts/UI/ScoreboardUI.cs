@@ -366,6 +366,11 @@ namespace VRMultiplayer.UI
                     SetTime("ISINMA");
                     break;
 
+                case Match.MatchManager.Phase.Starting:
+                    if (_resultLocked) ClearResult();
+                    SetTime("BAŞLIYOR");
+                    break;
+
                 case Match.MatchManager.Phase.Ended:
                     // Sonuc ekrani: panel acilir ve B ile kapatilamaz — kazanan kacirilmasin.
                     if (!_resultLocked)

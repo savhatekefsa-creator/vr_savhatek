@@ -32,7 +32,8 @@ namespace VRMultiplayer
         LowHealthVignette _vignette;    // dusuk canda kenar kizarmasi
         RespawnGuide _respawnGuide;     // olu/bekleyen ekrani: gri perde + bolge yonlendirmesi
         KillFeedUI _killFeed;           // sol ust: kim kimi oldurdu
-        ScoreboardUI _scoreboard;       // B ile acilan mac tablosu: skorlar + sure + kendi bilgin
+        ScoreboardUI _scoreboard;       // B ile acilan mac tablosu
+        MatchStatusUI _matchStatus;     // surekli gorunen faz gostergesi + geri sayim + ses: skorlar + sure + kendi bilgin
         SpawnRouteGuide _route;         // zeminde dogum bolgesine giden rota
         int _lastHealth = PlayerHealth.MaxHealth;
         float _targetRatio = 1f;
@@ -73,6 +74,7 @@ namespace VRMultiplayer
             if (_vignette != null) Destroy(_vignette.gameObject);
             if (_killFeed != null) Destroy(_killFeed.gameObject);
             if (_scoreboard != null) Destroy(_scoreboard.gameObject);
+            if (_matchStatus != null) Destroy(_matchStatus.gameObject);
             if (_route != null) Destroy(_route.gameObject);
         }
 
@@ -258,6 +260,11 @@ namespace VRMultiplayer
             // Once surekli gorunen bir ust bar denenmisti; nisani kapatmamak icin lens kenarina
             // yakin durmak zorunda kaliyordu. Istege bagli acilan panel MERKEZE konabiliyor.
             _scoreboard = new GameObject("Scoreboard").AddComponent<ScoreboardUI>();
+
+            // Mac durumu SURGUN gorunur: skorbord istege bagli (B), bu degil. Faz bilgisi
+            // istege bagli olsaydi oyuncu isinmada ates edip "kimse olmuyor, oyun bozuk"
+            // sanardi. Kill paneli gibi _root'un DISINDA — olu oyuncu da gormeli.
+            _matchStatus = new GameObject("Match Status").AddComponent<MatchStatusUI>();
 
             // Dogum bolgesine giden zemin rotasi. RespawnGuide "bolgene git + x.x m" YAZAR,
             // bu ise YOLU gosterir — ikisi birbirini tamamlar, ayni durumla beslenirler.

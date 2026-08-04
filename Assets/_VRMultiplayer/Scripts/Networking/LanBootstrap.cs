@@ -199,8 +199,12 @@ namespace VRMultiplayer
             switch (m.Current)
             {
                 case Match.MatchManager.Phase.Warmup:
-                    GUILayout.Label("ISINMA — ateş var, hasar yok.");
+                    GUILayout.Label("ISINMA — ateş var, hasar yok. Oyuncular doğabilir.");
                     if (GUILayout.Button("MAÇI BAŞLAT")) m.ServerStartMatch();
+                    break;
+
+                case Match.MatchManager.Phase.Starting:
+                    GUILayout.Label("BAŞLIYOR — geri sayım " + Mathf.CeilToInt(m.SecondsLeft) + " sn");
                     break;
 
                 case Match.MatchManager.Phase.Playing:
