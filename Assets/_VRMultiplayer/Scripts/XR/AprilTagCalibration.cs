@@ -87,6 +87,20 @@ namespace VRMultiplayer
         [Tooltip("Ogrenme icin kac olcumun ortalamasi alinsin. Titremeyi bastirir.")]
         public int learnSampleCount = 30;
 
+        [Header("Yerlesim isaretcisi")]
+        [Tooltip("Her tag'in ILAN EDILEN yerine tag boyutunda bir plaka ciz.\n\n" +
+                 "Gercek tag'e bakip plakanin uzerine oturup oturmadigina bakarsin — yerlesimin " +
+                 "dogrulugu boylece sayilarla degil GOZLE denetlenir. Yesil plaka kalibrasyonda " +
+                 "kullanilan tag, sari plaka dogrulama bekleyen tag.")]
+        public bool showTagMarkers = true;
+
+        [Tooltip("Ogrenme modunda passthrough'u AC.\n\n" +
+                 "Plakanin gercek tag'in ustune oturup oturmadigini gormek icin ikisini AYNI " +
+                 "ANDA gormek gerekir; sanal dunya aciksa gercek tag zaten gorunmez. Sanal " +
+                 "dunyayi da gizler — isaretciler ve olcum paneli '~' onekli oldugu icin " +
+                 "ayakta kalir.")]
+        public bool learnPassthrough = true;
+
         [Header("Kalibrasyon")]
         [Tooltip("Ilk saglam tespitte otomatik kalibre et. Kapaliysa yalnizca olcum yapar " +
                  "(FAZ 0 spike modu).")]
@@ -137,15 +151,36 @@ namespace VRMultiplayer
 
         TextMesh _panel;
 
+        void Start()
+        {
+            // DISK SAHNEYI EZER: cihazda olculmus deger, PC'de elle yazilandan guvenilirdir.
+            // Dosya yoksa sahnedeki yerlesim varsayilan olarak kalir.
+            var stored = TagLayoutStore.Load();
+            if (stored != null)
+            {
+                tagLayout = stored;
+                Debug.Log($"[AprilTagCalib] Yerlesim DISKTEN yuklendi ({stored.Length} tag): " +
+                          TagLayoutStore.FilePath);
+            }
+            RebuildMarkers();
+        }
+
         void OnDestroy()
         {
             _detector?.Dispose();
             _detector = null;
             if (_panel != null) Destroy(_panel.gameObject);
+            ClearMarkers();
         }
 
         void Update()
         {
+            // HER KAREDE okunur. Tespit turu 1-3 Hz'de calisir; buton okumasi o kapinin
+            // ARDINDA kalsaydi basislarin cogu kacardi (saniyede bir ornekleme).
+            TickLearnInput();
+            TickTouch();   // her karede: en yakin yaklasmayi kacirmamak icin
+            TickFloor();
+
             if (Time.time < _nextDetectAt) { TickPanel(); return; }
 
             // UYARLANIR HIZ: tespit pahali (tam cozunurluklu GetPixels32 + tag arama, ana
@@ -217,6 +252,12 @@ namespace VRMultiplayer
                 // OLCUM her tag icin yapilir — hangi tag'i gordugumuzu ve ne kadar iyi
                 // gordugumuzu bilmek istiyoruz, yerlesimde tanimli olup olmamasi onemsiz.
                 RecordMeasurement(tag.ID, dist, worldPos);
+
+                // OLCULEN poz saklanir — dokunus yakinlik testi bunu kullanir. Bkz. TouchAnchor:
+                // ilan edilen degere baglanirsa yanlis tahmin dokunusu hic tetiklemez.
+                _seenPos[tag.ID] = worldPos;
+                _seenYaw[tag.ID] = YawOf(worldRot);
+                _seenTime[tag.ID] = Time.time;
 
                 if (learnMode)
                     Learn(tag.ID, dist, worldPos, worldRot);
@@ -509,6 +550,754 @@ namespace VRMultiplayer
         Vector3 _learnedPos;
         float _learnedYaw;
 
+        // ---- OLC -> UYGULA -> GOZLE DOGRULA -----------------------------------------------
+        //
+        // Eskiden olcum sonucu panelde SAYI olarak kalirdi; yerlesime gecirmek PC'de sahneyi
+        // duzenleyip yeniden build almak demekti. Tek bir tag icin saatler suren ve arada
+        // dogru mu yanlis mi gorulemeyen bir dongu. Sag kumandanin B tusu bunu kapatir:
+        //
+        //   olc  ->  B  ->  yerlesime yazilir + diske kaydedilir  ->  plaka tag'in ustune atlar
+        //
+        // Olcum BITMEMISKEN B basmak olcumu sifirlar — yanlis yerden olcmeye basladiysan
+        // uygulamayi kapatip acmak zorunda kalmayasin diye.
+        //
+        // TUS SECIMI: yalnizca learnMode ACIKKEN okunur. B oyunda baska is yapiyor; ogrenme
+        // bir kurulum modu oldugu icin cakisma pratikte olusmaz.
+        bool _applyPrev;
+
+        void TickLearnInput()
+        {
+            if (!learnMode) { _applyPrev = false; _nudgePrev = Vector2.zero; return; }
+
+            EnsureLearnPassthrough();
+            TickNudge();
+
+            // TUS SECIMI — sag A.
+            //
+            // B KULLANILAMAZ: LanBootstrap'ta "oyuna katil" tusu ve sunucuya baglanmamisken
+            // CANLI (LanBootstrap.cs:90). Olcumu yerlesime yazarken ayni anda sunucu aramaya
+            // baslamasi kabul edilemez.
+            //
+            // SAG A her iki durumda da guvenli: TeamSelector de A okur ama o AG OYUNCUSUNDA
+            // yasar — sunucusuz hic var olmaz, baglandiktan sonra da takim secilince _done ile
+            // susar. ConstructorPlacer'in A'si yalnizca insa modunda calisir.
+            // (Sol X denenmedi: RoomScanSync onu tutuyor ve oyuna katilinca canlaniyor.)
+            bool a = XRButtons.Button(UnityEngine.XR.XRNode.RightHand,
+                                      UnityEngine.XR.CommonUsages.primaryButton);
+            bool pressed = a && !_applyPrev;
+            _applyPrev = a;
+            if (!pressed) return;
+
+            // SOL GRIP basiliyken A: kalibrasyon iznini cevir. Ayri bir tusa yer yok —
+            // projede bos yuz tusu kalmadi, ikisini ayirmanin yolu degistirici tus.
+            var lh = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
+
+            if (XRButtons.HeldWithAxisFallback(lh, UnityEngine.XR.CommonUsages.gripButton,
+                                               UnityEngine.XR.CommonUsages.grip, 0.5f))
+            {
+                ToggleUseForSeenTag();
+                return;
+            }
+
+            // SOL TETIK + A: konumu KUMANDA DOKUNUSUNDAN yaz. Kamera poz kestirimi hic
+            // kullanilmaz — A/B'nin verdigi guveni tag sistemini bozmadan verir.
+            if (XRButtons.HeldWithAxisFallback(lh, UnityEngine.XR.CommonUsages.triggerButton,
+                                               UnityEngine.XR.CommonUsages.trigger, 0.5f))
+            {
+                ApplyTouchDerived();
+                return;
+            }
+
+            if (!_learnDone)
+            {
+                ResetLearn();
+                _learnNote = "sifirlandi — bastan olculuyor";
+                return;
+            }
+
+            ApplyLearned();
+        }
+
+        /// <summary>Son GORULEN tag'in kalibrasyon iznini cevirir ve diske yazar.</summary>
+        void ToggleUseForSeenTag()
+        {
+            var entry = Find(_lastId);
+            if (entry == null)
+            {
+                _learnNote = $"tag {_lastId} yerlesimde yok — once olcup B ile ekle";
+                return;
+            }
+
+            entry.useForCalibration = !entry.useForCalibration;
+            bool saved = TagLayoutStore.Save(tagLayout);
+            RebuildMarkers();
+
+            _learnNote = $"tag {entry.id} kalibrasyon " +
+                         (entry.useForCalibration ? "ACIK" : "KAPALI") +
+                         (saved ? "" : " — DISKE YAZILAMADI");
+
+            Debug.Log($"[AprilTagCalib] Tag {entry.id} useForCalibration = {entry.useForCalibration} " +
+                      $"({(saved ? "diske yazildi" : "DISKE YAZILAMADI")}).");
+        }
+
+        // ---- ELLE INCE AYAR ---------------------------------------------------------------
+        //
+        // Yeniden olcmek yalnizca RASTGELE hatayi duzeltir. Sapma SISTEMATIKSE — belli bir
+        // aciyla bakildiginda poz kestiriminin kaydigi durum — her tekrar ayni yanlisi verir
+        // ve olcumu tekrarlamak yalnizca yanlisi daha kararli hale getirir. Plakayi elle
+        // gercek tag'in ustune oturtmak bagimsiz bir olcumdur: gozun yakindan hizalamasi
+        // kameranin poz kestirim hatasini PAYLASMAZ.
+        //
+        // SOL cubuk: sag cubuk silah carkina ve insa paletine bagli, solun ekseni bostadir
+        // (yalnizca tiklamasi insa moduna geciriyor).
+        //
+        //   sol cubuk saga/sola      -> tag duzleminde yatay (duvar boyunca)
+        //   sol cubuk yukari/asagi   -> yukseklik
+        //   sol GRIP + saga/sola     -> yaw
+        //   sol TETIK + yukari/asagi -> duvara dik (ileri/geri)
+        //
+        // AYRIK ADIM, basili tutunca tekrar: surekli kaydirmada dogru noktada durmak zordur.
+        const float NudgeStep = 0.01f;          // m
+        const float NudgeYawStep = 0.5f;        // derece
+        const float NudgeRepeatDelay = 0.35f;   // ilk adimdan sonra tekrara gecis
+        const float NudgeRepeatRate = 12f;      // adim/sn
+
+        Vector2 _nudgePrev;
+        float _nudgeNextAt;
+        bool _nudgeDirty;
+
+        void TickNudge()
+        {
+            var dev = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
+            if (!dev.isValid) return;
+
+            if (!dev.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primary2DAxis, out Vector2 ax))
+                ax = Vector2.zero;
+
+            // Olu bolge + TEK EKSENE kilit: capraz itiste hem yatay hem dikey oynarsa
+            // duzelttigini sanip baska bir ekseni bozarsin.
+            const float dz = 0.6f;
+            int ix = (Mathf.Abs(ax.x) > dz && Mathf.Abs(ax.x) >= Mathf.Abs(ax.y)) ? (int)Mathf.Sign(ax.x) : 0;
+            int iy = (Mathf.Abs(ax.y) > dz && Mathf.Abs(ax.y) >  Mathf.Abs(ax.x)) ? (int)Mathf.Sign(ax.y) : 0;
+
+            if (ix == 0 && iy == 0)
+            {
+                // BIRAKILINCA yazilir. Her adimda diske yazmak, basili tutulan cubukta
+                // saniyede 12 dosya yazmasi demek olurdu.
+                if (_nudgeDirty)
+                {
+                    bool ok = TagLayoutStore.Save(tagLayout);
+                    _nudgeDirty = false;
+                    _learnNote = ok ? "ince ayar kaydedildi" : "ince ayar DISKE YAZILAMADI";
+                }
+                _nudgePrev = Vector2.zero;
+                return;
+            }
+
+            bool first = _nudgePrev == Vector2.zero;
+            _nudgePrev = new Vector2(ix, iy);
+
+            if (first) _nudgeNextAt = Time.time + NudgeRepeatDelay;
+            else if (Time.time < _nudgeNextAt) return;
+            else _nudgeNextAt = Time.time + 1f / NudgeRepeatRate;
+
+            ApplyNudge(dev, ix, iy);
+        }
+
+        void ApplyNudge(UnityEngine.XR.InputDevice dev, int ix, int iy)
+        {
+            var entry = Find(_lastId);
+            if (entry == null)
+            {
+                _learnNote = $"tag {_lastId} yerlesimde yok — once olcup B ile ekle";
+                return;
+            }
+
+            bool grip = XRButtons.HeldWithAxisFallback(dev,
+                UnityEngine.XR.CommonUsages.gripButton, UnityEngine.XR.CommonUsages.grip, 0.5f);
+            bool trigger = XRButtons.HeldWithAxisFallback(dev,
+                UnityEngine.XR.CommonUsages.triggerButton, UnityEngine.XR.CommonUsages.trigger, 0.5f);
+
+            // Eksenler tag'in KENDI cercevesinde: duvara yapisik bir tag'i dunya X/Z ile
+            // itmek onu duvarin icine/disina kaydirir, oysa duzeltmek istedigin sey
+            // neredeyse her zaman duvar BOYUNCA kaymadir.
+            Quaternion rot = Quaternion.Euler(0f, entry.yawDegrees, 0f);
+            string ne;
+
+            if (grip && ix != 0)
+            {
+                entry.yawDegrees = Mathf.Repeat(entry.yawDegrees + ix * NudgeYawStep + 180f, 360f) - 180f;
+                ne = "yaw";
+            }
+            else if (trigger && iy != 0)
+            {
+                entry.position += (rot * Vector3.forward) * (iy * NudgeStep);
+                ne = "derinlik";
+            }
+            else if (ix != 0)
+            {
+                entry.position += (rot * Vector3.right) * (ix * NudgeStep);
+                ne = "yatay";
+            }
+            else
+            {
+                entry.position += Vector3.up * (iy * NudgeStep);
+                ne = "yukseklik";
+            }
+
+            _nudgeDirty = true;
+            SyncMarkerPoses();
+
+            _learnNote = $"tag {entry.id} {ne}: " +
+                         $"{entry.position.x:0.00} {entry.position.y:0.00} {entry.position.z:0.00}" +
+                         $" / yaw {entry.yawDegrees:0.0}";
+        }
+
+        // ---- KUMANDA DOKUNUSU -------------------------------------------------------------
+        //
+        // Yerlesimi denetleyecek BAGIMSIZ bir olcu lazim; kameradan gelen her sayi ayni
+        // biaslari paylasiyor. Serit metre bunu verirdi ama tag'ler duvarda yuksekte, aralari
+        // olculemiyor. Kumanda verebilir: takibi tag tespitinden AYRI bir sistem, dolayisiyla
+        // poz kestirim hatasini paylasmaz.
+        //
+        // KUMANDANIN KENDI OFSETI SORUN DEGIL: izlenen nokta parmak ucunda degil, ama iki
+        // tag'e de ayni sekilde degdigin icin ofset FARKTAN duser. Olculen ara ile ilan
+        // edilen arayi karsilastirmak bu yuzden gecerli.
+        //
+        // EN YAKIN YAKLASMA kaydedilir, anlik deger degil: tag'e degerken paneli okuyamazsin,
+        // kolunu indirdikten sonra okursun.
+        readonly Dictionary<int, Vector3> _touchPos = new Dictionary<int, Vector3>();
+        readonly Dictionary<int, Quaternion> _touchRot = new Dictionary<int, Quaternion>();
+        readonly Dictionary<int, float> _touchTime = new Dictionary<int, float>();
+        int _approachId = -1;
+        float _approachBest;
+        Vector3 _approachPos;
+        Quaternion _approachRot;
+
+        const float TouchEnter = 0.45f;   // altina inince yaklasma baslar
+        const float TouchExit = 0.70f;    // ustune cikinca biter, en yakin nokta saklanir
+
+        // Kameranin SON OLCTUGU tag pozlari. Dokunusun yakinlik testi bunlara baglidir.
+        readonly Dictionary<int, Vector3> _seenPos = new Dictionary<int, Vector3>();
+        readonly Dictionary<int, float> _seenYaw = new Dictionary<int, float>();
+        readonly Dictionary<int, float> _seenTime = new Dictionary<int, float>();
+        readonly List<int> _touchCandidates = new List<int>();
+
+        /// <summary>
+        /// Dokunus icin tag'in NEREDE OLDUGU: taze bir kamera olcumu varsa O, yoksa ilan
+        /// edilen konum.
+        ///
+        /// OLCUM ONCELIKLI OLMAK ZORUNDA. Ilan edilen deger yeni bir tag icin ya hic yoktur
+        /// ya da tamamen yanlistir — kagit yeniden asilmis olabilir. Yakinlik testini yanlis
+        /// bir tahmine baglarsak dokunus HIC tetiklenmez ve tag'i kaydetmenin yolu kalmaz.
+        /// Kamera ise tag'i KIMLIGIYLE taniyor ve her tespitte nerede oldugunu soyluyor;
+        /// konumu yanlis bilse de "su anda su tag'e bakiyorum" bilgisi dogrudur.
+        /// </summary>
+        bool TouchAnchor(int id, out Vector3 anchor)
+        {
+            if (_seenTime.TryGetValue(id, out float t) && Time.time - t < 3f)
+            {
+                anchor = _seenPos[id];
+                return true;
+            }
+            var e = Find(id);
+            if (e != null) { anchor = e.position; return true; }
+
+            anchor = Vector3.zero;
+            return false;
+        }
+
+        void TickTouch()
+        {
+            if (_rightHandDiag == null)
+            {
+                var rigRef = XRRigReference.Instance;
+                _rightHandDiag = rigRef != null ? rigRef.rightHand : null;
+                if (_rightHandDiag == null) return;
+            }
+            Vector3 p = _rightHandDiag.position;
+
+            // Aday tag'ler: yerlesimde OLANLAR + su anda GORULENLER. Ikincisi sart —
+            // yerlesimde hic bulunmayan yeni bir tag ancak boyle kaydedilebilir.
+            _touchCandidates.Clear();
+            if (tagLayout != null)
+                foreach (var t in tagLayout)
+                    if (t != null && !_touchCandidates.Contains(t.id)) _touchCandidates.Add(t.id);
+            foreach (var kv in _seenTime)
+                if (Time.time - kv.Value < 3f && !_touchCandidates.Contains(kv.Key))
+                    _touchCandidates.Add(kv.Key);
+
+            int near = -1;
+            float nd = float.MaxValue;
+            foreach (int id in _touchCandidates)
+            {
+                if (!TouchAnchor(id, out Vector3 a)) continue;
+                float d = Vector3.Distance(p, a);
+                if (d < nd) { nd = d; near = id; }
+            }
+            if (near < 0) return;
+
+            if (_approachId < 0)
+            {
+                if (nd < TouchEnter)
+                {
+                    _approachId = near; _approachBest = nd;
+                    _approachPos = p; _approachRot = _rightHandDiag.rotation;
+                }
+                return;
+            }
+
+            if (near == _approachId && nd < _approachBest)
+            {
+                _approachBest = nd;
+                _approachPos = p; _approachRot = _rightHandDiag.rotation;
+            }
+
+            if (nd > TouchExit || near != _approachId)
+            {
+                _touchPos[_approachId] = _approachPos;
+                _touchRot[_approachId] = _approachRot;
+                _touchTime[_approachId] = Time.time;
+                Debug.Log($"[AprilTagCalib] Tag {_approachId} dokunuldu: {_approachPos} " +
+                          $"(en yakin yaklasma {_approachBest * 100f:0.0} cm).");
+
+                var de = Find(_approachId);
+                string turetilen = TouchDerived(_approachId, out Vector3 dp)
+                    ? $"  turetilen {dp.x:0.000} {dp.y:0.000} {dp.z:0.000}" : "";
+                string ilan = de != null
+                    ? $"  ilan {de.position.x:0.000} {de.position.y:0.000} {de.position.z:0.000}" : "  (yerlesimde YOK)";
+                WriteDiag($"DOKUNUS tag {_approachId}  ham {_approachPos.x:0.000} {_approachPos.y:0.000} {_approachPos.z:0.000}" +
+                          turetilen + ilan + $"  yaklasma {_approachBest * 100f:0.0} cm");
+                _approachId = -1;
+            }
+        }
+
+        /// <summary>
+        /// Tag konumunu KUMANDADAN turetir — kamera poz kestirimi devre disi.
+        ///
+        /// Kumanda takibi tag tespitinden cok daha dogru; tek engeli izlenen noktanin
+        /// parmak ucunda olmamasi. Yani tag'e degdiginde okunan konum = tag'in konumu +
+        /// sabit bir OFSET. Ofset REFERANS tag'de olculur (onun konumu zaten bir TANIM,
+        /// dogru kabul edilir) ve digerlerinden dusulur. A/B'nin verdigi seyi verir:
+        /// kameraya hic guvenmeyen bir konum.
+        ///
+        /// OFSET KUMANDANIN KENDI CERCEVESINDE saklanir. Dunya cercevesinde saklansaydi
+        /// iki tag'e farkli acilarla degdiginde ofset donmez, aradaki fark oldugu gibi
+        /// hataya donusurdu.
+        ///
+        /// YAW VERMEZ: tek dokunus yon tasimaz. Yaw kameradan ya da sol cubuktan gelir.
+        /// </summary>
+        /// <summary>Referans tag'de olculen kumanda ofseti — KUMANDANIN kendi cercevesinde.</summary>
+        bool TouchOffsetLocal(out Vector3 offsetLocal, out int refId)
+        {
+            offsetLocal = Vector3.zero;
+            refId = -1;
+            foreach (var kv in _touchPos)
+            {
+                var e = Find(kv.Key);
+                if (e == null || !e.useForCalibration) continue;
+                offsetLocal = Quaternion.Inverse(_touchRot[kv.Key]) * (e.position - kv.Value);
+                refId = kv.Key;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Kumanda pozunu, DEGDIRILEN noktanin konumuna cevirir.</summary>
+        Vector3 ApplyTouchOffset(Vector3 pos, Quaternion rot)
+        {
+            return TouchOffsetLocal(out Vector3 off, out _) ? pos + rot * off : pos;
+        }
+
+        bool TouchDerived(int id, out Vector3 pos)
+        {
+            pos = Vector3.zero;
+            if (!_touchPos.ContainsKey(id)) return false;
+            if (!TouchOffsetLocal(out Vector3 offsetLocal, out int refId)) return false;
+            if (refId == id) return false;   // referansin kendisi turetilemez
+
+            pos = _touchPos[id] + _touchRot[id] * offsetLocal;
+            return true;
+        }
+
+        // ---- ZEMIN OLCUMU -----------------------------------------------------------------
+        //
+        // Kumandayi yere YATIRMAK ise yaramiyor: IR halkasi gozlugun kameralarindan gizlenince
+        // takip kopuyor ve poz yarim metre siciyor (cihazda olculdu: 0.06 -> 0.56). Dogrusu
+        // kumandayi ELDE TUTUP ucunu yere degdirmek, halkasi gorunur kalsin.
+        //
+        // Olcume tag'lerdeki AYNI ofset uygulanir, yani raporlanan sey "kumandanin izlenen
+        // noktasi" degil GERCEKTEN DEGDIRDIGIN nokta olur.
+        float _floorBest = float.MaxValue;
+        Vector3 _floorPos;
+        Quaternion _floorRot;
+        bool _floorTracking, _hasFloor;
+        float _floorY, _floorRaw;
+
+        void TickFloor()
+        {
+            if (_rightHandDiag == null) return;
+            Vector3 p = _rightHandDiag.position;
+
+            if (p.y < 0.25f)
+            {
+                if (!_floorTracking || p.y < _floorBest)
+                {
+                    _floorTracking = true;
+                    _floorBest = p.y;
+                    _floorPos = p;
+                    _floorRot = _rightHandDiag.rotation;
+                }
+            }
+            else if (_floorTracking && p.y > 0.5f)
+            {
+                _floorTracking = false;
+                _floorRaw = _floorPos.y;
+                _floorY = ApplyTouchOffset(_floorPos, _floorRot).y;
+                _hasFloor = true;
+                _floorBest = float.MaxValue;
+                WriteDiag($"ZEMIN  ham {_floorRaw:0.000}  ofsetli {_floorY:0.000}");
+            }
+        }
+
+        /// <summary>
+        /// Teshis satirini DISKE yazar.
+        ///
+        /// NEDEN LOGCAT DEGIL: bu build'de Unity'nin managed logu logcat'e hic akmiyor —
+        /// uygulama 2700+ satir basiyor ama hepsi native katmandan. Panelden sayi okuyup
+        /// sesli aktarmak hem yavas hem hataya acik. Dosya iki tarafta da guvenilir ve
+        /// adb ile dogrudan cekilebiliyor.
+        /// </summary>
+        static void WriteDiag(string line)
+        {
+            try
+            {
+                System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(Application.persistentDataPath, "TagDiag.log"),
+                    $"[{Time.time:0.0}] {line}\n");
+            }
+            catch { /* teshis yazamamak oyunu durdurmamali */ }
+        }
+
+        /// <summary>Son dokunulan (referans olmayan) tag'in konumunu kumandadan yazar.</summary>
+        void ApplyTouchDerived()
+        {
+            int best = -1;
+            float bestT = -1f;
+            foreach (var kv in _touchTime)
+            {
+                var e = Find(kv.Key);
+                if (e != null && e.useForCalibration) continue;   // referansa yazilmaz
+                if (kv.Value > bestT) { bestT = kv.Value; best = kv.Key; }
+            }
+            if (best < 0) { _learnNote = "once kumandayla bir tag'e degdir"; return; }
+
+            Vector3 pos;
+            if (!TouchDerived(best, out pos))
+            {
+                _learnNote = "once REFERANS tag'e (tag 0) degdir — ofset oradan olculuyor";
+                return;
+            }
+
+            var entry = Find(best);
+            bool isNew = entry == null;
+            if (isNew)
+            {
+                // Yerlesimde HIC OLMAYAN tag: dokunusla sifirdan dogar. Boylece tag 1 ve 2 icin
+                // onceden bir tahmin tutmaya gerek kalmiyor — kagidi nereye asarsan oraya yazilir.
+                // KAPALI dogar: dogrulanmadan kalibrasyona giren yanlis bir tag, dogru olanlarin
+                // kurdugu cerceveyi de bozar.
+                entry = new TagEntry { id = best, useForCalibration = false };
+                var list = new List<TagEntry>(tagLayout ?? Array.Empty<TagEntry>());
+                list.Add(entry);
+                tagLayout = list.ToArray();
+            }
+
+            Vector3 before = entry.position;
+            entry.position = pos;
+
+            // YAW dokunustan gelmez (tek nokta yon tasimaz) — kameradan alinir. Yeni tag'de
+            // sifir birakmak plakayi tamamen yanlis yone cevirir ve dogrulamayi imkansiz kilar.
+            bool yawFromCam = _seenTime.TryGetValue(best, out float st) && Time.time - st < 3f;
+            if (yawFromCam) entry.yawDegrees = _seenYaw[best];
+
+            bool saved = TagLayoutStore.Save(tagLayout);
+            if (isNew) RebuildMarkers(); else SyncMarkerPoses();
+
+            _learnNote = (isNew ? $"tag {best} KUMANDADAN olusturuldu"
+                                : $"tag {best} KUMANDADAN yazildi ({(pos - before).magnitude * 100f:0} cm oynadi)")
+                       + (yawFromCam ? "" : "  [yaw YOK — tag'e bak]")
+                       + (saved ? "" : "  — DISKE YAZILAMADI");
+
+            Debug.Log($"[AprilTagCalib] Tag {best} konumu kumanda dokunusundan turetildi: " +
+                      $"{before} -> {pos}, yaw {entry.yawDegrees:0.0} ({(yawFromCam ? "kameradan" : "eski")}). " +
+                      $"Kamera poz kestirimi konumda kullanilmadi.");
+
+            WriteDiag($"YAZILDI tag {best} {(isNew ? "(YENI)" : "")}  " +
+                      $"{pos.x:0.000} {pos.y:0.000} {pos.z:0.000}  yaw {entry.yawDegrees:0.0}" +
+                      $"  once {before.x:0.000} {before.y:0.000} {before.z:0.000}");
+        }
+
+        string TouchLine()
+        {
+            var sb = new System.Text.StringBuilder();
+
+            // ZEMIN: ofset uygulanmis deger 0'a ne kadar yakin. Oyunun zemini gercek zeminle
+            // ortusuyorsa ~0.00 cikar.
+            if (_hasFloor)
+                sb.Append($"\n\n=== ZEMIN ===  {_floorY:+0.000;-0.000} m   (ham {_floorRaw:+0.000;-0.000})");
+
+            if (_touchPos.Count == 0) return sb.ToString();
+
+            sb.Append("\n\n=== DOKUNMA (kumandayla tag'e degdir) ===");
+            foreach (var kv in _touchPos)
+                sb.Append($"\ntag {kv.Key}  {kv.Value.x:0.00} {kv.Value.y:0.00} {kv.Value.z:0.00}" +
+                          $"   {Time.time - _touchTime[kv.Key]:0} sn once");
+
+            // Iki dokunus varsa serit metrenin yaptigi is: OLCULEN ara ile ILAN EDILEN ara.
+            // Fark buyukse yerlesim yanlis — kameranin ne kadar temiz gorundugu onemsiz.
+            var ids = new List<int>(_touchPos.Keys);
+            for (int i = 0; i < ids.Count; i++)
+                for (int j = i + 1; j < ids.Count; j++)
+                {
+                    var a = Find(ids[i]);
+                    var b = Find(ids[j]);
+                    if (a == null || b == null) continue;
+
+                    float olculen = Vector3.Distance(_touchPos[ids[i]], _touchPos[ids[j]]);
+                    float ilan = Vector3.Distance(a.position, b.position);
+                    sb.Append($"\n{ids[i]}-{ids[j]}  olculen {olculen:0.000}  ilan {ilan:0.000}" +
+                              $"  fark {(olculen - ilan) * 100f:+0.0;-0.0} cm");
+                }
+
+            // KUMANDADAN turetilen konum — kameranin hic karismadigi deger.
+            foreach (var id in ids)
+            {
+                Vector3 d;
+                if (!TouchDerived(id, out d)) continue;
+                var e = Find(id);
+                float fark = e != null ? Vector3.Distance(d, e.position) : 0f;
+                sb.Append($"\ntag {id} KUMANDADAN {d.x:0.00} {d.y:0.00} {d.z:0.00}" +
+                          $"  (ilandan {fark * 100f:0} cm)  [sol tetik+A = yaz]");
+            }
+            return sb.ToString();
+        }
+
+        Constructor.ConstructorPassthrough _pt;
+
+        /// <summary>
+        /// Ogrenme modunda GERCEK odayi goster.
+        ///
+        /// Bu bir konfor ayari degil, sart: isaretci plakasi tag'in IDDIA EDILEN yerini
+        /// cizer, dogrulamak icin GERCEK tag'le ayni karede gorulmesi gerekir. Sanal dunya
+        /// aciksa gercek tag zaten gorunmez ve plakanin dogru olup olmadigi anlasilamaz.
+        ///
+        /// Her karede kontrol edilir: insa moduna girip cikmak passthrough'u kapatabilir,
+        /// bu da onu geri acar. SetActive ayni degerde erken donuyor, bosuna is olmuyor.
+        /// </summary>
+        void EnsureLearnPassthrough()
+        {
+            if (!learnPassthrough) return;
+            if (_pt == null)
+            {
+                _pt = FindFirstObjectByType<Constructor.ConstructorPassthrough>();
+                if (_pt == null) return;
+            }
+            if (!_pt.Active) _pt.SetActive(true);
+        }
+
+        /// <summary>
+        /// Tag'ler arasi ILAN EDILEN mesafeler — serit metreyle karsilastirmak icin.
+        ///
+        /// Kamerayi denetleyen TEK bagimsiz olcu bu. Kalibrasyon kaymasi, poz kestirim biasi,
+        /// drift — hepsi tag'lerin konumlarini BIRLIKTE kaydirabilir ve hicbiri panelde
+        /// belli olmaz. Ama aralarindaki mesafe fiziksel bir gercektir ve serit metre onu
+        /// 5 mm'de verir. Tutmuyorsa yerlesim yanlistir, sayilar ne kadar duzgun gorunurse
+        /// gorunsun.
+        /// </summary>
+        string PairLine()
+        {
+            if (tagLayout == null || tagLayout.Length < 2) return "";
+
+            var sb = new System.Text.StringBuilder("\n\n=== ARALIK (serit metre ile karsilastir) ===");
+            for (int i = 0; i < tagLayout.Length; i++)
+                for (int j = i + 1; j < tagLayout.Length; j++)
+                {
+                    if (tagLayout[i] == null || tagLayout[j] == null) continue;
+                    float d = Vector3.Distance(tagLayout[i].position, tagLayout[j].position);
+                    sb.Append($"\n{tagLayout[i].id}-{tagLayout[j].id}   {d:0.000} m");
+                }
+            return sb.ToString();
+        }
+
+        void ResetLearn()
+        {
+            _learnPos.Clear();
+            _learnYaw.Clear();
+            _learnId = -1;
+            _learnDone = false;
+        }
+
+        /// <summary>
+        /// Olculen pozu yerlesime yazar, diske kaydeder, isaretciyi tazeler.
+        /// </summary>
+        void ApplyLearned()
+        {
+            if (_learnId < 0) return;
+
+            var list = new List<TagEntry>(tagLayout ?? Array.Empty<TagEntry>());
+            var entry = list.Find(t => t != null && t.id == _learnId);
+
+            // DONGUSEL OLCUM ENGELI: su an kalibrasyonu SUREN tag'i olcmek, onu kendi
+            // cercevesinde olcmek demektir — sonuc zorunlu olarak mevcut degerin ta kendisidir
+            // (olu bolge kadar sapmayla). Uzerine yazmak bilgi katmaz, olu bolge hatasini
+            // yerlesime kalici olarak isler. Baska bir tag referansken olcmek anlamlidir.
+            if (entry != null && entry.useForCalibration && _calibId == entry.id)
+            {
+                _learnNote = $"tag {entry.id} SU AN referans — kendini olcemez";
+                Debug.LogWarning($"[AprilTagCalib] Tag {entry.id} yazilmadi: kalibrasyon su an " +
+                                 "bu tag'den geliyor, kendi cercevesinde olculen deger dongusel olur.");
+                return;
+            }
+
+            bool isNew = entry == null;
+            if (isNew)
+            {
+                // YENI tag KAPALI dogar. Yanlis olculmus tek bir tag, dogru olanlarin kurdugu
+                // cerceveyi de bozar ve hangisinin sucu oldugu anlasilmaz — once dogrulanir.
+                entry = new TagEntry { id = _learnId, useForCalibration = false };
+                list.Add(entry);
+            }
+
+            Vector3 before = entry.position;
+            float beforeYaw = entry.yawDegrees;
+
+            entry.position = _learnedPos;
+            entry.yawDegrees = _learnedYaw;
+            tagLayout = list.ToArray();
+
+            bool saved = TagLayoutStore.Save(tagLayout);
+            RebuildMarkers();
+
+            float moved = (entry.position - before).magnitude;
+            float yawMoved = Mathf.Abs(Mathf.DeltaAngle(beforeYaw, entry.yawDegrees));
+
+            _learnNote = isNew
+                ? (saved ? $"TAG {_learnId} EKLENDI (kapali)" : $"TAG {_learnId} EKLENDI — DISKE YAZILAMADI")
+                : (saved ? $"UYGULANDI ({moved * 100f:0} cm, {yawMoved:0.0} derece oynadi)"
+                         : "UYGULANDI — DISKE YAZILAMADI");
+
+            Debug.Log($"[AprilTagCalib] Tag {_learnId} yerlesimi guncellendi.\n" +
+                      $"  once : {before}  yaw {beforeYaw:0.0}\n" +
+                      $"  simdi: {entry.position}  yaw {entry.yawDegrees:0.0}\n" +
+                      $"  fark : {moved * 100f:0.0} cm, {yawMoved:0.0} derece\n" +
+                      $"  dosya: {TagLayoutStore.FilePath} ({(saved ? "yazildi" : "YAZILAMADI")})");
+
+            ResetLearn();
+        }
+
+        // ---- yerlesim isaretcileri --------------------------------------------------------
+        //
+        // Yerlesimin dogrulugu sayilarla denetlenemez: "-1.12" dogru mu yanlis mi, ekranda
+        // bakarak anlasilmaz. Plakayi ILAN EDILEN yere cizip gercek tag'e bakmak ise tek
+        // bakista soyler — ustune oturuyorsa dogru, kaymissa ne kadar kaydigini da gosterir.
+
+        readonly List<GameObject> _markers = new List<GameObject>();
+
+        void ClearMarkers()
+        {
+            foreach (var m in _markers) if (m != null) Destroy(m);
+            _markers.Clear();
+        }
+
+        /// <summary>
+        /// Isaretcileri yeniden KURMADAN yalnizca yerlerini tazeler. Ince ayar saniyede 12
+        /// adim atiyor; her adimda obje yikip yeniden yaratmak bosuna cop uretir.
+        /// </summary>
+        void SyncMarkerPoses()
+        {
+            if (tagLayout == null) return;
+            for (int i = 0; i < _markers.Count && i < tagLayout.Length; i++)
+            {
+                if (_markers[i] == null || tagLayout[i] == null) continue;
+                _markers[i].transform.SetPositionAndRotation(
+                    tagLayout[i].position, Quaternion.Euler(0f, tagLayout[i].yawDegrees, 0f));
+            }
+        }
+
+        void RebuildMarkers()
+        {
+            ClearMarkers();
+            if (!showTagMarkers || tagLayout == null) return;
+
+            foreach (var t in tagLayout)
+            {
+                if (t == null) continue;
+                _markers.Add(BuildMarker(t));
+            }
+        }
+
+        GameObject BuildMarker(TagEntry t)
+        {
+            // "~" ONEKI SART: passthrough acilinca HideVirtualWorld cizen tum kok objeleri
+            // kapatiyor. Oneksiz birakinca isaretci tam da ise yarayacagi anda kaybolurdu —
+            // plakayi gercek tag'le karsilastirmak icin ikisini AYNI ANDA gormek gerekiyor.
+            var root = new GameObject($"~TagIsaretci_{t.id}");
+            root.transform.SetPositionAndRotation(t.position, Quaternion.Euler(0f, t.yawDegrees, 0f));
+
+            // Yesil = kalibrasyonda kullaniliyor. Sari = dogrulama bekliyor.
+            Color c = t.useForCalibration ? new Color(0.2f, 1f, 0.35f) : new Color(1f, 0.85f, 0.15f);
+
+            // PLAKA: tag boyutunda, gercek tag'in tam ustune oturmali.
+            // Quad DEGIL ince kutu — Quad'in tek yuzu var, arkadan bakilinca kaybolur ve
+            // "plaka yok" ile "plaka yanlis yerde" ayirt edilemez hale gelirdi.
+            MakePart(root.transform, "plaka", c,
+                     new Vector3(tagSizeMeters, tagSizeMeters, 0.004f), Vector3.zero);
+
+            // BURUN: yaw'i gorunur kilar. Duz bir plaka 10 derece donukken de duz gorunur;
+            // duvara dik duran bir cubuk egriligi hemen ele verir.
+            //
+            // IKI YONE birden uzar (merkezde, tek tarafa degil): tespitin yaw konvansiyonu
+            // duvarin ICINE bakiyorsa tek tarafli cubuk duvarda kaybolur ve hicbir sey
+            // gostermez. Simetrik cubuk hangi konvansiyon olursa olsun gorunur kalir.
+            MakePart(root.transform, "burun", c,
+                     new Vector3(0.008f, 0.008f, tagSizeMeters * 2.5f), Vector3.zero);
+
+            return root;
+        }
+
+        static void MakePart(Transform parent, string name, Color c, Vector3 scale, Vector3 localPos)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+
+            // Carpisan bir teshis objesi mermileri durdurur ve oyuncuyu takar — gorsel olmali.
+            var col = go.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = scale;
+            Paint(go, c);
+        }
+
+        static void Paint(GameObject go, Color c)
+        {
+            var r = go.GetComponent<Renderer>();
+            if (r == null) return;
+
+            // Isiktan bagimsiz: teshis isaretcisi karanlikta da okunabilmeli.
+            var sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = Shader.Find("Unlit/Color");
+            if (sh == null) sh = Shader.Find("Sprites/Default");
+            if (sh == null) return;
+
+            var m = new Material(sh);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", c);
+            r.sharedMaterial = m;
+        }
+
         TagEntry Find(int id)
         {
             if (tagLayout == null) return null;
@@ -562,7 +1351,11 @@ namespace VRMultiplayer
             if (!showPanel) { if (_panel != null) _panel.gameObject.SetActive(false); return; }
             if (_panel == null)
             {
-                _panel = UI.HeadFollowPanel.Create("AprilTag Olcum", "", Color.white);
+                // "~" ONEKI SART: ConstructorPassthrough.HideVirtualWorld cizen TUM kok
+                // objeleri kapatir, panel de kok bir obje. Oneksiz birakinca passthrough
+                // acildigi anda panel kaybolurdu — yani sayilari tam da gercek dunyayi
+                // gordugun anda kaybederdin.
+                _panel = UI.HeadFollowPanel.Create("~AprilTag Olcum", "", Color.white);
                 var f = _panel.GetComponent<UI.HeadFollowPanel>();
                 if (f != null) f.heightOffset = 0.35f;   // kalibrasyon panelinin USTUNDE
             }
@@ -596,7 +1389,22 @@ namespace VRMultiplayer
                 // gizleniyordu: "HIZALI" hic gorunmuyor sanilip kalibrasyon bozuk zannedildi,
                 // oysa calisiyordu. Coklu tag kurulumunda ikisi ayni anda kullaniliyor
                 // (tag 0 kalibre eder, tag 1 olculur) — ikisini de gormek sart.
-                string mode = (learnMode ? "OGRENME: " + _learnNote + "\n" : "")
+                // B tusunun ne yapacagi ANLIK duruma bagli (yaz / sifirla) — ekranda yazmazsa
+                // kullanici hangi halde oldugunu bilemez ve olcumu yanlislikla siler.
+                // Passthrough istendi ama kamera kalkmadiysa SOYLE. Yoksa oyuncu sanal
+                // dunyayi gorup "isaretci yanlis yerde" sanir; oysa gordugu sey gercek oda
+                // bile degildir.
+                string ptWarn = (learnPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
+                    ? "PASSTHROUGH ACILAMADI (OpenXR ozelligi kapali?)\n" : "";
+
+                string mode = ptWarn
+                            + (learnMode
+                                  ? "OGRENME: " + _learnNote + "\n"
+                                    + (_learnDone ? ">> A = YERLESIME YAZ <<\n"
+                                                  : "(A = olcumu sifirla)\n")
+                                    + "(sol grip+A = kalib ac/kapat | sol tetik+A = kumandadan yaz)\n"
+                                    + "(sol cubuk = ince ayar)\n"
+                                  : "")
                             + (autoCalibrate ? "TAG: " + _calibNote
                                              : (learnMode ? "" : "olcum modu"));
 
@@ -615,6 +1423,9 @@ namespace VRMultiplayer
                     // TAG GECIS SAPMASI — Test C'nin sayisi. Iki tag'in yerlesim degerleri
                     // birbirini tutuyorsa bu ~0 olmali; buyukse tag'lerden biri yanlis olculmus.
                     ProbeLine() +
+                    // Yerlesimi kameradan BAGIMSIZ denetleyen sayilar.
+                    PairLine() +
+                    TouchLine() +
                     // KAPALI tag kontrolu: yerlesim degerini duzeltmek icin gereken sayilar.
                     // "duzeltilmis deger = mevcut - sapma" olacak sekilde okunur.
                     (_hasCheck
@@ -648,6 +1459,9 @@ namespace VRMultiplayer
                     // TAG GECIS SAPMASI — Test C'nin sayisi. Iki tag'in yerlesim degerleri
                     // birbirini tutuyorsa bu ~0 olmali; buyukse tag'lerden biri yanlis olculmus.
                     ProbeLine() +
+                    // Yerlesimi kameradan BAGIMSIZ denetleyen sayilar.
+                    PairLine() +
+                    TouchLine() +
                     // KAPALI tag kontrolu: yerlesim degerini duzeltmek icin gereken sayilar.
                     // "duzeltilmis deger = mevcut - sapma" olacak sekilde okunur.
                     (_hasCheck
