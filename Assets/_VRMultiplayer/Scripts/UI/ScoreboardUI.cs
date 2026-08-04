@@ -65,6 +65,9 @@ namespace VRMultiplayer.UI
 
         const float StripW = 0.46f, StripH = 0.075f, StripGap = 0.030f;
 
+        // Mac sonu seridi: panelin USTUNDE (panel yarisi 0.28 + bosluk).
+        const float ResultW = 0.52f, ResultH = 0.072f, ResultY = 0.335f, ResultSize = 0.038f;
+
         const float TimeLabelSize = 0.016f, TimeSize = 0.048f;
         const float TeamNameSize = 0.026f, TeamScoreSize = 0.040f;
         const float ColLabelSize = 0.015f, RowSize = 0.024f;
@@ -115,6 +118,9 @@ namespace VRMultiplayer.UI
         Transform _panel;
         El _time, _scoreBlue, _scoreRed, _overflowBlue, _overflowRed;
         El _stripName, _stripKills, _stripDeaths, _stripChip;
+        El _result;            // mac sonu basligi (normalde gizli)
+        Transform _resultRoot;
+        bool _resultLocked;    // acikken B paneli kapatamaz
 
         float _open;           // 0 = kapali, 1 = tam acik
         bool _want;
@@ -134,6 +140,24 @@ namespace VRMultiplayer.UI
 
         /// <summary>Panel su an gorunur mu (animasyon dahil)?</summary>
         public bool Visible => _open > 0.001f;
+
+        /// <summary>Mac sonucu ilan et: baslik belirir ve panel ACIK KILITLENIR (B ile
+        /// kapatilamaz). Kilit <see cref="ClearResult"/> ile kalkar.</summary>
+        public void ShowResult(string headline, Color tint)
+        {
+            _resultLocked = true;
+            if (_result == null) return;
+            _result.design = tint;
+            _result.tm.text = headline;
+            if (_resultRoot != null) _resultRoot.gameObject.SetActive(true);
+        }
+
+        /// <summary>Sonuc basligini kaldirir ve paneli B'nin kontrolune geri verir.</summary>
+        public void ClearResult()
+        {
+            _resultLocked = false;
+            if (_resultRoot != null) _resultRoot.gameObject.SetActive(false);
+        }
 
         // ------------------------------------------------------------------ kurulum
 
@@ -164,6 +188,27 @@ namespace VRMultiplayer.UI
                 UITheme.SurfaceEdge, QRow, new Vector2(0f, -0.058f), 0.0032f);
 
             BuildPersonalStrip();
+            BuildResultBanner();
+        }
+
+        /// <summary>Mac sonu basligi: panelin USTUNDE duran serit. Normalde gizli; yalnizca
+        /// <see cref="ShowResult"/> acar. Panelin icine sigdirmak yerine ustune konuldu —
+        /// tablonun kendi yerlesimi hic bozulmuyor.</summary>
+        void BuildResultBanner()
+        {
+            var root = new GameObject("Result Banner").transform;
+            root.SetParent(_panel, false);
+            _resultRoot = root;
+
+            Shape("Result Bg", UIMesh.RoundedRect(ResultW, ResultH, 0.014f),
+                Alpha(UITheme.PanelBg, bgAlpha), QBg, new Vector2(0f, ResultY), 0.004f, root);
+            Shape("Result Edge", UIMesh.RoundedRectOutline(ResultW, ResultH, 0.014f, PanelEdgeW),
+                Alpha(UITheme.PanelEdge, 0.9f), QBg + 1, new Vector2(0f, ResultY), 0.0038f, root);
+
+            _result = Text("", Primary, ResultSize, new Vector2(0f, ResultY),
+                TextAnchor.MiddleCenter, root);
+
+            root.gameObject.SetActive(false);
         }
 
         void BuildTimeCard()
@@ -280,9 +325,10 @@ namespace VRMultiplayer.UI
 
         void Update()
         {
+            SyncMatch();
             ReadButton();
 
-            float target = _want ? 1f : 0f;
+            float target = (_want || _resultLocked) ? 1f : 0f;
             if (!Mathf.Approximately(_open, target))
             {
                 float dur = _want ? openTime : closeTime;
@@ -298,6 +344,50 @@ namespace VRMultiplayer.UI
                 Refresh();
                 ApplyOpen(_open);          // yeni tasarim renkleri animasyon carpaniyla yazilsin
             }
+        }
+
+        /// <summary>Mac durumunu okur: geri sayimi yazar, mac bitince paneli KENDILIGINDEN acar
+        /// ve kazanani ilan eder. MatchManager yoksa hicbir sey yapmaz — panel eski davranisinda
+        /// (sunucu acildigindan beri gecen sure) kalir.</summary>
+        void SyncMatch()
+        {
+            var m = Match.MatchManager.Instance;
+            if (m == null) return;
+
+            switch (m.Current)
+            {
+                case Match.MatchManager.Phase.Playing:
+                    if (_resultLocked) ClearResult();
+                    SetTime(Clock(m.SecondsLeft));
+                    break;
+
+                case Match.MatchManager.Phase.Warmup:
+                    if (_resultLocked) ClearResult();
+                    SetTime("ISINMA");
+                    break;
+
+                case Match.MatchManager.Phase.Ended:
+                    // Sonuc ekrani: panel acilir ve B ile kapatilamaz — kazanan kacirilmasin.
+                    if (!_resultLocked)
+                    {
+                        byte w = m.Winner.Value;
+                        ShowResult(
+                            w == PlayerProfile.TeamBlue ? "MAVİ TAKIM KAZANDI"
+                          : w == PlayerProfile.TeamRed ? "KIZIL TAKIM KAZANDI"
+                          : "BERABERE",
+                            w == PlayerProfile.TeamBlue ? UITheme.TeamBlueText
+                          : w == PlayerProfile.TeamRed ? UITheme.TeamRedText
+                          : Primary);
+                    }
+                    SetTime("MAÇ BİTTİ");
+                    break;
+            }
+        }
+
+        static string Clock(float seconds)
+        {
+            int t = Mathf.Max(0, Mathf.CeilToInt(seconds));
+            return (t / 60).ToString("00") + ":" + (t % 60).ToString("00");
         }
 
         void ReadButton()
@@ -384,7 +474,9 @@ namespace VRMultiplayer.UI
             // yoksa esit skorlu oyuncular her tazelemede yer degistirir).
             _sorted.Sort(CompareRank);
 
-            Write(score, PlayerIdentity.TeamScore(team).ToString());
+            // Takim toplami MatchManager varsa ORADAN gelir (kalici sayac: oyuncu cikinca
+            // dusmez). Mac katmani yoksa eski hesaba duser — MatchManager'siz de calisir.
+            Write(score, Match.MatchManager.TeamScore(team).ToString());
 
             var local = PlayerIdentity.Local;
             int shown = Mathf.Min(_sorted.Count, MaxRows);
