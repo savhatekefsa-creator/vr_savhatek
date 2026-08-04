@@ -216,6 +216,15 @@ Bugün (2026-07-31) okunarak doğrulandı.
 | Tespit hızı | 3 Hz meşgul / 1 Hz boşta | `5116a4a` |
 | Düzeltme ölü bölgesi | 2 cm / 1.5° | `d1176d6` |
 | **Tag 0 yüksekliği (`h`)** | **1.52 m** | şerit metre, 2026-07-31 — tag yeni yerine asıldıktan sonra |
+| **Tag görüşleri arası drift** | **3-5 cm** | cihaz, 2026-07-31 — tag'den uzaklaşıp dönünce; tag görününce toparlıyor |
+
+**3-5 cm drift ne demek:** tag kadrajdan çıkınca düzeltme durur, gözlüğün kendi SLAM'i kayar;
+tag tekrar görününce toparlanır. Anchor'ın işi buydu ama tag'i ezdiği için kesildi (A maddesi).
+
+Nişan/çarpışma için sorun değil. **Harita kurmak için doğruluk tabanı budur** — 4 cm kaymışken
+yerleştirdiğin duvar 4 cm yanlış olur, ve odanın iki ucundaki iki nesnenin BİRBİRİNE göre hatası
+birikir. **D maddesinin (çoklu tag) ölçülmüş gerekçesi budur:** tag'ler dağıtılırsa iki düzeltme
+arası kısalır, drift birikmeye fırsat bulamaz.
 
 **Tag 0 yerleşimi (BU mekân, göç sonrası):** `id: 0, position: (1.30, 1.52, -0.07), yawDegrees: 180`.
 `x`/`z` sıfır DEĞİL çünkü bu bir göç — bkz. B maddesi. Sıfırdan bir mekânda `(0, h, 0)` olur.

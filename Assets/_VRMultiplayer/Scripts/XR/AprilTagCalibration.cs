@@ -67,6 +67,12 @@ namespace VRMultiplayer
                  "Elle olcmekten cok daha hassas: 1 m'de jitter 3 mm.")]
         public bool learnMode = false;
 
+        [Tooltip("YALNIZCA bu ID'li tag ogrenilir. -1 = ilk uygun tag (tek tag'li kurulum icin).\n\n" +
+                 "COKLU TAG'DE MUTLAKA DOLDURUN: ogrenme ilk uygun tag'e KILITLENIR ve bir daha " +
+                 "birakmaz. Tag 0 menzildeyken acarsaniz onu ogrenir, yeni tag'i degil — ve " +
+                 "duzeltmenin tek yolu uygulamayi kapatip acmaktir.")]
+        public int learnTargetId = -1;
+
         [Tooltip("Ogrenme icin en fazla bu mesafeden olcum kabul edilir (m). Jitter mesafenin " +
                  "karesiyle buyudugu icin uzaktan ogrenmek hatayi kalici hale getirir.")]
         public float learnMaxDistance = 1.5f;
@@ -139,7 +145,11 @@ namespace VRMultiplayer
             // is parcaciginda). Macin buyuk kisminda tag kadrajda degil ya da hiza zaten iyi —
             // o sure boyunca tam hizda taramak bosuna. Is varken hizlan, yokken yavasla.
             bool tagFresh = _lastTagTime > 0f && Time.time - _lastTagTime < 2f;
-            bool busy = tagFresh && !_alignedNow;          // gorunuyor ama duzeltme gerekiyor
+            // HENUZ KALIBRE DEGILSEK tam hizda tara. tagFresh ilk tespitte zorunlu olarak
+            // false (tag daha hic gorulmedi), yani ilk tur idle hizinda geciyordu: 1 Hz =
+            // oyuncunun tag'e bakip bosuna bekledigi 1 saniye. Tasarruf edilecek bir sey yok,
+            // oyuncu zaten duvara bakmis bekliyor.
+            bool busy = (tagFresh && !_alignedNow) || !CalibrationManager.Calibrated;
             float rate = busy ? detectionsPerSecond : idleDetectionsPerSecond;
             _nextDetectAt = Time.time + 1f / Mathf.Max(0.2f, rate);
 
@@ -175,32 +185,54 @@ namespace VRMultiplayer
 
             var camPose = PassthroughCameraUtils.GetCameraPoseInWorld(_camMgr.Eye);
 
+            // COKLU TAG: olcum HER tag icin yapilir, kalibrasyon YALNIZCA BIR tag ile.
+            //
+            // Neden tek tag ile duzeltiyoruz: ContinuousCorrect rig'i OYNATIR. Ayni karede
+            // ikinci bir tag'le daha duzeltmek, ikincinin hesabini birincinin tasidigi yeni
+            // cerceveye uygulamak demektir -- ust uste binen duzeltmeler sapma uretir.
+            //
+            // Secim olcutu EN YAKIN: jitter mesafeyle karesel buyuyor (olculdu: 1 m'de 3 mm,
+            // 2 m'de 15 mm), yani en yakin tag her zaman en guvenilir olandir. Agirlikli
+            // fuzyon (birden fazla tag'i birlestirme) gerekmiyor; gerekirse sonraki faz.
+            TagEntry bestEntry = null;
+            float bestDist = float.MaxValue;
+            Vector3 bestPos = Vector3.zero;
+            Quaternion bestRot = Quaternion.identity;
+
             foreach (var tag in _detector.DetectedTags)
             {
                 // Tag'in DUNYA pozu (mevcut, muhtemelen kaymis rig'e gore).
                 Vector3 worldPos = camPose.position + camPose.rotation * tag.Position;
                 Quaternion worldRot = camPose.rotation * tag.Rotation;
+                float dist = tag.Position.magnitude;
 
-                // OLCUM her tag icin yapilir — spike'ta hangi tag'i gordugumuzu ve ne kadar
-                // iyi gordugumuzu bilmek istiyoruz, yerlesimde tanimli olup olmamasi onemsiz.
-                RecordMeasurement(tag.ID, tag.Position.magnitude, worldPos);
+                // OLCUM her tag icin yapilir — hangi tag'i gordugumuzu ve ne kadar iyi
+                // gordugumuzu bilmek istiyoruz, yerlesimde tanimli olup olmamasi onemsiz.
+                RecordMeasurement(tag.ID, dist, worldPos);
 
                 if (learnMode)
-                    Learn(tag.ID, tag.Position.magnitude, worldPos, worldRot);
+                    Learn(tag.ID, dist, worldPos, worldRot);
 
-                // KALIBRASYON: yalnizca yerlesimde TANIMLI tag ile. Tek seferlik DEGIL — tag her
-                // gorulduginde hiza kontrol edilir, gerekiyorsa duzeltilir. Boylece uyku / konum
-                // degisimi / drift sonrasi kendini onarir. (Eski tek-seferlik kilit, uyku sonrasi
-                // yeniden kalibrasyonu blokluyordu ve panel "KALIBRE EDILDI" yalanini gosteriyordu.)
+                // KALIBRASYON adayi: yalnizca yerlesimde TANIMLI tag'ler yarisir.
                 if (autoCalibrate)
                 {
                     var entry = Find(tag.ID);
-                    if (entry != null)
-                        ContinuousCorrect(entry, tag.Position.magnitude, worldPos, worldRot);
+                    if (entry != null && dist < bestDist)
+                    {
+                        bestEntry = entry;
+                        bestDist = dist;
+                        bestPos = worldPos;
+                        bestRot = worldRot;
+                    }
                 }
-
-                break; // tek tag yeter; coklu tag FAZ 5
             }
+
+            // Tek seferlik DEGIL — tag her gorulduginde hiza kontrol edilir, gerekiyorsa
+            // duzeltilir. Boylece uyku / konum degisimi / drift sonrasi kendini onarir.
+            // Kazanan tag degisirse ContinuousCorrect kayan pencereyi zaten temizler
+            // (_calibId kontrolu), yani tag'ler arasi gecis pozu bozmaz.
+            if (bestEntry != null)
+                ContinuousCorrect(bestEntry, bestDist, bestPos, bestRot);
 
             TickPanel();
         }
@@ -222,28 +254,19 @@ namespace VRMultiplayer
         //   dy kapanmiyor  -> dikeyi ezen var (XROrigin floor offset supheli)
         //   dx/dz kapanmiyor -> yatayda baska bir yazici var
         //   hepsi kapaniyor ama yine duzeltiyor -> esik/gurultu sorunu
-        Vector3 _diagMeasured, _diagExpected, _diagDelta;
+        Vector3 _diagDelta;
+
+        // Tag gecisi olcumu: bir tag'den otekine gecerken olusan sapma = iki tag'in
+        // yerlesimdeki degerlerinin BIRBIRIYLE uyusmazligi. Test C'nin sayisal karsiligi.
+        Transform _rightHandDiag;   // nokta okuyucu (gecici, bkz. ProbeLine)
+
+        Vector3 _switchDelta;
+        float _switchYawDev;
+        int _switchFrom = -1, _switchTo = -1;
+        bool _switchPending, _hasSwitch;
         float _diagYawMeasured, _diagYawExpected, _diagYawDev;
         bool _diagValid;
 
-        // ---- NOKTA OKUYUCU (gecici) ------------------------------------------------------
-        // Tag'in yerlesimdeki konumunu bulmak icin: tag'den kalibre ol, sonra SAG KUMANDAYI
-        // bilinen bir fiziksel noktaya (orn. eski sifir isareti) DEGDIR ve bu satiri oku.
-        // Okunan deger, o noktanin TAG cercevesindeki yeridir; tag'in o noktaya gore yeri
-        // bunun ters isaretlisidir.
-        //
-        // Neden kumanda, kafa degil: noktaya degdirmek mm hassasiyetinde, uzerinde durmak
-        // 5-10 cm. A/B'nin nokta yakalama yontemi de ayni gerekceyle kumanda kullaniyor.
-        // Neden serit metre degil: eski cercevenin +X/+Z eksenlerinin nereye baktigini
-        // bilmeden elle olculen "1 m solda" bilgisi yerlesime yazilamaz.
-        Transform _rightHandDiag;
-
-        // Canli okuma yetmiyor: kumandayi noktaya degdirip panele bakmak icin eli oynatinca
-        // sayi degisiyor ve yanlis deger okunuyor (yasandi — 2.55 m okundu, gercegi ~1.4 m).
-        // TETIK, o andaki konumu DONDURUR; sonra rahatca okunur.
-        Vector3 _probeCaptured;
-        bool _probeHasCapture;
-        bool _probePrevTrigger;
 
         Transform _rig;
         CalibrationManager _cm;   // rig + CompleteFromTag icin; ilk duzeltmede bir kez bulunur
@@ -265,7 +288,17 @@ namespace VRMultiplayer
                 _alignedNow = true;   // bu mesafede yapilacak is yok -> tespit hizlanmasin
                 return;
             }
-            if (_calibId >= 0 && entry.id != _calibId) { _calibPos.Clear(); _calibYaw.Clear(); }
+            // TAG GECISI: kazanan tag degisti. Pencere temizlenir (eski ornekler oteki tag'e
+            // ait). Ayrica gecisten SONRAKI ilk sapmayi yakalamak istiyoruz — o sayi iki tag'in
+            // BIRBIRINE ne kadar uymadigini dogrudan olcer. Duzeltme uygulandiktan sonraki
+            // sapma hep ~0 cikar (hizalanmis olur) ve bu bilgiyi gizler.
+            bool justSwitched = _calibId >= 0 && entry.id != _calibId;
+            if (justSwitched)
+            {
+                _calibPos.Clear(); _calibYaw.Clear();
+                _switchFrom = _calibId;
+                _switchPending = true;
+            }
             _calibId = entry.id;
 
             // Kayan pencereye ekle, en fazla calibrateSampleCount tut.
@@ -273,7 +306,12 @@ namespace VRMultiplayer
             _calibYaw.Add(YawOf(worldRot));
             while (_calibPos.Count > calibrateSampleCount) { _calibPos.RemoveAt(0); _calibYaw.RemoveAt(0); }
 
-            int need = Mathf.Min(5, calibrateSampleCount);
+            // ILK hizalamada AZ ornek yeter, sonrakilerde cok.
+            // Ilk duzeltme metre mertebesindedir — 3 mm'lik ornekleme hatasi yaninda gurultu
+            // bile sayilmaz, ortalama almak bosa beklemektir. Kalibre olduktan SONRA duzeltmeler
+            // cm mertebesine iner ve ortalama gercekten degerli olur; orada 5 ornek kalir.
+            // Kotu bir ilk hizalama zaten kendini onarir: bir sonraki tespit duzeltir.
+            int need = CalibrationManager.Calibrated ? Mathf.Min(5, calibrateSampleCount) : 2;
             if (_calibPos.Count < need)
             {
                 _calibNote = $"olculuyor {_calibPos.Count}/{need}";
@@ -293,15 +331,26 @@ namespace VRMultiplayer
             float dev = Vector3.Distance(avgPos, entry.position);
             float yawDev = Mathf.Abs(Mathf.DeltaAngle(avgYaw, entry.yawDegrees));
 
-            // TESHIS: olculen / beklenen / eksen bazli sapma. Duzeltme yapilsin yapilmasin
-            // yazilir — "duzeltti ama kapanmadi" durumunu gormek icin ikisi de gerekli.
-            _diagMeasured = avgPos;
-            _diagExpected = entry.position;
+            // TESHIS: eksen bazli sapma. Duzeltme yapilsin yapilmasin yazilir — "duzeltti ama
+            // kapanmadi" durumunu ancak duzeltme sonrasi deger okunarak gorulur.
             _diagDelta = entry.position - avgPos;
             _diagYawMeasured = avgYaw;
             _diagYawExpected = entry.yawDegrees;
             _diagYawDev = yawDev;
             _diagValid = true;
+
+            // Gecisten sonraki ILK olcum: iki tag'in uyusmazligi. Duzeltme uygulanmadan
+            // once yakalanir ve KALICI durur — oyuncunun okumaya vakti olsun.
+            if (_switchPending)
+            {
+                _switchPending = false;
+                _switchDelta = _diagDelta;
+                // ISARETLI: duzeltmeyi uygulayabilmek icin yonu de lazim. yawDev mutlak deger
+                // oldugu icin "1.8 derece" hangi yone bilinmiyordu.
+                _switchYawDev = Mathf.DeltaAngle(avgYaw, entry.yawDegrees);
+                _switchTo = entry.id;
+                _hasSwitch = true;
+            }
 
             if (dev <= correctionDeadzoneMeters && yawDev <= correctionYawDeadzoneDegrees)
             {
@@ -371,9 +420,18 @@ namespace VRMultiplayer
         {
             if (_learnDone) return;
 
+            // Hedef ID verilmisse baska tag'e BAKMA. Bu satir olmadan ogrenme, menzile giren
+            // ILK tag'e kilitleniyor ve birakmiyordu: coklu tag kurulumunda tag 0 yakindayken
+            // acinca onu olcuyor, yeni tag'i degil.
+            if (learnTargetId >= 0 && id != learnTargetId)
+            {
+                _learnNote = $"tag {learnTargetId} bekleniyor (gorulen: {id})";
+                return;
+            }
+
             if (!CalibrationManager.Calibrated)
             {
-                _learnNote = "once A/B ile kalibre ol";
+                _learnNote = "once kalibre ol (tag 0'a bak)";
                 return;
             }
             if (distance > learnMaxDistance)
@@ -505,32 +563,38 @@ namespace VRMultiplayer
             {
                 // Canli durum — tek seferlik "KALIBRE EDILDI" degil, surekli hiza:
                 //   "HIZALI (1.2 cm)" / "duzeltildi (6.3 cm)" / "yaklas" / "olculuyor X/5"
-                string mode = learnMode     ? "OGRENME: " + _learnNote
-                            : autoCalibrate ? "TAG: " + _calibNote
-                                            : "olcum modu";
+                // IKISI BIRDEN gosterilir. Eskiden learnMode acikken kalibrasyon satiri
+                // gizleniyordu: "HIZALI" hic gorunmuyor sanilip kalibrasyon bozuk zannedildi,
+                // oysa calisiyordu. Coklu tag kurulumunda ikisi ayni anda kullaniliyor
+                // (tag 0 kalibre eder, tag 1 olculur) — ikisini de gormek sart.
+                string mode = (learnMode ? "OGRENME: " + _learnNote + "\n" : "")
+                            + (autoCalibrate ? "TAG: " + _calibNote
+                                             : (learnMode ? "" : "olcum modu"));
 
                 _panel.text =
                     "APRILTAG\n" +
-                    $"Tag: {_lastId}\n" +
-                    $"Mesafe: {_lastDistance:0.00} m\n" +
-                    $"Jitter: {_jitterMm:0.0} mm\n" +
-                    $"Tespit: {_detectHz:0.0} Hz\n" +
+                    // Tek satirda: hangi tag, ne kadar uzakta, ne kadar titrek, ne hizda.
+                    $"Tag {_lastId}   {_lastDistance:0.00} m   {_jitterMm:0.0} mm   {_detectHz:0.0} Hz\n" +
                     mode +
-                    // TESHIS bloku — sapma kapaniyor mu, hangi eksende takiliyor?
+                    // Sapma: konum eksen bazli + yaw. "HIZALI" icin IKISI birden esigin
+                    // altinda olmali (2 cm / 1.5 derece) — biri tutmazsa duzeltme tetiklenir.
                     (_diagValid
-                        ? $"\n--- teshis ---" +
-                          $"\nOlculen : {_diagMeasured.x:+0.00;-0.00} {_diagMeasured.y:+0.00;-0.00} {_diagMeasured.z:+0.00;-0.00}" +
-                          $"\nBeklenen: {_diagExpected.x:+0.00;-0.00} {_diagExpected.y:+0.00;-0.00} {_diagExpected.z:+0.00;-0.00}" +
-                          $"\nSapma dx {_diagDelta.x:+0.00;-0.00} dy {_diagDelta.y:+0.00;-0.00} dz {_diagDelta.z:+0.00;-0.00}" +
-                          // Konum esigi (2 cm) gecse bile YAW esigi (1.5 derece) tutmazsa
-                          // duzeltme yine tetiklenir — "HIZALI" icin IKISI birden gerekir.
-                          $"\nYaw olc {_diagYawMeasured:0.0} bek {_diagYawExpected:0.0} " +
-                          $"sapma {_diagYawDev:0.0} (esik 1.5)"
+                        ? $"\nsapma  dx {_diagDelta.x:+0.00;-0.00} dy {_diagDelta.y:+0.00;-0.00} dz {_diagDelta.z:+0.00;-0.00}" +
+                          $"\nyaw    olc {_diagYawMeasured:0.0}  bek {_diagYawExpected:0.0}  sapma {_diagYawDev:0.0}"
                         : "") +
+                    // OGRENME sonucu — yerlesime yazilacak sayilar. En altta ve ayrik dursun.
+                    // TAG GECIS SAPMASI — Test C'nin sayisi. Iki tag'in yerlesim degerleri
+                    // birbirini tutuyorsa bu ~0 olmali; buyukse tag'lerden biri yanlis olculmus.
                     ProbeLine() +
+                    (_hasSwitch
+                        ? $"\n\n=== TAG {_switchFrom} -> {_switchTo} GECISI ===" +
+                          $"\nsapma  dx {_switchDelta.x:+0.00;-0.00} dy {_switchDelta.y:+0.00;-0.00} dz {_switchDelta.z:+0.00;-0.00}" +
+                          $"\ntoplam {_switchDelta.magnitude:0.00} m   yaw {_switchYawDev:+0.0;-0.0}"
+                        : "") +
                     (_learnDone
-                        ? $"\npos {_learnedPos.x:0.00} {_learnedPos.y:0.00} {_learnedPos.z:0.00}" +
-                          $"\nyaw {_learnedYaw:0.0}"
+                        ? $"\n\n=== TAG {_learnId} OLCULDU ===" +
+                          $"\npos  {_learnedPos.x:0.00}  {_learnedPos.y:0.00}  {_learnedPos.z:0.00}" +
+                          $"\nyaw  {_learnedYaw:0.0}"
                         : "");
             }
             else
@@ -543,24 +607,37 @@ namespace VRMultiplayer
                     "Tag GORUNMUYOR\n" +
                     since + "\n" +
                     (cameraRunning ? "kamera: calisiyor" : "KAMERA YOK (izin?)") +
-                    // Okuyucu BURADA da olmali: olculecek fiziksel nokta (orn. eski sifir
-                    // isareti) tag'den uzakta olabilir, o zaman tag kadrajdan cikar. Kalibrasyon
-                    // zaten yapilmis oldugu icin okunan deger gecerlidir — tag'i GORMEK
-                    // gerekmez, bir kez kalibre olmus olmak yeter.
-                    ProbeLine();
+                    // Olcum sonucu tag kadrajdan ciksa da gorunsun — sayilari not ederken
+                    // oyuncu tag'e bakmayi surdurmek zorunda kalmasin.
+                    // TAG GECIS SAPMASI — Test C'nin sayisi. Iki tag'in yerlesim degerleri
+                    // birbirini tutuyorsa bu ~0 olmali; buyukse tag'lerden biri yanlis olculmus.
+                    ProbeLine() +
+                    (_hasSwitch
+                        ? $"\n\n=== TAG {_switchFrom} -> {_switchTo} GECISI ===" +
+                          $"\nsapma  dx {_switchDelta.x:+0.00;-0.00} dy {_switchDelta.y:+0.00;-0.00} dz {_switchDelta.z:+0.00;-0.00}" +
+                          $"\ntoplam {_switchDelta.magnitude:0.00} m   yaw {_switchYawDev:+0.0;-0.0}"
+                        : "") +
+                    (_learnDone
+                        ? $"\n\n=== TAG {_learnId} OLCULDU ===" +
+                          $"\npos  {_learnedPos.x:0.00}  {_learnedPos.y:0.00}  {_learnedPos.z:0.00}" +
+                          $"\nyaw  {_learnedYaw:0.0}"
+                        : "");
             }
         }
 
         /// <summary>
-        /// Sag kumandanin DUNYA konumu — bilinen bir fiziksel noktaya degdirip okunmak icin.
-        /// Kalibrasyon tag'den geldigi icin bu deger TAG cercevesindedir.
+        /// Sag kumandanin DUNYA konumu — bilinen bir fiziksel noktaya degdirip okumak icin.
         ///
-        /// Kullanim: kumandayi eski sifir isaretine degdir, ciktiyi oku. Diyelim (1.03, 0.00,
-        /// 0.18) — bu, eski sifirin tag cercevesindeki yeridir. O halde TAG, eski cercevede
-        /// (-1.03, h, -0.18)'dedir; yerlesime yazilacak sayi budur.
+        /// SU ANKI SORU (2026-07-31): tag 0'in yuksekligi ELLE 1.52 girildi, tag'in MERKEZI
+        /// olculerek. Ama kumandayla bakildiginda 1.52 tag'in UST KENARINA denk geliyor —
+        /// yani ~7 cm (tag yarisi) kayma var. Iki ihtimal:
+        ///   a) Tespit edilen tag pozu merkez degil, baska bir nokta
+        ///   b) Oyunun y=0'i gercek zeminden ~7 cm farkli (gozlugun zemin tahmini)
         ///
-        /// Rig'in KENDISINI degil kumandayi okuyoruz: kumanda gercek bir fiziksel noktaya
-        /// degdirilebilir, rig soyut bir referanstir.
+        /// AYIRT EDEN TEST: kumandayi ZEMINE degdir.
+        ///   y ~ 0.00  -> zemin dogru, sorun tag pozunda (a)
+        ///   y ~ 0.07  -> oyunun zemini gercek zeminden 7 cm yukarida (b)
+        /// (b) ise HER SEY dikeyde kayar; (a) ise yalnizca tag'lerin y'si.
         /// </summary>
         string ProbeLine()
         {
@@ -570,24 +647,8 @@ namespace VRMultiplayer
                 _rightHandDiag = rigRef != null ? rigRef.rightHand : null;
                 if (_rightHandDiag == null) return "";
             }
-
-            // Tetigin YUKSELEN kenari yakalar. Basili tutmak tekrar tekrar yakalamaz.
-            bool trig = XRButtons.Button(UnityEngine.XR.XRNode.RightHand,
-                                         UnityEngine.XR.CommonUsages.triggerButton);
-            if (trig && !_probePrevTrigger)
-            {
-                _probeCaptured = _rightHandDiag.position;
-                _probeHasCapture = true;
-            }
-            _probePrevTrigger = trig;
-
             Vector3 p = _rightHandDiag.position;
-            return $"\n--- nokta okuyucu ---" +
-                   $"\nCanli   : {p.x:+0.00;-0.00} {p.y:+0.00;-0.00} {p.z:+0.00;-0.00}" +
-                   (_probeHasCapture
-                       ? $"\nYAKALANDI: {_probeCaptured.x:+0.00;-0.00} {_probeCaptured.y:+0.00;-0.00} {_probeCaptured.z:+0.00;-0.00}" +
-                         $"\n  yatay mesafe: {new Vector2(_probeCaptured.x, _probeCaptured.z).magnitude:0.00} m"
-                       : "\n(tetige bas = yakala)");
+            return $"\nkumanda {p.x:+0.00;-0.00} {p.y:+0.00;-0.00} {p.z:+0.00;-0.00}";
         }
 
         static float YawOf(Quaternion q)
