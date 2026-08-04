@@ -32,7 +32,7 @@ namespace VRMultiplayer
         LowHealthVignette _vignette;    // dusuk canda kenar kizarmasi
         RespawnGuide _respawnGuide;     // olu/bekleyen ekrani: gri perde + bolge yonlendirmesi
         KillFeedUI _killFeed;           // sol ust: kim kimi oldurdu
-        MatchBarUI _matchBar;           // ust orta: takim skorlari + mac suresi
+        ScoreboardUI _scoreboard;       // B ile acilan mac tablosu: skorlar + sure + kendi bilgin
         SpawnRouteGuide _route;         // zeminde dogum bolgesine giden rota
         int _lastHealth = PlayerHealth.MaxHealth;
         float _targetRatio = 1f;
@@ -72,7 +72,7 @@ namespace VRMultiplayer
             if (_dirFlash != null) Destroy(_dirFlash.gameObject);
             if (_vignette != null) Destroy(_vignette.gameObject);
             if (_killFeed != null) Destroy(_killFeed.gameObject);
-            if (_matchBar != null) Destroy(_matchBar.gameObject);
+            if (_scoreboard != null) Destroy(_scoreboard.gameObject);
             if (_route != null) Destroy(_route.gameObject);
         }
 
@@ -253,10 +253,11 @@ namespace VRMultiplayer
             // dogum bolgesine yururken de takip edilir).
             _killFeed = new GameObject("Kill Feed").AddComponent<KillFeedUI>();
 
-            // Mac bari: ust-ortada takim skorlari + sure. Kill paneliyle AYNI sebeple _root'un
-            // disinda — skoru ve sureyi olu oyuncu da gormeli. Skor artik YALNIZCA burada
-            // yaziliyor; kill panelinin skor basligi kaldirildi (tek kaynak).
-            _matchBar = new GameObject("Match Bar").AddComponent<MatchBarUI>();
+            // Skorbord: B ile acilan mac tablosu (skorlar + sure + kendi bilgin). Kill paneliyle
+            // AYNI sebeple _root'un disinda — oldugun an skoru en cok merak ettigin andir.
+            // Once surekli gorunen bir ust bar denenmisti; nisani kapatmamak icin lens kenarina
+            // yakin durmak zorunda kaliyordu. Istege bagli acilan panel MERKEZE konabiliyor.
+            _scoreboard = new GameObject("Scoreboard").AddComponent<ScoreboardUI>();
 
             // Dogum bolgesine giden zemin rotasi. RespawnGuide "bolgene git + x.x m" YAZAR,
             // bu ise YOLU gosterir — ikisi birbirini tamamlar, ayni durumla beslenirler.

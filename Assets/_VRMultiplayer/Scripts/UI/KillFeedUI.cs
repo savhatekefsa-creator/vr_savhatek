@@ -9,9 +9,9 @@ namespace VRMultiplayer.UI
     /// <see cref="PlayerHealth.KillReported"/> olayini dinler; sahibe ozel, <see cref="PlayerHUD"/>
     /// tarafindan uretilir.
     ///
-    /// TAKIM SKORU BURADA DEGIL: panelin ustunde bir skor basligi vardi, <see cref="MatchBarUI"/>
-    /// gelince ayni bilgi iki yerde yazilir oldu. Skor ust-ortadaki bara tasindi, panel yalnizca
-    /// "kim kimi oldurdu" isini yapiyor — daha temiz bir sorumluluk ayrimi.
+    /// TAKIM SKORU BURADA DEGIL: panelin ustunde bir skor basligi vardi, ayni bilgi iki yerde
+    /// yazilir olunca kaldirildi. Skor artik <see cref="ScoreboardUI"/>'da (B ile acilan mac
+    /// tablosu); bu panel yalnizca "kim kimi oldurdu" isini yapiyor — temiz sorumluluk ayrimi.
     ///
     /// KONUM KARARI: panel bilerek gorus merkezinden UZAGA, sol ust kosede duruyor (~-26 yatay,
     /// ~+19 dikey derece). Amaci "goz ucuyla surekli takip" degil — ust uste olumlerde nisan

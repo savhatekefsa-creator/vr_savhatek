@@ -49,6 +49,33 @@ namespace VRMultiplayer.Constructor
 
         readonly List<GameObject> _hidden = new List<GameObject>();
 
+        /// <summary>
+        /// PASSTHROUGH VARSAYILAN OLARAK KAPALI — yalnizca INSA MODU acar.
+        ///
+        /// Sahnedeki <see cref="ARCameraManager"/> acik kayitli (menu 23 boyle ekliyor) ve
+        /// "Meta Quest: Camera (Passthrough)" OpenXR ozelligi Android'de acik. Ikisi birlikte
+        /// uygulamayi TUM OTURUM boyunca alfa-harmanli kompozisyona sokuyordu: kare tamponunun
+        /// alfasi 1'in altina dustugu HER YERDE gercek oda goruluyordu. Sonuc, oyuncu modunda
+        /// sisin, patlamanin, hasar flasinin, olum ekraninin ve panellerin icinden gercek odanin
+        /// sizmasiydi — ustelik bu efektlerin hicbiri bozuk degildi, yalnizca saydamdilar.
+        ///
+        /// Kullanici karari (2026-08-04): OYUNCU MODUNDA PASSTHROUGH ISTENMIYOR. Kolokasyon
+        /// guvenligi (olu oyuncunun gercek odayi gormesi) bilerek feda edildi.
+        ///
+        /// Burada kapatmak KOK COZUM: ozellik acik kalabilir, insa modu <see cref="SetActive"/>
+        /// ile istedigi an geri acar. Malzeme tarafindaki alfa duzeltmeleri (bkz.
+        /// <c>UITheme.PreserveDestinationAlpha</c>) ikinci savunma hatti olarak durur — passthrough
+        /// bir gun oyun icinde de acilirsa efektler yine delik acmaz.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void DisableAtStartup()
+        {
+            var cam = FindFirstObjectByType<ARCameraManager>(FindObjectsInactive.Include);
+            if (cam == null || !cam.enabled) return;
+            cam.enabled = false;
+            Debug.Log("[Passthrough] Baslangicta KAPATILDI — yalnizca insa modu acar.");
+        }
+
         void OnDisable() => SetActive(false);
 
         public void SetActive(bool on)
