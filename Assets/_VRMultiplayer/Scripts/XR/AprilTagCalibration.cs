@@ -101,6 +101,14 @@ namespace VRMultiplayer
                  "ayakta kalir.")]
         public bool learnPassthrough = true;
 
+        [Tooltip("Kumanda ofsetinin olculecegi tag. Ofset havuzuna YALNIZCA bu tag'e yapilan " +
+                 "dokunuslar girer, ve bu tag dokunusla YENIDEN YAZILAMAZ.\n\n" +
+                 "Neden sabit bir tag: ofset, tag'in ILAN EDILEN konumu dogru kabul edilerek " +
+                 "hesaplanir. Sifir noktasini TANIMLAYAN tag icin bu her zaman dogrudur; " +
+                 "olculmus bir tag icin degildir. Herhangi bir kalibrasyon tag'ini kabul " +
+                 "edersek, konumu daha az guvenilir bir tag'e dokunmak ofseti kirletir.")]
+        public int offsetReferenceTagId = 0;
+
         [Header("Kalibrasyon")]
         [Tooltip("Ilk saglam tespitte otomatik kalibre et. Kapaliysa yalnizca olcum yapar " +
                  "(FAZ 0 spike modu).")]
@@ -919,12 +927,16 @@ namespace VRMultiplayer
                 // kadardir (~5-7 cm). 15 cm'nin ustu tag'e degmemissin demektir; boyle bir
                 // ornegi havuza katmak ortalamayi bozar. (Cihazda goruldu: 16,9 cm'lik bir
                 // iskalanin ardindan gelen dogru dokunus 6,7 cm'ydi.)
+                // YALNIZCA belirlenmis referans tag'i ofset uretir. Eskiden useForCalibration
+                // acik olan HER tag uretiyordu; tag 1/2 acilinca onlara dokunmak da havuza
+                // ornek ekliyordu (cihazda goruldu: "ornek 5", "ornek 6"). Ofset, tag'in ILAN
+                // EDILEN konumu dogru kabul edilerek hesaplandigi icin daha az guvenilir bir
+                // tag'den ornek almak ofseti kirletir ve kirlilik SONRAKI TUM olcumlere gecer.
                 var refEntry = Find(_approachId);
-                if (refEntry != null && refEntry.useForCalibration)
+                if (refEntry != null && _approachId == offsetReferenceTagId)
                 {
                     if (_approachBest <= 0.15f)
                     {
-                        _refId = _approachId;
                         _refOffsets.Add(Quaternion.Inverse(_approachRot) *
                                         (refEntry.position - _approachPos));
                         WriteDiag($"OFSET  ornek {_refOffsets.Count}  sacilma {RefOffsetSpread() * 100f:0.0} cm");
@@ -972,13 +984,12 @@ namespace VRMultiplayer
         // yasandi: tag 1 tam bu yuzden 2,4 cm yuksek yazildi. Ortalama gurultuyü kok-N ile
         // bastirir ve her yeni referans dokunusu tahmini IYILESTIRIR, bozmaz.
         readonly List<Vector3> _refOffsets = new List<Vector3>();
-        int _refId = -1;
 
         /// <summary>Referans tag'de olculen kumanda ofseti — KUMANDANIN kendi cercevesinde.</summary>
         bool TouchOffsetLocal(out Vector3 offsetLocal, out int refId)
         {
             offsetLocal = Vector3.zero;
-            refId = _refId;
+            refId = offsetReferenceTagId;
             if (_refOffsets.Count == 0) return false;
 
             foreach (var o in _refOffsets) offsetLocal += o;
@@ -1079,11 +1090,24 @@ namespace VRMultiplayer
             float bestT = -1f;
             foreach (var kv in _touchTime)
             {
-                var e = Find(kv.Key);
-                if (e != null && e.useForCalibration) continue;   // referansa yazilmaz
+                // KORUNAN TEK TAG: su an kalibrasyonu SUREN olan. Onu kendi cercevesinde
+                // olcmek dongusel olur.
+                //
+                // Eskiden useForCalibration acik olan HER tag korunuyordu — bu, bir tag'i
+                // dogrulayip actiktan sonra onu YENIDEN OLCMEYI imkansiz kiliyordu. Cihazda
+                // yasandi: tag 1 ve 2 acildiktan sonra sol tetik+A sessizce reddetti, log'da
+                // tek bir YAZILDI satiri bile olusmadi ve olcum yapildi saniladi.
+                if (kv.Key == _calibId) continue;
+                if (kv.Key == offsetReferenceTagId) continue;   // sifir noktasinin TANIMI
                 if (kv.Value > bestT) { bestT = kv.Value; best = kv.Key; }
             }
-            if (best < 0) { _learnNote = "once kumandayla bir tag'e degdir"; return; }
+            if (best < 0)
+            {
+                _learnNote = _touchPos.Count == 0
+                    ? "once kumandayla bir tag'e degdir"
+                    : $"yazilabilir tag yok (tag {_calibId} su an referans)";
+                return;
+            }
 
             Vector3 pos;
             if (!TouchDerived(best, out pos))
