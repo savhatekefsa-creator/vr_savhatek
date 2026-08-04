@@ -124,25 +124,61 @@ namespace VRMultiplayer.Weapons
             {
                 if (slots[i].OwnerId != instanceId) continue;
 
-                var held = slots[i].Current;
-                if (held != null && !held.IsHeld && held.isActiveAndEnabled)
-                {
-                    var no = held.GetComponent<NetworkObject>();
-                    if (no != null && no.IsSpawned) no.Despawn();
-                    else Destroy(held.gameObject);
-                }
+                DespawnSlotWeapon(slots[i]);
 
                 slots.RemoveAt(i);
                 ConstructorWeaponCount = Mathf.Max(0, ConstructorWeaponCount - 1);
             }
         }
 
-        /// <summary>Forgets every built rack — the map is being torn down and rebuilt.</summary>
+        /// <summary>
+        /// Forgets every built rack — the map is being torn down and rebuilt.
+        ///
+        /// YUVADAKI SILAHLAR DA GIDER. Kaydi dusurmek yetmiyordu: silahlar gercek ag objeleri
+        /// ve haritanin COCUGU DEGIL, o yuzden <see cref="MapBuilder.Clear"/> onlara dokunmuyor.
+        /// Kayit dusup objeler kalinca "yeni harita" bos bir zeminde ONCEKI haritanin
+        /// silahlariyla aciliyordu — ve o silahlar artik hicbir rafa bagli olmadigi icin bir
+        /// daha toplanmiyorlardi bile.
+        /// </summary>
         public static void ClearConstructorRacks()
         {
             if (_instance == null) return;
-            _instance._slots.RemoveAll(s => s.OwnerId != 0);
+
+            var slots = _instance._slots;
+            for (int i = slots.Count - 1; i >= 0; i--)
+            {
+                if (slots[i].OwnerId == 0) continue;   // sahneye elle konmus: haritaya ait degil
+
+                DespawnSlotWeapon(slots[i]);
+                slots.RemoveAt(i);
+            }
             ConstructorWeaponCount = 0;
+        }
+
+        /// <summary>
+        /// Yuvadaki silahi ortadan kaldirir.
+        ///
+        /// TUTULAN SILAHA DOKUNULMAZ: oyuncu aldigi anda o silah rafin olmaktan cikti, ve baska
+        /// yerde bir duvar silindi diye elinden almak bir oyunun yapacagi sey degil.
+        ///
+        /// DESPAWN SUNUCUNUN ISI. Bu metot her peer'da calisan Clear/Unregister yolundan
+        /// cagriliyor; istemcide Despawn cagirmak Netcode hatasi verir. Istemci zaten sunucunun
+        /// despawn'ini agdan goruyor.
+        /// </summary>
+        static void DespawnSlotWeapon(RackSlot s)
+        {
+            var held = s.Current;
+            if (held == null || held.IsHeld || !held.isActiveAndEnabled) return;
+
+            var nm = NetworkManager.Singleton;
+            var no = held.GetComponent<NetworkObject>();
+
+            if (no != null && no.IsSpawned)
+            {
+                if (nm != null && nm.IsServer) no.Despawn();
+                return;
+            }
+            Destroy(held.gameObject);
         }
 
         void Update()
