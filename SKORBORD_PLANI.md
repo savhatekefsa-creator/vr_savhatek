@@ -98,14 +98,18 @@ dersi). Tüm yazılar `UITheme.MakeText` (Quest font tuzağı). Görsel dil eşl
 | Takım toplam skoru (başlıkta) | `TextPrimary` 0.040 m — MatchBar'daki gibi renk chip'i (`TeamAColor`/`TeamBColor`) yanında |
 | Ortadaki süre altıgeni | Yuvarlak köşeli küçük kart: `SurfaceFill` + `SurfaceEdge` çerçeve, "SÜRE" `TextMuted`, saat `TextPrimary` 0.048 |
 | Satır zeminleri | `SurfaceFill` alfa ~0.5, kendi satırım `HoverCol` (giriş ekranının vurgu rengi — aynı dil) |
-| Panel zemini | `PanelBg` **TAM OPAK** + `RoundedRectOutline` çerçeve `PanelEdge` — ⚠ bkz. §3.1 |
-| Ölü oyuncu | satır içeriği zemine %45 karıştırılmış (**alfa değil renk**) + "ÖLÜ" etiketi `TeamRedText` (ikon/emoji YOK — font riski; Türkçe glifler cihazda kanıtlı) |
+| Panel zemini | `PanelBg` alfa **~0.72** + `RoundedRectOutline` çerçeve `PanelEdge` — bkz. §3.1 |
+| Ölü oyuncu | satır içeriği alfa ~0.45 + "ÖLÜ" etiketi `TeamRedText` (ikon/emoji YOK — font riski; Türkçe glifler cihazda kanıtlı) |
 | K / D kolonları | "K" / "Ö" — kol saatiyle (`WatchScreenUI` "K x Ö y") aynı terim |
 
-### 3.1 ⚠ HİÇBİR YÜZEY YARI SAYDAM OLAMAZ (cihazda yanıldı, 2026-08-04)
+### 3.1 Yarı saydamlık — sorun çıktı, KÖKÜNDEN çözüldü (2026-08-04)
 
-Panel önce zemin alfa 0.72 ile yazıldı. Quest'te sonuç: **panelin içinden gerçek oda
-görünüyordu** — çizim doğru, ama panel bir "pencere" gibi davranıyordu.
+> **Sonuç: panel yarı saydam KALDI (alfa 0.72).** Aşağıdaki kısıt bir süre geçerliydi,
+> sonra kök sebep bulunup kaldırıldı. Kayıt, passthrough bir gün oyun içinde tekrar
+> açılırsa diye duruyor.
+
+İlk cihaz testinde **panelin içinden gerçek oda görünüyordu** — çizim doğru, ama panel bir
+"pencere" gibi davranıyordu.
 
 Sebep: bu oyunda passthrough uygulamanın **altına** kompozit ediliyor
 (`Meta Quest: Camera (Passthrough)` OpenXR özelliği `m_enabled: 1`, sahnedeki
@@ -121,10 +125,21 @@ Yani opak bir zeminin **üstüne** çizilen yarı saydam bir yüzey bile alfayı
 tek bir yüzeye değil **hepsine** uygulanır: zemin, çerçeve, satır zeminleri, takım şeritleri,
 vurgular, animasyon fade'i.
 
-**Çözüm:** saydamlık alfayla değil **renkle** taklit edilir — `ScoreboardUI.Shade(c, t)`
-rengi panel zeminiyle karıştırır, çıkan renk her zaman opak. Görüntü aynı, alfa kanalı bozulmaz.
+**İlk çözüm (geri alındı):** saydamlığı alfayla değil renkle taklit etmek. İşe yarıyordu ama
+sis, patlama ve tüm WarFX efektleri de aynı sızıntıyı taşıdığı için bitmeyen bir iş olurdu —
+üstelik hepsi üçüncü parti shader.
 
-Aynı ders `PlayerEntryPanel.cs:76`'da zaten yazılıydı; bu plan onu atlamıştı.
+**KÖK ÇÖZÜM (uygulanan):** passthrough'un oyuncu modunda **hiç açılmaması**.
+Sızıntı aslında yeni bir regresyondu — `32ae691` sahneye `ARCameraManager`'ı açık koydu,
+`919e160` Android OpenXR passthrough özelliğini açtı, ve oyuncu modunda kimse kapatmıyordu.
+`ConstructorPassthrough.DisableAtStartup()` artık başlangıçta kapatıyor; yalnızca inşa modu
+açıyor. Passthrough kapalıyken blend modu **opak** olur ve alfa kanalının hiçbir önemi kalmaz.
+
+Bunun üzerine panel, kill paneli ve ölüm ekranı **yarı saydam hâllerine geri alındı**.
+`UITheme.PreserveDestinationAlpha` ise duruyor: görsel bedeli sıfır, ikinci savunma hattı.
+
+Aynı ders `PlayerEntryPanel.cs:76`'da zaten yazılıydı — o panel bugün de opak, ama sebebi
+passthrough değil okunurluk (arkadaki parlak yüzeyler yazıyı soldurmasın).
 
 ### Ölçüler (mesafe 1.3 m, sönümlü kafa takibi — killfeed deseni, `followSpeed 9`)
 

@@ -353,10 +353,7 @@ namespace VRMultiplayer.UI
 
             Color c = _zone.TeamColor;
             float blink = 0.4f + 0.6f * (0.5f + 0.5f * Mathf.Sin(Time.time * 1.6f * Mathf.PI * 2f));
-            // Yanip sonme PARLAKLIKLA, alfayla DEGIL: ok bir overlay malzemesiyle (GUI/Text
-            // Shader) ciziliyor ve alfa dusurmek kare tamponunun alfasini dusurur — passthrough
-            // okun icinden sizar. Olu oyuncu zaten en cok bu ekrana bakiyor.
-            UITheme.SetMaterialColor(_arrowMat, new Color(c.r * blink, c.g * blink, c.b * blink, 1f));
+            UITheme.SetMaterialColor(_arrowMat, new Color(c.r, c.g, c.b, blink));
         }
     }
 }

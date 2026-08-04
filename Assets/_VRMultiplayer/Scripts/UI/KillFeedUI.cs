@@ -70,15 +70,9 @@ namespace VRMultiplayer.UI
         [Tooltip("Alttaki satirlarin bir sira asagi kayma hizi. Kaskad hissini bu verir.")]
         public float cascadeSpeed = 14f;
 
-        [Header("Ton")]
-        // ⚠ BUNLAR ARTIK ALFA DEGIL, KARISIM ORANI. Passthrough bu oyunda uygulamanin ALTINA
-        // kompozit ediliyor: kare tamponunun alfasi 1'in altina duserse GERCEK ODA panelin
-        // icinden gorunur. Bu yuzden panelde tek bir yari saydam yuzey bile olamaz; "soluk"
-        // gorunum rengi ZEMINLE karistirarak elde edilir (bkz. Mix).
-        [Tooltip("Satir zemininin koyulugu (0 = tamamen siyah, 1 = tam ton). Alfa DEGIL.")]
-        [Range(0f, 1f)] public float bgTint = 0.85f;
-        [Tooltip("Yazinin zeminden ne kadar ayrildigi (1 = tam parlak). Alfa DEGIL.")]
-        [Range(0f, 1f)] public float textTint = 0.90f;
+        [Header("Opaklik")]
+        [Range(0f, 1f)] public float bgAlpha = 0.25f;
+        [Range(0f, 1f)] public float textAlpha = 0.90f;
 
         [Header("Renk")]
         [Tooltip("Acik: mavi = senin takimin, kirmizi = rakip (standart FPS). " +
@@ -102,15 +96,6 @@ namespace VRMultiplayer.UI
         const int QBg = 3050, QText = 3051;
         const float Pad = 0.012f;
 
-        /// <summary>Rengi ZEMINE dogru karistirir; sonuc HER ZAMAN opak. Yari saydamligin
-        /// alfasiz karsiligi — passthrough kompozisyonu icin sart (bkz. bgTint/textTint).</summary>
-        static Color Mix(Color c, float t) =>
-            new Color(c.r * t, c.g * t, c.b * t, 1f);
-
-        static Color Mix(Color over, Color under, float t) =>
-            new Color(Mathf.Lerp(under.r, over.r, t), Mathf.Lerp(under.g, over.g, t),
-                      Mathf.Lerp(under.b, over.b, t), 1f);
-
         class Row
         {
             public GameObject go;
@@ -119,9 +104,6 @@ namespace VRMultiplayer.UI
             public bool bound;
             public float animY;      // su anki yerel y — hedefe dogru kayar
             public float appear;     // 0..1 giris animasyonu
-            // Solma ALFAYLA DEGIL renkle yapildigi icin taban renkler saklanir; yoksa her
-            // karede solmus renk taban sanilip satir kademeli kararirdi.
-            public Color leftBase, midBase, rightBase;
         }
 
         class Entry
@@ -240,21 +222,19 @@ namespace VRMultiplayer.UI
             if (info.Kind == 0)
             {
                 row.left.text = info.Killer;
-                row.leftBase = TeamColor(info.KillerTeam);
+                row.left.color = TeamColor(info.KillerTeam);
                 row.mid.text = ">>";   // ASCII: font/kodlama riski olmayan yon isareti
-                row.midBase = Dim;
                 row.right.text = info.Victim;
-                row.rightBase = TeamColor(info.VictimTeam);
+                row.right.color = TeamColor(info.VictimTeam);
             }
             else
             {
                 // Intihar / kaynagi bilinmeyen olum: tek isim solda, aciklama sagda.
                 row.left.text = info.Victim;
-                row.leftBase = TeamColor(info.VictimTeam);
+                row.left.color = TeamColor(info.VictimTeam);
                 row.mid.text = "";
-                row.midBase = Dim;
                 row.right.text = info.SelfKill ? "KENDINI OLDURDU" : "OLDU";
-                row.rightBase = Dim;
+                row.right.color = Dim;
             }
         }
 
@@ -291,7 +271,7 @@ namespace VRMultiplayer.UI
                 float targetY = -i * rowHeight;
                 row.animY = Mathf.Lerp(row.animY, targetY, k);
 
-                // Giris: soldan kayarak ve acilarak gelir.
+                // Giris: soldan kayarak ve belirerek gelir.
                 row.appear = Mathf.Min(1f, row.appear + dt / Mathf.Max(0.01f, appearTime));
                 float ease = row.appear * row.appear * (3f - 2f * row.appear);   // smoothstep
                 row.go.transform.localPosition =
@@ -303,50 +283,43 @@ namespace VRMultiplayer.UI
             Follow();
         }
 
-        /// <summary>Satirin belirme/solma gorunumu. HICBIR YERDE ALFA KULLANILMAZ:
-        /// panel yari saydam cizilirse passthrough kare tamponunun alfasindan sizar ve gercek
-        /// oda satirlarin icinden gorunur (bkz. bgTint). Bunun yerine
-        ///  - zemin ve yazi renkleri SIYAHA dogru karistirilir,
-        ///  - satir DIKEYDE olceklenerek acilip kapanir.
-        /// Gorsel sonuc "solma" ile ayni, alfa kanali bozulmaz.</summary>
         void ApplyFade(Entry e, float now, float appear)
         {
             var row = e.row;
             float age = now - e.born;
 
-            // Omrun son fadeTime saniyesinde kapanir.
+            // Omrun son fadeTime saniyesinde soner.
             float life = rowLifetime - fadeTime;
             float out01 = age <= life ? 1f : Mathf.Clamp01(1f - (age - life) / Mathf.Max(0.01f, fadeTime));
             float k = out01 * appear;
 
             Color bg = RowBg;
-            float tint = bgTint;
+            float a = bgAlpha;
 
             if (e.byMe)
             {
                 // Kendi oldurmem: sari zemin, kisa bir parlama ile girer sonra normale oturur.
                 float glow = Mathf.Clamp01(1f - age / Mathf.Max(0.01f, killGlowTime));
                 bg = KillBg;
-                tint = Mathf.Lerp(bgTint, 1f, glow);
+                a = Mathf.Lerp(bgAlpha, 0.45f, glow);
             }
             else if (e.onMe)
             {
                 bg = DeathBg;
-                tint = Mathf.Min(1f, bgTint * 1.2f);
+                a = bgAlpha * 1.2f;
             }
 
-            // Zemin OPAK. Satirin kaybolmasi olcekle olur, seffaflasarak degil.
-            Color bgOpaque = Mix(bg, tint);
-            UITheme.SetMaterialColor(row.bgMat, bgOpaque);
+            UITheme.SetMaterialColor(row.bgMat, new Color(bg.r, bg.g, bg.b, a * k));
 
-            // Yazi zeminden AYRISIR; solarken zemine geri karisir. Boylece hicbir an
-            // yari saydam bir piksel yazilmaz.
-            row.left.color  = Mix(row.leftBase,  bgOpaque, textTint * k);
-            row.mid.color   = Mix(row.midBase,   bgOpaque, textTint * k * 0.8f);
-            row.right.color = Mix(row.rightBase, bgOpaque, textTint * k);
+            SetAlpha(row.left, textAlpha * k);
+            SetAlpha(row.mid, textAlpha * k * 0.8f);
+            SetAlpha(row.right, textAlpha * k);
+        }
 
-            // Dikey olcek: acilirken buyur, solarken kapan (yazi o an zaten zemine karismis).
-            row.go.transform.localScale = new Vector3(1f, k, 1f);
+        static void SetAlpha(TextMesh tm, float a)
+        {
+            var c = tm.color;
+            tm.color = new Color(c.r, c.g, c.b, a);
         }
 
         static byte LocalTeam()

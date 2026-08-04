@@ -21,20 +21,9 @@ namespace VRMultiplayer.UI
     /// Yazilar dikeyde EZILMEZ — animasyonun son bolumunde alfa ile belirirler; olcekle acilan
     /// yazi acilirken okunmaz ve cirkin gorunur.
     ///
-    /// HICBIR YUZEY YARI SAYDAM DEGIL — SAYDAMLIK RENKLE TAKLIT EDILIR (<see cref="Shade"/>).
-    /// Sebep passthrough: bu oyunda gercek oda uygulamanin ALTINA kompozit ediliyor ve kare
-    /// tamponunun ALFASI "burada sanal icerik var mi" demek. Panel yari saydam cizildiginde
-    /// (zemin alfa 0.72 denendi) o bolgede alfa 1'den ~0.80'e dusuyor ve GERCEK ODA PANELIN
-    /// ICINDEN GORUNUYOR — cizim duzgun, ama panel bir "pencere" gibi davraniyor.
-    ///
-    /// Kacinilmaz: HUD malzemesi GUI/Text Shader ve harmani "Blend SrcAlpha OneMinusSrcAlpha",
-    /// yani alfa kanalini da harmanliyor; opak bir zeminin USTUNE cizilen yari saydam bir
-    /// yuzey bile alfayi dusurur. Bu yuzden kural TEK BIR YUZEYE degil HEPSINE uygulanir.
-    /// Ayni ders <see cref="PlayerEntryPanel"/>'de de yazili.
-    ///
-    /// TASARIM/ANIMASYON RENGI AYRI TUTULUR (<see cref="El"/>): olu satirin soluklugu bir
-    /// "tasarim" rengidir, animasyon onu zemine dogru KARISTIRIR. Ikisi ayni alanda tutulsaydi
-    /// her tazeleme animasyon degerini taban sanip renkleri kademeli sondururdu.
+    /// TASARIM/ANIMASYON ALFASI AYRI TUTULUR (<see cref="El"/>): olu satirin soluklugu ve
+    /// zemin opakligi "tasarim" alfasidir, animasyon onu CARPAR. Ikisi ayni alanda tutulsaydi
+    /// her tazeleme animasyon alfasini taban sanip degerleri kademeli sondururdu.
     ///
     /// KUYRUK 3052+: kill panelinin (3050/3051) ustunde, olum perdesinin (3000) cok ustunde.
     /// Oldugun an skoru en cok merak ettigin andir — perde skorbordu ortmemeli.
@@ -55,6 +44,10 @@ namespace VRMultiplayer.UI
         [Header("Animasyon (saniye)")]
         public float openTime = 0.22f;
         public float closeTime = 0.14f;
+
+        [Header("Opaklik")]
+        [Tooltip("Panel zemini. Tam opak DEGIL: oyun ici hizli bakis, menu degil.")]
+        [Range(0f, 1f)] public float bgAlpha = 0.72f;
 
         // ------------------------------------------------------------------ olculer (metre)
         const float PanelW = 0.84f, PanelH = 0.56f, PanelR = 0.018f, PanelEdgeW = 0.0025f;
@@ -82,49 +75,28 @@ namespace VRMultiplayer.UI
         const int QBg = 3052, QRow = 3054, QText = 3056;
 
         // ------------------------------------------------------------------ palet
-        // HEPSI OPAK. Yari saydam bir renk yazmak passthrough'da panele delik acar (bkz. sinif
-        // yorumu); "saydam gorunsun" isteyen her yer Shade() ile zemine karistirilir.
-        static readonly Color Backdrop = Opaque(UITheme.PanelBg);
-        static readonly Color Muted = Opaque(UITheme.TextMuted);
-        static readonly Color Primary = Opaque(UITheme.TextPrimary);
-        static readonly Color PanelEdge = Opaque(UITheme.PanelEdge);
+        static readonly Color Muted = UITheme.TextMuted;
+        static readonly Color Primary = UITheme.TextPrimary;
+        /// <summary>Kendi satirimin vurgusu: giris ekraninin hover rengi — ayni gorsel dil.</summary>
+        static readonly Color MineHighlight = new Color(0.35f, 0.62f, 0.75f, 0.30f);
+        static readonly Color RowFill = UITheme.SurfaceFill;
 
-        /// <summary>Kendi satirimin vurgusu: giris ekraninin hover rengi, zemine %30 karistirilmis.</summary>
-        static readonly Color MineHighlight = Shade(new Color(0.35f, 0.62f, 0.75f), 0.30f);
-        static readonly Color RowFill = Shade(UITheme.SurfaceFill, 0.60f);
-        static readonly Color RowFillDead = Shade(UITheme.SurfaceFill, 0.35f);
+        /// <summary>Olu oyuncunun satiri bu kadar soluklasir.</summary>
+        const float DeadAlpha = 0.45f;
 
-        /// <summary>Olu oyuncunun yazisi zemine bu orana kadar karistirilir (eski alfa 0.45'in
-        /// opak karsiligi — GORUNTU ayni, alfa kanali bozulmuyor).</summary>
-        const float DeadFade = 0.45f;
-
-        static Color Opaque(Color c) => new Color(c.r, c.g, c.b, 1f);
-
-        /// <summary>"Yari saydam" gorunumun ALFASIZ karsiligi: rengi panel zeminiyle karistirir.
-        /// t = 1 tam renk, t = 0 duz zemin. Cikan renk HER ZAMAN opak — passthrough kompozisyonu
-        /// icin kritik olan tam da bu (bkz. sinif yorumu).</summary>
-        static Color Shade(Color c, float t)
-        {
-            var b = UITheme.PanelBg;
-            return new Color(Mathf.Lerp(b.r, c.r, t), Mathf.Lerp(b.g, c.g, t),
-                             Mathf.Lerp(b.b, c.b, t), 1f);
-        }
-
-        /// <summary>Animasyonla belirip kaybolan bir oge. <see cref="design"/> tasarim rengidir
-        /// (olu soluklugu, satir vurgusu burada); <see cref="Apply"/> onu zemine dogru
-        /// KARISTIRARAK ekrana yazar — alfaya hic dokunmaz. Tasarim rengi EKRANDAN geri okunmaz:
-        /// okunsaydi animasyon ara degeri taban sanilip renkler her karede biraz daha sonerdi.</summary>
+        /// <summary>Animasyonla soluklastirilabilen bir oge. <see cref="design"/> tasarim
+        /// rengidir (olu solukluğu, zemin opakligi burada); <see cref="Apply"/> onu animasyon
+        /// carpaniyla ekrana yazar. Tasarim rengi EKRANDAN geri okunmaz — okunsaydi animasyon
+        /// alfasi taban sanilip degerler her karede biraz daha sonerdi.</summary>
         class El
         {
             public TextMesh tm;      // ya yazi...
             public Material mat;     // ...ya yuzey
             public Color design;
-            /// <summary>Yalnizca yazilar animasyonla belirir; yuzeyler olcekle acilir.</summary>
-            public bool fades;
 
             public void Apply(float fade)
             {
-                var c = fades ? Shade(design, fade) : design;
+                var c = new Color(design.r, design.g, design.b, design.a * fade);
                 if (tm != null) tm.color = c;
                 else if (mat != null) UITheme.SetMaterialColor(mat, c);
             }
@@ -176,12 +148,10 @@ namespace VRMultiplayer.UI
 
         void Build()
         {
-            // Zemin TAM OPAK ve panelin en altinda: alfayi 1'e GERI CEKER, boylece panelin
-            // kapladigi alanda passthrough tamamen kapanir.
             Shape("Bg", UIMesh.RoundedRect(PanelW, PanelH, PanelR),
-                Backdrop, QBg, Vector2.zero, 0.004f);
+                Alpha(UITheme.PanelBg, bgAlpha), QBg, Vector2.zero, 0.004f);
             Shape("Edge", UIMesh.RoundedRectOutline(PanelW, PanelH, PanelR, PanelEdgeW),
-                PanelEdge, QBg + 1, Vector2.zero, 0.0038f);
+                Alpha(UITheme.PanelEdge, 0.9f), QBg + 1, Vector2.zero, 0.0038f);
 
             BuildTimeCard();
             BuildTeam(-1f, "MAVİ TAKIM", UITheme.TeamBlueEdge, PlayerIdentity.TeamAColor,
@@ -212,9 +182,9 @@ namespace VRMultiplayer.UI
         {
             float cx = dir * ColX;
 
-            // Gorseldeki renkli takim basligi (zemine %90 karistirilmis — alfa DEGIL).
+            // Gorseldeki renkli takim basligi.
             Shape(label + " Bar", UIMesh.RoundedRect(HeadW, HeadH, 0.008f),
-                Shade(barColor, 0.9f), QRow, new Vector2(cx, HeadY), 0.0034f);
+                Alpha(barColor, 0.9f), QRow, new Vector2(cx, HeadY), 0.0034f);
 
             Shape(label + " Chip", UIMesh.RoundedRect(ChipSize, ChipSize, ChipSize * 0.28f),
                 chipColor, QText, new Vector2(cx - HeadW * 0.5f + 0.024f, HeadY), 0.003f);
@@ -245,7 +215,7 @@ namespace VRMultiplayer.UI
             {
                 go = go,
                 bg = Shape("Bg", UIMesh.RoundedRect(HeadW, RowH - 0.005f, 0.005f),
-                    RowFill, QRow, Vector2.zero, 0.003f, go.transform),
+                    Alpha(RowFill, 0.6f), QRow, Vector2.zero, 0.003f, go.transform),
                 name = Text("", Primary, RowSize, new Vector2(NameX, 0f), TextAnchor.MiddleLeft, go.transform),
                 dead = Text("", UITheme.TeamRedText, ColLabelSize, new Vector2(DeadX, 0f),
                     TextAnchor.MiddleLeft, go.transform),
@@ -262,9 +232,9 @@ namespace VRMultiplayer.UI
             float y = -PanelH * 0.5f - StripGap - StripH * 0.5f;
 
             Shape("Strip Bg", UIMesh.RoundedRect(StripW, StripH, 0.012f),
-                Backdrop, QBg, new Vector2(0f, y), 0.004f);
+                Alpha(UITheme.PanelBg, bgAlpha), QBg, new Vector2(0f, y), 0.004f);
             Shape("Strip Edge", UIMesh.RoundedRectOutline(StripW, StripH, 0.012f, PanelEdgeW),
-                PanelEdge, QBg + 1, new Vector2(0f, y), 0.0038f);
+                Alpha(UITheme.PanelEdge, 0.9f), QBg + 1, new Vector2(0f, y), 0.0038f);
 
             _stripChip = Shape("Strip Chip", UIMesh.RoundedRect(0.020f, 0.020f, 0.006f),
                 Muted, QText, new Vector2(-StripW * 0.5f + 0.028f, y), 0.003f);
@@ -284,7 +254,7 @@ namespace VRMultiplayer.UI
         {
             var tm = UITheme.MakeText(parent != null ? parent : _panel, s, c, size, anchor, QText);
             tm.transform.localPosition = new Vector3(pos.x, pos.y, 0f);
-            var el = new El { tm = tm, design = Opaque(c), fades = true };
+            var el = new El { tm = tm, design = c };
             _els.Add(el);
             return el;
         }
@@ -294,10 +264,12 @@ namespace VRMultiplayer.UI
         {
             var t = UITheme.MakeShape(parent != null ? parent : _panel, name, mesh, c, queue);
             t.localPosition = new Vector3(pos.x, pos.y, z);
-            var el = new El { mat = t.GetComponent<MeshRenderer>().sharedMaterial, design = Opaque(c) };
+            var el = new El { mat = t.GetComponent<MeshRenderer>().sharedMaterial, design = c };
             _els.Add(el);
             return el;
         }
+
+        static Color Alpha(Color c, float a) => new Color(c.r, c.g, c.b, a);
 
         static void Write(El el, string s)
         {
@@ -368,8 +340,7 @@ namespace VRMultiplayer.UI
         // ------------------------------------------------------------------ animasyon
 
         /// <summary>CIZGIDEN ACILMA: panel dikeyde 0'dan tam boya buyur (yatayda hep tam boy).
-        /// Yazilar son %40'ta belirir — ama ALFAYLA DEGIL, zeminden renge karisarak
-        /// (bkz. <see cref="Shade"/>). Yuzeyler olcekle acilir, renkleri hic degismez.</summary>
+        /// Yazilar son %40'ta alfa ile belirir.</summary>
         void ApplyOpen(float t)
         {
             bool active = t > 0.001f;
@@ -382,7 +353,11 @@ namespace VRMultiplayer.UI
             float fade = Mathf.Clamp01((t - 0.6f) / 0.4f);
             fade = fade * fade * (3f - 2f * fade);
 
-            for (int i = 0; i < _els.Count; i++) _els[i].Apply(fade);
+            for (int i = 0; i < _els.Count; i++)
+            {
+                var el = _els[i];
+                el.Apply(el.tm != null ? fade : ease);   // yuzeyler olcekle, yazilar gec fade ile
+            }
         }
 
         // ------------------------------------------------------------------ veri
@@ -425,21 +400,19 @@ namespace VRMultiplayer.UI
                 bool mine = p == local;
                 var health = p.GetComponent<PlayerHealth>();
                 bool isDead = health != null && health.Dead.Value;
-                // Olu satir SOLUK gorunur ama ALFAYLA DEGIL: renk zemine karistirilir.
-                // Alfa dusurmek panelde passthrough deligi acardi (bkz. sinif yorumu).
-                float f = isDead ? DeadFade : 1f;
+                float a = isDead ? DeadAlpha : 1f;
 
                 Write(row.name, p.NetName.Value.ToString());
                 Write(row.kills, p.Kills.Value.ToString());
                 Write(row.deaths, p.Deaths.Value.ToString());
-                Write(row.dead, isDead ? "ÖLÜ" : "");   // gizleme yolu ALFA degil BOS METIN
+                Write(row.dead, isDead ? "ÖLÜ" : "");
 
                 // Kendi satirim camgobegi (giris ekraninin vurgu rengi) + acik zemin.
-                row.name.design = Shade(mine ? UITheme.AccentCyan : Primary, f);
-                row.kills.design = Shade(Primary, f);
-                row.deaths.design = Shade(Muted, f);
-                row.dead.design = Opaque(UITheme.TeamRedText);
-                row.bg.design = mine ? MineHighlight : (isDead ? RowFillDead : RowFill);
+                row.name.design = Alpha(mine ? UITheme.AccentCyan : Primary, a);
+                row.kills.design = Alpha(Primary, a);
+                row.deaths.design = Alpha(Muted, a);
+                row.dead.design = Alpha(UITheme.TeamRedText, isDead ? 1f : 0f);
+                row.bg.design = mine ? MineHighlight : Alpha(RowFill, isDead ? 0.35f : 0.6f);
             }
 
             int extra = _sorted.Count - shown;
