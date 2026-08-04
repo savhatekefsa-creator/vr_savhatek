@@ -12,8 +12,14 @@ namespace VRMultiplayer
 {
     /// <summary>
     /// Starts the LAN session. The PC runs the room as a dedicated SERVER (on-screen button);
-    /// headsets press B to JOIN (the server is found automatically on the LAN), then pick a
-    /// team. Shows a world-space status label so players know what to do.
+    /// headsets JOIN from the entry screen's OYUNA BASLA button (the server is found
+    /// automatically on the LAN). Shows a world-space status label so players know what is
+    /// happening.
+    ///
+    /// KATILIM ARTIK TUSSUZ. Eskiden B ile katiliniyor / yeniden deneniyordu; B artik
+    /// SKORBORD'un (bkz. UI.ScoreboardUI). Kopan baglanti elle degil OTOMATIK geri geliyor
+    /// (bkz. ScheduleRetry) — zaten daha iyisiydi: oyuncu paneli okuyup dogru tusa basana
+    /// kadar mac akip gidiyordu.
     /// </summary>
     [RequireComponent(typeof(NetworkDiscovery))]
     public class LanBootstrap : MonoBehaviour
@@ -30,9 +36,21 @@ namespace VRMultiplayer
         [Tooltip("Seconds to search for a host before giving up.")]
         public float discoveryTimeout = 10f;
 
+        [Tooltip("Baglanti koptuktan/basarisiz olduktan sonra otomatik yeniden denemeye kadar " +
+                 "beklenen sure (saniye).")]
+        public float retryDelay = 2f;
+
         bool _busy;
         bool _clientStarted;
         bool _wasSessionActive;
+
+        // Otomatik yeniden baglanmanin zamanlayicisi (0 = bekleyen deneme yok).
+        //
+        // ESKIDEN B TUSUYDU: oyuncu dusunce "B = YENIDEN KATIL" yazip bekliyorduk. B artik
+        // SKORBORD'un (bkz. UI.ScoreboardUI) — ve zaten elle yeniden baglanma kotu bir
+        // cozumdu: oyuncu paneli okuyup dogru tusa basana kadar mac akip gidiyordu.
+        // unscaledTime kullaniliyor: baglanti koptugunda zaman olceginin ne oldugu belirsiz.
+        float _retryAt;
 
         void Reset() => discovery = GetComponent<NetworkDiscovery>();
 
@@ -47,16 +65,16 @@ namespace VRMultiplayer
             bool connected = nm != null && nm.IsConnectedClient;
             bool sessionActive = nm != null && (nm.IsServer || connected);
 
-            // Oturum bitti (sunucu kapandi / baglanti koptu): _busy kilidini birak ki B tusu ve
-            // PC'deki SUNUCU butonu yeniden calissin. Onceden kilit basarili katilimdan sonra hic
-            // sifirlanmiyordu — panel "B'ye bas" derken tus olu kaliyor, restart gerekiyordu.
-            // JoinAsClient'in arama evresini bozmaz: o evrede sessionActive zaten hep false
-            // oldugundan true->false gecisi olusmaz.
+            // Oturum bitti (sunucu kapandi / baglanti koptu): _busy kilidini birak ki otomatik
+            // yeniden deneme ve PC'deki SUNUCU butonu calissin. Onceden kilit basarili
+            // katilimdan sonra hic sifirlanmiyordu — panel "B'ye bas" derken tus olu kaliyor,
+            // restart gerekiyordu. JoinAsClient'in arama evresini bozmaz: o evrede sessionActive
+            // zaten hep false oldugundan true->false gecisi olusmaz.
             if (_wasSessionActive && !sessionActive)
             {
                 _busy = false;
                 _clientStarted = false;
-                SetStatus("Baglanti koptu / oturum bitti.\nB = YENIDEN KATIL");
+                ScheduleRetry("Baglanti koptu / oturum bitti.");
             }
             _wasSessionActive = sessionActive;
 
@@ -73,7 +91,7 @@ namespace VRMultiplayer
                 statusLabel = null;
             }
 
-            // Detect a failed/dropped connection attempt so B works again.
+            // Detect a failed/dropped connection attempt so the retry timer can fire.
             if (_clientStarted && nm != null)
             {
                 if (connected) _clientStarted = false;
@@ -81,33 +99,54 @@ namespace VRMultiplayer
                 {
                     _clientStarted = false;
                     _busy = false;
-                    SetStatus("Baglanti basarisiz.\nB = TEKRAR DENE");
+                    ScheduleRetry("Baglanti basarisiz.");
                 }
             }
 
-            if (_busy || !right.isValid) return;
+            if (_busy) return;
 
             // OYUNCU modu secilmeden ve isim + takim onaylanmadan katilim yok (bkz. AppMode,
-            // UI.PlayerEntryUI). Normal akista katilimi zaten OYUNA BASLA butonu baslatir;
-            // B burada YENIDEN DENEME olarak kalir (baglanti koparsa ya da sunucu bulunamazsa).
-            // YARATICI modda B olu kalir: harita tasarlarken ag baslatmak istemiyoruz.
-            // PC'nin SUNUCU butonu bu kapiya TAKILMAZ: sunucu avatar spawn etmiyor, profile de
-            // mod secimine de ihtiyaci yok (bkz. StartAsServer).
+            // UI.PlayerEntryUI). Katilimi OYUNA BASLA butonu baslatir; buradaki zamanlayici
+            // yalnizca KOPAN baglantiyi geri getirir. YARATICI modda hic calismaz: harita
+            // tasarlarken ag baslatmak istemiyoruz. PC'nin SUNUCU butonu bu kapiya TAKILMAZ:
+            // sunucu avatar spawn etmiyor, profile de mod secimine de ihtiyaci yok
+            // (bkz. StartAsServer).
             if (!AppMode.IsPlayer || !PlayerProfile.Confirmed) return;
 
-            if (XRButtons.Button(XRNode.RightHand, CommonUsages.secondaryButton))  // B
+            // Otomatik yeniden baglanma. Kumanda gecerliligi ARANMAZ (panelin aksine): kumanda
+            // uykuya daldiginda baglantinin geri gelmemesi icin bir sebep yok.
+            if (_retryAt > 0f && Time.unscaledTime >= _retryAt)
+            {
+                _retryAt = 0f;
                 StartCoroutine(JoinAsClient());
+            }
+        }
+
+        /// <summary>Bir sonraki otomatik denemeyi kurar ve sebebini panele yazar.
+        /// Yalnizca OYUNCU modunda ve profil onayliyken anlamli — yaratici modda ya da giris
+        /// tamamlanmadan yeniden baglanmaya calismak yanlis olurdu.</summary>
+        void ScheduleRetry(string reason)
+        {
+            if (!AppMode.IsPlayer || !PlayerProfile.Confirmed)
+            {
+                SetStatus(reason);
+                return;
+            }
+            _retryAt = Time.unscaledTime + Mathf.Max(0.5f, retryDelay);
+            SetStatus(reason + "\nYeniden baglaniliyor...");
         }
 
         void EnsureJoinPanel()
         {
-            // Once MOD SECIMI, sonra GIRIS EKRANI (isim + takim). O ekranlar aciktayken katilim
-            // panelini kurmayiz: paneller ust uste biner ve oyuncu daha secimini yapmadan B'ye
-            // basip isimsiz/takimsiz spawn olurdu. YARATICI modda hic kurulmaz.
+            // Once MOD SECIMI, sonra GIRIS EKRANI (isim + takim). O ekranlar aciktayken bu
+            // paneli kurmayiz: paneller ust uste binerdi. YARATICI modda hic kurulmaz.
+            //
+            // Panel artik TUS ISTEMIYOR, yalnizca DURUM bildiriyor: katilimi OYUNA BASLA
+            // baslatiyor, kopan baglantiyi da zamanlayici geri getiriyor (bkz. ScheduleRetry).
             if (!AppMode.IsPlayer || !PlayerProfile.Confirmed) return;
             if (statusLabel != null) return;
             statusLabel = UI.HeadFollowPanel.Create("Join Panel",
-                "OYUNA KATILMAK ICIN\nB TUSUNA BAS", Color.white);
+                "SUNUCUYA BAGLANILIYOR...", Color.white);
         }
 
         // PC screen: the only thing the PC does is run the server.
@@ -215,8 +254,8 @@ namespace VRMultiplayer
 
             if (string.IsNullOrEmpty(ip))
             {
-                SetStatus("Sunucu bulunamadi.\nSunucu acik mi?\nB = TEKRAR DENE");
                 _busy = false;
+                ScheduleRetry("Sunucu bulunamadi.\nSunucu acik mi?");
                 yield break;
             }
 
