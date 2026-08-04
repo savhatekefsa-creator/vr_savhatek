@@ -29,6 +29,34 @@ namespace VRMultiplayer.Constructor
 
         static readonly List<ConstructorSync> Spawned = new List<ConstructorSync>();
 
+        /// <summary>
+        /// Senkronunu BITIRMIS istemciler (sunucu tarafi). <c>NetworkClient.IsConnected</c>
+        /// Netcode'un icinde internal, yani disaridan okunamiyor; <c>OnClientConnectedCallback</c>
+        /// ise public ve tam senkron tamamlaninca atiyor — "artik RPC gonderilebilir"in kesin
+        /// isareti bu. Bkz. <see cref="SendLayoutToOwner"/>.
+        /// </summary>
+        static readonly HashSet<ulong> ReadyClients = new HashSet<ulong>();
+        static bool _hookedReady;
+
+        static void HookClientReady(NetworkManager net)
+        {
+            if (_hookedReady || net == null) return;
+            _hookedReady = true;
+            net.OnClientConnectedCallback += id => ReadyClients.Add(id);
+            net.OnClientDisconnectCallback += id => ReadyClients.Remove(id);
+        }
+
+        // Domain reload kapaliyken statikler oyunlar arasi tasinir: eski oturumdan kalan
+        // "hazir" kimlikler ikinci Play'de haritanin ONAY ORTASINDA gonderilmesine geri
+        // donerdi — yani duzeltilen hatanin ta kendisine.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics()
+        {
+            ReadyClients.Clear();
+            _hookedReady = false;
+            Spawned.Clear();
+        }
+
         static ConstructorSession Session => ConstructorSession.Instance;
 
         byte[][] _rxChunks;
@@ -37,9 +65,15 @@ namespace VRMultiplayer.Constructor
         public override void OnNetworkSpawn()
         {
             Spawned.Add(this);
+
             // Sunucu, YENI katilan oyuncuya mevcut haritayi yollar. Bu obje o oyuncunun
-            // objesi oldugu icin "gec katilim" tam da burasi.
-            if (IsServer) StartCoroutine(SendLayoutToOwner());
+            // objesi oldugu icin "gec katilim" tam da burasi — ama gonderme, istemci
+            // senkronunu bitirene kadar bekler (bkz. SendLayoutToOwner).
+            if (IsServer)
+            {
+                HookClientReady(NetworkManager);
+                StartCoroutine(SendLayoutToOwner());
+            }
         }
 
         /// <summary>
@@ -131,11 +165,16 @@ namespace VRMultiplayer.Constructor
         /// checked the same rule and quietly returned, so a whole session of building lived only
         /// in the server's memory until the server closed.
         /// </summary>
-        public static bool ClientRequestSave()
+        /// <param name="mapName">
+        /// Bos birakilirsa sunucu ACIK haritanin uzerine yazar. Dolu gelirse "farkli kaydet":
+        /// isimlendirme ekrani (Serit 1) gozlukte doldurulur ama dosyayi yazan PC'dir, yani ad
+        /// da tele binmek zorunda.
+        /// </param>
+        public static bool ClientRequestSave(string mapName = null)
         {
             var sync = LocalOwned();
             if (sync == null) return false;
-            sync.SaveServerRpc();
+            sync.SaveServerRpc(mapName ?? "");
             return true;
         }
 
@@ -198,7 +237,7 @@ namespace VRMultiplayer.Constructor
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        void SaveServerRpc(RpcParams p = default)
+        void SaveServerRpc(string mapName, RpcParams p = default)
         {
             if (p.Receive.SenderClientId != OwnerClientId) return;
             if (Session == null || !Session.IsActive)
@@ -207,7 +246,10 @@ namespace VRMultiplayer.Constructor
                 return;
             }
 
-            bool ok = Session.Save();
+            // Ad geldiyse "farkli kaydet": oturum bundan sonra o ad uzerinde calisir. Ad yoksa
+            // acik haritanin uzerine yazilir.
+            bool ok = string.IsNullOrEmpty(mapName) ? Session.Save() : Session.SaveAs(mapName);
+            if (ok) MapCatalog.NoteSaved();   // yeni/adi degismis harita listeye girsin
             // Bekleyen otomatik kaydi da dusur: elle kaydettikten 3 saniye sonra ayni dosyayi
             // bir kez daha yazmanin anlami yok.
             Session.FlushPendingSave();
@@ -231,6 +273,165 @@ namespace VRMultiplayer.Constructor
 
         /// <summary>Last save result from the server; the placer shows it once and clears it.</summary>
         public static string SaveMessage { get; set; }
+
+        // ------------------------------------------------------------- katalog (Serit 2)
+        //
+        // HARITALAR PC'DE YASAR, TASARIM GOZLUKTE YAPILIR. Gozluk kendi diskindeki listeyi
+        // gosterseydi orada var gorunen bir harita mac aninda bulunamazdi — liste de dosyalar
+        // da tek yerde olmali. Bu bolum o tek yeri gozlugun eline veriyor: istek gozlukten,
+        // is PC'de, sonuc herkese.
+
+        /// <summary>Istemci: "listeyi yolla". Cevap <see cref="CatalogChunkClientRpc"/> ile gelir.</summary>
+        public static bool ClientRequestCatalog()
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.RequestCatalogServerRpc();
+            return true;
+        }
+
+        public static bool ClientRequestPoolChange(string mapName, bool add)
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.PoolChangeServerRpc(mapName, add);
+            return true;
+        }
+
+        public static bool ClientRequestRename(string oldName, string newName)
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.RenameServerRpc(oldName, newName);
+            return true;
+        }
+
+        public static bool ClientRequestDelete(string mapName)
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.DeleteServerRpc(mapName);
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void RequestCatalogServerRpc(RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            StartCoroutine(SendCatalogToOwner());
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void PoolChangeServerRpc(string mapName, bool add, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+
+            string hata = null;
+            bool ok = add ? MapCatalog.AddToPool(mapName, out hata) : MapCatalog.RemoveFromPool(mapName);
+            if (!ok) CatalogErrorOwnerRpc(hata ?? $"'{mapName}' islenemedi.");
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void RenameServerRpc(string oldName, string newName, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+
+            if (!MapCatalog.Rename(oldName, newName, out string hata))
+                CatalogErrorOwnerRpc(hata ?? "Yeniden adlandirilamadi.");
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void DeleteServerRpc(string mapName, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+
+            if (!MapCatalog.Delete(mapName))
+                CatalogErrorOwnerRpc($"'{mapName}' silinemedi.");
+        }
+
+        [Rpc(SendTo.Owner)]
+        void CatalogErrorOwnerRpc(string hata)
+        {
+            // Isi yapan makine oyuncunun BAKMADIGI makine; sebep geri donmezse islem sessizce
+            // yutulmus gorunur.
+            MapCatalog.LastError = hata;
+            Debug.LogWarning("[MapCatalog] Sunucu reddetti: " + hata);
+        }
+
+        /// <summary>Sunucu: guncel listeyi BUTUN istemcilere yollar.</summary>
+        public static void ServerBroadcastCatalog()
+        {
+            var any = AnySpawned();
+            if (any == null) return;   // bagli istemci yok — yollanacak kimse de yok
+            any.StartCoroutine(any.SendCatalogToAll());
+        }
+
+        IEnumerator SendCatalogToOwner() => SendCatalog(false);
+        IEnumerator SendCatalogToAll() => SendCatalog(true);
+
+        /// <summary>
+        /// Listeyi parcalayarak yollar — haritayla ayni gerekce: guvenilir kanalin kuyrugu
+        /// sinirli, tek karede sikistirilan buyuk yuk dusuyor ve dusen parcanin tekrar yolu yok.
+        /// </summary>
+        IEnumerator SendCatalog(bool toAll)
+        {
+            string json = MapCatalog.SnapshotJson();
+            if (string.IsNullOrEmpty(json)) yield break;
+
+            byte[] bytes = Encoding.UTF8.GetBytes(json);
+            int total = (bytes.Length + ChunkSize - 1) / ChunkSize;
+            if (total > MaxChunks)
+            {
+                Debug.LogError($"[MapCatalog] Liste cok buyuk ({bytes.Length} bayt) — gonderilemedi.");
+                yield break;
+            }
+
+            for (int i = 0; i < total; i++)
+            {
+                if (!IsSpawned) yield break;
+                int len = Mathf.Min(ChunkSize, bytes.Length - i * ChunkSize);
+                var chunk = new byte[len];
+                Buffer.BlockCopy(bytes, i * ChunkSize, chunk, 0, len);
+
+                if (toAll) CatalogChunkClientRpc(i, total, chunk);
+                else CatalogChunkOwnerRpc(i, total, chunk);
+
+                if ((i & 7) == 7) yield return null;
+            }
+        }
+
+        [Rpc(SendTo.Owner)]
+        void CatalogChunkOwnerRpc(int index, int total, byte[] data) => ReceiveCatalogChunk(index, total, data);
+
+        [Rpc(SendTo.NotServer)]
+        void CatalogChunkClientRpc(int index, int total, byte[] data) => ReceiveCatalogChunk(index, total, data);
+
+        byte[][] _catalogChunks;
+        int _catalogReceived;
+
+        void ReceiveCatalogChunk(int index, int total, byte[] data)
+        {
+            if (total <= 0 || total > MaxChunks || index < 0 || index >= total) return;
+
+            if (_catalogChunks == null || _catalogChunks.Length != total)
+            {
+                _catalogChunks = new byte[total][];
+                _catalogReceived = 0;
+            }
+            if (_catalogChunks[index] == null) _catalogReceived++;
+            _catalogChunks[index] = data;
+            if (_catalogReceived < total) return;
+
+            int size = 0;
+            foreach (var c in _catalogChunks) size += c.Length;
+            var all = new byte[size];
+            int at = 0;
+            foreach (var c in _catalogChunks) { Buffer.BlockCopy(c, 0, all, at, c.Length); at += c.Length; }
+
+            _catalogChunks = null;
+            _catalogReceived = 0;
+            MapCatalog.ApplySnapshot(Encoding.UTF8.GetString(all));
+        }
 
         // ------------------------------------------------------------- apply (server -> everyone)
 
@@ -270,6 +471,30 @@ namespace VRMultiplayer.Constructor
         {
             // Sunucunun kendi oyuncu objesi yok; bu yalnizca istemci objeleri icin anlamli.
             if (OwnerClientId == NetworkManager.ServerClientId) yield break;
+
+            // BAGLANTI ONAYININ ORTASINA RPC SOKMA.
+            //
+            // OnNetworkSpawn, Netcode'un HandleConnectionApproval'inin TAM ORTASINDA cagriliyor:
+            // oyuncu objesi dogdu ama sahne senkron paketi (SynchronizeNetworkObjects) HENUZ
+            // yazilmadi. Araya RPC sikistirmak o paketi bozuyor — sunucu
+            // NetworkObject.Serialize icinde NullReferenceException atiyor ve ISTEMCI HIC
+            // BAGLANAMIYOR. Objelerin kendisi saglam; kirilan sey SIRA.
+            //
+            // Eskiden bu kaza eseri dogruydu: sunucunun oturumu kapali oldugu icin asagidaki
+            // bekleme dongusu zaten kareyi devrediyor, gonderme onaydan cok sonraya kaliyordu.
+            // Harita artik acilista kuruldugundan (ConstructorSession.BuildForPlay) oturum
+            // ilk kareden itibaren ACIK ve donguye hic girilmiyordu — yani "gonderme sonra olur"
+            // bir kural degil, tesadufmus. Simdi kural.
+            float readyDeadline = Time.time + 20f;
+            while (Time.time < readyDeadline && !ReadyClients.Contains(OwnerClientId))
+                yield return null;
+
+            if (!ReadyClients.Contains(OwnerClientId))
+            {
+                Debug.LogWarning($"[ConstructorSync] Istemci {OwnerClientId} 20 sn icinde senkron " +
+                                 "olmadi — harita gonderilmedi. Insa moduna girince yeniden istenir.");
+                yield break;
+            }
 
             // Oturum henuz acilmamis olabilir (oda taramasi gelmemis) — bir sure bekle.
             float deadline = Time.time + 10f;

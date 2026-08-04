@@ -1165,8 +1165,13 @@ namespace VRMultiplayer.Constructor
         /// </summary>
         void OnModeChosen(AppMode.Mode m)
         {
-            if (m == AppMode.Mode.Creative) SetBuildMode(true);
-            else if (BuildMode || _wantBuildMode) SetBuildMode(false);
+            // YARATICI ARTIK DOGRUDAN EDITORE ATMAZ: once kalibrasyon, sonra HARITA MENUSU
+            // (bkz. UI.CreativeFlowUI). Editor oradaki "yeni harita" / "mevcut harita" ile
+            // aciliyor — yoksa hangi harita uzerinde calisildigi hic sorulmadan tek bir
+            // haritaya girilirdi ve menunun var olma sebebi ortadan kalkardi.
+            if (m == AppMode.Mode.Creative) return;
+
+            if (BuildMode || _wantBuildMode) SetBuildMode(false);
         }
 
         // ------------------------------------------------------------- input

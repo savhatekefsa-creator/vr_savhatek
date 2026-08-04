@@ -85,29 +85,83 @@ namespace VRMultiplayer
                 }
             }
 
+            // Yaratici moddan cikinca kendiliginden baglanma hakki geri gelir: ana menuye donup
+            // tekrar YARATICI'yi secen biri yeniden baglanabilmeli.
+            if (!AppMode.IsCreative) _creativeJoinStarted = false;
+
             if (_busy || !right.isValid) return;
 
-            // OYUNCU modu secilmeden ve isim + takim onaylanmadan katilim yok (bkz. AppMode,
-            // UI.PlayerEntryUI). Normal akista katilimi zaten OYUNA BASLA butonu baslatir;
-            // B burada YENIDEN DENEME olarak kalir (baglanti koparsa ya da sunucu bulunamazsa).
-            // YARATICI modda B olu kalir: harita tasarlarken ag baslatmak istemiyoruz.
+            // OYUNCU modu: isim + takim onaylanmadan katilim yok (bkz. AppMode, UI.PlayerEntryUI).
+            // Normal akista katilimi zaten OYUNA BASLA butonu baslatir; B burada YENIDEN DENEME
+            // olarak kalir (baglanti koparsa ya da sunucu bulunamazsa).
+            //
+            // YARATICI modda da katiliyoruz, ve bu bilincli bir DEGISIKLIK: haritalar PC'de
+            // yasiyor (MapCatalog otoritesi), tasarim ise gozlukte yapiliyor. Baglanmayan bir
+            // gozluk kendi diskine yazardi ve o harita macta hic gorunmezdi. Yaratici modda
+            // profil ARANMAZ — isim/takim ekrani oyuncu akisina ait, harita tasarlarken
+            // sorulacak bir sey degil.
+            //
             // PC'nin SUNUCU butonu bu kapiya TAKILMAZ: sunucu avatar spawn etmiyor, profile de
             // mod secimine de ihtiyaci yok (bkz. StartAsServer).
-            if (!AppMode.IsPlayer || !PlayerProfile.Confirmed) return;
+            if (AppMode.IsPlayer) { if (!PlayerProfile.Confirmed) return; }
+            else if (!AppMode.IsCreative) return;
+
+            // YARATICI SIRASI: ONCE KALIBRASYON, SONRA BAGLANTI.
+            //
+            // Harita KALIBRE CERCEVEDE oruluyor. Kalibre olmadan baglanmak, sunucunun haritasini
+            // gozlugun daha oturmamis cercevesinde kurmak demek: duvarlar gorunur ama gercek
+            // odaya gore yanlis yerde durur, ve kalibrasyon sonradan yapildiginda zemin
+            // oyuncunun altinda kayar. Insa modu ayni kurala zaten tabi (bkz.
+            // ConstructorPlacer.RequireCalibration) — baglantiyi disarida birakmak sirayi yarim
+            // birakirdi.
+            if (AppMode.IsCreative && !CalibrationManager.Calibrated) return;
+
+            // Kalibrasyon bitti: baglantiyi BIR KEZ kendiliginden baslat. Yaratici modda ag
+            // istege bagli degil — haritalar PC'de, baglanmayan gozlukte gosterilecek liste de
+            // kaydedilecek yer de yok. B, oyuncu modundaki gibi YENIDEN DENEME olarak kalir.
+            if (AppMode.IsCreative && !_creativeJoinStarted && !connected)
+            {
+                _creativeJoinStarted = true;
+                StartCoroutine(JoinAsClient());
+                return;
+            }
 
             if (XRButtons.Button(XRNode.RightHand, CommonUsages.secondaryButton))  // B
                 StartCoroutine(JoinAsClient());
         }
 
+        // Yaratici moddaki kendiliginden baglanma bir KEZ denenir; sonrasi oyuncunun elinde
+        // (B). Yoksa sunucu kapaliyken her karede yeni bir deneme baslardi.
+        bool _creativeJoinStarted;
+
         void EnsureJoinPanel()
         {
             // Once MOD SECIMI, sonra GIRIS EKRANI (isim + takim). O ekranlar aciktayken katilim
             // panelini kurmayiz: paneller ust uste biner ve oyuncu daha secimini yapmadan B'ye
-            // basip isimsiz/takimsiz spawn olurdu. YARATICI modda hic kurulmaz.
+            // basip isimsiz/takimsiz spawn olurdu.
+            //
+            // YARATICI modda panel metni farkli: orada katilim "maca girmek" degil, haritalarin
+            // durdugu PC'ye baglanmak demek.
+            if (AppMode.IsCreative) { EnsureCreativeJoinPanel(); return; }
             if (!AppMode.IsPlayer || !PlayerProfile.Confirmed) return;
             if (statusLabel != null) return;
             statusLabel = UI.HeadFollowPanel.Create("Join Panel",
                 "OYUNA KATILMAK ICIN\nB TUSUNA BAS", Color.white);
+        }
+
+        /// <summary>
+        /// Yaratici modun katilim daveti. Baglanmadan harita listesi bos kalir ve kaydedilen
+        /// harita hicbir yere gitmez — bu yuzden sebebi yaziyor, "B'ye bas" demekle yetinmiyor.
+        /// </summary>
+        void EnsureCreativeJoinPanel()
+        {
+            // KALIBRASYON PANELIYLE YAN YANA DURMAZ: ikisi de kafanin 1.4 m onunde duruyor,
+            // ikisini birden acmak ust uste iki yazi demek (aeb92ec'de ayni ders). Sira zaten
+            // once kalibrasyon; bu panel ancak o bitince anlamli.
+            if (!CalibrationManager.Calibrated) return;
+            if (statusLabel != null) return;
+            statusLabel = UI.HeadFollowPanel.Create("Join Panel",
+                "HARITALAR PC'DE\nBAGLANILIYOR...", Color.white);
         }
 
         // PC screen: the only thing the PC does is run the server.
