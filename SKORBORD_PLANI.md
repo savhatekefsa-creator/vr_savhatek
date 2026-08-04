@@ -98,9 +98,33 @@ dersi). Tüm yazılar `UITheme.MakeText` (Quest font tuzağı). Görsel dil eşl
 | Takım toplam skoru (başlıkta) | `TextPrimary` 0.040 m — MatchBar'daki gibi renk chip'i (`TeamAColor`/`TeamBColor`) yanında |
 | Ortadaki süre altıgeni | Yuvarlak köşeli küçük kart: `SurfaceFill` + `SurfaceEdge` çerçeve, "SÜRE" `TextMuted`, saat `TextPrimary` 0.048 |
 | Satır zeminleri | `SurfaceFill` alfa ~0.5, kendi satırım `HoverCol` (giriş ekranının vurgu rengi — aynı dil) |
-| Panel zemini | `PanelBg` alfa **~0.72** (oyun içi hızlı bakış; tam opak menü değil — killfeed'in "opaklığı zeminden kıs" dersi) + `RoundedRectOutline` çerçeve `PanelEdge` |
-| Ölü oyuncu | satır içeriği alfa ~0.45 + "ÖLÜ" etiketi `TeamRedText` (ikon/emoji YOK — font riski; Türkçe glifler cihazda kanıtlı) |
+| Panel zemini | `PanelBg` **TAM OPAK** + `RoundedRectOutline` çerçeve `PanelEdge` — ⚠ bkz. §3.1 |
+| Ölü oyuncu | satır içeriği zemine %45 karıştırılmış (**alfa değil renk**) + "ÖLÜ" etiketi `TeamRedText` (ikon/emoji YOK — font riski; Türkçe glifler cihazda kanıtlı) |
 | K / D kolonları | "K" / "Ö" — kol saatiyle (`WatchScreenUI` "K x Ö y") aynı terim |
+
+### 3.1 ⚠ HİÇBİR YÜZEY YARI SAYDAM OLAMAZ (cihazda yanıldı, 2026-08-04)
+
+Panel önce zemin alfa 0.72 ile yazıldı. Quest'te sonuç: **panelin içinden gerçek oda
+görünüyordu** — çizim doğru, ama panel bir "pencere" gibi davranıyordu.
+
+Sebep: bu oyunda passthrough uygulamanın **altına** kompozit ediliyor
+(`Meta Quest: Camera (Passthrough)` OpenXR özelliği `m_enabled: 1`, sahnedeki
+`ARCameraManager` `m_Enabled: 1`, kamera arka plan alfası `0`). Kare tamponunun **alfası**
+"burada sanal içerik var mı" demek. HUD malzemesi `GUI/Text Shader` ve harmanı
+`Blend SrcAlpha OneMinusSrcAlpha` — **alfa kanalını da harmanlıyor**:
+
+```
+dstA = srcA² + (1 − srcA)·dstA      →   0.72 ile:  1.00 → 0.80
+```
+
+Yani opak bir zeminin **üstüne** çizilen yarı saydam bir yüzey bile alfayı düşürür. Kural
+tek bir yüzeye değil **hepsine** uygulanır: zemin, çerçeve, satır zeminleri, takım şeritleri,
+vurgular, animasyon fade'i.
+
+**Çözüm:** saydamlık alfayla değil **renkle** taklit edilir — `ScoreboardUI.Shade(c, t)`
+rengi panel zeminiyle karıştırır, çıkan renk her zaman opak. Görüntü aynı, alfa kanalı bozulmaz.
+
+Aynı ders `PlayerEntryPanel.cs:76`'da zaten yazılıydı; bu plan onu atlamıştı.
 
 ### Ölçüler (mesafe 1.3 m, sönümlü kafa takibi — killfeed deseni, `followSpeed 9`)
 
