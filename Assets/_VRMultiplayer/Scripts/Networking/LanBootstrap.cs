@@ -87,12 +87,24 @@ namespace VRMultiplayer
 
             if (_busy || !right.isValid) return;
 
+            // OYUNCU modu secilmeden ve isim + takim onaylanmadan katilim yok (bkz. AppMode,
+            // UI.PlayerEntryUI). Normal akista katilimi zaten OYUNA BASLA butonu baslatir;
+            // B burada YENIDEN DENEME olarak kalir (baglanti koparsa ya da sunucu bulunamazsa).
+            // YARATICI modda B olu kalir: harita tasarlarken ag baslatmak istemiyoruz.
+            // PC'nin SUNUCU butonu bu kapiya TAKILMAZ: sunucu avatar spawn etmiyor, profile de
+            // mod secimine de ihtiyaci yok (bkz. StartAsServer).
+            if (!AppMode.IsPlayer || !PlayerProfile.Confirmed) return;
+
             if (XRButtons.Button(XRNode.RightHand, CommonUsages.secondaryButton))  // B
                 StartCoroutine(JoinAsClient());
         }
 
         void EnsureJoinPanel()
         {
+            // Once MOD SECIMI, sonra GIRIS EKRANI (isim + takim). O ekranlar aciktayken katilim
+            // panelini kurmayiz: paneller ust uste biner ve oyuncu daha secimini yapmadan B'ye
+            // basip isimsiz/takimsiz spawn olurdu. YARATICI modda hic kurulmaz.
+            if (!AppMode.IsPlayer || !PlayerProfile.Confirmed) return;
             if (statusLabel != null) return;
             statusLabel = UI.HeadFollowPanel.Create("Join Panel",
                 "OYUNA KATILMAK ICIN\nB TUSUNA BAS", Color.white);
@@ -114,6 +126,10 @@ namespace VRMultiplayer
         /// <summary>
         /// Dedicated-server mode for the PC: runs the room WITHOUT spawning a player avatar.
         /// Headsets join with B; the PC gets the spectator/map view (<see cref="ServerView"/>).
+        ///
+        /// MOD SECIMINE VE PROFILE BILEREK TAKILMAZ (bkz. Update'teki kapi): mod secimi ve
+        /// isim/takim kulaklik isi, sunucu ise avatar spawn etmiyor. SUNUCU butonu her zaman
+        /// calisir — kapiya alinirsa PC hicbir oturum baslatamaz.
         /// </summary>
         public void StartAsServer()
         {
@@ -174,6 +190,9 @@ namespace VRMultiplayer
         {
             if (_busy) yield break;
             _busy = true;
+            // Paneli BURADA kur: cagri OYUNA BASLA'dan gelmis olabilir, o durumda Update
+            // henuz panelini kurmamis olur ve durum yazisi hicbir yere yazilamazdi.
+            EnsureJoinPanel();
             SetStatus("Sunucu araniyor...");
 
             string ip = null;

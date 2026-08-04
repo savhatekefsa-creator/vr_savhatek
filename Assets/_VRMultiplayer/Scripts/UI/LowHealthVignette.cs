@@ -21,24 +21,15 @@ namespace VRMultiplayer.UI
 
         Transform _quad;
         Material _mat;
-        Texture2D _tex;
         float _ratio = 1f;
 
         void Awake()
         {
-            _tex = MakeVignetteTexture();
-
-            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            q.name = "Vignette Quad";
-            Destroy(q.GetComponent<Collider>());
-            q.transform.SetParent(transform, false);
-            q.transform.localScale = new Vector3(2f, 2f, 1f);
-            _mat = UITheme.CreateTransparentMaterial(VignetteColor);
-            if (_mat.HasProperty("_BaseMap")) _mat.SetTexture("_BaseMap", _tex);
-            if (_mat.HasProperty("_MainTex")) _mat.SetTexture("_MainTex", _tex);
-            q.GetComponent<MeshRenderer>().sharedMaterial = _mat;
-            _quad = q.transform;
-            q.gameObject.SetActive(false);
+            // Doku UITheme'de tek kaynak: olum ekrani da ayni kalibre dokuyu kullaniyor
+            // (bkz. UITheme.VignetteTexture — aci esleme notu orada).
+            _quad = UITheme.MakeVignetteQuad(transform, "Vignette Quad", VignetteColor, out _mat);
+            _quad.localScale = new Vector3(2f, 2f, 1f);
+            _quad.gameObject.SetActive(false);
         }
 
         /// <summary>Guncel can oranini (0-1) bildirir.</summary>
@@ -75,28 +66,5 @@ namespace VRMultiplayer.UI
             UITheme.SetMaterialColor(_mat, new Color(VignetteColor.r, VignetteColor.g, VignetteColor.b, a));
         }
 
-        // Merkezi seffaf, kenarlara dogru opaklasan radyal vignette dokusu.
-        //
-        // ACI ESLEMESI (0.52 m'de 2x2 quad): uv 0.30 ≈ 30°, uv 0.52 ≈ 45° (Quest lens
-        // kenari). Esik eskiden 0.55'ti (~47°) — kizarma Quest'te lensin gorunur alaninin
-        // DISINA ciziliyordu, Editor'de gorunup cihazda gorunmuyordu (ayni ders:
-        // DamageDirectionFlash sinif dokusu).
-        static Texture2D MakeVignetteTexture()
-        {
-            const int S = 256;
-            var tex = new Texture2D(S, S, TextureFormat.RGBA32, false);
-            tex.wrapMode = TextureWrapMode.Clamp;
-            for (int y = 0; y < S; y++)
-            {
-                for (int x = 0; x < S; x++)
-                {
-                    Vector2 v = new Vector2(x - (S - 1) * 0.5f, y - (S - 1) * 0.5f) / (S * 0.5f);
-                    float alpha = Mathf.Pow(Mathf.Clamp01((v.magnitude - 0.30f) / 0.5f), 1.8f);
-                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
-                }
-            }
-            tex.Apply();
-            return tex;
-        }
     }
 }

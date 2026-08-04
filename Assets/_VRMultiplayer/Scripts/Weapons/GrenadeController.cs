@@ -206,6 +206,14 @@ namespace VRMultiplayer.Weapons
         public void PullPin(byte hand)
         {
             if (_armed || _exploded || _grab == null || !_grab.IsOwner) return;
+
+            // TUKETIM: pim cekmek bombayi baglar (artik geri donusu yok, patlayacak). Bu, "kullanma"
+            // anidir — cantadaki bu bomba turunu simdi siliyoruz ki cark bir daha ayni bombayi
+            // sunmasin (sonsuz bomba bug'i). Yenisi raftan alinir. Yalnizca owner'in kendi
+            // cantasi; ApplyPin uzak makinelerde de kosar ama envanter yerel oldugu icin burada.
+            var inv = WeaponInventory.Instance;
+            if (inv != null) inv.RemoveType(WeaponInventory.TypeKey(_grab));
+
             ApplyPin(hand);
             SendPinToServer(hand);
         }

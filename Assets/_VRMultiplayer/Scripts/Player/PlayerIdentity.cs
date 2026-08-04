@@ -39,6 +39,17 @@ namespace VRMultiplayer
         /// <summary>0 = takım yok, 1 = A takımı, 2 = B takımı.</summary>
         public NetworkVariable<byte> Team = new NetworkVariable<byte>(0);
 
+        /// <summary>Bu oyuncunun oldurme / olme sayisi. Sunucu yazar (<see cref="PlayerHealth"/>).
+        /// NetworkVariable oldugu icin GEC KATILAN da dogru skoru gorur — ilk senkron otomatik.
+        /// Ayri bir MatchManager/NetworkObject KURULMADI: skorun oyuncunun kimliginde yasamasi
+        /// sahne ve prefab degisikligini tamamen gereksiz kiliyor.</summary>
+        public NetworkVariable<ushort> Kills = new NetworkVariable<ushort>(0);
+        public NetworkVariable<ushort> Deaths = new NetworkVariable<ushort>(0);
+
+        // Isim BIR KEZ atanir: oyun ortasinda isim degistirmek kill panelindeki gecmis
+        // satirlarla celisir ve kimligi bulandirir.
+        bool _nameSet;
+
         MaterialPropertyBlock _mpb;
         PlayerHealth _health;
         // nameTag'in renderer'i. Isim etiketini takima gore acip kapatan sey bu; her
@@ -108,6 +119,21 @@ namespace VRMultiplayer
             // durumunda takim ZATEN atanmis gelir ve ilk senkron callback tetiklemez, yani
             // burasi olmadan o etiketler kalici gizli kalirdi.
             if (IsOwner) RefreshAll(); else Refresh();
+
+            // Oyuncunun giris ekraninda sectigi isim ve TAKIM sunucuya bildirilir
+            // (bkz. UI.PlayerEntryUI). Sunucu ikisini de kendi tarafinda dogrular —
+            // istemciden gelen degere guvenilmez.
+            //
+            // Takim eskiden spawn'dan SONRA TeamSelector paneliyle seciliyordu; artik giris
+            // ekraninda secildigi icin burada gonderiliyor. TeamSelector yalnizca yedek yol
+            // olarak duruyor (bkz. o dosya).
+            if (IsOwner && PlayerProfile.Confirmed)
+            {
+                if (!string.IsNullOrEmpty(PlayerProfile.Name))
+                    SetNameServerRpc(new FixedString32Bytes(PlayerProfile.Name));
+                if (PlayerProfile.Team != PlayerProfile.TeamNone)
+                    JoinTeamServerRpc(PlayerProfile.Team);
+            }
         }
 
         public override void OnNetworkDespawn()
@@ -159,9 +185,99 @@ namespace VRMultiplayer
         [ServerRpc]
         public void JoinTeamServerRpc(byte team)
         {
-            if (team <= 2)
+            // team = 0 KABUL EDILMEZ: takimsiz oyuncu dost-atesi filtresini bypass ederdi
+            // (WeaponHitscanServer yalnizca t != 0 && t == shooterTeam ise engelliyor).
+            if (team >= 1 && team <= 2)
                 Team.Value = team;
         }
+
+        /// <summary>
+        /// Sahibin sectigi ismi sunucuya bildirir. SUNUCU SON SOZU SOYLER: gelen metin yeniden
+        /// temizlenir (kontrol karakteri, zengin metin etiketi, asiri uzunluk), gecersizse
+        /// eski "Oyuncu N" davranisina duser, baskasinda varsa tekillestirilir.
+        ///
+        /// [ServerRpc] varsayilani RequireOwnership = true, yani bir istemci BASKASININ ismini
+        /// degistiremez.
+        /// </summary>
+        [ServerRpc]
+        public void SetNameServerRpc(FixedString32Bytes requested)
+        {
+            if (_nameSet) return;
+
+            string clean = PlayerProfile.Sanitize(requested.ToString());
+            if (!PlayerProfile.IsValidName(clean)) clean = "Oyuncu " + OwnerClientId;
+
+            NetName.Value = new FixedString32Bytes(MakeUnique(clean));
+            _nameSet = true;
+        }
+
+        /// <summary>Ayni isimden ikinci varsa "-2", "-3" ekler. Kill panelinde iki ayni isim
+        /// gorunmesi paneli okunmaz yapardi.</summary>
+        string MakeUnique(string wanted)
+        {
+            if (!IsTaken(wanted)) return wanted;
+
+            for (int n = 2; n <= 32; n++)
+            {
+                string suffix = "-" + n;
+                // Sonek icin yer ac: sinir karakter DEGIL bayt bazli oldugundan kirpmayi
+                // Sanitize'a yaptiriyoruz (tek kural, tek yer).
+                string baseName = wanted;
+                string candidate = PlayerProfile.Sanitize(baseName + suffix);
+                while (!candidate.EndsWith(suffix) && baseName.Length > 1)
+                {
+                    baseName = baseName.Substring(0, baseName.Length - 1);
+                    candidate = PlayerProfile.Sanitize(baseName + suffix);
+                }
+
+                if (!IsTaken(candidate)) return candidate;
+            }
+            return wanted;   // 32 cakisma: pes et, ayni isim gorunsun
+        }
+
+        bool IsTaken(string name)
+        {
+            for (int i = 0; i < _all.Count; i++)
+            {
+                var p = _all[i];
+                if (p == null || p == this) continue;
+                if (string.Equals(p.NetName.Value.ToString(), name,
+                        System.StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Bir takimin toplam oldurme sayisi. Mevcut <see cref="_all"/> listesi
+        /// uzerinden ISTEMCIDE hesaplanir — ag uzerinde ayrica skor tasinmaz.
+        ///
+        /// BILINEN SINIR: oyuncu cikinca kimligi despawn olur ve skoru toplamdan duser.
+        /// Kalici skor tablosu MatchManager isi.</summary>
+        public static int TeamScore(byte team)
+        {
+            int total = 0;
+            for (int i = 0; i < _all.Count; i++)
+            {
+                var p = _all[i];
+                if (p != null && p.Team.Value == team) total += p.Kills.Value;
+            }
+            return total;
+        }
+
+        /// <summary>Verilen istemcinin kimligi (yoksa null — oyuncu ayrilmis olabilir).</summary>
+        public static PlayerIdentity For(ulong clientId)
+        {
+            for (int i = 0; i < _all.Count; i++)
+            {
+                var p = _all[i];
+                if (p != null && p.OwnerClientId == clientId) return p;
+            }
+            return null;
+        }
+
+        /// <summary>Yerel oyuncunun kimligi (HUD/kill paneli "ben kimim" sorusunu bununla
+        /// cevaplar). Takim henuz secilmemisse Team 0 doner.</summary>
+        public static PlayerIdentity Local => _local;
 
         /// <summary>Avatarin tum parcalarini saydam varyanta cevirir / geri alir. Yalnizca
         /// DURUM DEGISINCE calisir: Refresh() renk/isim/takim degisiminde de cagriliyor,

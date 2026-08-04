@@ -1,77 +1,199 @@
+using Unity.Netcode;
 using UnityEngine;
 
 namespace VRMultiplayer.UI
 {
     /// <summary>
-    /// Elenen (ya da henuz oyuna girmemis) oyuncunun ekrani: gorusu grilestiren yari saydam bir
-    /// perde + kendi takim bolgesine yonlendiren metin + bolgedeyken geri sayim.
+    /// Elenen (ya da henuz oyuna girmemis) oyuncunun ekrani: KENAR vinyeti + oyunun giris
+    /// ekraniyla ayni dilde tasarlanmis bir durum karti + hedefi gosteren pusula oku +
+    /// bolgede beklerken dolan ilerleme halkasi.
     ///
-    /// GORUSU KAPATMAZ, bilerek. Bu oyun kolokasyonlu: olu oyuncu dogum bolgesine GERCEK odada
-    /// yuruyecek. Ekrani karartmak onu gercek bir engele ya da baska bir oyuncuya carptirir.
-    /// Bu yuzden perde acik gri ve dusuk alfali — "oldun" hissini verir ama yol gostermeye
-    /// devam eder. <see cref="alpha"/> degerini yukseltirken bunu hatirla.
+    /// GORUSUN ORTASI ACIK KALIR, bilerek. Bu oyun kolokasyonlu: olu oyuncu dogum bolgesine
+    /// GERCEK odada yuruyor. Eskiden tum gorusu kaplayan gri bir perde vardi; perde acik tonlu
+    /// tutulmustu ama yine de tam ortayi orttugu icin hem prototip duruyor hem yururken
+    /// gorusu kirletiyordu. Yerine KENAR vinyeti kondu: kenarlarda kararma, merkez tertemiz.
+    /// Hem daha guvenli hem daha tasarlanmis.
     ///
-    /// Gercek doygunluk-dusurme (desaturation) bir post-process Volume ister; projede hic
-    /// post-process yok, o yuzden en ucuz ve build'de guvenli yol olan gri quad kullanildi
-    /// (ayni desen: <see cref="LowHealthVignette"/>, <see cref="DamageDirectionFlash"/>).
+    /// KARARTMAYI ARTIRMAK ISTERSEN DUR: bu ekranla oyuncu gercek bir odada yuruyor. Karanlik
+    /// bir ekran onu gercek bir masaya ya da baska bir oyuncuya carptirir. Vinyet renginin
+    /// alfasi (<see cref="alpha"/>) bu yuzden dusuk.
+    ///
+    /// Gercek doygunluk dusurme (desaturation) bir post-process Volume ister; projede hic
+    /// post-process yok, tek efekt icin o yigini kurmaya degmez.
     ///
     /// <see cref="PlayerHUD"/> tarafindan olusturulur ve her kare <see cref="SetState"/> ile
     /// beslenir. Sahnedeki <see cref="TeamSpawnZone"/> halkasinin vurgusunu da bu surer.
     /// </summary>
     public class RespawnGuide : MonoBehaviour
     {
-        [Tooltip("Gri perdenin opakligi. YUKSELTIRKEN DIKKAT: oyuncu bu ekranla gercek odada yuruyor.")]
-        [Range(0f, 0.85f)] public float alpha = 0.55f;
+        [Tooltip("Kenar vinyetinin opakligi. YUKSELTIRKEN DIKKAT: oyuncu bu ekranla gercek " +
+                 "odada yuruyor, merkez acik kalmali.")]
+        [Range(0f, 0.9f)] public float alpha = 0.55f;
 
-        static readonly Color VeilColor = new Color(0.45f, 0.46f, 0.48f);
+        [Tooltip("Kartin kafadan uzakligi (metre).")]
+        public float cardDistance = 1.25f;
+        [Tooltip("Kartin gorus merkezine gore ASAGI acisi (derece) — nisan hattini kapatmasin.")]
+        [Range(5f, 35f)] public float cardAngle = 18f;
 
-        Transform _veil;
-        Material _veilMat;
-        TextMesh _text;
+        // Olum = koyu kirmizi, ilk dogus = takim rengi. Oyuncu bakmadan hangi durumda
+        // oldugunu ayirt eder.
+        static readonly Color DeathTint = new Color(0.55f, 0.05f, 0.04f);
+
+        // Giris ekraniyla AYNI palet — degerler UITheme'de tek kaynak. Buraya ham renk
+        // yazmak, iki ekranin birbirinden kaymasi demektir; bir kez oldu (kart kol saatinin
+        // teal'ini ve yari saydam bir zemin kullaniyordu, giris ekrani camgobegi ve opak).
+        static readonly Color CardFill  = UITheme.PanelBg;      // TAM OPAK
+        static readonly Color CardEdge  = UITheme.PanelEdge;
+        static readonly Color InsetFill = UITheme.SurfaceFill;  // alt seridin cukur yuzeyi
+        static readonly Color InsetEdge = UITheme.SurfaceEdge;
+        static readonly Color TitleDead = UITheme.TeamRedText;
+        static readonly Color TitleWait = UITheme.AccentCyan;
+        static readonly Color BodyCol   = UITheme.TextPrimary;
+        static readonly Color MutedCol  = UITheme.TextMuted;
+        static readonly Color DistCol   = UITheme.TextPrimary;
+        static readonly Color RingDim   = UITheme.SurfaceEdge;
+
+        const int QCard = 3040, QText = 3052;   // olum vinyeti/perde 3000'de kalir, kart ustunde
+        const float CardW = 0.50f, CardH = 0.29f;
+        const int RingSegments = 48;
+
+        Transform _vignette;
+        Material _vignetteMat;
+
+        Transform _card;
+        TextMesh _title, _killer, _body, _distance, _count;
+        Transform _arrow;
+        Material _arrowMat;
+        LineRenderer _ringBg, _ringFill;
+        Material _ringBgMat, _ringFillMat;
 
         bool _active;
+        bool _hasLived;          // bir kez canlandi mi? ilk dogus ile olumu bu ayirir
+        string _killerName;      // beni en son kim oldurdu (bilinmiyorsa bos)
         TeamSpawnZone _zone;
+        byte _team;
+        Font _font;
 
         void Awake()
         {
-            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            q.name = "Respawn Veil";
-            var col = q.GetComponent<Collider>();
-            if (col != null) Destroy(col);
-            q.transform.SetParent(transform, false);
-            q.transform.localScale = new Vector3(2.4f, 2.4f, 1f);
-            _veilMat = UITheme.CreateTransparentMaterial(VeilColor);
-            q.GetComponent<MeshRenderer>().sharedMaterial = _veilMat;
-            _veil = q.transform;
+            _vignette = UITheme.MakeVignetteQuad(transform, "Death Vignette", DeathTint, out _vignetteMat);
 
-            var t = new GameObject("Respawn Text");
-            t.transform.SetParent(transform, false);
-            _text = t.AddComponent<TextMesh>();
-            _text.characterSize = 0.06f;
-            _text.fontSize = 60;
-            _text.anchor = TextAnchor.MiddleCenter;
-            _text.alignment = TextAlignment.Center;
-            _text.color = Color.white;
-            t.transform.localScale = Vector3.one * 0.16f;
+            _card = new GameObject("Status Card").transform;
+            _card.SetParent(transform, false);
+            BuildCard();
 
+            PlayerHealth.KillReported += OnKillReported;
             gameObject.SetActive(false);
-        }
-
-        /// <summary>PlayerHUD'daki ozel font secimi burada da gecerli olsun (bos = varsayilan).</summary>
-        public void SetFont(Font f)
-        {
-            if (f != null && _text != null) _text.font = f;
         }
 
         void OnDestroy()
         {
+            PlayerHealth.KillReported -= OnKillReported;
             // Perde kapanirken sahnedeki halka vurgulu kalmasin.
             if (_zone != null) _zone.SetLocalState(false, 0f);
         }
 
-        /// <summary>
-        /// Her kare PlayerHUD tarafindan cagrilir.
-        /// </summary>
+        // Katil adi zaten sunucudan geliyor (kill paneli isinde acildi) — olum ekraninin en
+        // cok merak edilen sorusuna bedavaya cevap veriyor.
+        void OnKillReported(KillInfo info)
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || info.VictimId != nm.LocalClientId) return;
+            _killerName = info.Kind == 0 ? info.Killer : string.Empty;
+        }
+
+        void BuildCard()
+        {
+            UITheme.MakeRounded(_card, "Card Border", Vector2.zero,
+                new Vector2(CardW, CardH), 0.018f, CardEdge, 0.004f, QCard);
+            UITheme.MakeRounded(_card, "Card Fill", Vector2.zero,
+                new Vector2(CardW - 0.005f, CardH - 0.005f), 0.016f, CardFill, 0.003f, QCard + 1);
+
+            // Baslik altinda vurgu cizgisi + altta cukur serit: giris ekraninin katmanli
+            // dili. Duz tek renk bir kutu "prototip" duruyordu, derinligi bunlar veriyor.
+            UITheme.MakeRounded(_card, "Header Line", new Vector2(0f, 0.062f),
+                new Vector2(CardW * 0.80f, 0.0022f), 0.001f, UITheme.AccentCyan, 0.0025f, QCard + 2);
+            UITheme.MakeRounded(_card, "Inset Edge", new Vector2(0f, -0.080f),
+                new Vector2(CardW - 0.030f, 0.072f), 0.012f, InsetEdge, 0.0028f, QCard + 2);
+            UITheme.MakeRounded(_card, "Inset Fill", new Vector2(0f, -0.080f),
+                new Vector2(CardW - 0.034f, 0.068f), 0.011f, InsetFill, 0.0026f, QCard + 3);
+
+            _title    = Text("", TitleDead, 0.046f, new Vector3(0f, 0.093f, 0f));
+            _killer   = Text("", MutedCol,  0.021f, new Vector3(0f, 0.040f, 0f));
+            _body     = Text("", BodyCol,   0.025f, new Vector3(0f, -0.008f, 0f));
+            _distance = Text("", DistCol,   0.040f, new Vector3(0.035f, -0.080f, 0f));
+            _count    = Text("", DistCol,   0.030f, new Vector3(0f, -0.080f, 0f));
+
+            _arrow = UITheme.MakeShape(_card, "Direction Arrow", UIMesh.Arrow(), Color.white, QText);
+            _arrowMat = _arrow.GetComponent<MeshRenderer>().sharedMaterial;
+            _arrow.localPosition = new Vector3(-0.10f, -0.080f, 0f);
+            _arrow.localScale = Vector3.one * 0.075f;
+
+            // Halka: LineRenderer yayi — TeamSpawnZone zeminde ayni teknigi kullaniyor, mesh'i
+            // her kare yeniden uretmeye gerek yok.
+            _ringBg = Ring("Ring Bg", RingDim, 0.005f, out _ringBgMat);
+            _ringFill = Ring("Ring Fill", TitleWait, 0.008f, out _ringFillMat);
+            WriteArc(_ringBg, 1f);
+        }
+
+        TextMesh Text(string s, Color c, float h, Vector3 pos)
+        {
+            var tm = UITheme.MakeText(_card, s, c, h, TextAnchor.MiddleCenter, QText);
+            tm.transform.localPosition = pos;
+            return tm;
+        }
+
+        LineRenderer Ring(string name, Color c, float width, out Material mat)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_card, false);
+            go.transform.localPosition = new Vector3(0f, -0.080f, 0f);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = false;
+            lr.alignment = LineAlignment.TransformZ;
+            lr.widthMultiplier = width;
+            lr.numCapVertices = 2;
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            mat = UITheme.CreateOverlayMaterial(c);
+            mat.renderQueue = QText;
+            lr.sharedMaterial = mat;
+            return lr;
+        }
+
+        static void WriteArc(LineRenderer lr, float fraction)
+        {
+            // Alttaki cukur seridin (yukseklik 0.072) ICINE sigmali; 0.052 tasiyordu.
+            const float R = 0.028f;
+            int used = Mathf.Max(2, Mathf.CeilToInt(RingSegments * Mathf.Clamp01(fraction)) + 1);
+            lr.positionCount = used;
+            for (int i = 0; i < used; i++)
+            {
+                // Tepeden baslar, saat yonunde dolar — geri sayim hissi boyle okunur.
+                float a = Mathf.PI * 0.5f - (i / (float)RingSegments) * Mathf.PI * 2f;
+                lr.SetPosition(i, new Vector3(Mathf.Cos(a) * R, Mathf.Sin(a) * R, 0f));
+            }
+        }
+
+        /// <summary>PlayerHUD'daki ozel font secimi burada da gecerli olsun (bos = varsayilan).
+        /// Materyal de degismeli: yalnizca tm.font yazmak yaziyi ESKI fontun atlasiyla cizmeye
+        /// devam ettirir (yanlis glifler / bos kutu).</summary>
+        public void SetFont(Font f)
+        {
+            if (f == null) return;
+            _font = f;
+            Apply(_title); Apply(_killer); Apply(_body); Apply(_distance); Apply(_count);
+        }
+
+        void Apply(TextMesh tm)
+        {
+            if (tm == null || _font == null) return;
+            tm.font = _font;
+            var mr = tm.GetComponent<MeshRenderer>();
+            if (mr != null) mr.sharedMaterial = _font.material;
+        }
+
+        /// <summary>Her kare PlayerHUD tarafindan cagrilir.</summary>
         /// <param name="waiting">Oyuncu olu / dogum bekliyor mu?</param>
         /// <param name="team">Oyuncunun takimi (0 = henuz secilmedi).</param>
         /// <param name="inZone">Sunucuya gore cemberin icinde mi?</param>
@@ -79,9 +201,18 @@ namespace VRMultiplayer.UI
         /// <param name="holdSeconds">Toplam bekleme suresi — kalan saniyeyi yazmak icin.</param>
         public void SetState(bool waiting, byte team, bool inZone, float progress01, float holdSeconds)
         {
-            // Takim secilmeden perde ACILMAZ: o asamada TeamSelector'un kendi paneli onde duruyor,
-            // ustune bir de gri perde binerse yazi okunmaz.
+            _team = team;
+
+            // Takim secilmeden ekran ACILMAZ: o asamada oyuncu daha giris panelinde.
             bool want = waiting && team != 0;
+
+            if (!waiting)
+            {
+                // Canlandi: bundan sonraki bekleyisler ILK DOGUS degil OLUM.
+                _hasLived = true;
+                _killerName = string.Empty;
+            }
+
             if (_active != want)
             {
                 _active = want;
@@ -97,57 +228,132 @@ namespace VRMultiplayer.UI
             _zone = TeamSpawnZone.For(team);
             _zone?.SetLocalState(true, progress01);
 
-            UITheme.SetMaterialColor(_veilMat,
-                new Color(VeilColor.r, VeilColor.g, VeilColor.b, alpha));
+            Color tint = _hasLived ? DeathTint : TeamTint(team);
+            UITheme.SetMaterialColor(_vignetteMat, new Color(tint.r, tint.g, tint.b, alpha));
+
+            Fill(inZone, progress01, holdSeconds);
+        }
+
+        static Color TeamTint(byte team) =>
+            team == 2 ? new Color(0.45f, 0.06f, 0.06f) : new Color(0.06f, 0.16f, 0.42f);
+
+        // ------------------------------------------------------------------ metin
+
+        void Fill(bool inZone, float progress01, float holdSeconds)
+        {
+            bool holding = inZone && _zone != null;
+
+            _ringBg.enabled = holding;
+            _ringFill.enabled = holding;
+            _count.gameObject.SetActive(holding);
+            _arrow.gameObject.SetActive(!holding);
+            _distance.gameObject.SetActive(!holding);
+
+            if (holding)
+            {
+                _title.text = "BÖLGENDESİN";
+                _title.color = TitleWait;
+                _killer.text = "";
+                _body.text = "Hareketsiz bekle";
+
+                WriteArc(_ringFill, Mathf.Clamp01(progress01));
+                float left = Mathf.Max(0f, holdSeconds * (1f - Mathf.Clamp01(progress01)));
+                _count.text = Mathf.CeilToInt(left).ToString();
+                return;
+            }
 
             if (_zone == null)
             {
                 // Bolge kurulmamis; PlayerHealth guvenlik agiyla zamanli dogum yapiyor.
-                _text.text = "YENIDEN DOGULUYOR\n" + Remaining(progress01, holdSeconds);
+                _title.text = "YENİDEN DOĞULUYOR";
+                _title.color = TitleWait;
+                _killer.text = "";
+                _body.text = "Bölge kurulmamış — bekle";
+                _distance.text = Mathf.CeilToInt(
+                    Mathf.Max(0f, holdSeconds * (1f - Mathf.Clamp01(progress01)))) + " sn";
+                _arrow.gameObject.SetActive(false);
+                return;
             }
-            else if (inZone)
+
+            if (_hasLived)
             {
-                _text.text = "DOGUM BOLGESINDESIN\nBEKLE: " + Remaining(progress01, holdSeconds);
+                _title.text = "ÖLDÜN";
+                _title.color = TitleDead;
+                _killer.text = string.IsNullOrEmpty(_killerName)
+                    ? "" : "Seni " + _killerName + " öldürdü";
+                _body.text = "Yeniden doğmak için takım bölgene git";
             }
             else
             {
-                float d = _zone.HorizontalDistance(HeadPosition());
-                _text.text = $"TAKIM BOLGENE GIT\n{d:0.0} m";
+                _title.text = "HAZIRLAN";
+                _title.color = TitleWait;
+                _killer.text = "";
+                _body.text = "Doğmak için takım bölgene git";
             }
-        }
 
-        static string Remaining(float progress01, float holdSeconds)
-        {
-            float left = Mathf.Max(0f, holdSeconds * (1f - Mathf.Clamp01(progress01)));
-            return Mathf.CeilToInt(left) + " sn";
+            _distance.text = _zone.HorizontalDistance(HeadPosition()).ToString("0.0") + " m";
         }
 
         static Vector3 HeadPosition()
         {
-            var rig = XRRigReference.Instance;
-            if (rig != null && rig.head != null) return rig.head.position;
-            return Camera.main != null ? Camera.main.transform.position : Vector3.zero;
+            var head = XRRigReference.HeadOrCamera;
+            return head != null ? head.position : Vector3.zero;
         }
+
+        // ------------------------------------------------------------------ yerlesim
 
         void LateUpdate()
         {
             if (!_active) return;
 
-            var rig = XRRigReference.Instance;
-            Transform head = rig != null && rig.head != null ? rig.head
-                           : (Camera.main != null ? Camera.main.transform : null);
+            Transform head = XRRigReference.HeadOrCamera;
             if (head == null) return;
 
-            // Perde hepsinin ONUNDE (katman 0) — vignette/hasar flasiyla z-cakismasin.
-            // Mesafe HeadOverlay'den: sabit 0.45 m durbun merceginin tam sinirindaydi
-            // (WeaponScope 0.45 m'den yakinda aciliyor), yani durbune bakan olu oyuncu
-            // perdeyi hic gormeyebiliyordu.
-            _veil.SetPositionAndRotation(
-                head.position + head.forward * HeadOverlay.Distance(HeadOverlay.Veil), head.rotation);
+            // Vinyet kafaya kilitli. Mesafe HeadOverlay'den: sabit deger durbun merceginin
+            // arkasinda kalabiliyordu. Quad olcegi mesafeyle AYNI oranda kuculur, yoksa
+            // dokunun aci esleme kalibrasyonu (bkz. UITheme.VignetteTexture) kayar.
+            float d = HeadOverlay.Distance(HeadOverlay.Veil);
+            _vignette.SetPositionAndRotation(head.position + head.forward * d, head.rotation);
+            float s = 2f * (d / 0.52f);
+            _vignette.localScale = new Vector3(s, s, 1f);
 
-            // Yazi biraz daha uzakta — VR'da cok yakin metin okunmaz.
-            _text.transform.position = head.position + head.forward * 1.2f;
-            _text.transform.rotation = Quaternion.LookRotation(_text.transform.position - head.position);
+            // Kart nisan hattinin ALTINDA: yururken onunu kapatmasin.
+            Vector3 fwd = head.forward;
+            Vector3 pos = head.position
+                        + fwd * cardDistance
+                        - head.up * (cardDistance * Mathf.Tan(cardAngle * Mathf.Deg2Rad));
+            _card.SetPositionAndRotation(pos, Quaternion.LookRotation(pos - head.position, head.up));
+
+            UpdateArrow(head);
+        }
+
+        /// <summary>
+        /// Pusula oku: hedefin BAGIL yonu — ileri = yukari, sag = saga, ARKA = asagi.
+        ///
+        /// Neden ekran duzleminde donen bir ok, neden dunya yonunde duran 3B bir ok degil:
+        /// goz hizasinda duran yatay bir ok, hedef tam onde ya da tam arkadayken kameraya
+        /// UCUNDAN goruldugu icin cizgiye doner ve yon okunamaz. Ekran duzleminde donen ok
+        /// hicbir acida bozulmaz.
+        /// </summary>
+        void UpdateArrow(Transform head)
+        {
+            if (_arrow == null || !_arrow.gameObject.activeSelf || _zone == null) return;
+
+            Vector3 fwd = head.forward; fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
+            fwd.Normalize();
+
+            Vector3 to = _zone.transform.position - head.position; to.y = 0f;
+            float bearing = to.sqrMagnitude > 0.0025f
+                ? Vector3.SignedAngle(fwd, to.normalized, Vector3.up)
+                : 0f;
+
+            // Ok mesh'i +X'e bakiyor; 90 derece ile yukari cevrilir (bearing 0 = ileri).
+            _arrow.localRotation = Quaternion.Euler(0f, 0f, 90f - bearing);
+
+            Color c = _zone.TeamColor;
+            float blink = 0.4f + 0.6f * (0.5f + 0.5f * Mathf.Sin(Time.time * 1.6f * Mathf.PI * 2f));
+            UITheme.SetMaterialColor(_arrowMat, new Color(c.r, c.g, c.b, blink));
         }
     }
 }

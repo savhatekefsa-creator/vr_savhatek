@@ -274,10 +274,16 @@ namespace VRMultiplayer.EditorTools
                 }
             }
 
+            // Duvarlar degisti -> yurunebilir alan da degisti. Bake'i AYRI bir adim olarak
+            // birakmiyoruz: unutulursa dogum rotasi eski duvarlara gore hesaplanir ve
+            // oyuncuyu duvara yollar.
+            RoomNavMeshSetup.Bake(out string nav);
+
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorUtility.DisplayDialog("VR Multiplayer",
                 "Sinir duvarlari uretildi: " + bushCount + " cali + " + pts.Length + " gorunmez collider\n" +
                 "(hepsi " + MapRootName + "/Walls altinda — begenmedigini sil/tasi).\n\n" +
+                nav + "\n\n" +
                 "Icini elle dekore et, Ctrl+S ile kaydet ve gozluklere build al.", "Tamam");
         }
 
@@ -297,6 +303,8 @@ namespace VRMultiplayer.EditorTools
             BuildRoomFromPlan(plan, mapRoot.transform, Vector2.zero, Vector2.zero, "",
                 out int doorEdge, out int tables);
 
+            RoomNavMeshSetup.Bake(out string nav);   // bkz. menu 13'teki not
+
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorUtility.DisplayDialog("VR Multiplayer",
                 "Oda insa edildi (RoomMap altinda, build'e girer):\n" +
@@ -306,6 +314,7 @@ namespace VRMultiplayer.EditorTools
                     ? "• A/B noktasindaki gercek kapiya CIKIS boslugu acildi\n"
                     : "• UYARI: kapi icin uygun kenar bulunamadi\n") +
                 "• " + plan.furniture.Length + " esya karsiligi (" + tables + " masa)\n\n" +
+                nav + "\n\n" +
                 "Istedigini sil/boya/tasi, Ctrl+S ile kaydet ve 3 gozluge YENIDEN build al.", "Tamam");
         }
 
@@ -357,6 +366,8 @@ namespace VRMultiplayer.EditorTools
             BuildRoomFromPlan(planB, mapRoot.transform, offset, doorA + nA * 0.4f, "2",
                 out int doorEdgeB, out _);
 
+            RoomNavMeshSetup.Bake(out string nav);   // bkz. menu 13'teki not
+
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorUtility.DisplayDialog("VR Multiplayer",
                 "Ikinci oda (" + planB.floorPolygon.Length + " koseli buyuk oda) aktif odanin " +
@@ -364,6 +375,7 @@ namespace VRMultiplayer.EditorTools
                 (doorEdgeB >= 0
                     ? "Iki kapi hizalandi: gercek kapidan gecince sanal buyuk odaya girersiniz.\n"
                     : "UYARI: ikinci odada kapi kenari bulunamadi.\n") +
+                "\n" + nav + "\n" +
                 "\nKaldirmak istersen RoomMap altindaki Walls2/Zemin2/Furniture2'yi sil.\n" +
                 "Ctrl+S ile kaydet ve gozluklere YENIDEN build al.", "Tamam");
         }

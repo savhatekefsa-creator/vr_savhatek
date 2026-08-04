@@ -107,6 +107,15 @@ namespace VRMultiplayer.Weapons
             {
                 var g = actives[gi];
                 if (g.HolderClientId != me) continue; // sadece SU AN benim tuttugum silahlar
+
+                // PIMI CEKILMIS BOMBAYI EKLEME. Armed bomba "kullanimda" — atilacak, saklanacak
+                // esya degil. PullPin cantadan zaten cikardi; bu tarama 0.3 sn'de bir kosuyor ve
+                // armed bombayi elde tutarken GERI EKLERDI, atinca da listede kalirdi (kullanicinin
+                // gordugu "atilan bomba envanterde duruyor" sorunu). Armed'i atlayinca kayit gitmis
+                // kalir.
+                var gc = g.GetComponent<GrenadeController>();
+                if (gc != null && gc.Armed) continue;
+
                 string key = TypeKey(g);
                 int slot = (int)CategoryOf(key);
                 var cur = _slots[slot];
@@ -154,6 +163,24 @@ namespace VRMultiplayer.Weapons
 
         /// <summary>Kategorinin yuvasindaki silah (bos yuva = null). Cark her dilimi buradan okur.</summary>
         public Entry Slot(WeaponCategory c) => _slots[(int)c];
+
+        /// <summary>Bu turu cantadan CIKAR. El bombasi TUKETILEBILIR: atilinca (kullanilinca)
+        /// cantadaki kaydi silinir, cark bir daha o bombayi sunmaz. Yeni bomba raftan alinir.
+        /// Silahlar icin cagrilmaz — onlar tekrar kullanilabilir, cantada kalir.</summary>
+        public void RemoveType(string key)
+        {
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                var e = _slots[i];
+                if (e == null || e.Key != key) continue;
+                if (e.Preview != null) Destroy(e.Preview);
+                _slots[i] = null;
+                _viewDirty = true;
+                Debug.Log($"[WeaponInventory] {(WeaponCategory)i} yuvasi bosaldi: {key} (kullanildi)");
+                Changed?.Invoke();
+                return;
+            }
+        }
 
         // Bu turden yeni bir tane uretecek kalibi bul: Resources/WeaponPrefabs'taki her prefabin
         // tutuş profili isim eslesmesiyle bulunur (WeaponGripBinder ile AYNI kural), profili bu
