@@ -1557,6 +1557,14 @@ MonoBehaviour:
   rightGripEulerOffset: {x: -7.99, y: 150, z: -50.6}
   palmOffset: 0.09
   armReachRemap: 0
+  driveElbowHints: 1
+  elbowDown: 1
+  elbowOut: 0.55
+  elbowBack: 0.4
+  elbowForwardOnCross: 0.7
+  crossBlendMeters: 0.12
+  elbowHintDistance: 0.3
+  minElbowRadius: 0.2
   feetOffset: 0.021316923
   groundY: 0
   trackingReadyMinHeight: 1
@@ -2703,6 +2711,7 @@ GameObject:
   - component: {fileID: 1455032696690629462}
   - component: {fileID: 7316377061070769038}
   - component: {fileID: 165688490942211547}
+  - component: {fileID: 4936700139560549304}
   m_Layer: 0
   m_Name: NetworkPlayer
   m_TagString: Untagged
@@ -2938,6 +2947,19 @@ MonoBehaviour:
   barSlideSpeed: 1.2
   showDuration: 4
   alwaysShowBelow: 0.35
+--- !u!114 &4936700139560549304
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5293397041292697250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d8c5832fa38314a47b51ecb1ab2c04d6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Constructor.ConstructorSync
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &5518199563869288857
 GameObject:
   m_ObjectHideFlags: 0

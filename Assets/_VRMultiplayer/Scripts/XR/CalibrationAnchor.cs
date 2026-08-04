@@ -526,7 +526,7 @@ namespace VRMultiplayer
                 _panel = UI.HeadFollowPanel.Create("Calibration Status", "", Color.white);
                 // Kalibrasyon panelinin ALTINDA dursun — ikisi de kafanin 1.4 m onunde.
                 var follow = _panel.GetComponent<UI.HeadFollowPanel>();
-                if (follow != null) follow.verticalOffset = -0.40f;
+                if (follow != null) follow.heightOffset = -0.40f;
             }
             _panel.gameObject.SetActive(true);
             RefreshPanelText();

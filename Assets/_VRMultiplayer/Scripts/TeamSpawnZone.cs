@@ -33,6 +33,11 @@ namespace VRMultiplayer
         [Tooltip("Halkanin zeminden yuksekligi (metre) — z-fighting olmasin diye kucuk bir pay.")]
         public float groundOffset = 0.02f;
 
+        [Tooltip("Constructor ile oyuncu tarafindan yerlestirildi mi? Boyle olanlar sahneye " +
+                 "elle konmus sabit bolgelerin ONUNE gecer — oyuncu haritasina dogus noktasi " +
+                 "koyduysa niyeti sahnedekini degistirmektir.")]
+        public bool fromConstructor;
+
         const int RingSegments = 64;
 
         static readonly List<TeamSpawnZone> _all = new List<TeamSpawnZone>();
@@ -60,12 +65,22 @@ namespace VRMultiplayer
 
         /// <summary>Verilen takimin bolgesi; yoksa null. Ayni takima birden fazla bolge
         /// konmussa ILKI kullanilir — sunucu ile istemcilerin ayni bolgeyi secmesi icin
-        /// secim kurali sabit tutulur.</summary>
+        /// secim kurali sabit tutulur.
+        ///
+        /// Tek istisna: Constructor ile YERLESTIRILMIS bir bolge varsa o kazanir. Oyuncu
+        /// haritasina dogus noktasi koyduysa sahnedeki sabit bolgeyi degistirmek istiyordur;
+        /// kural yine deterministik oldugu icin her istemci ayni bolgeyi secer.</summary>
         public static TeamSpawnZone For(byte team)
         {
+            TeamSpawnZone sceneZone = null;
             for (int i = 0; i < _all.Count; i++)
-                if (_all[i] != null && _all[i].team == team) return _all[i];
-            return null;
+            {
+                var z = _all[i];
+                if (z == null || z.team != team) continue;
+                if (z.fromConstructor) return z;
+                if (sceneZone == null) sceneZone = z;
+            }
+            return sceneZone;
         }
 
         /// <summary>Nokta cemberin icinde mi? YATAY mesafeye bakilir: kafa zeminden ~1.7 m

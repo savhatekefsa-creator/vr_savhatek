@@ -535,7 +535,7 @@ namespace VRMultiplayer
             {
                 _panel = UI.HeadFollowPanel.Create("AprilTag Olcum", "", Color.white);
                 var f = _panel.GetComponent<UI.HeadFollowPanel>();
-                if (f != null) f.verticalOffset = 0.35f;   // kalibrasyon panelinin USTUNDE
+                if (f != null) f.heightOffset = 0.35f;   // kalibrasyon panelinin USTUNDE
             }
             _panel.gameObject.SetActive(true);
 

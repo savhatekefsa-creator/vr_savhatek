@@ -298,7 +298,19 @@ namespace VRMultiplayer
         {
             // El tasiyicilari bu karede zaten yazildi (NetworkVRPlayer, order -100), yani rig'in
             // GUNCEL donusu okunuyor. Telafi, aimDir raw ile karsilastirilmadan ONCE yapilmali.
+            //
+            // INSA MODU GUARD'INDAN ONCE cagriliyor, bilerek: telafi _rigRotPrev'i her karede
+            // tazeler. Guard'in arkasinda kalsaydi insa modu boyunca guncellenmez, moddan
+            // cikildiginda birikmis kocaman bir delta tek seferde aimDir'e uygulanirdi.
+            // Insa modunda aimDir zaten sifir oldugu icin telafinin kendisi is yapmaz — sadece
+            // referansi guncel tutar. Maliyeti bir quaternion karsilastirmasi.
             CompensateRigRotation();
+
+            // Insa modu: grip "palet" demek. Bu blogu atlamak, gripin DUSEN kenarinda
+            // Release(h) calisip elindeki silahi yere dusurmesini engeller — el neyi
+            // tutuyorsa tutmaya devam eder, moddan cikinca normal davranis geri gelir.
+            if (XRButtons.GameplayInputSuppressed) return;
+
             if (_left != null) UpdateHand(_left);
             if (_right != null) UpdateHand(_right);
             Reconcile();

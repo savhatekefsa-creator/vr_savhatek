@@ -109,6 +109,10 @@ namespace VRMultiplayer.UI
             var inv = WeaponInventory.Instance;
             if (inv == null) { SetOpen(false); return; }
 
+            // Insa modunda grip PROP PALETINI aciyor; iki cark ayni tusla ayni anda acilirsa
+            // stick ikisini birden surer ve hicbiri secilemez.
+            if (XRButtons.GameplayInputSuppressed) { SetOpen(false); return; }
+
             // Cark sadece grip basiliyken yasar (birakinca HandGrabber silahi cantaya yollar).
             if (!GripHeld()) { SetOpen(false); return; }
 
