@@ -166,7 +166,18 @@ namespace VRMultiplayer.UI
             if (Application.isMobilePlatform) return;
             if (AppMode.Current != AppMode.Mode.None) return;
 
-            GUILayout.BeginArea(new Rect(20, 120, 320, 80), GUI.skin.box);
+            // ILK EKRAN HICBIR SEYIN ALTINDA KALMAZ. Gelistirici katmanlari ekranin ALT kenarina
+            // gore konumlaniyor (WeaponGripCaptureTool: Screen.height - 370); alcak bir Game
+            // view'da o kutu yukari tirmanip tam buranin uzerine biniyordu — butonlar duruyor
+            // ama okunmuyor ve nisan alinamiyordu, "moda gecemiyorum"un sebebi buydu.
+            //
+            // Iki onlem birden, cunku ikisi de tek basina kirilgan: konum artik UST-ORTA (iki
+            // dev kutusu da SOL ve SAG kenara yapisik), ve GUI.depth ile bu kutu her seyin
+            // ustunde ciziliyor — ileride eklenen bir katman yine ustune binemesin.
+            GUI.depth = -1000;
+
+            const float w = 320f, h = 80f;
+            GUILayout.BeginArea(new Rect((Screen.width - w) * 0.5f, 20f, w, h), GUI.skin.box);
             GUILayout.Label("Bir mod sec");
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("YARATICI")) AppMode.Choose(AppMode.Mode.Creative);
