@@ -122,8 +122,25 @@ namespace VRMultiplayer
                  "— jitter'dan surekli snap olmasin. Ust sinir yoksa uyku sonrasi buyuk sapmayi da toparlar.")]
         public float correctionDeadzoneMeters = 0.02f;
 
-        [Tooltip("Yaw icin olu bolge (derece).")]
-        public float correctionYawDeadzoneDegrees = 1.5f;
+        [Tooltip("Yaw icin olu bolge (derece).\n\n" +
+                 "MESAFEDE BASKIN HATA BUDUR: yaw sapmasi tag'den uzaklastikca dogrusal olarak " +
+                 "yer degistirmeye donusur. 1,5 derece 4 metrede 10 cm demek. Olculdu: iki " +
+                 "olcum kosusu arasinda tag 1 tam bu yuzden 23 cm oynadi ve yer degistirme " +
+                 "tag 0'dan cikan yaricapa DIK cikti — yani konum degil, donme.")]
+        public float correctionYawDeadzoneDegrees = 0.4f;
+
+        [Tooltip("KUCUK sapmalarda duzeltmenin ne kadari bir seferde uygulanir (0-1).\n\n" +
+                 "1 = aninda (eski davranis, dar olu bolgede dunya zipliyor). 0,25 = birkac " +
+                 "tespitte yakinsar, titreme gorunmez. Dar olu bolgeyi kullanilabilir kilan sey budur.")]
+        [Range(0.05f, 1f)]
+        public float smallCorrectionRate = 0.25f;
+
+        [Tooltip("Bu sapmanin USTU 'buyuk' sayilir ve ANINDA duzeltilir (m). Uyku sonrasi ya da " +
+                 "takip kaybinda dunya hemen yerine otursun; suzulerek gelmesi cok daha kotudur.")]
+        public float snapThresholdMeters = 0.10f;
+
+        [Tooltip("Buyuk sapma esiginin yaw karsiligi (derece).")]
+        public float snapThresholdDegrees = 3f;
 
         [Header("Spike olcum paneli")]
         public bool showPanel = true;
@@ -453,9 +470,26 @@ namespace VRMultiplayer
             }
 
             float yawDelta = Mathf.DeltaAngle(measuredYaw, entry.yawDegrees);
-            _rig.RotateAround(measuredPos, Vector3.up, yawDelta);
 
-            Vector3 delta = entry.position - measuredPos;
+            // KUCUK duzeltme YUMUSAK, BUYUK duzeltme ANINDA.
+            //
+            // Olu bolgeyi daraltmak dogrulugu artirir ama tek basina kotu bir takas: duzeltme
+            // her tespitte tam uygulaninca dunya saniyede 1-3 kez zipliyor. Olcum gurultusu
+            // ~0,3-0,5 derece oldugu icin dar bir esik neredeyse her turda tetiklenir ve
+            // 4 metrede 0,4 derece 3 cm'lik gorunur bir kayma demektir — dunya yuzer.
+            //
+            // Sapmanin bir ORANINI uygulamak ayni dogruluga TITREMEDEN goturur: ust uste
+            // birkac tespitte yakinsar, gurultu de ortalanmis olur. Boylece esigi gercekten
+            // kucuk tutabiliyoruz.
+            //
+            // Buyuk sapma yumusatilmaz: uyku sonrasi ya da takip kaybinda oyuncu dunyanin
+            // HEMEN yerine oturmasini ister, saniyelerce suzulmesini degil.
+            bool snap = dev > snapThresholdMeters || Mathf.Abs(yawDelta) > snapThresholdDegrees;
+            float rate = snap ? 1f : Mathf.Clamp01(smallCorrectionRate);
+
+            _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
+
+            Vector3 delta = (entry.position - measuredPos) * rate;
             if (!correctVertical) delta.y = 0f;
             _rig.position += delta;
 

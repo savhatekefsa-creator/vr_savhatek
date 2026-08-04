@@ -1426,7 +1426,10 @@ MonoBehaviour:
   calibrateSampleCount: 15
   calibrateMaxDistance: 2
   correctionDeadzoneMeters: 0.01
-  correctionYawDeadzoneDegrees: 1.5
+  correctionYawDeadzoneDegrees: 0.4
+  smallCorrectionRate: 0.25
+  snapThresholdMeters: 0.1
+  snapThresholdDegrees: 3
   showPanel: 1
 --- !u!114 &1565593142
 MonoBehaviour:
