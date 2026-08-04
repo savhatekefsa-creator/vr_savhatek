@@ -33,8 +33,30 @@ namespace VRMultiplayer.Constructor
         /// </summary>
         public string CurrentMapName { get; private set; } = DefaultMapName;
 
-        /// <summary>Son kayittan bu yana degisiklik var mi? "Kaydet?" karari bunu sorar.</summary>
-        public bool HasUnsavedChanges => _dirty;
+        /// <summary>
+        /// Son kayittan bu yana degisiklik var mi? "Kaydet?" karari bunu sorar.
+        ///
+        /// OTORITEDEN BAGIMSIZ, <see cref="_dirty"/>'den ayri: soru GOZLUKTE soruluyor ama
+        /// dosyayi PC yaziyor. Otomatik kaydi baglayan bayrak istemcide hic set edilmedigi icin
+        /// (bkz. <see cref="MarkDirty"/>) ona bakilsaydi gozlukte "kaydedilecek bir sey yok"
+        /// denip butun oturum sessizce atilirdi.
+        /// </summary>
+        public bool HasUnsavedChanges => _touched;
+
+        bool _touched;
+
+        /// <summary>
+        /// Otomatik kayit askida mi?
+        ///
+        /// Yaratici akista kaydetme KARARI oyuncunun (Serit 1: "Kaydet?"), ve "degisiklikleri
+        /// at" secenegi ancak hicbir sey yazilmamissa bir anlam tasir — otomatik kayit acik
+        /// kalsaydi "at" demek daima gec kalmis olurdu. Bedeli acik: editordeyken cokme olursa
+        /// o oturumun emegi gider. Karsiliginda "at" gercekten atiyor.
+        /// </summary>
+        public static bool AutoSaveSuspended { get; set; }
+
+        /// <summary>Kaydedildi say — istemcide sunucunun onayi gelince cagriliyor.</summary>
+        public void ClearUnsaved() => _touched = false;
 
         public static ConstructorSession Instance { get; private set; }
 
@@ -122,6 +144,10 @@ namespace VRMultiplayer.Constructor
         /// </summary>
         void MarkDirty()
         {
+            // Degisiklik HER peer'da isaretlenir (bkz. HasUnsavedChanges); otorite kontrolu
+            // yalnizca OTOMATIK kaydi baglar.
+            _touched = true;
+
             if (!IsMapAuthority) return;
             _dirty = true;
             _saveAt = Time.unscaledTime + AutoSaveDelay;
@@ -137,7 +163,7 @@ namespace VRMultiplayer.Constructor
         void Update()
         {
             HookServerStopped();
-            if (!_dirty || Time.unscaledTime < _saveAt) return;
+            if (!_dirty || AutoSaveSuspended || Time.unscaledTime < _saveAt) return;
             FlushPendingSave();
         }
 
@@ -298,6 +324,7 @@ namespace VRMultiplayer.Constructor
             CurrentMapName = mapName;
             bool ok = StartNew(RoomPlan.FreeSpace());
             _dirty = false;   // yeni ve bos — yazilacak bir sey yok
+            _touched = false;
             return ok;
         }
 
@@ -323,7 +350,7 @@ namespace VRMultiplayer.Constructor
             // Odasi olmayan kayit (elle bozulmus ya da cok eski) bos zemine oturur —
             // yerlestirmeleri toptan reddetmektense zeminini tamamlamak daha az kayipli.
             bool ok = Adopt(saved, saved.HasRoom ? null : RoomPlan.FreeSpace());
-            if (ok) _dirty = false;
+            if (ok) { _dirty = false; _touched = false; }
             else NotStartedReason = $"'{mapName}' acilamadi: izgara kurulamadi.";
             return ok;
         }
@@ -864,7 +891,9 @@ namespace VRMultiplayer.Constructor
             }
 
             Layout.libraryVersion = Library.contentVersion;
-            return Layout.Save(mapName);
+            bool yazildi = Layout.Save(mapName);
+            if (yazildi) _touched = false;
+            return yazildi;
         }
 
         /// <summary>The current layout as JSON — what the server ships to a late joiner.</summary>

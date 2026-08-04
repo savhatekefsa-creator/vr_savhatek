@@ -815,7 +815,14 @@ namespace VRMultiplayer.Constructor
             _wantBuildMode = false;
             _waitingForCalibration = false;
             if (!BuildMode) { HidePanel(); return; }
-            SaveNow();   // moddan cikarken kaydet: bir oturumluk emek, cikisi unutunca ucmasin
+            // Moddan cikarken kaydet: bir oturumluk emek, cikisi unutunca ucmasin.
+            //
+            // YARATICI AKISTA DEGIL. Orada kaydetme karari cikista SORULUYOR ("Kaydet?" ->
+            // isimlendirme | degisiklikleri at, bkz. UI.CreativeFlowUI) ve burada sessizce
+            // yazmak "at" secenegini anlamsiz kilardi: atilacak sey coktan diske yazilmis
+            // olurdu. Askiyi o akis koyup kaldiriyor.
+            if (!ConstructorSession.AutoSaveSuspended) SaveNow();
+
             Activate(false);
         }
 

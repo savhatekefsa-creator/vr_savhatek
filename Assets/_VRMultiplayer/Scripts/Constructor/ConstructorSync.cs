@@ -269,6 +269,35 @@ namespace VRMultiplayer.Constructor
             SaveMessage = ok
                 ? $"KAYDEDILDI\n\n{propCount} prop sunucuya yazildi."
                 : "KAYDEDILEMEDI\n\nSunucu diske yazamadi (Console'a bak).";
+
+            // Istemcinin "kaydedilmemis degisiklik" isareti ancak sunucu ONAYLAYINCA dusuyor:
+            // istegi yollar yollamaz dusseydi, reddedilen bir kayitta gozluk isini kaydedilmis
+            // sanardi.
+            if (ok && Session != null) Session.ClearUnsaved();
+        }
+
+        /// <summary>Istemci: "acik haritayi diskteki haline geri dondur" (degisiklikleri at).</summary>
+        public static bool ClientRequestDiscard()
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.DiscardServerRpc();
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void DiscardServerRpc(RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null) return;
+
+            // Degisiklikler SUNUCUNUN belleginde de duruyor (her yerlestirme oraya uygulaniyor),
+            // yani atmak istemcide tek basina yapilamaz. Sunucu diskteki haline donuyor —
+            // otomatik kayit yaratici akista askida oldugu icin disk hala eski hali — ve
+            // sonucu isteyene geri yolluyor.
+            string ad = Session.CurrentMapName;
+            bool ok = string.IsNullOrEmpty(ad) ? Session.OpenNew() : Session.OpenExisting(ad);
+            if (ok) StartCoroutine(SendLayoutToOwner());
         }
 
         /// <summary>Last save result from the server; the placer shows it once and clears it.</summary>

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.XR;
@@ -29,12 +30,15 @@ namespace VRMultiplayer.UI
 
         CreativeMenuPanel _menu;
         MapListPanel _list;
+        ConfirmPanel _confirm;
+        NameEntryPanel _name;
         VRPointer _pointer;
         CalibrationManager _calibration;
         ConstructorPlacer _placer;
 
         bool _placed, _recentering;
         bool _calibrationAsked;
+        bool _wasEditing;
 
         // Aboneligi AppMode.ResetStatics temizler (domain reload kapaliyken abonelik listesi
         // oyunlar arasi tasinir ve ikinci Play'de IKI akis dogardi — PlayerEntryUI'daki ders).
@@ -60,17 +64,36 @@ namespace VRMultiplayer.UI
 
             // 2) INSA MODU ACIKKEN MENU YOK. Editor ekranin sahibi; menu, editorden cikilinca
             //    kendiliginden geri gelir.
-            if (Placer != null && Placer.BuildMode) { CloseAll(); return; }
+            if (Placer != null && Placer.BuildMode)
+            {
+                _wasEditing = true;
+                CloseAll();
+                return;
+            }
 
-            // 3) Menu ya da liste.
-            if (_list != null) { Place(_list.transform); _list.Tick(_pointer); return; }
+            // 3) EDITORDEN YENI CIKILDI: karar zinciri (Kaydet? -> isim -> havuz | at).
+            if (_wasEditing)
+            {
+                _wasEditing = false;
+                BeginExitFlow();
+            }
+
+            // 4) Acik olan ekrani sur — sirasi onemli: karar ekranlari menunun onunde.
+            if (_confirm != null) { Place(_confirm.transform); _confirm.Tick(_pointer); return; }
+            if (_name != null)    { Place(_name.transform);    _name.Tick(_pointer);    return; }
+            if (_list != null)    { Place(_list.transform);    _list.Tick(_pointer);    return; }
 
             if (_menu == null) OpenMenu();
             Place(_menu.transform);
             _menu.Tick(_pointer);
         }
 
-        void OnDestroy() => CloseAll();
+        void OnDestroy()
+        {
+            // Askiyi BIRAKARAK cik: yaratici mod disinda otomatik kayit yine calismali.
+            ConstructorSession.AutoSaveSuspended = false;
+            CloseAll();
+        }
 
         // ------------------------------------------------------------- kalibrasyon
 
@@ -185,7 +208,179 @@ namespace VRMultiplayer.UI
                 StartCoroutine(Note("EDİTÖR YOK\n\nConstructor bileşeni bulunamadı.", 4f));
                 return;
             }
+
+            // Editordeyken otomatik kayit YOK: kaydetme karari cikista soruluyor ve
+            // "degisiklikleri at" ancak hicbir sey yazilmamissa bir anlam tasir.
+            ConstructorSession.AutoSaveSuspended = true;
             Placer.SetBuildMode(true);
+        }
+
+        // ------------------------------------------------------------- cikis karar zinciri
+
+        /// <summary>
+        /// Editorden cikildi. Kaydedilmemis degisiklik yoksa hicbir sey sorulmaz — her cikista
+        /// bir soru, en cok yapilan islemi en pahali hale getirirdi.
+        /// </summary>
+        void BeginExitFlow()
+        {
+            var s = ConstructorSession.Instance;
+            if (s == null || !s.HasUnsavedChanges) return;
+            AskSave();
+        }
+
+        void AskSave()
+        {
+            var s = ConstructorSession.Instance;
+            int prop = s != null ? s.PlacedCount : 0;
+            OpenConfirm("KAYDET?", prop + " yerleştirme kaydedilmedi.",
+                "KAYDET", "KAYDETME", UITheme.AccentCyan, yes =>
+            {
+                if (!yes) { AskDiscard(); return; }
+
+                // Isimsiz harita once isimlendirilir; adi olanda "uzerine yaz mi, farkli mi".
+                if (string.IsNullOrEmpty(s?.CurrentMapName)) OpenName("HARİTA ADI", null);
+                else AskOverwrite();
+            });
+        }
+
+        void AskOverwrite()
+        {
+            var s = ConstructorSession.Instance;
+            string ad = s != null ? s.CurrentMapName : "";
+            OpenConfirm("'" + ad + "'", "Üzerine mi yazılsın, yoksa yeni bir ad mı?",
+                "ÜZERİNE YAZ", "FARKLI KAYDET", UITheme.AccentCyan, yes =>
+            {
+                if (yes) DoSave(ad);
+                else OpenName("FARKLI KAYDET", null);
+            });
+        }
+
+        void AskDiscard()
+        {
+            OpenConfirm("DEĞİŞİKLİKLERİ AT?", "Bu oturumda yaptıkların geri gelmez.",
+                "AT", "VAZGEÇ", UITheme.TeamRedEdge, yes =>
+            {
+                if (yes) Discard();
+                else AskSave();
+            });
+        }
+
+        void DoSave(string mapName)
+        {
+            var s = ConstructorSession.Instance;
+            if (s == null) return;
+
+            // Dosyayi HER ZAMAN otorite yazar. Gozlukte istek sunucuya gider; sonuc oradan
+            // doner (ConstructorSync.SaveMessage) ve "kaydedilmemis" isareti orada duser.
+            bool ok = ConstructorSession.IsMapAuthority
+                ? s.SaveAs(mapName)
+                : ConstructorSync.ClientRequestSave(mapName);
+
+            if (!ok)
+            {
+                StartCoroutine(Note("KAYDEDİLEMEDİ\n\nConsole'a bak.", 4f));
+                return;
+            }
+
+            if (ConstructorSession.IsMapAuthority) MapCatalog.NoteSaved();
+            AskPool(mapName);
+        }
+
+        /// <summary>Serit 2'nin ilk kutusu: kaydedilen harita oyuncu rotasyonuna girsin mi?</summary>
+        void AskPool(string mapName)
+        {
+            var e = MapCatalog.Find(mapName);
+
+            // Zaten havuzdaysa sormaya gerek yok.
+            if (e != null && e.inPool) return;
+
+            // Havuza giremeyecek harita icin SORU DEGIL, SEBEP: "evet" dedirtip ardindan
+            // reddetmek, kararin oyuncuda oldugu izlenimini bosa harcar.
+            if (e != null && !e.poolEligible)
+            {
+                StartCoroutine(Note("HAVUZA EKLENEMEZ\n\n" + e.poolBlockReason, 6f));
+                return;
+            }
+
+            OpenConfirm("HAVUZA EKLENSİN Mİ?", "Havuzdakiler oyuncu modunda çıkar.",
+                "EKLE", "EKLEME", UITheme.AccentCyan, yes =>
+            {
+                if (!yes) return;
+                if (!MapCatalog.AddToPool(mapName, out string hata) && !string.IsNullOrEmpty(hata))
+                    StartCoroutine(Note("HAVUZA EKLENEMEDİ\n\n" + hata, 6f));
+            });
+        }
+
+        void Discard()
+        {
+            var s = ConstructorSession.Instance;
+            if (s == null) return;
+
+            if (!ConstructorSession.IsMapAuthority)
+            {
+                // Degisiklikler sunucunun belleginde de duruyor; atmayi o yapmali.
+                ConstructorSync.ClientRequestDiscard();
+                s.ClearUnsaved();
+                return;
+            }
+
+            string ad = s.CurrentMapName;
+            bool ok = string.IsNullOrEmpty(ad) ? s.OpenNew() : s.OpenExisting(ad);
+            if (!ok) StartCoroutine(Note("GERİ ALINAMADI\n\n" + s.NotStartedReason, 4f));
+        }
+
+        // ------------------------------------------------------------- karar/isim ekranlari
+
+        void OpenConfirm(string title, string message, string yesLabel, string noLabel,
+            Color yesEdge, Action<bool> onAnswer)
+        {
+            CloseConfirm();
+            CloseName();
+            EnsurePointer();
+
+            var go = new GameObject("Confirm Panel");
+            go.transform.SetParent(transform, false);
+            _confirm = go.AddComponent<ConfirmPanel>();
+            _confirm.Setup(title, message, yesLabel, noLabel, yesEdge);
+            _confirm.Answered += answer =>
+            {
+                CloseConfirm();
+                onAnswer?.Invoke(answer);
+            };
+
+            _placed = false;
+            _recentering = false;
+        }
+
+        void OpenName(string title, string prefill)
+        {
+            CloseConfirm();
+            CloseName();
+            EnsurePointer();
+
+            var go = new GameObject("Name Entry Panel");
+            go.transform.SetParent(transform, false);
+            _name = go.AddComponent<NameEntryPanel>();
+            _name.Setup(title, prefill);
+            _name.Confirmed += ad => { CloseName(); DoSave(ad); };
+            _name.Cancelled += () => { CloseName(); AskSave(); };
+
+            _placed = false;
+            _recentering = false;
+        }
+
+        void CloseConfirm()
+        {
+            if (_confirm == null) return;
+            Destroy(_confirm.gameObject);
+            _confirm = null;
+        }
+
+        void CloseName()
+        {
+            if (_name == null) return;
+            Destroy(_name.gameObject);
+            _name = null;
         }
 
         // ------------------------------------------------------------- yardimcilar
@@ -228,6 +423,8 @@ namespace VRMultiplayer.UI
         {
             CloseMenu();
             CloseList();
+            CloseConfirm();
+            CloseName();
             if (_pointer != null) { Destroy(_pointer.gameObject); _pointer = null; }
         }
 
