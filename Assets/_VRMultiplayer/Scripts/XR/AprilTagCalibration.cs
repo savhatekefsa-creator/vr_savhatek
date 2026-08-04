@@ -358,7 +358,7 @@ namespace VRMultiplayer
 
         // Tag gecisi olcumu: bir tag'den otekine gecerken olusan sapma = iki tag'in
         // yerlesimdeki degerlerinin BIRBIRIYLE uyusmazligi. Test C'nin sayisal karsiligi.
-        Transform _rightHandDiag;   // nokta okuyucu (gecici, bkz. ProbeLine)
+        Transform _rightHandDiag;   // sag kumanda — dokunus ve zemin olcumu (TickTouch/TickFloor)
 
         // KAPALI tag olcumu: useForCalibration=0 olan tag'in yerlesim degerinden ne kadar
         // saptigi. Rig'e dokunmaz, yalnizca panelde gosterilir — yeni tag'in yerlesimini
@@ -978,6 +978,10 @@ namespace VRMultiplayer
                 Debug.Log($"[AprilTagCalib] Tag {_approachId} dokunuldu: {_approachPos} " +
                           $"(en yakin yaklasma {_approachBest * 100f:0.0} cm).");
 
+                // Panelde ANLIK geri bildirim: dokunus yakalandi mi, ne kadar yakindi.
+                // Panel sadelestikten sonra dokunus listesi kalkti, bunun yerini bu satir aldi.
+                _learnNote = $"tag {_approachId} dokunuldu ({_approachBest * 100f:0.0} cm)";
+
                 var de = Find(_approachId);
                 string turetilen = TouchDerived(_approachId, out Vector3 dp)
                     ? $"  turetilen {dp.x:0.000} {dp.y:0.000} {dp.z:0.000}" : "";
@@ -1184,60 +1188,6 @@ namespace VRMultiplayer
                       $"  once {before.x:0.000} {before.y:0.000} {before.z:0.000}");
         }
 
-        string TouchLine()
-        {
-            var sb = new System.Text.StringBuilder();
-
-            // ZEMIN: ofset uygulanmis deger 0'a ne kadar yakin. Oyunun zemini gercek zeminle
-            // ortusuyorsa ~0.00 cikar.
-            if (_hasFloor)
-                sb.Append($"\n\n=== ZEMIN ===  {_floorY:+0.000;-0.000} m   (ham {_floorRaw:+0.000;-0.000})");
-
-            // OFSET saglami: sacilma kucukse turetilen konumlara guvenilir. Buyukse
-            // dokunuslar tutarsiz demektir ve o tutarsizlik TUM tag'lere geciyordur.
-            if (_refOffsets.Count > 0)
-            {
-                TouchOffsetLocal(out Vector3 off, out int rid);
-                sb.Append($"\n\n=== OFSET (tag {rid}) ===  {off.magnitude * 100f:0.0} cm   " +
-                          $"{_refOffsets.Count} olcum   sacilma {RefOffsetSpread() * 100f:0.0} cm");
-            }
-
-            if (_touchPos.Count == 0) return sb.ToString();
-
-            sb.Append("\n\n=== DOKUNMA (kumandayla tag'e degdir) ===");
-            foreach (var kv in _touchPos)
-                sb.Append($"\ntag {kv.Key}  {kv.Value.x:0.00} {kv.Value.y:0.00} {kv.Value.z:0.00}" +
-                          $"   {Time.time - _touchTime[kv.Key]:0} sn once");
-
-            // Iki dokunus varsa serit metrenin yaptigi is: OLCULEN ara ile ILAN EDILEN ara.
-            // Fark buyukse yerlesim yanlis — kameranin ne kadar temiz gorundugu onemsiz.
-            var ids = new List<int>(_touchPos.Keys);
-            for (int i = 0; i < ids.Count; i++)
-                for (int j = i + 1; j < ids.Count; j++)
-                {
-                    var a = Find(ids[i]);
-                    var b = Find(ids[j]);
-                    if (a == null || b == null) continue;
-
-                    float olculen = Vector3.Distance(_touchPos[ids[i]], _touchPos[ids[j]]);
-                    float ilan = Vector3.Distance(a.position, b.position);
-                    sb.Append($"\n{ids[i]}-{ids[j]}  olculen {olculen:0.000}  ilan {ilan:0.000}" +
-                              $"  fark {(olculen - ilan) * 100f:+0.0;-0.0} cm");
-                }
-
-            // KUMANDADAN turetilen konum — kameranin hic karismadigi deger.
-            foreach (var id in ids)
-            {
-                Vector3 d;
-                if (!TouchDerived(id, out d)) continue;
-                var e = Find(id);
-                float fark = e != null ? Vector3.Distance(d, e.position) : 0f;
-                sb.Append($"\ntag {id} KUMANDADAN {d.x:0.00} {d.y:0.00} {d.z:0.00}" +
-                          $"  (ilandan {fark * 100f:0} cm)  [sol tetik+A = yaz]");
-            }
-            return sb.ToString();
-        }
-
         Constructor.ConstructorPassthrough _pt;
 
         /// <summary>
@@ -1259,30 +1209,6 @@ namespace VRMultiplayer
                 if (_pt == null) return;
             }
             if (!_pt.Active) _pt.SetActive(true);
-        }
-
-        /// <summary>
-        /// Tag'ler arasi ILAN EDILEN mesafeler — serit metreyle karsilastirmak icin.
-        ///
-        /// Kamerayi denetleyen TEK bagimsiz olcu bu. Kalibrasyon kaymasi, poz kestirim biasi,
-        /// drift — hepsi tag'lerin konumlarini BIRLIKTE kaydirabilir ve hicbiri panelde
-        /// belli olmaz. Ama aralarindaki mesafe fiziksel bir gercektir ve serit metre onu
-        /// 5 mm'de verir. Tutmuyorsa yerlesim yanlistir, sayilar ne kadar duzgun gorunurse
-        /// gorunsun.
-        /// </summary>
-        string PairLine()
-        {
-            if (tagLayout == null || tagLayout.Length < 2) return "";
-
-            var sb = new System.Text.StringBuilder("\n\n=== ARALIK (serit metre ile karsilastir) ===");
-            for (int i = 0; i < tagLayout.Length; i++)
-                for (int j = i + 1; j < tagLayout.Length; j++)
-                {
-                    if (tagLayout[i] == null || tagLayout[j] == null) continue;
-                    float d = Vector3.Distance(tagLayout[i].position, tagLayout[j].position);
-                    sb.Append($"\n{tagLayout[i].id}-{tagLayout[j].id}   {d:0.000} m");
-                }
-            return sb.ToString();
         }
 
         void ResetLearn()
@@ -1549,118 +1475,63 @@ namespace VRMultiplayer
                 // Passthrough istendi ama kamera kalkmadiysa SOYLE. Yoksa oyuncu sanal
                 // dunyayi gorup "isaretci yanlis yerde" sanir; oysa gordugu sey gercek oda
                 // bile degildir.
-                string ptWarn = (learnPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
-                    ? "PASSTHROUGH ACILAMADI (OpenXR ozelligi kapali?)\n" : "";
-
-                string mode = ptWarn
-                            + (learnMode
-                                  ? "OGRENME: " + _learnNote + "\n"
-                                    + (_learnDone ? ">> A = YERLESIME YAZ <<\n"
-                                                  : "(A = olcumu sifirla)\n")
-                                    + "(sol grip+A = kalib ac/kapat | sol tetik+A = kumandadan yaz)\n"
-                                    + "(sol cubuk = ince ayar)\n"
-                                  : "")
-                            + (autoCalibrate ? "TAG: " + _calibNote
-                                             : (learnMode ? "" : "olcum modu"));
-
-                _panel.text =
-                    "APRILTAG\n" +
-                    // Tek satirda: hangi tag, ne kadar uzakta, ne kadar titrek, ne hizda.
-                    $"Tag {_lastId}   {_lastDistance:0.00} m   {_jitterMm:0.0} mm   {_detectHz:0.0} Hz\n" +
-                    mode +
-                    // Sapma: konum eksen bazli + yaw. "HIZALI" icin IKISI birden esigin
-                    // altinda olmali (2 cm / 1.5 derece) — biri tutmazsa duzeltme tetiklenir.
-                    (_diagValid
-                        ? $"\nsapma  dx {_diagDelta.x:+0.00;-0.00} dy {_diagDelta.y:+0.00;-0.00} dz {_diagDelta.z:+0.00;-0.00}" +
-                          $"\nyaw    olc {_diagYawMeasured:0.0}  bek {_diagYawExpected:0.0}  sapma {_diagYawDev:0.0}"
-                        : "") +
-                    // OGRENME sonucu — yerlesime yazilacak sayilar. En altta ve ayrik dursun.
-                    // TAG GECIS SAPMASI — Test C'nin sayisi. Iki tag'in yerlesim degerleri
-                    // birbirini tutuyorsa bu ~0 olmali; buyukse tag'lerden biri yanlis olculmus.
-                    ProbeLine() +
-                    // Yerlesimi kameradan BAGIMSIZ denetleyen sayilar.
-                    PairLine() +
-                    TouchLine() +
-                    // KAPALI tag kontrolu: yerlesim degerini duzeltmek icin gereken sayilar.
-                    // "duzeltilmis deger = mevcut - sapma" olacak sekilde okunur.
-                    (_hasCheck
-                        ? $"\n\n=== TAG {_checkId} KONTROL (kapali) ===" +
-                          $"\nsapma  dx {_checkDelta.x:+0.00;-0.00} dy {_checkDelta.y:+0.00;-0.00} dz {_checkDelta.z:+0.00;-0.00}" +
-                          $"\ntoplam {_checkDelta.magnitude:0.00} m   yaw {_checkYawDev:+0.0;-0.0}"
-                        : "") +
-                    (_hasSwitch
-                        ? $"\n\n=== TAG {_switchFrom} -> {_switchTo} GECISI ===" +
-                          $"\nsapma  dx {_switchDelta.x:+0.00;-0.00} dy {_switchDelta.y:+0.00;-0.00} dz {_switchDelta.z:+0.00;-0.00}" +
-                          $"\ntoplam {_switchDelta.magnitude:0.00} m   yaw {_switchYawDev:+0.0;-0.0}"
-                        : "") +
-                    (_learnDone
-                        ? $"\n\n=== TAG {_learnId} OLCULDU ===" +
-                          $"\npos  {_learnedPos.x:0.00}  {_learnedPos.y:0.00}  {_learnedPos.z:0.00}" +
-                          $"\nyaw  {_learnedYaw:0.0}"
-                        : "");
+                _panel.text = PanelText(true, cameraRunning);
             }
             else
             {
-                string since = _lastTagTime > 0f
-                    ? $"son gorulme: {Time.time - _lastTagTime:0} sn once"
-                    : "hic gorulmedi";
-                _panel.text =
-                    "APRILTAG\n" +
-                    "Tag GORUNMUYOR\n" +
-                    since + "\n" +
-                    (cameraRunning ? "kamera: calisiyor" : "KAMERA YOK (izin?)") +
-                    // Olcum sonucu tag kadrajdan ciksa da gorunsun — sayilari not ederken
-                    // oyuncu tag'e bakmayi surdurmek zorunda kalmasin.
-                    // TAG GECIS SAPMASI — Test C'nin sayisi. Iki tag'in yerlesim degerleri
-                    // birbirini tutuyorsa bu ~0 olmali; buyukse tag'lerden biri yanlis olculmus.
-                    ProbeLine() +
-                    // Yerlesimi kameradan BAGIMSIZ denetleyen sayilar.
-                    PairLine() +
-                    TouchLine() +
-                    // KAPALI tag kontrolu: yerlesim degerini duzeltmek icin gereken sayilar.
-                    // "duzeltilmis deger = mevcut - sapma" olacak sekilde okunur.
-                    (_hasCheck
-                        ? $"\n\n=== TAG {_checkId} KONTROL (kapali) ===" +
-                          $"\nsapma  dx {_checkDelta.x:+0.00;-0.00} dy {_checkDelta.y:+0.00;-0.00} dz {_checkDelta.z:+0.00;-0.00}" +
-                          $"\ntoplam {_checkDelta.magnitude:0.00} m   yaw {_checkYawDev:+0.0;-0.0}"
-                        : "") +
-                    (_hasSwitch
-                        ? $"\n\n=== TAG {_switchFrom} -> {_switchTo} GECISI ===" +
-                          $"\nsapma  dx {_switchDelta.x:+0.00;-0.00} dy {_switchDelta.y:+0.00;-0.00} dz {_switchDelta.z:+0.00;-0.00}" +
-                          $"\ntoplam {_switchDelta.magnitude:0.00} m   yaw {_switchYawDev:+0.0;-0.0}"
-                        : "") +
-                    (_learnDone
-                        ? $"\n\n=== TAG {_learnId} OLCULDU ===" +
-                          $"\npos  {_learnedPos.x:0.00}  {_learnedPos.y:0.00}  {_learnedPos.z:0.00}" +
-                          $"\nyaw  {_learnedYaw:0.0}"
-                        : "");
+                _panel.text = PanelText(false, cameraRunning);
             }
         }
 
         /// <summary>
-        /// Sag kumandanin DUNYA konumu — bilinen bir fiziksel noktaya degdirip okumak icin.
+        /// Panel metni — SADE TUTULUR.
         ///
-        /// SU ANKI SORU (2026-07-31): tag 0'in yuksekligi ELLE 1.52 girildi, tag'in MERKEZI
-        /// olculerek. Ama kumandayla bakildiginda 1.52 tag'in UST KENARINA denk geliyor —
-        /// yani ~7 cm (tag yarisi) kayma var. Iki ihtimal:
-        ///   a) Tespit edilen tag pozu merkez degil, baska bir nokta
-        ///   b) Oyunun y=0'i gercek zeminden ~7 cm farkli (gozlugun zemin tahmini)
+        /// Her sayi zaten TagDiag.log'a yaziliyor ve adb ile cekilebiliyor; ekranda yalnizca
+        /// ANLIK KARAR icin gerekenler kalir. Onceki surumde panel 20 satiri asiyor ve gorus
+        /// alanini kapatiyordu — bir teshis penceresi, oynanabilirligi bozacak kadar
+        /// buyudugunde teshis olmaktan cikar.
         ///
-        /// AYIRT EDEN TEST: kumandayi ZEMINE degdir.
-        ///   y ~ 0.00  -> zemin dogru, sorun tag pozunda (a)
-        ///   y ~ 0.07  -> oyunun zemini gercek zeminden 7 cm yukarida (b)
-        /// (b) ise HER SEY dikeyde kayar; (a) ise yalnizca tag'lerin y'si.
+        /// Kaldirilanlar (hepsi log'da duruyor): eksen bazli sapma, yaw olc/bek, kumanda
+        /// konumu, tag'ler arasi ilan edilen mesafeler, dokunus listesi, kapali tag kontrolu,
+        /// eski kamera-ogrenme sonucu.
         /// </summary>
-        string ProbeLine()
+        string PanelText(bool seen, bool cameraRunning)
         {
-            if (_rightHandDiag == null)
+            var p = new System.Text.StringBuilder("APRILTAG\n");
+
+            p.Append(seen
+                ? $"Tag {_lastId}   {_lastDistance:0.00} m   {_jitterMm:0.0} mm   {_detectHz:0.0} Hz\n"
+                : "Tag GORUNMUYOR   " +
+                  (_lastTagTime > 0f ? $"{Time.time - _lastTagTime:0} sn once\n" : "hic gorulmedi\n"));
+
+            if (!cameraRunning) p.Append("KAMERA YOK (izin?)\n");
+            if (learnPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
+                p.Append("PASSTHROUGH ACILAMADI\n");
+
+            if (autoCalibrate && !string.IsNullOrEmpty(_calibNote)) p.Append(_calibNote + "\n");
+
+            // Ofsetin ne kadar oturdugu: turetilen konumlara guvenilip guvenilmeyecegini soyler.
+            if (_refOffsets.Count > 0)
             {
-                var rigRef = XRRigReference.Instance;
-                _rightHandDiag = rigRef != null ? rigRef.rightHand : null;
-                if (_rightHandDiag == null) return "";
+                TouchOffsetLocal(out Vector3 off, out _);
+                p.Append($"OFSET {off.magnitude * 100f:0.0} cm  {_refOffsets.Count} olcum  " +
+                         $"sacilma {RefOffsetSpread() * 100f:0.0} cm\n");
             }
-            Vector3 p = _rightHandDiag.position;
-            return $"\nkumanda {p.x:+0.00;-0.00} {p.y:+0.00;-0.00} {p.z:+0.00;-0.00}";
+
+            if (_hasFloor) p.Append($"ZEMIN {_floorY:+0.000;-0.000}\n");
+
+            // Iki tag'in yerlesim degerlerinin birbirini tutup tutmadigi — izlenen ana sayi.
+            if (_hasSwitch)
+                p.Append($"GECIS {_switchFrom}->{_switchTo}  {_switchDelta.magnitude * 100f:0.0} cm  " +
+                         $"yaw {_switchYawDev:+0.0;-0.0}\n");
+
+            // Son eylemin sonucu: dokunuldu / yazildi / reddedildi.
+            if (!string.IsNullOrEmpty(_learnNote)) p.Append("> " + _learnNote + "\n");
+
+            if (learnMode)
+                p.Append("A=yaz  solGRIP+A=ac/kapat  solTETIK+A=kumandadan  solCUBUK=ince");
+
+            return p.ToString();
         }
 
         static float YawOf(Quaternion q)
