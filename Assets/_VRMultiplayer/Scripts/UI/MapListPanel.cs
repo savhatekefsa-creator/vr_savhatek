@@ -65,8 +65,19 @@ namespace VRMultiplayer.UI
 
         Transform _hover;
         MeshFilter _hoverMesh;
+        TextMesh _title;
         int _hoverIdx = -1;
         int _page;
+
+        /// <summary>
+        /// Baslik disaridan degistirilebilir: ayni liste hem "mevcut harita ac" hem "harita
+        /// yoneticisi" akisinda kullaniliyor ve oyuncunun HANGI ISTE oldugunu bilmesi gerekiyor.
+        /// Iki ayri liste sinifi yazmak, sayfalama ve rozet mantigini iki yerde tutmak olurdu.
+        /// </summary>
+        public void SetTitle(string text)
+        {
+            if (_title != null) _title.text = text;
+        }
 
         void Awake()
         {
@@ -74,9 +85,9 @@ namespace VRMultiplayer.UI
                 new Vector2(PanelW, PanelH), PanelR, PanelEdge, Backdrop, PanelEdgeW,
                 ZBack, QBack, QBack + 1);
 
-            var title = UITheme.MakeText(transform, "KAYITLI HARİTALAR", UITheme.AccentCyan,
+            _title = UITheme.MakeText(transform, "KAYITLI HARİTALAR", UITheme.AccentCyan,
                 TitleSize, TextAnchor.MiddleCenter, QText);
-            title.transform.localPosition = new Vector3(0f, TitleY, ZText);
+            _title.transform.localPosition = new Vector3(0f, TitleY, ZText);
 
             var h = UITheme.MakeShape(transform, "Hover",
                 UIMesh.RoundedRect(0.01f, 0.01f, 0.002f), HoverCol, QHover);

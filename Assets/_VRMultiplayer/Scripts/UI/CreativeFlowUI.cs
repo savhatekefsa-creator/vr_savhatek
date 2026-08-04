@@ -36,9 +36,15 @@ namespace VRMultiplayer.UI
         CalibrationManager _calibration;
         ConstructorPlacer _placer;
 
+        MapActionsPanel _actions;
+
         bool _placed, _recentering;
         bool _calibrationAsked;
         bool _wasEditing;
+
+        // Ayni liste iki isi goruyor: harita ACMA ve harita YONETME. Secilen satirin ne
+        // yapacagini bu belirliyor (bkz. OnMapPicked).
+        bool _managing;
 
         // Aboneligi AppMode.ResetStatics temizler (domain reload kapaliyken abonelik listesi
         // oyunlar arasi tasinir ve ikinci Play'de IKI akis dogardi — PlayerEntryUI'daki ders).
@@ -81,6 +87,7 @@ namespace VRMultiplayer.UI
             // 4) Acik olan ekrani sur — sirasi onemli: karar ekranlari menunun onunde.
             if (_confirm != null) { Place(_confirm.transform); _confirm.Tick(_pointer); return; }
             if (_name != null)    { Place(_name.transform);    _name.Tick(_pointer);    return; }
+            if (_actions != null) { Place(_actions.transform); _actions.Tick(_pointer); return; }
             if (_list != null)    { Place(_list.transform);    _list.Tick(_pointer);    return; }
 
             if (_menu == null) OpenMenu();
@@ -146,9 +153,9 @@ namespace VRMultiplayer.UI
                     break;
 
                 case CreativeMenuPanel.Choice.ManagePool:
-                    // Harita Yoneticisi ayri bir ekran; su an yalnizca sebebi soyluyoruz ki
-                    // dugme "bozuk" gibi durmasin.
-                    StartCoroutine(Note("HARİTA YÖNETİCİSİ\n\nHenüz hazır değil.", 3f));
+                    CloseMenu();
+                    _managing = true;
+                    OpenList();
                     break;
             }
         }
@@ -164,8 +171,9 @@ namespace VRMultiplayer.UI
             var go = new GameObject("Map List Panel");
             go.transform.SetParent(transform, false);
             _list = go.AddComponent<MapListPanel>();
+            _list.SetTitle(_managing ? "HARİTA YÖNETİCİSİ" : "KAYITLI HARİTALAR");
             _list.Picked += OnMapPicked;
-            _list.Back += CloseList;
+            _list.Back += () => { _managing = false; CloseList(); };
 
             _placed = false;
             _recentering = false;
@@ -173,6 +181,11 @@ namespace VRMultiplayer.UI
 
         void OnMapPicked(string mapName)
         {
+            // YONETICI AKISINDA liste kapanmaz mantigi degisir: satir bir haritayi ACMAZ,
+            // o haritanin islemlerini acar. "Ekleme/cikarma sinirsiz tekrarlanabilir" kurali
+            // bundan cikiyor — islem bitince listeye geri donuluyor, menuye degil.
+            if (_managing) { OpenActions(mapName); return; }
+
             CloseList();
 
             var s = ConstructorSession.Instance;
@@ -329,6 +342,90 @@ namespace VRMultiplayer.UI
             if (!ok) StartCoroutine(Note("GERİ ALINAMADI\n\n" + s.NotStartedReason, 4f));
         }
 
+        // ------------------------------------------------------------- harita yoneticisi
+
+        void OpenActions(string mapName)
+        {
+            var e = MapCatalog.Find(mapName);
+            if (e == null) return;
+
+            CloseActions();
+            EnsurePointer();
+
+            var go = new GameObject("Map Actions Panel");
+            go.transform.SetParent(transform, false);
+            _actions = go.AddComponent<MapActionsPanel>();
+            _actions.Setup(e);
+            _actions.Chosen += a => OnAction(a, mapName);
+
+            _placed = false;
+            _recentering = false;
+        }
+
+        void OnAction(MapActionsPanel.Action a, string mapName)
+        {
+            var e = MapCatalog.Find(mapName);
+            CloseActions();
+
+            switch (a)
+            {
+                case MapActionsPanel.Action.Back:
+                    break;   // listeye don — panel kapandi, liste zaten acik
+
+                case MapActionsPanel.Action.PoolToggle:
+                    if (e != null && e.inPool) MapCatalog.RemoveFromPool(mapName);
+                    else if (!MapCatalog.AddToPool(mapName, out string hata) &&
+                             !string.IsNullOrEmpty(hata))
+                        StartCoroutine(Note("HAVUZA EKLENEMEDİ\n\n" + hata, 6f));
+                    break;
+
+                case MapActionsPanel.Action.Rename:
+                    OpenRename(mapName);
+                    break;
+
+                case MapActionsPanel.Action.Delete:
+                    // SILME GERI DONUSSUZ: tek tikla degil, onayla. Onay kirmizi.
+                    OpenConfirm("SİLİNSİN Mİ?",
+                        "'" + (e != null ? e.displayName : mapName) + "' tamamen kaldırılır.",
+                        "SİL", "VAZGEÇ", UITheme.TeamRedEdge, yes =>
+                    {
+                        if (yes && !MapCatalog.Delete(mapName))
+                            StartCoroutine(Note("SİLİNEMEDİ\n\nConsole'a bak.", 4f));
+                    });
+                    break;
+            }
+        }
+
+        void OpenRename(string mapName)
+        {
+            CloseConfirm();
+            CloseName();
+            EnsurePointer();
+
+            var e = MapCatalog.Find(mapName);
+            var go = new GameObject("Name Entry Panel");
+            go.transform.SetParent(transform, false);
+            _name = go.AddComponent<NameEntryPanel>();
+            _name.Setup("YENİDEN ADLANDIR", e != null ? e.displayName : mapName);
+            _name.Confirmed += yeni =>
+            {
+                CloseName();
+                if (!MapCatalog.Rename(mapName, yeni, out string hata) && !string.IsNullOrEmpty(hata))
+                    StartCoroutine(Note("ADLANDIRILAMADI\n\n" + hata, 5f));
+            };
+            _name.Cancelled += () => { CloseName(); OpenActions(mapName); };
+
+            _placed = false;
+            _recentering = false;
+        }
+
+        void CloseActions()
+        {
+            if (_actions == null) return;
+            Destroy(_actions.gameObject);
+            _actions = null;
+        }
+
         // ------------------------------------------------------------- karar/isim ekranlari
 
         void OpenConfirm(string title, string message, string yesLabel, string noLabel,
@@ -423,8 +520,10 @@ namespace VRMultiplayer.UI
         {
             CloseMenu();
             CloseList();
+            CloseActions();
             CloseConfirm();
             CloseName();
+            _managing = false;
             if (_pointer != null) { Destroy(_pointer.gameObject); _pointer = null; }
         }
 
