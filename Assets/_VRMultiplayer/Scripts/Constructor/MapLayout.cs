@@ -110,6 +110,13 @@ namespace VRMultiplayer.Constructor
 
         public RoomPlan builtForRoom = new RoomPlan();
 
+        /// <summary>
+        /// True when the map carries a room a grid can be built from. A saved map is the ONLY
+        /// copy of the room it was authored in — the scan file it came from may be long gone.
+        /// </summary>
+        public bool HasRoom => builtForRoom != null && builtForRoom.floorPolygon != null &&
+                               builtForRoom.floorPolygon.Length >= 3;
+
         public PlacedProp[] props = new PlacedProp[0];
 
         [Tooltip("Bir sonraki yerlestirmeye verilecek kimlik. Sunucu artirir; kayitta saklanir " +
