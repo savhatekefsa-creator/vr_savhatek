@@ -913,6 +913,12 @@ namespace VRMultiplayer.Constructor
                 return false;
             }
             Debug.Log($"[Constructor] Sunucudan harita alindi: {layout.Count} prop.");
+
+            // HANGI HARITANIN ACIK OLDUGU DA SUNUCUDAN GELIR. Istemci dosyalari gormuyor;
+            // "uzerine mi yazayim, farkli mi kaydedeyim" sorusu bu ada dayaniyor ve eski ad
+            // kalirsa gozluk yanlis dosyayi hedefler. Isimsiz harita bos ad tasir — dogru.
+            CurrentMapName = layout.name;
+
             return Adopt(layout);
         }
 

@@ -276,6 +276,67 @@ namespace VRMultiplayer.Constructor
             if (ok && Session != null) Session.ClearUnsaved();
         }
 
+        // ------------------------------------------------------- harita ACMA (Serit 1)
+        //
+        // HARITA ACMAK DA SUNUCUNUN ISI. Dosyalar PC'de: gozlukte MapLayout.Load kendi bos
+        // klasorune bakip "bulunamadi" der. Liste sunucudan geldigi icin harita EKRANDA
+        // gorunuyordu ama acilmiyordu — kaydetme ve havuz islemleri gibi acma da tele binmeliydi.
+        //
+        // Ayni sey YENI HARITA icin de gecerli, ve orada sessizce daha kotusu oluyordu: gozluk
+        // kendi bos oturumunu acar, sunucu ESKI haritada kalirdi; sonraki her yerlestirme eski
+        // haritaya islenirdi.
+
+        public static bool ClientRequestOpen(string mapName)
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.OpenMapServerRpc(mapName);
+            return true;
+        }
+
+        public static bool ClientRequestNewMap()
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.NewMapServerRpc();
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void OpenMapServerRpc(string mapName, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null) return;
+
+            if (!Session.OpenExisting(mapName))
+            {
+                SessionErrorOwnerRpc(Session.NotStartedReason);
+                return;
+            }
+            StartCoroutine(SendLayout(true));
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void NewMapServerRpc(RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null) return;
+
+            if (!Session.OpenNew())
+            {
+                SessionErrorOwnerRpc("Yeni harita acilamadi.");
+                return;
+            }
+            StartCoroutine(SendLayout(true));
+        }
+
+        [Rpc(SendTo.Owner)]
+        void SessionErrorOwnerRpc(string reason)
+        {
+            PendingMessage = "HARITA ACILAMADI\n\n" + reason;
+            Debug.LogWarning("[ConstructorSync] Sunucu haritayi acamadi: " + reason);
+        }
+
         /// <summary>Istemci: "acik haritayi diskteki haline geri dondur" (degisiklikleri at).</summary>
         public static bool ClientRequestDiscard()
         {
@@ -496,7 +557,14 @@ namespace VRMultiplayer.Constructor
         /// the transfer would simply never complete. Breathing every 8 chunks is the same fix
         /// <see cref="RoomScanSync"/> arrived at going the other direction.
         /// </summary>
-        IEnumerator SendLayoutToOwner()
+        IEnumerator SendLayoutToOwner() => SendLayout(false);
+
+        /// <param name="toAll">
+        /// true ise harita BUTUN istemcilere gider. Gec katilimda yalnizca yeni gelene
+        /// yollamak yeter; ama harita DEGISTIGINDE (yeni harita, baska harita acildi,
+        /// degisiklikler atildi) herkesin elindeki artik yanlis — o durumda hepsine gider.
+        /// </param>
+        IEnumerator SendLayout(bool toAll)
         {
             // Sunucunun kendi oyuncu objesi yok; bu yalnizca istemci objeleri icin anlamli.
             if (OwnerClientId == NetworkManager.ServerClientId) yield break;
@@ -550,7 +618,8 @@ namespace VRMultiplayer.Constructor
                 int len = Mathf.Min(ChunkSize, bytes.Length - i * ChunkSize);
                 var chunk = new byte[len];
                 Buffer.BlockCopy(bytes, i * ChunkSize, chunk, 0, len);
-                LayoutChunkOwnerRpc(i, total, chunk);
+                if (toAll) LayoutChunkClientRpc(i, total, chunk);
+                else LayoutChunkOwnerRpc(i, total, chunk);
                 if ((i & 7) == 7) yield return null;
             }
 
@@ -558,8 +627,17 @@ namespace VRMultiplayer.Constructor
                       $"-> istemci {OwnerClientId}");
         }
 
+        // IKI RPC, TEK GOVDE. Bir [Rpc] metodunu kod icinden cagirmak govdesini CALISTIRMAZ,
+        // yeni bir RPC YOLLAR — o yuzden ortak is duz bir metotta (katalogda da ayni kalip).
+        [Rpc(SendTo.NotServer)]
+        void LayoutChunkClientRpc(int index, int total, byte[] data) =>
+            ReceiveLayoutChunk(index, total, data);
+
         [Rpc(SendTo.Owner)]
-        void LayoutChunkOwnerRpc(int index, int total, byte[] data)
+        void LayoutChunkOwnerRpc(int index, int total, byte[] data) =>
+            ReceiveLayoutChunk(index, total, data);
+
+        void ReceiveLayoutChunk(int index, int total, byte[] data)
         {
             if (total <= 0 || total > MaxChunks || index < 0 || index >= total) return;
 

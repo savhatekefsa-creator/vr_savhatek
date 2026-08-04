@@ -96,9 +96,22 @@ namespace VRMultiplayer.UI
             _hover.gameObject.SetActive(false);
 
             Rebuild();
+            _awake = true;
         }
 
-        void OnEnable()  => MapCatalog.Changed += Rebuild;
+        bool _awake;
+
+        void OnEnable()
+        {
+            MapCatalog.Changed += Rebuild;
+
+            // GIZLIYKEN KACIRILANI TOPLA. Onde bir ekran varken bu panel kapatiliyor
+            // (bkz. CreativeFlowUI.ShowOnlyTop) ve kapaliyken olaya abone degil — arada
+            // harita adi degismis ya da havuz durumu donmus olabilir. Ilk kurulusta Awake
+            // zaten kuruyor, ikinci kez yapmayalim.
+            if (_awake) Rebuild();
+        }
+
         void OnDisable() => MapCatalog.Changed -= Rebuild;
 
         // ------------------------------------------------------------------ cizim

@@ -85,14 +85,51 @@ namespace VRMultiplayer.UI
             }
 
             // 4) Acik olan ekrani sur — sirasi onemli: karar ekranlari menunun onunde.
+            // Menu yalnizca onde baska ekran yokken acilir.
+            if (_confirm == null && _name == null && _actions == null && _list == null && _menu == null)
+                OpenMenu();
+
+            ShowOnlyTop();
+
             if (_confirm != null) { Place(_confirm.transform); _confirm.Tick(_pointer); return; }
             if (_name != null)    { Place(_name.transform);    _name.Tick(_pointer);    return; }
             if (_actions != null) { Place(_actions.transform); _actions.Tick(_pointer); return; }
             if (_list != null)    { Place(_list.transform);    _list.Tick(_pointer);    return; }
+            if (_menu != null)    { Place(_menu.transform);    _menu.Tick(_pointer); }
+        }
 
-            if (_menu == null) OpenMenu();
-            Place(_menu.transform);
-            _menu.Tick(_pointer);
+        /// <summary>
+        /// AYNI ANDA TEK EKRAN GORUNUR.
+        ///
+        /// Butun paneller ayni yere yerlesiyor — kafanin 1.4 m onune — cunku okunabilir olan
+        /// yer orasi. Ikisi birden acik kalinca ust uste binip ikisi de okunamaz hale geliyordu:
+        /// isim klavyesi harita listesinin, silme onayi da altindakinin uzerine cikiyordu.
+        ///
+        /// ARKADAKI YOK EDILMEZ, GIZLENIR: geri donuldugunde listenin SAYFASI ve menunun durumu
+        /// yeniden kurulmasin. Liste gizliyken kacirdigi degisiklikleri gorununce topluyor
+        /// (bkz. MapListPanel.OnEnable).
+        /// </summary>
+        void ShowOnlyTop()
+        {
+            Transform top = null;
+            if (_confirm != null)      top = _confirm.transform;
+            else if (_name != null)    top = _name.transform;
+            else if (_actions != null) top = _actions.transform;
+            else if (_list != null)    top = _list.transform;
+            else if (_menu != null)    top = _menu.transform;
+
+            Toggle(_confirm != null ? _confirm.transform : null, top);
+            Toggle(_name    != null ? _name.transform    : null, top);
+            Toggle(_actions != null ? _actions.transform : null, top);
+            Toggle(_list    != null ? _list.transform    : null, top);
+            Toggle(_menu    != null ? _menu.transform    : null, top);
+        }
+
+        static void Toggle(Transform t, Transform top)
+        {
+            if (t == null) return;
+            bool on = t == top;
+            if (t.gameObject.activeSelf != on) t.gameObject.SetActive(on);
         }
 
         void OnDestroy()
@@ -191,6 +228,20 @@ namespace VRMultiplayer.UI
             var s = ConstructorSession.Instance;
             if (s == null) return;
 
+            // HARITAYI SUNUCU ACAR. Dosyalar PC'de; gozlukte diski okumak bos klasore bakip
+            // "bulunamadi" demek olurdu — liste sunucudan geldigi icin harita ekranda gorunup
+            // acilmiyordu. Gelen layout yerel oturumun uzerine yaziliyor.
+            if (!ConstructorSession.IsMapAuthority)
+            {
+                if (!ConstructorSync.ClientRequestOpen(mapName))
+                {
+                    StartCoroutine(Note("SUNUCUYA BAĞLI DEĞİL\n\nHaritalar PC'de tutuluyor.", 5f));
+                    return;
+                }
+                EnterEditor();
+                return;
+            }
+
             if (!s.OpenExisting(mapName))
             {
                 StartCoroutine(Note("AÇILAMADI\n\n" + s.NotStartedReason, 4f));
@@ -203,6 +254,20 @@ namespace VRMultiplayer.UI
         {
             var s = ConstructorSession.Instance;
             if (s == null) return;
+
+            // YENI HARITAYI DA SUNUCU ACAR. Gozluk kendi bos oturumunu acsaydi sunucu ESKI
+            // haritada kalirdi ve sonraki her yerlestirme oraya islenirdi — sessiz ve en kotu
+            // turden bir uyusmazlik.
+            if (!ConstructorSession.IsMapAuthority)
+            {
+                if (!ConstructorSync.ClientRequestNewMap())
+                {
+                    StartCoroutine(Note("SUNUCUYA BAĞLI DEĞİL\n\nHaritalar PC'de tutuluyor.", 5f));
+                    return;
+                }
+                EnterEditor();
+                return;
+            }
 
             // Bos zemin: "yeni harita" sifirdan tasarim demek, oda taramasina bagli degil
             // (bkz. ConstructorSession.OpenNew). Isim ilk kayitta sorulacak.
