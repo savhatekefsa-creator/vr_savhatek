@@ -373,6 +373,24 @@ namespace VRMultiplayer.UI
 
         /// <summary>
         /// Alfa ile solabilen (transparan) unlit materyal olusturur — hasar flasi gibi efektler icin.
+        ///
+        /// HEDEF ALFA KORUNUR — PASSTHROUGH ICIN SART. Bu oyunda gercek oda uygulamanin ALTINA
+        /// kompozit ediliyor ve kare tamponunun ALFASI "burada sanal icerik var mi" demek.
+        /// Duz alfa harmani (SrcAlpha/OneMinusSrcAlpha) alfa kanalini DA harmanlar:
+        ///
+        ///     dstA = srcA^2 + (1 - srcA) * dstA        alfa 0.5 ile:  1.00 -> 0.75
+        ///
+        /// Yani yari saydam bir hasar flasi ya da vinyet, sanal dunyanin USTUNE cizilse bile
+        /// oranin alfasini dusurur ve GERCEK ODA efektin icinden sizar. Bombadan hasar alinca
+        /// "bir sure gercek dunyayi gormek" tam olarak buydu.
+        ///
+        /// Cozum: alfa kanali icin AYRI harman — Zero/One, yani "hedef alfaya dokunma".
+        /// RGB normal harmanlanmaya devam eder, gorunum degismez. URP/Unlit bu ozellikleri
+        /// (_SrcBlendAlpha / _DstBlendAlpha) tanimliyor; tanimlamayan bir shader'a duserse
+        /// kod sessizce eski davranista kalir (efekt yine cizilir, yalnizca sizinti surer).
+        ///
+        /// PANELLER BUNU KULLANAMAZ: URP/Unlit sahne geometrisine takilir (ZTest Always yok,
+        /// bkz. <see cref="CreateOverlayMaterial"/>). Panellerin cozumu opak renk.
         /// </summary>
         public static Material CreateTransparentMaterial(Color color)
         {
@@ -388,8 +406,20 @@ namespace VRMultiplayer.UI
                 m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             }
+            PreserveDestinationAlpha(m);
             SetMaterialColor(m, color);
             return m;
+        }
+
+        /// <summary>Malzemeyi "hedef alfaya dokunma" moduna alir (bkz.
+        /// <see cref="CreateTransparentMaterial"/>). Ozellikler yoksa hicbir sey yapmaz.</summary>
+        public static void PreserveDestinationAlpha(Material m)
+        {
+            if (m == null) return;
+            if (m.HasProperty("_SrcBlendAlpha"))
+                m.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.Zero);
+            if (m.HasProperty("_DstBlendAlpha"))
+                m.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
         }
 
         // --- Radyal menu parcalari ---
