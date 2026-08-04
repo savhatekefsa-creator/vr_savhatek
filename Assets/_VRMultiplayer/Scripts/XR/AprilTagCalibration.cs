@@ -130,6 +130,19 @@ namespace VRMultiplayer
                  "— jitter'dan surekli snap olmasin. Ust sinir yoksa uyku sonrasi buyuk sapmayi da toparlar.")]
         public float correctionDeadzoneMeters = 0.02f;
 
+        [Tooltip("YAW yalnizca referans tag'den duzeltilsin; digerleri KONUMU duzeltsin.\n\n" +
+                 "NEDEN: duzlemsel bir isaretcinin pozunda en guvenilmez bilesen duzlem disi " +
+                 "donmedir — duvara asili bir tag icin bu tam olarak yaw'dir. Konum mm " +
+                 "mertebesinde cikarken yaw 1-3 derece hata verir ve hata BAKIS ACISINA bagli " +
+                 "oldugu icin ortalama almak duzeltmez. Olculdu: tag 1 ile tag 2'nin ilan " +
+                 "edilen yaw'lari 2,4 derece celisiyordu ve gecislerde isaretli, tekrarlanabilir " +
+                 "sicramalar uretiyordu.\n\n" +
+                 "Gozluk ise tam tersi: yonu iyi tutar (IMU+SLAM), konumu kaybeder. Her tarafi " +
+                 "guclu oldugu iste kullanmak icin yaw referanstan, konum her tag'den alinir.\n\n" +
+                 "GUVENLIK: sapma anlik-duzeltme esigini asarsa yaw yine duzeltilir — uyku " +
+                 "sonrasi ya da takip kaybinda yonun kilitli kalmasi cok daha kotu olurdu.")]
+        public bool yawFromReferenceOnly = true;
+
         [Tooltip("Yaw icin olu bolge (derece).\n\n" +
                  "MESAFEDE BASKIN HATA BUDUR: yaw sapmasi tag'den uzaklastikca dogrusal olarak " +
                  "yer degistirmeye donusur. 1,5 derece 4 metrede 10 cm demek. Olculdu: iki " +
@@ -455,7 +468,17 @@ namespace VRMultiplayer
                           $"yaw {_switchYawDev:+0.00;-0.00}");
             }
 
-            if (dev <= correctionDeadzoneMeters && yawDev <= correctionYawDeadzoneDegrees)
+            // Bu tag'in yaw'i cerceveyi dondurebilir mi?
+            //
+            // Karar burada da verilmeli, yalnizca ApplyCorrection'da degil: yaw
+            // uygulanmayacaksa yaw sapmasi duzeltmeyi TETIKLEMEMELI. Aksi halde sapma hic
+            // kapanmaz ve her tespitte bosuna duzeltme calisir — sonsuz dongü.
+            bool yawCounts = !yawFromReferenceOnly
+                             || entry.id == offsetReferenceTagId
+                             || yawDev > snapThresholdDegrees;   // kurtarma kapisi
+
+            if (dev <= correctionDeadzoneMeters &&
+                (!yawCounts || yawDev <= correctionYawDeadzoneDegrees))
             {
                 _calibNote = $"HIZALI ({dev * 100f:0.0} cm)";
                 _alignedNow = true;    // is yok -> tespit yavaslasin
@@ -463,7 +486,7 @@ namespace VRMultiplayer
             }
 
             _alignedNow = false;       // duzeltme gerekiyor -> tespit hizlansin
-            ApplyCorrection(entry, avgPos, avgYaw, dev);
+            ApplyCorrection(entry, avgPos, avgYaw, dev, yawCounts);
 
             // Rig oynadi: pencere artik eski cerceveye ait, temizle — yeni cercevede dolsun.
             _calibPos.Clear(); _calibYaw.Clear();
@@ -476,7 +499,8 @@ namespace VRMultiplayer
         /// referans (anchor tracking'i 'None' oldugunda ise yaramiyordu, ustelik LateUpdate'te
         /// tag'in duzeltmesini eziyordu).
         /// </summary>
-        void ApplyCorrection(TagEntry entry, Vector3 measuredPos, float measuredYaw, float dev)
+        void ApplyCorrection(TagEntry entry, Vector3 measuredPos, float measuredYaw, float dev,
+                             bool applyYaw)
         {
             if (_cm == null) _cm = FindFirstObjectByType<CalibrationManager>();
             if (_rig == null)
@@ -486,6 +510,8 @@ namespace VRMultiplayer
             }
 
             float yawDelta = Mathf.DeltaAngle(measuredYaw, entry.yawDegrees);
+            float yawRaw = yawDelta;
+            if (!applyYaw) yawDelta = 0f;   // bu tag konumu duzeltir, yonu ellemez
 
             // KUCUK duzeltme YUMUSAK, BUYUK duzeltme ANINDA.
             //
@@ -505,14 +531,17 @@ namespace VRMultiplayer
 
             // Duzeltmeler saniyede 3'e kadar tetiklenir; hepsini yazmak dosyayi bogar.
             // SNAP her zaman yazilir (nadir ve onemli), normal hiza 5 saniyede bir.
+            // Log'da HAM yaw sapmasi yazilir (uygulanmasa bile): tag'in yaw kestiriminin ne
+            // kadar tutarsiz oldugunu gormek, yaw'i devre disi biraktiktan SONRA da gerekli.
+            string yawNot = applyYaw ? "" : " (uygulanmadi)";
             if (snap)
             {
-                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawDelta:+0.00;-0.00}");
+                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}");
             }
             else if (Time.time >= _nextStateDiagAt)
             {
                 _nextStateDiagAt = Time.time + 5f;
-                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawDelta:+0.00;-0.00}");
+                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}");
             }
 
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
