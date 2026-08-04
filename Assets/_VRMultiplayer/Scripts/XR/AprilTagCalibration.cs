@@ -205,6 +205,7 @@ namespace VRMultiplayer
             float bestDist = float.MaxValue;
             Vector3 bestPos = Vector3.zero;
             Quaternion bestRot = Quaternion.identity;
+            _checkDist = float.MaxValue;   // her turda yeniden secilir
 
             foreach (var tag in _detector.DetectedTags)
             {
@@ -230,6 +231,19 @@ namespace VRMultiplayer
                         bestDist = dist;
                         bestPos = worldPos;
                         bestRot = worldRot;
+                    }
+
+                    // KAPALI tag'in de sapmasi OLCULUR, sadece uygulanmaz. Yoksa yeni bir tag'i
+                    // dogrulamak imkansiz olurdu: plakanin kaydigini gorursun ama NE KADAR
+                    // kaydigini bilemezsin, dolayisiyla yerlesimi duzeltemezsin.
+                    // Duzeltme acik tag'den geldigi icin bu sayi guvenilir bir cerçevede olculur.
+                    if (entry != null && !entry.useForCalibration && dist < _checkDist)
+                    {
+                        _checkId = entry.id;
+                        _checkDist = dist;
+                        _checkDelta = entry.position - worldPos;
+                        _checkYawDev = Mathf.DeltaAngle(YawOf(worldRot), entry.yawDegrees);
+                        _hasCheck = true;
                     }
                 }
             }
@@ -266,6 +280,14 @@ namespace VRMultiplayer
         // Tag gecisi olcumu: bir tag'den otekine gecerken olusan sapma = iki tag'in
         // yerlesimdeki degerlerinin BIRBIRIYLE uyusmazligi. Test C'nin sayisal karsiligi.
         Transform _rightHandDiag;   // nokta okuyucu (gecici, bkz. ProbeLine)
+
+        // KAPALI tag olcumu: useForCalibration=0 olan tag'in yerlesim degerinden ne kadar
+        // saptigi. Rig'e dokunmaz, yalnizca panelde gosterilir — yeni tag'in yerlesimini
+        // duzeltmek icin gereken sayi budur.
+        Vector3 _checkDelta;
+        float _checkYawDev, _checkDist = float.MaxValue;
+        int _checkId = -1;
+        bool _hasCheck;
 
         Vector3 _switchDelta;
         float _switchYawDev;
@@ -593,6 +615,13 @@ namespace VRMultiplayer
                     // TAG GECIS SAPMASI — Test C'nin sayisi. Iki tag'in yerlesim degerleri
                     // birbirini tutuyorsa bu ~0 olmali; buyukse tag'lerden biri yanlis olculmus.
                     ProbeLine() +
+                    // KAPALI tag kontrolu: yerlesim degerini duzeltmek icin gereken sayilar.
+                    // "duzeltilmis deger = mevcut - sapma" olacak sekilde okunur.
+                    (_hasCheck
+                        ? $"\n\n=== TAG {_checkId} KONTROL (kapali) ===" +
+                          $"\nsapma  dx {_checkDelta.x:+0.00;-0.00} dy {_checkDelta.y:+0.00;-0.00} dz {_checkDelta.z:+0.00;-0.00}" +
+                          $"\ntoplam {_checkDelta.magnitude:0.00} m   yaw {_checkYawDev:+0.0;-0.0}"
+                        : "") +
                     (_hasSwitch
                         ? $"\n\n=== TAG {_switchFrom} -> {_switchTo} GECISI ===" +
                           $"\nsapma  dx {_switchDelta.x:+0.00;-0.00} dy {_switchDelta.y:+0.00;-0.00} dz {_switchDelta.z:+0.00;-0.00}" +
@@ -619,6 +648,13 @@ namespace VRMultiplayer
                     // TAG GECIS SAPMASI — Test C'nin sayisi. Iki tag'in yerlesim degerleri
                     // birbirini tutuyorsa bu ~0 olmali; buyukse tag'lerden biri yanlis olculmus.
                     ProbeLine() +
+                    // KAPALI tag kontrolu: yerlesim degerini duzeltmek icin gereken sayilar.
+                    // "duzeltilmis deger = mevcut - sapma" olacak sekilde okunur.
+                    (_hasCheck
+                        ? $"\n\n=== TAG {_checkId} KONTROL (kapali) ===" +
+                          $"\nsapma  dx {_checkDelta.x:+0.00;-0.00} dy {_checkDelta.y:+0.00;-0.00} dz {_checkDelta.z:+0.00;-0.00}" +
+                          $"\ntoplam {_checkDelta.magnitude:0.00} m   yaw {_checkYawDev:+0.0;-0.0}"
+                        : "") +
                     (_hasSwitch
                         ? $"\n\n=== TAG {_switchFrom} -> {_switchTo} GECISI ===" +
                           $"\nsapma  dx {_switchDelta.x:+0.00;-0.00} dy {_switchDelta.y:+0.00;-0.00} dz {_switchDelta.z:+0.00;-0.00}" +
