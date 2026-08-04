@@ -140,6 +140,13 @@ namespace VRMultiplayer
         public void ServerApplyDamage(int amount, ulong attacker, Vector3 sourcePos)
         {
             if (!IsServer || Dead.Value || amount <= 0) return;
+
+            // MAC KAPISI: hasar YALNIZCA "Playing" fazinda gecer. Isinmada ve mac sonu ekraninda
+            // herkes dolasip ates edebilir (ses, geri tepme, mermi, namlu alevi calisir) ama
+            // kimse hasar almaz. Mac katmani hic yoksa MatchManager.DamageAllowed true doner —
+            // yani MatchManager'siz oyun eskisi gibi calisir.
+            if (!Match.MatchManager.DamageAllowed) return;
+
             if (Time.time < _invulnUntil) return; // just revived — brief grace
 
             Health.Value = Mathf.Max(0, Health.Value - amount);
@@ -202,7 +209,14 @@ namespace VRMultiplayer
             // Kill YALNIZCA gercek bir katilde sayilir: intihar ve kaynagi bilinmeyen olum
             // kimseye puan yazmaz.
             if (kind == 0 && killer != null)
+            {
                 killer.Kills.Value = (ushort)(killer.Kills.Value + 1);
+
+                // TAKIM skoru MatchManager'da KALICI olarak yasar. Kisisel Kills burada kaliyor
+                // (skorbordun satirlari onu gosteriyor); ama takim toplami oyuncu ciktiginda
+                // dusmemeli — kazanan ona bakiyor.
+                Match.MatchManager.ServerAddScore(killer.Team.Value);
+            }
 
             string killerName = killer != null ? killer.NetName.Value.ToString() : string.Empty;
             byte killerTeam = killer != null ? killer.Team.Value : (byte)0;
@@ -251,6 +265,15 @@ namespace VRMultiplayer
 
         void TickSpawn()
         {
+            // AYNI KAPI: mac disinda ne hasar gecer ne dogum isler. Mac bitince olen ayakta
+            // dirilmez, sonucu olu izler (ekip karari). Isinmaya gecerken MatchManager zaten
+            // herkesi ayaga kaldirdigi icin kimse burada takili kalmaz.
+            if (!Match.MatchManager.DamageAllowed)
+            {
+                ResetSpawnCounters();
+                return;
+            }
+
             byte team = TeamValue;
 
             // Takim henuz secilmedi (TeamSelector paneli acik / kalibrasyon suruyor). Bu asamada
@@ -298,6 +321,16 @@ namespace VRMultiplayer
             _invulnUntil = Time.time + reviveInvuln;
             _lastDamageTime = Time.time;
             _regenAccumulator = 0f;
+        }
+
+        /// <summary>Server-only. Oyuncuyu mac basi/isinma icin temiz duruma alir: tam can, ayakta,
+        /// sayaclar sifir. Dogum cemberinde beklemeyi ATLAR — mac baslarken ya da isinmaya
+        /// donerken herkesin ayakta olmasi gerekiyor, 5 saniye beklemesi degil.
+        /// Cagiran: <see cref="Match.MatchManager"/>.</summary>
+        public void ServerResetForMatch()
+        {
+            if (!IsServer) return;
+            Revive();
         }
 
         void ResetSpawnCounters()

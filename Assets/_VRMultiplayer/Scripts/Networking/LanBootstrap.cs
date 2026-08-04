@@ -155,10 +155,66 @@ namespace VRMultiplayer
             // IMGUI kulaklikta hicbir sey cizmez ama layout maliyeti yine de odenirdi;
             // sunucu butonu zaten yalnizca PC icindir — mobilde tamamen kapali.
             if (Application.isMobilePlatform) return;
+
+            // Sunucu ayaktayken bu panel MAC KUMANDASI olur (bkz. MatchGui). _busy kilidi
+            // yalnizca sunucu HENUZ baslamadan onemliydi.
+            var nm = NetworkManager.Singleton;
+            if (nm != null && nm.IsServer) { MatchGui(); return; }
+
             if (_busy) return;
             GUILayout.BeginArea(new Rect(20, 20, 260, 90), GUI.skin.box);
             GUILayout.Label("LAN VR Multiplayer");
             if (GUILayout.Button("SUNUCU başlat")) StartAsServer();
+            GUILayout.EndArea();
+        }
+
+        /// <summary>PC'nin mac kumandasi: maci ELLE baslatir (ekip karari — otomatik baslatma yok).
+        /// Yalnizca sunucuda cizilir; kulaklikta IMGUI zaten gorunmez.</summary>
+        void MatchGui()
+        {
+            var m = Match.MatchManager.Instance;
+
+            GUILayout.BeginArea(new Rect(20, 20, 300, 150), GUI.skin.box);
+            GUILayout.Label("SUNUCU AKTIF");
+
+            if (m == null)
+            {
+                GUILayout.Label("Mac katmani yok (Match prefabi bulunamadi).");
+                GUILayout.EndArea();
+                return;
+            }
+
+            // Hazir durum: butonu KILITLEMEZ, yalnizca bilgi verir — tek kisiyle test
+            // edilebilsin diye (bkz. MatchConfig.minPlayersToStart).
+            int blue = 0, red = 0;
+            var all = PlayerIdentity.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i] == null) continue;
+                if (all[i].Team.Value == PlayerProfile.TeamBlue) blue++;
+                else if (all[i].Team.Value == PlayerProfile.TeamRed) red++;
+            }
+            GUILayout.Label("Oyuncu: " + (blue + red) + "   MAVİ " + blue + " / KIZIL " + red);
+
+            switch (m.Current)
+            {
+                case Match.MatchManager.Phase.Warmup:
+                    GUILayout.Label("ISINMA — ateş var, hasar yok.");
+                    if (GUILayout.Button("MAÇI BAŞLAT")) m.ServerStartMatch();
+                    break;
+
+                case Match.MatchManager.Phase.Playing:
+                    GUILayout.Label("MAÇ SÜRÜYOR — kalan " + Mathf.CeilToInt(m.SecondsLeft) + " sn");
+                    GUILayout.Label("Skor:  MAVİ " + m.ScoreBlue.Value + " — KIZIL " + m.ScoreRed.Value);
+                    break;
+
+                case Match.MatchManager.Phase.Ended:
+                    GUILayout.Label("MAÇ BİTTİ — " + (m.Winner.Value == 0 ? "BERABERE"
+                        : m.Winner.Value == PlayerProfile.TeamBlue ? "MAVİ KAZANDI" : "KIZIL KAZANDI"));
+                    GUILayout.Label("Isınmaya dönüş: " + Mathf.CeilToInt(m.SecondsLeft) + " sn");
+                    if (GUILayout.Button("HEMEN YENİ MAÇ")) m.ServerStartMatch();
+                    break;
+            }
             GUILayout.EndArea();
         }
 
