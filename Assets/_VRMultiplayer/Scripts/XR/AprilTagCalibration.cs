@@ -858,6 +858,28 @@ namespace VRMultiplayer
                 _touchPos[_approachId] = _approachPos;
                 _touchRot[_approachId] = _approachRot;
                 _touchTime[_approachId] = Time.time;
+
+                // REFERANS tag'e dokunulduysa ofset havuzuna ekle.
+                //
+                // ISKALAYI ALMA: yaklasma mesafesi iyi bir dokunusta ofset buyuklugu
+                // kadardir (~5-7 cm). 15 cm'nin ustu tag'e degmemissin demektir; boyle bir
+                // ornegi havuza katmak ortalamayi bozar. (Cihazda goruldu: 16,9 cm'lik bir
+                // iskalanin ardindan gelen dogru dokunus 6,7 cm'ydi.)
+                var refEntry = Find(_approachId);
+                if (refEntry != null && refEntry.useForCalibration)
+                {
+                    if (_approachBest <= 0.15f)
+                    {
+                        _refId = _approachId;
+                        _refOffsets.Add(Quaternion.Inverse(_approachRot) *
+                                        (refEntry.position - _approachPos));
+                        WriteDiag($"OFSET  ornek {_refOffsets.Count}  sacilma {RefOffsetSpread() * 100f:0.0} cm");
+                    }
+                    else
+                    {
+                        WriteDiag($"OFSET  ORNEK ATILDI (yaklasma {_approachBest * 100f:0.0} cm > 15)");
+                    }
+                }
                 Debug.Log($"[AprilTagCalib] Tag {_approachId} dokunuldu: {_approachPos} " +
                           $"(en yakin yaklasma {_approachBest * 100f:0.0} cm).");
 
@@ -887,20 +909,37 @@ namespace VRMultiplayer
         ///
         /// YAW VERMEZ: tek dokunus yon tasimaz. Yaw kameradan ya da sol cubuktan gelir.
         /// </summary>
+        // Referans tag'e yapilan TUM dokunuslardan cikan ofsetler. Ortalanir.
+        //
+        // NEDEN ORTALAMA, NEDEN SONUNCUSU DEGIL: ofset kumandanin SABIT fiziksel ozelligi —
+        // izlenen noktanin degdirdigin noktaya uzakligi. Ama her dokunus onu ~3 cm gurultuyle
+        // olcuyor (cihazda goruldu: ayni tag'e iki dokunus y'de 1,472 ve 1,442 verdi). Tek
+        // ornekle yeniden olcmek, o gurultuyu SONRAKI TUM tag'lere kalici olarak gecirir —
+        // yasandi: tag 1 tam bu yuzden 2,4 cm yuksek yazildi. Ortalama gurultuyü kok-N ile
+        // bastirir ve her yeni referans dokunusu tahmini IYILESTIRIR, bozmaz.
+        readonly List<Vector3> _refOffsets = new List<Vector3>();
+        int _refId = -1;
+
         /// <summary>Referans tag'de olculen kumanda ofseti — KUMANDANIN kendi cercevesinde.</summary>
         bool TouchOffsetLocal(out Vector3 offsetLocal, out int refId)
         {
             offsetLocal = Vector3.zero;
-            refId = -1;
-            foreach (var kv in _touchPos)
-            {
-                var e = Find(kv.Key);
-                if (e == null || !e.useForCalibration) continue;
-                offsetLocal = Quaternion.Inverse(_touchRot[kv.Key]) * (e.position - kv.Value);
-                refId = kv.Key;
-                return true;
-            }
-            return false;
+            refId = _refId;
+            if (_refOffsets.Count == 0) return false;
+
+            foreach (var o in _refOffsets) offsetLocal += o;
+            offsetLocal /= _refOffsets.Count;
+            return true;
+        }
+
+        /// <summary>Ortalamadan ortalama sapma (m) — ofsetin ne kadar oturdugunu soyler.</summary>
+        float RefOffsetSpread()
+        {
+            if (_refOffsets.Count < 2) return 0f;
+            TouchOffsetLocal(out Vector3 mean, out _);
+            float s = 0f;
+            foreach (var o in _refOffsets) s += (o - mean).magnitude;
+            return s / _refOffsets.Count;
         }
 
         /// <summary>Kumanda pozunu, DEGDIRILEN noktanin konumuna cevirir.</summary>
@@ -1046,6 +1085,15 @@ namespace VRMultiplayer
             // ortusuyorsa ~0.00 cikar.
             if (_hasFloor)
                 sb.Append($"\n\n=== ZEMIN ===  {_floorY:+0.000;-0.000} m   (ham {_floorRaw:+0.000;-0.000})");
+
+            // OFSET saglami: sacilma kucukse turetilen konumlara guvenilir. Buyukse
+            // dokunuslar tutarsiz demektir ve o tutarsizlik TUM tag'lere geciyordur.
+            if (_refOffsets.Count > 0)
+            {
+                TouchOffsetLocal(out Vector3 off, out int rid);
+                sb.Append($"\n\n=== OFSET (tag {rid}) ===  {off.magnitude * 100f:0.0} cm   " +
+                          $"{_refOffsets.Count} olcum   sacilma {RefOffsetSpread() * 100f:0.0} cm");
+            }
 
             if (_touchPos.Count == 0) return sb.ToString();
 
