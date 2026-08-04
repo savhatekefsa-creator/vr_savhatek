@@ -37,6 +37,13 @@ namespace VRMultiplayer
 
             [Tooltip("Tag'in baktigi yon — ortak cercevenin +Z'sine gore derece.")]
             public float yawDegrees;
+
+            [Tooltip("Bu tag KALIBRASYONDA kullanilsin mi.\n\n" +
+                     "KAPALIYKEN tag yine gorulur, olculur ve panelde gorunur — ama rig'i " +
+                     "OYNATMAZ. Yeni asilan bir tag icin yerlesim degerleri gozle dogrulanana " +
+                     "kadar KAPALI tutulur: yanlis olculmus tek bir tag, dogru olanlarin " +
+                     "kurdugu cerceveyi de bozar ve hangisinin sucu oldugu anlasilmaz.")]
+            public bool useForCalibration = true;
         }
 
         [Header("Tag")]
@@ -217,7 +224,7 @@ namespace VRMultiplayer
                 if (autoCalibrate)
                 {
                     var entry = Find(tag.ID);
-                    if (entry != null && dist < bestDist)
+                    if (entry != null && entry.useForCalibration && dist < bestDist)
                     {
                         bestEntry = entry;
                         bestDist = dist;
