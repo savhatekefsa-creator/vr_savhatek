@@ -828,8 +828,13 @@ namespace VRMultiplayer.Constructor
             // duruyor" diye baslamak, hatirlamanin getirdigi kolayliktan daha pahali.
             if (!on) { _level = 0; _heightMode = false; }
 
+            // Serbest alan sessiz kalmamali: oyuncu gercek odasinin duvarlarini bekliyorsa
+            // hicbir seyin engellememesi hata gibi gorunur — sebebi burada bir kez yaziyor.
+            bool freeSpace = Session != null && Session.IsFreeSpace;
+
             Show(on
-                ? "INSA MODU ACIK\n\nTetik = koy   A = sil   B = geri al\nGrip = palet\n" +
+                ? (freeSpace ? "INSA MODU ACIK  (SERBEST ALAN — oda taramasi yok)" : "INSA MODU ACIK") +
+                  "\n\nTetik = koy   A = sil   B = geri al\nGrip = palet\n" +
                   "Stick yatay = dondur   SAG STICK TIK = yukseklik"
                 : $"INSA MODU KAPALI\n\n{placed} prop.", 4f);
         }

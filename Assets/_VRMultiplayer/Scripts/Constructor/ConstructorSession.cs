@@ -28,6 +28,14 @@ namespace VRMultiplayer.Constructor
         public bool IsActive => Layout != null && Grid != null;
         public int PlacedCount => Layout != null ? Layout.Count : 0;
 
+        /// <summary>
+        /// True when the grid stands on an invented floor (<see cref="RoomPlan.FreeSpace"/>)
+        /// instead of a scan. Read from the LAYOUT, not from a flag set at startup, so it stays
+        /// right for a peer that received the map over the network instead of building it.
+        /// </summary>
+        public bool IsFreeSpace => Layout != null && Layout.builtForRoom != null &&
+                                   Layout.builtForRoom.IsFreeSpace;
+
         /// <summary>Fired after any placement/removal — the grid view and HUD redraw on this.</summary>
         public event Action Changed;
 
@@ -150,6 +158,10 @@ namespace VRMultiplayer.Constructor
         /// not use one even if it had it: two scans of the same room produce slightly different
         /// polygons, the grid origin snaps differently, and cell (4,7) stops meaning the same
         /// spot on every headset. So the client asks the server and waits.
+        ///
+        /// NO SCAN IS NOT A DEAD END. Offline (or on the server) a missing scan opens a
+        /// <see cref="RoomPlan.FreeSpace"/> floor instead of refusing: the grid needs a polygon,
+        /// not a TRUE one. A saved map beats both — it carries the room it was authored in.
         /// </summary>
         public bool EnsureStarted()
         {
@@ -167,13 +179,28 @@ namespace VRMultiplayer.Constructor
             }
 
             var plan = RoomPlanIO.Load();
+            var saved = MapLayout.Load(WorkingMapName);
+
             if (plan == null)
             {
-                NotStartedReason = "Oda taramasi yok.\nGozlukte kalibre olup SOL X ile PC'ye gonder.";
-                return false;
+                // Bir kayit varsa ODASI ONUN ICINDE: uydurma bir zeminle yeniden izgaralamak
+                // kokeni kaydirir ve butun yerlestirmeler yanlis yere duser. Tarama dosyasi
+                // gitmis olabilir, harita hala kendi odasini biliyor.
+                if (saved != null && saved.HasRoom)
+                {
+                    if (!Adopt(saved)) NotStartedReason = "Kayitli haritanin odasi gecersiz.";
+                    return IsActive;
+                }
+
+                // Tarama da kayit da yok: VAZGECME, bos bir zemin uret. Poligonun disi zaten
+                // insa edilebilir (FreeOutside), yani kaybedilen tek sey "buraya yurunebilir"
+                // bilgisi — taranmamis bir odada zaten bilinmeyen bir sey.
+                plan = RoomPlan.FreeSpace();
+                Debug.LogWarning("[Constructor] Oda taramasi yok — SERBEST ALAN ile aciliyor: " +
+                                 $"kokende {plan.Area():0} m2 zemin + {RoomGrid.DefaultOutsideMargin:0} m pay. " +
+                                 "Hicbir hucre mobilyaya kapali degil; gercek odanin duvarlari bilinmiyor.");
             }
 
-            var saved = MapLayout.Load(WorkingMapName);
             bool ok = saved != null ? Adopt(saved, plan) : StartNew(plan);
             if (!ok) NotStartedReason = "Oda plani gecersiz: izgara kurulamadi.";
             return ok;
