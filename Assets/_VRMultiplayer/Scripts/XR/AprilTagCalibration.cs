@@ -860,6 +860,16 @@ namespace VRMultiplayer
         {
             if (!learnMode) { _applyPrev = false; _nudgePrev = Vector2.zero; return; }
 
+            // INSA MODUNDA SUS. Sag A insa modunda "sil" tusu (ConstructorPlacer.DeleteHeld);
+            // ogrenme girisleri acik kalirsa tek basis hem bir prop siler hem tag yerlesimine
+            // yazar. Sol cubuk da paletle cakisabilir. Constructor bu bayragi zaten kaldiriyor.
+            if (XRButtons.GameplayInputSuppressed)
+            {
+                _applyPrev = false;
+                _nudgePrev = Vector2.zero;
+                return;
+            }
+
             EnsureLearnPassthrough();
             TickNudge();
 
