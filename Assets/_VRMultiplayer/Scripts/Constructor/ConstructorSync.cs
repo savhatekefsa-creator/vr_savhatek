@@ -110,6 +110,19 @@ namespace VRMultiplayer.Constructor
         {
             Debug.LogWarning("[ConstructorSync] Sunucuda harita yok: " + reason);
             PendingMessage = "SUNUCUDA HARITA YOK\n\n" + reason;
+
+            // PendingMessage'i yalnizca INSA MODU gosteriyor (placer, moda girmeye
+            // calisirken okuyor). Oyuncu modunda kimse okumaz ve oyuncu bos bir dunyada
+            // sebepsiz kalirdi — mesaji orada kendimiz gosteriyoruz.
+            if (!AppMode.IsPlayer) return;
+            StartCoroutine(ShowNotice("HARİTA YOK\n\n" + reason, 8f));
+        }
+
+        IEnumerator ShowNotice(string text, float seconds)
+        {
+            var panel = UI.HeadFollowPanel.Create("Map Notice", text, Color.white);
+            yield return new WaitForSeconds(seconds);
+            if (panel != null) Destroy(panel.gameObject);
         }
 
         /// <summary>Last thing the server said about why building is not possible yet.</summary>
@@ -590,6 +603,19 @@ namespace VRMultiplayer.Constructor
             {
                 Debug.LogWarning($"[ConstructorSync] Istemci {OwnerClientId} 20 sn icinde senkron " +
                                  "olmadi — harita gonderilmedi. Insa moduna girince yeniden istenir.");
+                yield break;
+            }
+
+            // HARITA SECIMI TAM BURADA. Oyuncu isim + takim ekranini gecti ve baglandi; sema
+            // secimi bu andan sonraya koyuyor. Sunucu acik bir oturum varsa dokunmaz (devam
+            // eden mac), yoksa havuzdan secip kurar.
+            //
+            // KESIN KONTROL DE BURASI: gozluk havuz durumunu kesif yayinindan ogreniyor ve o
+            // bir IPUCU — yayinla katilim arasinda son harita havuzdan cikarilmis olabilir.
+            // Ipucuna guvenip sessizce bos bir dunyaya birakmak yerine sebebini soyluyoruz.
+            if (Session != null && !Session.IsActive && !Session.EnsureMatchMap())
+            {
+                NoLayoutOwnerRpc("Sunucunun havuzunda oynanabilir harita kalmamis.");
                 yield break;
             }
 

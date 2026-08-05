@@ -158,14 +158,30 @@ namespace VRMultiplayer.Constructor
         /// doguyor ve iki bootstrap arasindaki sira GARANTI DEGIL. Start hepsinden sonra kosar,
         /// yani raf yuvalari henuz var olmayan bir respawner'a yazilmaz.
         /// </summary>
-        void Start()
+        /// <summary>
+        /// Mac icin harita hazir olsun: acik bir oturum varsa DOKUNMA, yoksa havuzdan sec ve kur.
+        ///
+        /// ACILISTA DEGIL, OYUNCU GIRERKEN. Once acilista seciliyordu; sema ise secimi isim +
+        /// takim ekranindan SONRAYA koyuyor. Fark pratik: sunucu saatlerce bos beklerken secilen
+        /// harita, oyuncu girene kadar tasarimcinin havuzda yaptigi her degisiklige kor kalirdi.
+        /// Simdi ilk oyuncu girdiginde seciliyor.
+        ///
+        /// ACIK OTURUMA DOKUNMAMAK MACIN AYNI HARITADA GECMESINI SAGLIYOR: sonradan katilan
+        /// oyuncu yeni bir secim tetiklemez, devam eden maca girer.
+        /// </summary>
+        public bool EnsureMatchMap()
         {
-            if (BuildForPlay(PickPlayMap()) || !IsMapAuthority) return;
+            if (IsActive) return true;
+            if (!IsMapAuthority) return false;
+
+            string map = PickPlayMap();
+            if (BuildForPlay(map)) return true;
 
             // Sessiz kalmamali: harita gelmedigi anda ortada duvar da raf da silah da yok, ve
             // sebebi disaridan "bozuk" gorunuyor.
-            Debug.Log("[Constructor] Oynanacak harita yok: havuz bos ve '" + DefaultMapName +
-                      "' kayitli degil. Yaratici modda bir harita yapip HAVUZA EKLE.");
+            Debug.LogWarning("[Constructor] Oynanacak harita yok: havuz bos ve '" + DefaultMapName +
+                             "' kayitli degil. Yaratici modda bir harita yapip HAVUZA EKLE.");
+            return false;
         }
 
         /// <summary>
