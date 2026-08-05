@@ -312,7 +312,10 @@ namespace VRMultiplayer.Weapons
         }
 
         // WeaponGripProfile .asset dosyasinin bekledigi bicim — satir dogrudan yapistirilabilir.
-        static string Y(Vector3 v) => $"{{x: {v.x}, y: {v.y}, z: {v.z}}}";
+        // INVARIANT SART: Turkce yerel ayarda "0,0722" yazilir, Unity YAML'i ise NOKTA bekler.
+        // Ilk uretilen dosyalar virgullu ciktigi icin yapistirilamiyordu.
+        static string Y(Vector3 v) => string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "{{x: {0}, y: {1}, z: {2}}}", v.x, v.y, v.z);
 
         /// <summary>Ekranda gosterilen aci. Quaternion.eulerAngles 0..360 dondurur, yani -5
         /// derece 355 diye gorunur — silahlar arasi karsilastirma tam da bunun yuzunden
