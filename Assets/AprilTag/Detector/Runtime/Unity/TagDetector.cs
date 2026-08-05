@@ -65,6 +65,20 @@ namespace AprilTag
             RunDetectorAndEstimator(fov, tagSize);
         }
 
+        /// <summary>
+        /// TAM INTRINSICS ile isleme. Cihazdan olculmus fx, fy, cx, cy varsa bunu kullanin —
+        /// FOV'lu asiri yuklemesi fx == fy ve ana nokta == goruntu merkezi VARSAYAR.
+        ///
+        /// Degerler ISLENEN goruntunun cozunurlugunde olmali (intrinsics baska bir referans
+        /// cozunurluk icin verilmisse cagiran taraf olceklemeli).
+        /// </summary>
+        public void ProcessImage(ReadOnlySpan<Color32> image,
+                                 double fx, double fy, double cx, double cy, float tagSize)
+        {
+            ImageConverter.Convert(image, _image);
+            RunDetectorAndEstimator(fx, fy, cx, cy, tagSize);
+        }
+
         #endregion
 
         #region Private objects
@@ -92,6 +106,14 @@ namespace AprilTag
         // things (unmanaged vs managed vs Unity DOTS).
         //
         void RunDetectorAndEstimator(float fov, float tagSize)
+            => RunDetectorAndEstimator(
+                   _image.Height / 2.0 / System.Math.Tan(fov / 2),
+                   _image.Height / 2.0 / System.Math.Tan(fov / 2),
+                   _image.Width / 2.0,
+                   _image.Height / 2.0,
+                   tagSize);
+
+        void RunDetectorAndEstimator(double fx, double fy, double cx, double cy, float tagSize)
         {
             _profileData = null;
 
@@ -123,9 +145,10 @@ namespace AprilTag
             var job = new PoseEstimationJob(
                 jobInput,
                 jobOutput,
-                _image.Width,
-                _image.Height,
-                fov,
+                fx,
+                fy,
+                cx,
+                cy,
                 tagSize
             );
 

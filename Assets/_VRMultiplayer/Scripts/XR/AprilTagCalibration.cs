@@ -279,25 +279,44 @@ namespace VRMultiplayer
             EnsureDetector(tex.width, tex.height);
             tex.GetPixels32(_pixels);
 
-            // FOV: PoseEstimationJob "focalLength = height / 2 / tan(fov/2)" hesapliyor, yani
-            // DIKEY fov bekliyor. Kaynak projede YATAY fov veriliyordu; 1280x960 gibi kare
-            // olmayan bir goruntude bu %33 odak uzakligi (dolayisiyla mesafe) hatasi demek.
-            // Dogrusu: fy'den turetilen dikey fov.
+            // TAM INTRINSICS. Eskiden yalnizca fy'den bir DIKEY FOV turetilip veriliyordu; poz
+            // isi de o tek sayidan fx = fy uretip ana noktayi GORUNTU MERKEZI kabul ediyordu.
+            //
+            // Ana nokta varsayimi asil zararlisiydi: gercek ana nokta merkezden d piksel
+            // kaymissa, tag'in goruntudeki YERINE bagli d/f radyanlik bir yon hatasi olusur.
+            // Kamera hareket ettikce tag goruntude gezer, hata da onunla degisir — yani
+            // ortalamayla bastirilamayan, bakis noktasina gore degisen sistematik bir sapma.
+            // Iki tag'i farkli acilardan olcup "ayni duvarda ama 10 cm ayrik" cikmasinin
+            // birinci sanigi budur. 600 px odakta 30 px kayma = 2,9 derece = 2 metrede 10 cm.
+            //
+            // fx != fy de ayrica onemli: tek FOV sayisi ikisini esitlemeye zorluyordu.
             var intr = PassthroughCameraUtils.GetCameraIntrinsics(_camMgr.Eye);
-            float fy = intr.FocalLength.y > 1f ? intr.FocalLength.y : intr.FocalLength.x;
 
-            float fovVertical = 2f * Mathf.Atan(tex.height / (2f * fy));
+            // OLCEKLEME: intrinsics sabit bir REFERANS cozunurluk icin tanimli, biz ise
+            // tex.width x tex.height okuyoruz. Ikisi farkliysa fx, fy, cx, cy'nin HEPSI ayni
+            // oranla olceklenmeli. Eski kodda bu yapilmiyordu ve "RequestedResolution
+            // kucultulurse tum mesafeler kayar" uyarisi tam bu eksikligi anlatiyordu.
+            float sx = intr.Resolution.x > 0 ? (float)tex.width / intr.Resolution.x : 1f;
+            float sy = intr.Resolution.y > 0 ? (float)tex.height / intr.Resolution.y : 1f;
 
-            // DIKKAT — cozunurluk dusurulecekse burasi da degismeli. fy sabit bir referans
-            // cozunurluge gore verilir; tex.height ise okudugumuz doku. Su an ikisi de
-            // maksimum oldugu icin dogru calisiyor (spike: 1 m -> 1.01, cihazda dogrulandi).
-            // RequestedResolution kucultulurse tex.height duser ama fy dusmez, fovVertical
-            // yanlis cikar ve TUM mesafeler kayar — tag 1 m'de "2 m'den uzak" gorunup
-            // calibrateMaxDistance esigine takilir, hic kalibre etmez.
-            // Denendi: refHeight'i intr.Resolution.y yapmak — cihazda mesafeyi bozdu, geri alindi.
-            // Dogrusu once GetOutputSizes'tan gercek referansi OLCUP dogrulamak.
+            double fx = intr.FocalLength.x * sx;
+            double fyy = intr.FocalLength.y * sy;
+            double cx = intr.PrincipalPoint.x * sx;
+            double cy = intr.PrincipalPoint.y * sy;
 
-            _detector.ProcessImage(_pixels, fovVertical, tagSizeMeters);
+            // Bozulmus/eksik intrinsics gelirse eski yola dus — kalibrasyonsuz kalmak,
+            // sacma bir odak uzakligiyla calismaktan iyidir.
+            if (fx < 1.0 || fyy < 1.0)
+            {
+                float fbFy = intr.FocalLength.y > 1f ? intr.FocalLength.y : intr.FocalLength.x;
+                float fovVertical = 2f * Mathf.Atan(tex.height / (2f * fbFy));
+                _detector.ProcessImage(_pixels, fovVertical, tagSizeMeters);
+            }
+            else
+            {
+                LogIntrinsicsOnce(intr, tex.width, tex.height, fx, fyy, cx, cy);
+                _detector.ProcessImage(_pixels, fx, fyy, cx, cy, tagSizeMeters);
+            }
 
             float now = Time.time;
             if (_lastPassTime > 0f) _detectHz = 1f / Mathf.Max(0.0001f, now - _lastPassTime);
@@ -1174,6 +1193,38 @@ namespace VRMultiplayer
         /// sesli aktarmak hem yavas hem hataya acik. Dosya iki tarafta da guvenilir ve
         /// adb ile dogrudan cekilebiliyor.
         /// </summary>
+        bool _intrinsicsLogged;
+
+        /// <summary>
+        /// Intrinsics'i BIR KEZ log'a yazar — ana noktanin goruntu merkezinden ne kadar
+        /// kaydigini ve bunun mesafedeki karsiligini da hesaplayarak.
+        ///
+        /// Bu sayi dogrudan "eski kod ne kadar yaniliyordu"nun olcusudur: eski yol ana noktayi
+        /// goruntu merkezi KABUL EDIYORDU, yani asagida yazan kayma kadar hata yapiyordu. Ve o
+        /// hata tag'in goruntudeki yerine bagli oldugu icin her bakis acisinda farkli cikiyor,
+        /// ortalamayla bastirilamiyordu.
+        /// </summary>
+        void LogIntrinsicsOnce(PassthroughCameraIntrinsics intr, int texW, int texH,
+                               double fx, double fy, double cx, double cy)
+        {
+            if (_intrinsicsLogged) return;
+            _intrinsicsLogged = true;
+
+            double dx = cx - texW / 2.0;
+            double dy = cy - texH / 2.0;
+            double dpx = System.Math.Sqrt(dx * dx + dy * dy);
+            double angX = System.Math.Atan2(dx, fx) * Mathf.Rad2Deg;
+            double angY = System.Math.Atan2(dy, fy) * Mathf.Rad2Deg;
+            double ang = System.Math.Sqrt(angX * angX + angY * angY);
+
+            WriteDiag($"INTRINSICS doku {texW}x{texH}  referans {intr.Resolution.x}x{intr.Resolution.y}");
+            WriteDiag($"  fx {fx:0.0}  fy {fy:0.0}   fark {System.Math.Abs(fx - fy):0.0} px");
+            WriteDiag($"  cx {cx:0.0}  cy {cy:0.0}   goruntu merkezi {texW / 2.0:0.0} {texH / 2.0:0.0}");
+            WriteDiag($"  ANA NOKTA KAYMASI {dpx:0.0} px = {ang:0.00} derece" +
+                      $"  ->  2 m'de {200.0 * System.Math.Tan(ang * Mathf.Deg2Rad):0.0} cm yanal hata");
+            WriteDiag($"  skew {intr.Skew:0.0000}");
+        }
+
         static void WriteDiag(string line)
         {
             try
