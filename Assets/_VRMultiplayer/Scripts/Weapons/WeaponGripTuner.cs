@@ -60,6 +60,7 @@ namespace VRMultiplayer.Weapons
 
         HandGrabber _grabber;
         TextMesh _panel;
+        WeaponHandWeld _weld;
 
         // Oturum basi anlik goruntusu: hangi profil, hangi degerlerle basladi.
         WeaponGripProfile _tuned;
@@ -108,6 +109,7 @@ namespace VRMultiplayer.Weapons
 
             Track(profile);
             Nudge(profile, held);
+            RefreshWeld(profile, held);
             HandleChords(profile, held);
 
             _sb.Clear();
@@ -172,6 +174,23 @@ namespace VRMultiplayer.Weapons
         }
 
         static float SafeDiv(float a, float b) => Mathf.Abs(b) < 1e-5f ? a : a / b;
+
+        /// <summary>
+        /// Weld, cipa degerlerini tutus BASINDA bir kez cozup onbellege aliyor
+        /// (WeaponHandWeld.SetHand) — profil kavrama sirasinda degisince silah yeni poza
+        /// gider ama bilek eski cipada kalir ve el silahtan kayar. Ayar yaparken bu, ayarin
+        /// kendisi bozukmus gibi gorunurdu. Her karede yeniden kurarak onbellegi tazeliyoruz;
+        /// SetHand devam eden blend rampasini korudugu icin bu bir pop yaratmaz.
+        ///
+        /// Ana el = SAG (mirrored: false, isSupport: false) — tuner zaten sol eli reddediyor.
+        /// Destek eli (sol) slotuna dokunulmaz, onu WeaponGrip yonetmeye devam eder.
+        /// </summary>
+        void RefreshWeld(WeaponGripProfile profile, GrabbableObject held)
+        {
+            if (_weld == null) _weld = GetComponentInChildren<WeaponHandWeld>(true);
+            if (_weld != null)
+                _weld.SetHand(false, held.transform, profile, false, false);
+        }
 
         void HandleChords(WeaponGripProfile profile, GrabbableObject held)
         {
