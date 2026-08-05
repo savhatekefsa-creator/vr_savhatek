@@ -100,6 +100,7 @@ namespace VRMultiplayer.Weapons
 
         TextMesh _panel;
         Transform _leftAxes, _rightAxes, _weaponAxes, _barrelRod, _aimMarker;
+        Material _barrelMat;
         float _nextRefresh;
         Vector3 _prevLeftPos, _prevRightPos;
         bool _prevChordMode, _prevChordRecord;
@@ -118,6 +119,16 @@ namespace VRMultiplayer.Weapons
         /// sirasinda zaten gerekli, kumandanin gercek eksenini gormeden ne ortaladigini
         /// bilemezsin.</summary>
         bool TunerActive => _tuner != null && _tuner.tuning;
+
+        // ─── Tuner'in okudugu canli nisan hatasi ──────────────────────────────────────────
+        // Ayar yaparken "iki mavi cubugu ust uste getir" diye bir hedef YOK: silahin +Z'si
+        // namlu degil, kumandanin +Z'si de nisan hatti degil (grip pose egimi). Minimize
+        // edilecek tek sey namlunun isaretciye olan acisi — tuner bu degerleri gosterir.
+        public bool HasAim { get; private set; }
+        public float AimTotal { get; private set; }
+        public float AimYaw { get; private set; }
+        public float AimPitch { get; private set; }
+        public float AimRoll { get; private set; }
 
         void Awake()
         {
@@ -183,9 +194,12 @@ namespace VRMultiplayer.Weapons
             Vector3 barrel = (w.rotation * barrelLocal).normalized;
             Vector3 top = w.up; // yazarlama sozlesmesi: silah +Y = ust ray
 
-            _weaponAxes.gameObject.SetActive(true);
+            // Ayar sirasinda silahin XYZ ucluSU KAPATILIR: kullanici "silahin mavisini elin
+            // mavisine mi esliyorum?" diye takiliyor, oysa o hizalama hedefi degil. Geriye
+            // yalnizca sari namlu cubugu kalir — minimize edilecek tek sey o.
+            _weaponAxes.gameObject.SetActive(!TunerActive);
             _barrelRod.gameObject.SetActive(true);
-            PlaceTriad(_weaponAxes, w);
+            if (!TunerActive) PlaceTriad(_weaponAxes, w);
             _barrelRod.SetPositionAndRotation(w.position, Quaternion.LookRotation(barrel, top));
 
             // ── HAM: namlu, kumanda cipasinin eksenlerine gore nerede duruyor? ──
@@ -199,6 +213,7 @@ namespace VRMultiplayer.Weapons
             // ── NISAN HATASI: baktigin noktaya gore namlu nerede? ──
             // Isaretci kafaya kilitli, yani "baktigim yere nisan aliyorum" tanimi.
             float aYaw = 0f, aPitch = 0f, aRoll = 0f, aTotal = 0f;
+            bool hasAim = false;
             if (_aimMarker != null)
             {
                 Vector3 muzzlePos = MuzzlePosition(w, barrel);
@@ -212,8 +227,13 @@ namespace VRMultiplayer.Weapons
                     aPitch = Mathf.Asin(Mathf.Clamp(bInAim.y, -1f, 1f)) * Mathf.Rad2Deg;
                     aRoll = SignedRoll(barrel, top, Vector3.up); // yatiklik: dunya yukarisina gore
                     aTotal = Vector3.Angle(want, barrel);
+                    hasAim = true;
                 }
             }
+
+            HasAim = hasAim;
+            AimTotal = aTotal; AimYaw = aYaw; AimPitch = aPitch; AimRoll = aRoll;
+            TintBarrel(hasAim, aTotal);
 
             if (!steady) return;
 
@@ -231,6 +251,20 @@ namespace VRMultiplayer.Weapons
             row.aimPitch += (aPitch - row.aimPitch) / n;
             row.aimRoll += (aRoll - row.aimRoll) / n;
             row.aimTotal += (aTotal - row.aimTotal) / n;
+        }
+
+        /// <summary>Namlu cubugunu nisan hatasina gore boyar: yesil = oturdu, sari = yakin,
+        /// kirmizi = uzak. VR'da sayi okumak zor; renk anlik geri bildirim verir ve
+        /// "hangi cubugu hangisine esliyorum" sorusunu tamamen ortadan kaldirir — tek is
+        /// sari cubugu YESILE dondurmek.</summary>
+        void TintBarrel(bool hasAim, float total)
+        {
+            if (_barrelMat == null) return;
+            Color c = !hasAim ? new Color(1f, 0.9f, 0.1f)
+                : total < 2f ? new Color(0.15f, 1f, 0.25f)
+                : total < 6f ? new Color(1f, 0.85f, 0.1f)
+                : new Color(1f, 0.25f, 0.15f);
+            UI.UITheme.SetMaterialColor(_barrelMat, c);
         }
 
         /// <summary>Silahin yatikligi: namluya dik duzlemde, referans "yukari" ile silahin
@@ -555,8 +589,14 @@ namespace VRMultiplayer.Weapons
             if (_leftAxes == null) _leftAxes = BuildTriad("Axes L");
             if (_rightAxes == null) _rightAxes = BuildTriad("Axes R");
             if (_weaponAxes == null) _weaponAxes = BuildTriad("Axes Weapon");
-            if (_barrelRod == null) _barrelRod = BuildRod("Barrel Rod", Vector3.forward,
-                new Color(1f, 0.9f, 0.1f), axisLength * 3f).transform;
+            if (_barrelRod == null)
+            {
+                var rod = BuildRod("Barrel Rod", Vector3.forward, new Color(1f, 0.9f, 0.1f), axisLength * 3f);
+                _barrelRod = rod.transform;
+                // Malzemeyi SAKLA ve rengini yerinde degistir. Her karede yeni malzeme
+                // uretmek Quest'te sizinti demek olurdu.
+                _barrelMat = rod.GetComponent<Renderer>().sharedMaterial;
+            }
             if (_aimMarker == null) _aimMarker = BuildAimMarker();
         }
 
@@ -613,6 +653,7 @@ namespace VRMultiplayer.Weapons
 
         void HideWeaponVisuals()
         {
+            HasAim = false;
             if (_weaponAxes != null && _weaponAxes.gameObject.activeSelf)
                 _weaponAxes.gameObject.SetActive(false);
             if (_barrelRod != null && _barrelRod.gameObject.activeSelf)

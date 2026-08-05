@@ -61,6 +61,7 @@ namespace VRMultiplayer.Weapons
         HandGrabber _grabber;
         TextMesh _panel;
         WeaponHandWeld _weld;
+        GripDebugRig _rig;
 
         // Oturum basi anlik goruntusu: hangi profil, hangi degerlerle basladi.
         WeaponGripProfile _tuned;
@@ -73,7 +74,11 @@ namespace VRMultiplayer.Weapons
         string _status = "";
         readonly StringBuilder _sb = new StringBuilder(256);
 
-        void Awake() => _grabber = GetComponent<HandGrabber>();
+        void Awake()
+        {
+            _grabber = GetComponent<HandGrabber>();
+            _rig = GetComponent<GripDebugRig>();
+        }
 
         void OnDisable() => ClosePanel();
 
@@ -114,14 +119,49 @@ namespace VRMultiplayer.Weapons
 
             _sb.Clear();
             _sb.Append("GRIP TUNER — ").Append(held.name).Append('\n');
-            _sb.Append("aci   ").Append(V(Wrap(profile.gripLocalEuler))).Append('\n');
+            AppendAim();
+            _sb.Append("\naci   ").Append(V(Wrap(profile.gripLocalEuler))).Append('\n');
             _sb.Append("konum ").Append(V(profile.gripLocalPosition)).Append('\n');
-            _sb.Append("baslangic aci   ").Append(V(Wrap(_origEuler))).Append('\n');
-            _sb.Append("\ncubuk: yaw/pitch  |  B+cubuk: roll/derinlik\n");
             _sb.Append("A+X basili: KAYDET  |  B+Y: geri al");
             if (!string.IsNullOrEmpty(_status)) _sb.Append('\n').Append(_status);
             _panel.text = _sb.ToString();
         }
+
+        /// <summary>
+        /// Ayarin TEK hedefi: sari namlu cubugunu pembe isaretciye dogrultmak. "Silahin mavi
+        /// ekseni ile kumandanin mavi ekseni ust uste gelsin" diye bir hedef YOK — silahin
+        /// +Z'si namlu degil, kumandanin +Z'si de nisan hatti degil, ve gercek bir kabza
+        /// namluya gore zaten egimlidir. O yuzden panelde eslestirilecek eksen degil,
+        /// KUCULTULECEK bir sayi gosteriyoruz; yon ipuclari da cubugu hangi tarafa itecegini
+        /// sOyluyor ki VR'da isaret arastirmak zorunda kalmayasin.
+        /// </summary>
+        void AppendAim()
+        {
+            if (_rig == null || !_rig.showOverlay)
+            {
+                _sb.Append("(eksen rig'i kapali — GripDebugRig.showOverlay'i ac)\n");
+                return;
+            }
+            if (!_rig.HasAim) { _sb.Append("(nisan olcumu yok)\n"); return; }
+
+            _sb.Append("NAMLU HEDEFE: ").Append(_rig.AimTotal.ToString("F1")).Append("  <- kucult\n");
+            // Isaretler Nudge()'daki donme yonlerinden turetildi:
+            //   cubuk saga  -> silah saga doner  -> yaw buyur
+            //   cubuk ileri -> namlu asagi iner  -> pitch kucul
+            //   B+cubuk saga-> ust ray sola yatar -> roll buyur
+            Hint("yaw  ", _rig.AimYaw, "cubugu SOLA", "cubugu SAGA");
+            Hint("pitch", _rig.AimPitch, "cubugu ILERI", "cubugu GERI");
+            Hint("roll ", _rig.AimRoll, "B + cubugu SOLA", "B + cubugu SAGA");
+        }
+
+        void Hint(string label, float value, string whenPositive, string whenNegative)
+        {
+            _sb.Append("  ").Append(label).Append(' ').Append(Deg(value));
+            _sb.Append(Mathf.Abs(value) < 0.5f ? "  tamam" : "  -> " + (value > 0f ? whenPositive : whenNegative));
+            _sb.Append('\n');
+        }
+
+        static string Deg(float v) => (v >= 0f ? "+" : "") + v.ToString("F1");
 
         /// <summary>Baska bir silaha gecildiginde yeni profilin baslangic degerlerini sakla —
         /// "geri al" her zaman ELDEKI silahin oturum basi degerine doner.</summary>
