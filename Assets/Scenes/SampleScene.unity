@@ -1432,6 +1432,8 @@ MonoBehaviour:
   yawRecoveryDegrees: 10
   maxHeadSpeed: 0.15
   maxHeadAngularSpeed: 15
+  assumedFrameLatency: 0.05
+  motionErrorBudget: 0.01
   useAnchorHold: 0
   correctionYawDeadzoneDegrees: 0.4
   smallCorrectionRate: 0.25

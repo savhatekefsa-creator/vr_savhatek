@@ -168,9 +168,24 @@ namespace VRMultiplayer
         public float maxHeadSpeed = 0.15f;
 
         [Tooltip("Kafa bu acisal hizdan hizli donerken tespitler katilmaz (derece/sn). 0 = kapali.\n\n" +
-                 "Donme daha zararli: 30 derece/sn ile 50 ms gecikme 1,5 derece eder, bu da " +
-                 "2 metrede 5 cm yer degistirme demektir.")]
+                 "BU TAVAN AYRI BIR SEY ICIN: rolling shutter. Quest passthrough kameralari " +
+                 "goruntuyu satir satir okuyor; donerken ustu ve alti farkli anlarda yakalanir " +
+                 "ve tag'in dortgeni EGILIR. Poz cozucu bunu 'tag donmus' diye yorumlar. Bu " +
+                 "carpitma mesafeye gore olceklenmez, o yuzden asagidaki butceden ayri durur.")]
         public float maxHeadAngularSpeed = 15f;
+
+        [Tooltip("Varsayilan passthrough gecikmesi (sn). Kare yakalandigi an ile kafa pozunu " +
+                 "okudugumuz an arasindaki tahmini fark. Quest'te tipik 30-60 ms.")]
+        public float assumedFrameLatency = 0.05f;
+
+        [Tooltip("Hareketten kaynaklanan TAHMINI konum hatasi bu butceyi asarsa tespit " +
+                 "kullanilmaz (m). 0 = kapali.\n\n" +
+                 "Sabit hiz esiginden neden ustun: acisal hizin konum bedeli MESAFEYLE buyur. " +
+                 "15 derece/sn, 1 m'deki tag'de 1,3 cm ama 4 m'dekinde 5,2 cm demek. Tek bir " +
+                 "hiz esigi ya yakini gereksiz kisitlar ya uzagi kacirir; butce ikisini de " +
+                 "dogru olceklendirir.\n\n" +
+                 "  hata ~ dogrusal_hiz * gecikme  +  mesafe * tan(acisal_hiz * gecikme)")]
+        public float motionErrorBudget = 0.01f;
 
         [Header("Anchor destegi (deneysel)")]
         [Tooltip("Tag GORUNMEZKEN cerceveyi Meta spatial anchor'i tutsun.\n\n" +
@@ -274,8 +289,24 @@ namespace VRMultiplayer
             TickTouch();   // her karede: en yakin yaklasmayi kacirmamak icin
             TickFloor();
             TickHeadMotion();
+            TickFrameFreshness();
 
             if (Time.time < _nextDetectAt) { TickPanel(); return; }
+
+            // YENI KARE YOKSA ISLEME. _nextDetectAt'i ILERLETMEDEN donuyoruz ki kare gelir
+            // gelmez islensin — aksi halde tazelik kontrolu tespit hizini yariya dusururdu.
+            if (!_frameDirty)
+            {
+                if (++_staleSkips >= _nextStaleReport)
+                {
+                    // Seyrek atlama normaldir; SIK atlama kamera akisinin bozuldugunu soyler.
+                    WriteDiag($"BAYAT KARE atlandi (toplam {_staleSkips})");
+                    _nextStaleReport = _staleSkips * 4;
+                }
+                TickPanel();
+                return;
+            }
+            _frameDirty = false;
 
             // UYARLANIR HIZ: tespit pahali (tam cozunurluklu GetPixels32 + tag arama, ana
             // is parcaciginda). Macin buyuk kisminda tag kadrajda degil ya da hiza zaten iyi —
@@ -375,7 +406,9 @@ namespace VRMultiplayer
                 // HAREKET KAPISI: kare ile kafa pozu ayni ana ait olmadigi icin, kafa
                 // hareket ederken cikan poz sistematik olarak kaymistir. Panelde gorunmeye
                 // devam etsin (oyuncu tag'i gordugunu bilsin) ama CERCEVEYE KARISMASIN.
-                if (!HeadSteady) continue;
+                //
+                // Esik MESAFEYE gore: uzaktaki tag ayni donme hizindan cok daha fazla etkilenir.
+                if (!MotionOk(dist)) continue;
 
                 if (learnMode)
                     Learn(tag.ID, dist, worldPos, worldRot);
@@ -1223,6 +1256,27 @@ namespace VRMultiplayer
         // OLCUM RIG'E GORE YAPILIR, dunyaya gore degil: kalibrasyon duzeltmesi rig'i oynatir
         // ve dunya cercevesinde bu, kafa hareket etmis gibi gorunurdu — kendi duzeltmemiz
         // kapiyi kapatirdi.
+        // ---- KARE TAZELIGI ----------------------------------------------------------------
+        //
+        // Tespit turu sabit araliklarla (1-3 Hz) calisiyor ama kamera dokusu bagimsiz akiyor.
+        // Tazelik kontrolu olmadan AYNI kare birden fazla kez islenebilir: kamera takilirsa,
+        // termal kisitlama olursa ya da doku beklenenden yavas guncellenirse.
+        //
+        // ZARARI HATAYI BUYUTMEK DEGIL, GUVENI SAHTE ARTIRMAK: kayan pencere ortalamasi ve
+        // jitter olcumu orneklerin BAGIMSIZ oldugunu varsayar. Ayni kare iki kez islenirse
+        // ortalama iyilesmez ama jitter DUSUK gorunur — panel tek bir olcumu "5 ornekle
+        // dogrulanmis" gibi gosterir. Sessiz bir istatistik yalani.
+        bool _frameDirty;
+        int _staleSkips;
+        int _nextStaleReport = 1;
+
+        /// <summary>Her karede calisir: doku guncellendiyse bayragi kaldirir.</summary>
+        void TickFrameFreshness()
+        {
+            var tex = GetCameraTexture();
+            if (tex != null && tex.didUpdateThisFrame) _frameDirty = true;
+        }
+
         Transform _head;
         Vector3 _headPosPrev;
         Quaternion _headRotPrev;
@@ -1259,10 +1313,27 @@ namespace VRMultiplayer
             _headPrevValid = true;
         }
 
-        /// <summary>Kafa, gecikmeyi zararsiz kilacak kadar sakin mi.</summary>
+        /// <summary>Kafa, gecikmeyi zararsiz kilacak kadar sakin mi (mesafeden bagimsiz tavanlar).</summary>
         bool HeadSteady =>
             (maxHeadSpeed <= 0f || _headSpeed <= maxHeadSpeed) &&
             (maxHeadAngularSpeed <= 0f || _headAngSpeed <= maxHeadAngularSpeed);
+
+        /// <summary>
+        /// Poz-kafa zaman uyusmazliginin bu mesafedeki TAHMINI konum bedeli (m).
+        ///
+        ///   hata ~ dogrusal_hiz * gecikme  +  mesafe * tan(acisal_hiz * gecikme)
+        ///
+        /// Ikinci terim mesafeyle buyudugu icin sabit bir hiz esigi yeterli degil: ayni
+        /// 15 derece/sn, 1 metredeki tag'de 1,3 cm, 4 metredekinde 5,2 cm eder.
+        /// </summary>
+        float MotionError(float distance)
+            => _headSpeed * assumedFrameLatency
+             + distance * Mathf.Tan(_headAngSpeed * assumedFrameLatency * Mathf.Deg2Rad);
+
+        /// <summary>Bu tag, su anki hareket altinda guvenle olculebilir mi.</summary>
+        bool MotionOk(float distance)
+            => HeadSteady
+            && (motionErrorBudget <= 0f || MotionError(distance) <= motionErrorBudget);
 
         bool _intrinsicsLogged;
 
@@ -1732,8 +1803,9 @@ namespace VRMultiplayer
 
             // Kapi kapaliysa SOYLE. Yoksa oyuncu tag'e bakip hicbir sey olmamasini
             // "sistem bozuk" diye yorumlar; oysa kasitli olarak bekliyoruz.
-            if (!HeadSteady)
-                p.Append($"BEKLE — kafa hareketli ({_headSpeed:0.00} m/sn, {_headAngSpeed:0} der/sn)\n");
+            if (seen && !MotionOk(_lastDistance))
+                p.Append($"BEKLE — hareket hatasi {MotionError(_lastDistance) * 100f:0.0} cm" +
+                         $"  ({_headSpeed:0.00} m/sn, {_headAngSpeed:0} der/sn)\n");
 
             if (autoCalibrate && !string.IsNullOrEmpty(_calibNote)) p.Append(_calibNote + "\n");
 
