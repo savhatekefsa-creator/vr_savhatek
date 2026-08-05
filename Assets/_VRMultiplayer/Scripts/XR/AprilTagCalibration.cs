@@ -408,7 +408,6 @@ namespace VRMultiplayer
             float bestDist = float.MaxValue;
             Vector3 bestPos = Vector3.zero;
             Quaternion bestRot = Quaternion.identity;
-            _checkDist = float.MaxValue;   // her turda yeniden secilir
             _nearestId = -1;
             _nearestDist = float.MaxValue;
 
@@ -462,18 +461,11 @@ namespace VRMultiplayer
                         bestRot = worldRot;
                     }
 
-                    // KAPALI tag'in de sapmasi OLCULUR, sadece uygulanmaz. Yoksa yeni bir tag'i
-                    // dogrulamak imkansiz olurdu: plakanin kaydigini gorursun ama NE KADAR
-                    // kaydigini bilemezsin, dolayisiyla yerlesimi duzeltemezsin.
-                    // Duzeltme acik tag'den geldigi icin bu sayi guvenilir bir cerçevede olculur.
-                    if (entry != null && !entry.useForCalibration && dist < _checkDist)
-                    {
-                        _checkId = entry.id;
-                        _checkDist = dist;
-                        _checkDelta = entry.position - worldPos;
-                        _checkYawDev = Mathf.DeltaAngle(YawOf(worldRot), entry.yawDegrees);
-                        _hasCheck = true;
-                    }
+                    // KAPALI tag KONTROLU KALDIRILDI. Yeni bir tag'i dogrulamak icin konulmustu:
+                    // "plaka kaymis ama NE KADAR" sorusunu cevapliyordu. Yerini dokunus yontemi
+                    // aldi — artik sapmayi olcup elle duzeltmiyoruz, konumu dogrudan kumandadan
+                    // yaziyoruz. Panel sadelestiginde gosterimi kalkti, hesap ise her tespitte
+                    // calismaya devam ediyordu: olu kod.
                 }
             }
 
@@ -518,20 +510,10 @@ namespace VRMultiplayer
         // yerlesimdeki degerlerinin BIRBIRIYLE uyusmazligi. Test C'nin sayisal karsiligi.
         Transform _rightHandDiag;   // sag kumanda — dokunus ve zemin olcumu (TickTouch/TickFloor)
 
-        // KAPALI tag olcumu: useForCalibration=0 olan tag'in yerlesim degerinden ne kadar
-        // saptigi. Rig'e dokunmaz, yalnizca panelde gosterilir — yeni tag'in yerlesimini
-        // duzeltmek icin gereken sayi budur.
-        Vector3 _checkDelta;
-        float _checkYawDev, _checkDist = float.MaxValue;
-        int _checkId = -1;
-        bool _hasCheck;
-
         Vector3 _switchDelta;
         float _switchYawDev;
         int _switchFrom = -1, _switchTo = -1;
         bool _switchPending, _hasSwitch;
-        float _diagYawMeasured, _diagYawExpected, _diagYawDev;
-        bool _diagValid;
 
 
         Transform _rig;
@@ -601,10 +583,6 @@ namespace VRMultiplayer
             // TESHIS: eksen bazli sapma. Duzeltme yapilsin yapilmasin yazilir — "duzeltti ama
             // kapanmadi" durumunu ancak duzeltme sonrasi deger okunarak gorulur.
             _diagDelta = entry.position - avgPos;
-            _diagYawMeasured = avgYaw;
-            _diagYawExpected = entry.yawDegrees;
-            _diagYawDev = yawDev;
-            _diagValid = true;
 
             // Gecisten sonraki ILK olcum: iki tag'in uyusmazligi. Duzeltme uygulanmadan
             // once yakalanir ve KALICI durur — oyuncunun okumaya vakti olsun.
