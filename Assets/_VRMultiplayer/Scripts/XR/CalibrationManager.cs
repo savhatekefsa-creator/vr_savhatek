@@ -305,7 +305,8 @@ namespace VRMultiplayer
             // yalnizca log'a giderdi; gozlukte Console olmadigi icin oyuncu HICBIR SEY gormez
             // ve "kalibre olmus gibi" sanip yanlis cerceveyle oynardi (yasanmis).
             if (status == null)
-                status = UI.HeadFollowPanel.Create("Calibration Panel", "", Color.white);
+                // "~": kalibrasyon durumunu ve "yeniden kalibre: SOL Y" talimatini tasiyor.
+                status = UI.HeadFollowPanel.Create("~Calibration Panel", "", Color.white);
 
             status.gameObject.SetActive(true);
             status.text = s;

@@ -94,7 +94,13 @@ namespace VRMultiplayer
         void EnsureJoinPanel()
         {
             if (statusLabel != null) return;
-            statusLabel = UI.HeadFollowPanel.Create("Join Panel",
+            // "~" ONEKI SART: ConstructorPassthrough.HideVirtualWorld cizen TUM kok objeleri
+            // gizliyor ve bu panel kok bir obje. Passthrough acikken panel kayboluyor, oyuncu
+            // da oyuna nasil katilacagini gosteren tek yazidan oluyor — ilerlemenin onunde
+            // duran bir UI'nin gizlenebilir olmasi kabul edilemez.
+            //
+            // Yasandi: passthrough acilista devreye girdi, "B TUSUNA BAS" hic gorunmedi.
+            statusLabel = UI.HeadFollowPanel.Create("~Join Panel",
                 "OYUNA KATILMAK ICIN\nB TUSUNA BAS", Color.white);
         }
 

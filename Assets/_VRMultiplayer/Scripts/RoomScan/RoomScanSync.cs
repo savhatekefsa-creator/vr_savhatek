@@ -341,7 +341,7 @@ namespace VRMultiplayer
         void Show(string text, float hideAfter = -1f)
         {
             if (_panel == null)
-                _panel = UI.HeadFollowPanel.Create("Room Scan Panel", "", new Color(0.5f, 1f, 0.6f));
+                _panel = UI.HeadFollowPanel.Create("~Room Scan Panel", "", new Color(0.5f, 1f, 0.6f));
             _panel.gameObject.SetActive(true);
             _panel.text = text;
             _hidePanelAt = hideAfter > 0f ? Time.time + hideAfter : -1f;

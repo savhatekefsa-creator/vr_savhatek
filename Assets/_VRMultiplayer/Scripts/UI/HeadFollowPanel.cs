@@ -34,6 +34,20 @@ namespace VRMultiplayer.UI
         /// <summary>Standart panel fabrikasi: TextMesh ayarlari (0.16 olcek, 0.1 karakter,
         /// 60 punto, ortali) tek yerde. Donen TextMesh'in text/renk alanlari sonradan
         /// degistirilebilir; takip bileseni otomatik takilidir.</summary>
+        /// <summary>
+        /// Kafayi takip eden bir yazi paneli olusturur.
+        ///
+        /// AD "~" ILE BASLAMALI (oyuncunun EYLEM yapmasi gereken paneller icin):
+        /// ConstructorPassthrough.HideVirtualWorld, passthrough acilinca cizen TUM kok
+        /// objeleri gizler ve bu paneller kok objedir. Oneksiz birakilan bir panel, passthrough
+        /// acikken kaybolur.
+        ///
+        /// Yasandi: "OYUNA KATILMAK ICIN B TUSUNA BAS" paneli passthrough acilista devreye
+        /// girince hic gorunmedi — oyuncu oyuna nasil gireceğini gosteren tek yazidan oldu.
+        ///
+        /// Salt teshis panelleri (Avatar Fit Debug gibi) oneksiz kalabilir; onlarin insa
+        /// modunda gizlenmesi zaten istenen davranis.
+        /// </summary>
         public static TextMesh Create(string name, string text, Color color)
         {
             var go = new GameObject(name);

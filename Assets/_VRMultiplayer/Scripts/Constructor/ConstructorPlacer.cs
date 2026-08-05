@@ -1333,7 +1333,11 @@ namespace VRMultiplayer.Constructor
         void Show(string text, float hideAfter = -1f)
         {
             if (_panel == null)
-                _panel = HeadFollowPanel.Create("Constructor Panel", "", new Color(0.5f, 0.9f, 1f));
+                // "~": insa modunun kendi UI'si. Passthrough tam da insa modunda aciliyor,
+                // yani oneksiz birakmak "aleti kullanirken aletin gostergesini gizlemek" olurdu.
+                // Su an yalnizca olusturma SIRASI sayesinde kurtuluyor (HideVirtualWorld
+                // etkinlestigi ANDAKI kok objeleri gizliyor) — kirilgan bir tesaduf.
+                _panel = HeadFollowPanel.Create("~Constructor Panel", "", new Color(0.5f, 0.9f, 1f));
             _panel.gameObject.SetActive(true);
             _panel.text = text;
             _hidePanelAt = hideAfter > 0f ? Time.time + hideAfter : -1f;
@@ -1351,7 +1355,7 @@ namespace VRMultiplayer.Constructor
         void EnsureStatusPanel()
         {
             if (_status != null) return;
-            _status = HeadFollowPanel.Create("Constructor Status", "", new Color(0.75f, 0.95f, 1f));
+            _status = HeadFollowPanel.Create("~Constructor Status", "", new Color(0.75f, 0.95f, 1f));
             var follow = _status.GetComponent<HeadFollowPanel>();
             follow.distance = 1.1f;
             follow.heightOffset = -0.45f;   // goz hizasinin ALTINDA: nisan aldigin yeri kapatmasin
