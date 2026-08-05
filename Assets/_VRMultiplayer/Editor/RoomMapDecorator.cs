@@ -740,9 +740,9 @@ namespace VRMultiplayer.EditorTools
                 var mr = masa.GetComponent<MeshRenderer>();
                 if (mr != null) { mr.sharedMaterial = mats.crate; n++; }
             }
-            // Kapi ic kosesinde capraz pusu paneli. Kapidan ~0.4 m iceride: daha yakini kapi
-            // gecidini navmesh vokselinde daraltiyor (kapi 1.1 m, ajan capi 0.5 m).
-            n += Place(PaintballPrefab("Wood_Modular_8"), props, new Vector3(0.70f, 0.02f, 1.10f), 135f,
+            // Capraz pusu paneli. Konum kullanicinin ELLE ayari (2026-08-05, sahnede tasidi):
+            // kapinin degil masanin guney hattini tutuyor — degistirirken ona sor.
+            n += Place(PaintballPrefab("Wood_Modular_8"), props, new Vector3(1.615f, 0.02f, 0.185f), 135f,
                 Vector2.zero, 0f) ? 1 : 0;
 
             // --- Koridor: SADECE gorsel duvar panolari. Cikinti yapan siper koridoru navmesh
@@ -753,9 +753,10 @@ namespace VRMultiplayer.EditorTools
 
             // --- Guney oda (B dogusu) ---
             // Bariyer girisin DIBINE degil oda ortasina: giristeki dirsek vokselde kapaniyordu
-            // (olculdu: PathPartial 2.3 m'de kesildi). Burada giris->dogus nisan hattini yine
-            // keser, iki yaninda da >0.6 m gecis kalir.
-            n += Place(PaintballPrefab("Barrier_1"), props, new Vector3(-1.35f, 0.03f, -4.90f), 90f,
+            // (olculdu: PathPartial 2.3 m'de kesildi). Konum + yukseklik kullanicinin ELLE
+            // ayari (2026-08-05): pos.y 0.154 -> dunya y 0.19 (taban oturtma 0.124 dusuyor),
+            // kullanici bariyeri bilerek 12 cm kaldirdi.
+            n += Place(PaintballPrefab("Barrier_1"), props, new Vector3(-1.224f, 0.154f, -4.536f), 90f,
                 new Vector2(0.85f, 0f), 1.00f) ? 1 : 0;
             n += Place(LokitPrefab("Vegetation/Bush_02"), props, new Vector3(-0.50f, 0.03f, -5.85f), 70f,
                 new Vector2(1.20f, 0f), 1.00f) ? 1 : 0;
