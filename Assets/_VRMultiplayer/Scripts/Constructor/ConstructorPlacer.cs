@@ -612,12 +612,28 @@ namespace VRMultiplayer.Constructor
 #endif
 
             bool place = Edge(PlaceHeld(), ref _prevTrigger) && !paletteOpen;
-            if (place && _hasCursor && _valid)
+            if (place)
             {
-                // Online'da true yalnizca "istek yola cikti" demek — prop, sunucunun yayini
-                // gelince belirir. Yerel red (dolu hucre / prefabsiz prop) false doner.
-                if (!Session.TryPlace(def, _minCell, _placeLevel, _placeRot, _widthPct, _heightPct))
+                // SESSIZ RED YOK. Eskiden kosul "place && _hasCursor && _valid" idi: gecersiz
+                // bir konumda tetige basmak HICBIR SEY yapmiyordu — ne yerlestirme, ne log, ne
+                // de bir aciklama. Oyuncu tetige basip duruyor ve neden olmadigini bilmiyordu.
+                // Cihazda yasandi: masa yerlestirilemedi, sebep hicbir yerde yazmiyordu.
+                if (!_hasCursor)
+                {
+                    Show("YERLESTIRILEMEZ\n\nImlec bir yuzeye bakmiyor", 2f);
+                }
+                else if (!_valid)
+                {
+                    Show("YERLESTIRILEMEZ\n\nHucreler dolu ya da alan disi.\n" +
+                         "Baska yere bak, [ ile daralt,\nya da KAT degistir.", 3f);
+                }
+                else if (!Session.TryPlace(def, _minCell, _placeLevel, _placeRot, _widthPct, _heightPct))
+                {
+                    // Online'da true yalnizca "istek yola cikti" demek — prop, sunucunun yayini
+                    // gelince belirir. Yerel red (dolu hucre / prefabsiz prop) false doner.
+                    Show("YERLESTIRILEMEZ\n\nIstek reddedildi (Console'a bak)", 3f);
                     Debug.LogWarning("[Constructor] Yerlestirme reddedildi (hucreler dolu olabilir).");
+                }
             }
 
             if (Edge(UndoHeld(), ref _prevUndo) && !paletteOpen)
