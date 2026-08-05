@@ -79,6 +79,19 @@ namespace VRMultiplayer.UI
             if (_title != null) _title.text = text;
         }
 
+        /// <summary>
+        /// Yalnizca HAVUZDAKI haritalari goster. Oyuncu modunda mac haritasi secilirken
+        /// kullaniliyor: havuz disi bir harita oynanabilir degil, listede durmasi yalnizca
+        /// "neden secemiyorum" sorusunu doguracakti.
+        /// </summary>
+        public void SetPoolOnly(bool on)
+        {
+            _poolOnly = on;
+            Rebuild();
+        }
+
+        bool _poolOnly;
+
         void Awake()
         {
             UITheme.MakeOutlined(transform, "Backdrop", Vector2.zero,
@@ -121,7 +134,26 @@ namespace VRMultiplayer.UI
         /// yaziliyor: menu her kare cizilmiyor, ve "eski satiri guncellemeyi unutma" hatasi
         /// listelerde en kolay yapilan hata.
         /// </summary>
-        void Rebuild()
+        /// <summary>
+        /// Yeniden kurulmayi ISTER — is bir sonraki LateUpdate'te, kare basina BIR kez yapilir.
+        ///
+        /// NEDEN ERTELENIYOR: kurulus karesinde uc kez cagriliyor (Awake, OnEnable, SetPoolOnly)
+        /// ve Destroy Unity'de KARE SONUNA erteleniyor. Hepsi ayni karede kosunca eski satirlar
+        /// henuz olmemis oluyor ve liste ucleniyordu. Kirli bayragi hepsini tek kuruluma
+        /// indiriyor; arada gecen tek kare panelin bos gorunmesinden ibaret.
+        /// </summary>
+        void Rebuild() => _needsBuild = true;
+
+        bool _needsBuild;
+
+        void LateUpdate()
+        {
+            if (!_needsBuild) return;
+            _needsBuild = false;
+            BuildNow();
+        }
+
+        void BuildNow()
         {
             foreach (var t in _built) if (t != null) Destroy(t.gameObject);
             _built.Clear();
@@ -129,14 +161,18 @@ namespace VRMultiplayer.UI
             _hoverIdx = -1;
             if (_hover != null) _hover.gameObject.SetActive(false);
 
-            var all = MapCatalog.All;
+            var all = new List<MapCatalog.Entry>();
+            foreach (var e in MapCatalog.All)
+                if (!_poolOnly || e.inPool) all.Add(e);
+
             int pages = Mathf.Max(1, (all.Count + RowsPerPage - 1) / RowsPerPage);
             _page = Mathf.Clamp(_page, 0, pages - 1);
 
             if (all.Count == 0)
             {
                 Add(UITheme.MakeText(transform,
-                    "Kayıtlı harita yok.\nYENİ ile bir tane tasarla.",
+                    _poolOnly ? "Havuzda oynanabilir harita yok."
+                              : "Kayıtlı harita yok.\nYENİ ile bir tane tasarla.",
                     Muted, EmptySize, TextAnchor.MiddleCenter, QText).transform,
                     new Vector3(0f, 0f, ZText));
             }

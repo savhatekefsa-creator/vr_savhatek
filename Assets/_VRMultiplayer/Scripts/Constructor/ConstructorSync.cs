@@ -377,6 +377,55 @@ namespace VRMultiplayer.Constructor
         /// <summary>Last save result from the server; the placer shows it once and clears it.</summary>
         public static string SaveMessage { get; set; }
 
+        // ------------------------------------------------------- mac haritasi secimi (Serit 3)
+
+        /// <summary>
+        /// Sunucu "haritayi sen sec" dedi. <see cref="UI.PlayerFlowUI"/> bunu gorup havuz
+        /// listesini acar. Statik + yoklamali: RPC istemcide rastgele bir karede duser, arayuz
+        /// ise kendi dongusunde yasar (PendingMessage ile ayni kalip).
+        /// </summary>
+        public static bool MapChoiceRequested { get; set; }
+
+        [Rpc(SendTo.Owner)]
+        void ChooseMapOwnerRpc() => MapChoiceRequested = true;
+
+        /// <summary>Istemci: "mac bu haritada gecsin".</summary>
+        public static bool ClientPickMatchMap(string mapName)
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.PickMatchMapServerRpc(mapName);
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void PickMatchMapServerRpc(string mapName, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null) return;
+
+            // ILK SECEN KAZANIR. Iki oyuncu ayni anda sectiyse ikincisinin secimi YOK SAYILIR ve
+            // ona acik harita yollanir — mac tek harita uzerinde gecmeli, "sonradan gelen
+            // herkesi tasir" olsaydi devam eden mac ayaginin altindan kayardi.
+            if (Session.IsActive) { StartCoroutine(SendLayout(false)); return; }
+
+            var e = MapCatalog.Find(mapName);
+            if (e == null || !e.inPool)
+            {
+                NoLayoutOwnerRpc($"'{mapName}' havuzda yok.");
+                return;
+            }
+
+            if (!Session.OpenExisting(mapName))
+            {
+                NoLayoutOwnerRpc(Session.NotStartedReason);
+                return;
+            }
+
+            Debug.Log($"[ConstructorSync] Mac haritasi secildi: '{mapName}' (istemci {OwnerClientId}).");
+            StartCoroutine(SendLayout(true));   // secimi HERKESE yay
+        }
+
         // ------------------------------------------------------------- katalog (Serit 2)
         //
         // HARITALAR PC'DE YASAR, TASARIM GOZLUKTE YAPILIR. Gozluk kendi diskindeki listeyi
@@ -613,9 +662,19 @@ namespace VRMultiplayer.Constructor
             // KESIN KONTROL DE BURASI: gozluk havuz durumunu kesif yayinindan ogreniyor ve o
             // bir IPUCU — yayinla katilim arasinda son harita havuzdan cikarilmis olabilir.
             // Ipucuna guvenip sessizce bos bir dunyaya birakmak yerine sebebini soyluyoruz.
-            if (Session != null && !Session.IsActive && !Session.EnsureMatchMap())
+            if (Session != null && !Session.IsActive)
             {
-                NoLayoutOwnerRpc("Sunucunun havuzunda oynanabilir harita kalmamis.");
+                if (MapCatalog.PoolIsEmpty)
+                {
+                    NoLayoutOwnerRpc("Sunucunun havuzunda oynanabilir harita kalmamis.");
+                    yield break;
+                }
+
+                // HARITAYI OYUNCU SECER, rastgele degil. Ilk giren havuzdan secer; secim
+                // yapilinca oturum acilir ve SONRAKI oyuncular bu daldan hic gecmez — dogrudan
+                // acik haritayi alirlar. Herkesin ayri secmesi ayni macta farkli haritalar
+                // demekti.
+                ChooseMapOwnerRpc();
                 yield break;
             }
 

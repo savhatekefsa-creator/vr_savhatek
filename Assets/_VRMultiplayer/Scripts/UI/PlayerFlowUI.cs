@@ -32,6 +32,7 @@ namespace VRMultiplayer.UI
         const float RecenterAngle = 35f, RecenterSpeed = 6f;
 
         ConfirmPanel _warn;
+        MapListPanel _mapList;
         VRPointer _pointer;
         NetworkDiscovery _discovery;
 
@@ -56,7 +57,26 @@ namespace VRMultiplayer.UI
             if (!AppMode.IsPlayer) { Destroy(gameObject); return; }
 
             if (_warn != null) { Place(_warn.transform); _warn.Tick(_pointer); return; }
-            if (_handedOff) return;
+
+            // 2. EVRE — MAC HARITASI. Giris ekranindan sonra sunucu "haritayi sen sec" diyebilir:
+            // macin haritasi HENUZ secilmemis demektir. Secim yapilinca sunucu haritayi herkese
+            // yayiyor, sonradan katilan bu evreden hic gecmiyor (bkz. ConstructorSync).
+            if (_handedOff)
+            {
+                if (_mapList != null)
+                {
+                    // Harita bu arada geldiyse (baska oyuncu sectiyse) secim ekrani anlamsiz.
+                    var s = ConstructorSession.Instance;
+                    if (s != null && s.IsActive) { CloseMapList(); return; }
+
+                    Place(_mapList.transform);
+                    _mapList.Tick(_pointer);
+                    return;
+                }
+
+                if (ConstructorSync.MapChoiceRequested) OpenMapChooser();
+                return;
+            }
 
             // SUNUCUNUN KENDISI: havuz elinin altinda, aramaya gerek yok.
             var nm = NetworkManager.Singleton;
@@ -94,17 +114,66 @@ namespace VRMultiplayer.UI
             if (Time.unscaledTime >= _searchUntil) ShowNoServer();
         }
 
-        void OnDestroy() => CloseWarning();
+        void OnDestroy()
+        {
+            CloseWarning();
+            CloseMapList();
+        }
 
         // ------------------------------------------------------------- ekranlar
 
-        /// <summary>Giris ekranini ac ve kenara cekil — bundan sonrasi onun isi.</summary>
+        /// <summary>
+        /// Giris ekranini ac. AKIS BURADA BITMIYOR: oyuncu isim + takimi onaylayip baglandiktan
+        /// sonra sunucu harita secimi isteyebilir, o da bu bilesenin isi (2. evre).
+        /// </summary>
         void HandOff()
         {
             _handedOff = true;
             CloseWarning();
             PlayerEntryUI.Create();
-            Destroy(gameObject);
+        }
+
+        // ------------------------------------------------------------- mac haritasi secimi
+
+        void OpenMapChooser()
+        {
+            ConstructorSync.MapChoiceRequested = false;
+            EnsurePointer();
+
+            // Liste sunucudan gelir; istek simdi gidiyor, panel MapCatalog.Changed ile dolar.
+            MapCatalog.Refresh();
+
+            var go = new GameObject("Match Map List");
+            go.transform.SetParent(transform, false);
+            _mapList = go.AddComponent<MapListPanel>();
+            _mapList.SetTitle("HARİTA SEÇ");
+            _mapList.SetPoolOnly(true);
+            _mapList.Picked += OnMatchMapPicked;
+
+            // GERI = maca girmekten vazgec. Harita secmeden mac baslamaz, o yuzden tek anlamli
+            // cikis ana menu.
+            _mapList.Back += () => AppMode.ReturnToModeSelect();
+
+            _placed = false;
+            _recentering = false;
+        }
+
+        void OnMatchMapPicked(string mapName)
+        {
+            CloseMapList();
+
+            if (ConstructorSync.ClientPickMatchMap(mapName)) return;
+
+            // Istek gidemedi (baglanti dustu): sebebi soyle, sessizce bos ekranda birakma.
+            ShowNoServer();
+        }
+
+        void CloseMapList()
+        {
+            if (_mapList == null) return;
+            _mapList.Picked -= OnMatchMapPicked;
+            Destroy(_mapList.gameObject);
+            _mapList = null;
         }
 
         void ShowEmptyPool()

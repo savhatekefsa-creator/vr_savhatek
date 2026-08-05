@@ -123,13 +123,28 @@ namespace VRMultiplayer.Constructor
         /// The map belongs to the server: a client writing its own copy leaves a file nobody
         /// reads and that the next sync invalidates. Offline — no NetworkManager, or one that
         /// has not started — the local peer is the only peer, so it owns it.
+        ///
+        /// GOZLUK BU KURALIN DISINDA: haritalar PC'de yasiyor, gozlukte hicbir zaman degil.
+        /// "Baglanti yoksa sahip benim" kurali gozlukte SESSIZ VERI KAYBI uretiyordu: ekranda
+        /// sunucudan gelmis liste duruyor, ama baglanti dustugu anda silme/kaydetme gozlugun
+        /// kendi bos klasorune uygulaniyor. Silinen harita PC'de oldugu gibi kaliyor (sonraki
+        /// acilista "geri gelmis" gorunuyor), yeni yapilan harita ise hicbir yere ulasmiyor.
+        /// Sahiplik yerine islem BASARISIZ olmali — cagiran taraf sebebi soyleyebilsin.
+        ///
+        /// Editor bu kuralin disinda tutuldu: PC'de sunucu baslatmadan harita duzenlemek
+        /// gelistirmenin normal yolu.
         /// </summary>
         public static bool IsMapAuthority
         {
             get
             {
                 var net = Unity.Netcode.NetworkManager.Singleton;
-                return net == null || !net.IsClient || net.IsServer;
+                if (net != null && net.IsServer) return true;
+#if UNITY_ANDROID && !UNITY_EDITOR
+                return false;
+#else
+                return net == null || !net.IsClient;
+#endif
             }
         }
 
