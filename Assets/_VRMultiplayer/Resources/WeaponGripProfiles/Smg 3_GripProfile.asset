@@ -15,7 +15,7 @@ MonoBehaviour:
   weaponNameEquals: Smg 3
   weaponNameContains: Smg 3
   gripLocalPosition: {x: -0.0562, y: 0.0811, z: 0.1558}
-  gripLocalEuler: {x: 316.15982, y: 225.20894, z: 342.9766}
+  gripLocalEuler: {x: 308.1529, y: 221.09744, z: 331.83618}
   barrelLocalDirection: {x: 0, y: 0, z: -1}
   combat: {fileID: 11400000, guid: 6f17c5c0294146cfb27a14aca64d874e, type: 2}
   mainHand:

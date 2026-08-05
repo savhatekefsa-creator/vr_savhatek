@@ -15,7 +15,7 @@ MonoBehaviour:
   weaponNameEquals: Rifle 3
   weaponNameContains: Rifle 3
   gripLocalPosition: {x: -0.0364, y: 0.1055, z: 0.1505}
-  gripLocalEuler: {x: 320.7066, y: 237.65887, z: 346.48453}
+  gripLocalEuler: {x: 310.0967, y: 223.71384, z: 328.46442}
   barrelLocalDirection: {x: -0, y: -0, z: -1}
   combat: {fileID: 11400000, guid: f6ce416af5394bec8817bddd35069348, type: 2}
   mainHand:
