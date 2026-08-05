@@ -68,13 +68,14 @@ namespace VRMultiplayer.Constructor
         {
             Spawned.Add(this);
 
-            // Sunucu, YENI katilan oyuncuya mevcut haritayi yollar. Bu obje o oyuncunun
-            // objesi oldugu icin "gec katilim" tam da burasi — ama gonderme, istemci
-            // senkronunu bitirene kadar bekler (bkz. SendLayoutToOwner).
+            // Sunucu, YENI katilan oyuncuyu karsilar: gerekiyorsa harita sectirir, degilse
+            // devam eden macin haritasini yollar. Bu obje o oyuncunun objesi oldugu icin
+            // "katilim" tam da burasi — ama her sey istemci senkronunu bitirene kadar bekler
+            // (bkz. JoinFlow).
             if (IsServer)
             {
                 HookClientReady(NetworkManager);
-                StartCoroutine(SendLayoutToOwner());
+                StartCoroutine(JoinFlow());
             }
         }
 
@@ -666,6 +667,58 @@ namespace VRMultiplayer.Constructor
         /// </summary>
         IEnumerator SendLayoutToOwner() => SendLayout(false);
 
+        /// <summary>
+        /// Istemcinin sahne senkronunu bitirmesini bekler. BAGLANTI ONAYININ ORTASINA RPC
+        /// SOKMAMAK icin: OnNetworkSpawn, Netcode'un HandleConnectionApproval'inin TAM
+        /// ORTASINDA cagriliyor — oyuncu objesi dogdu ama sahne senkron paketi henuz yazilmadi.
+        /// Araya RPC sikistirmak o paketi bozuyor ve istemci HIC baglanamiyor.
+        /// </summary>
+        IEnumerator WaitUntilClientReady()
+        {
+            float deadline = Time.time + 20f;
+            while (Time.time < deadline && !ReadyClients.Contains(OwnerClientId))
+                yield return null;
+
+            if (!ReadyClients.Contains(OwnerClientId))
+                Debug.LogWarning($"[ConstructorSync] Istemci {OwnerClientId} 20 sn icinde senkron " +
+                                 "olmadi — harita gonderilmedi. Insa moduna girince yeniden istenir.");
+        }
+
+        /// <summary>
+        /// KATILIM AKISI — yalnizca oyuncu objesi dogarken. Harita secimi BURAYA ait, genel
+        /// gonderme yoluna degil.
+        ///
+        /// Once secim mantigi <see cref="SendLayout"/> icindeydi ve YARATICI AKISI KIRIYORDU:
+        /// tasarimci "yeni harita" deyince sunucu haritayi kuruyor, ama gonderme yolu ayni
+        /// daldan gecip "haritayi sen sec" deyip cikiyordu. Gozluk haritayi hic almiyor ve
+        /// "Sunucudan harita bekleniyor..." ekraninda kaliyordu.
+        ///
+        /// Ayrim basit: SendLayout "elindekini yolla" demek; secim ise yalnizca yeni bir oyuncu
+        /// maca girerken sorulacak bir sey.
+        /// </summary>
+        IEnumerator JoinFlow()
+        {
+            if (OwnerClientId == NetworkManager.ServerClientId) yield break;
+
+            yield return WaitUntilClientReady();
+            if (!ReadyClients.Contains(OwnerClientId)) yield break;   // uyari iceride yazildi
+
+            // Bu macin haritasi secilmediyse SECTIR. Secildiyse hicbir sey sorulmaz: oyuncu
+            // devam eden maca girer (bkz. MatchMapChosen).
+            if (Session != null && !MatchMapChosen)
+            {
+                if (MapCatalog.PoolIsEmpty)
+                {
+                    NoLayoutOwnerRpc("Sunucunun havuzunda oynanabilir harita kalmamis.");
+                    yield break;
+                }
+                ChooseMapOwnerRpc();
+                yield break;
+            }
+
+            yield return SendLayout(false);
+        }
+
         /// <param name="toAll">
         /// true ise harita BUTUN istemcilere gider. Gec katilimda yalnizca yeni gelene
         /// yollamak yeter; ama harita DEGISTIGINDE (yeni harita, baska harita acildi,
@@ -689,39 +742,8 @@ namespace VRMultiplayer.Constructor
             // Harita artik acilista kuruldugundan (ConstructorSession.BuildForPlay) oturum
             // ilk kareden itibaren ACIK ve donguye hic girilmiyordu — yani "gonderme sonra olur"
             // bir kural degil, tesadufmus. Simdi kural.
-            float readyDeadline = Time.time + 20f;
-            while (Time.time < readyDeadline && !ReadyClients.Contains(OwnerClientId))
-                yield return null;
-
-            if (!ReadyClients.Contains(OwnerClientId))
-            {
-                Debug.LogWarning($"[ConstructorSync] Istemci {OwnerClientId} 20 sn icinde senkron " +
-                                 "olmadi — harita gonderilmedi. Insa moduna girince yeniden istenir.");
-                yield break;
-            }
-
-            // HARITA SECIMI TAM BURADA. Oyuncu isim + takim ekranini gecti ve baglandi; sema
-            // secimi bu andan sonraya koyuyor. Sunucu acik bir oturum varsa dokunmaz (devam
-            // eden mac), yoksa havuzdan secip kurar.
-            //
-            // KESIN KONTROL DE BURASI: gozluk havuz durumunu kesif yayinindan ogreniyor ve o
-            // bir IPUCU — yayinla katilim arasinda son harita havuzdan cikarilmis olabilir.
-            // Ipucuna guvenip sessizce bos bir dunyaya birakmak yerine sebebini soyluyoruz.
-            if (Session != null && !MatchMapChosen)
-            {
-                if (MapCatalog.PoolIsEmpty)
-                {
-                    NoLayoutOwnerRpc("Sunucunun havuzunda oynanabilir harita kalmamis.");
-                    yield break;
-                }
-
-                // HARITAYI OYUNCU SECER, rastgele degil. Ilk giren havuzdan secer; secim
-                // yapilinca oturum acilir ve SONRAKI oyuncular bu daldan hic gecmez — dogrudan
-                // acik haritayi alirlar. Herkesin ayri secmesi ayni macta farkli haritalar
-                // demekti.
-                ChooseMapOwnerRpc();
-                yield break;
-            }
+            yield return WaitUntilClientReady();
+            if (!ReadyClients.Contains(OwnerClientId)) yield break;
 
             // Oturum henuz acilmamis olabilir (oda taramasi gelmemis) — bir sure bekle.
             float deadline = Time.time + 10f;
