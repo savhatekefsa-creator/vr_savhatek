@@ -668,7 +668,7 @@ namespace VRMultiplayer
             }
 
             _alignedNow = false;       // duzeltme gerekiyor -> tespit hizlansin
-            ApplyCorrection(entry, avgPos, avgYaw, dev, yawCounts);
+            ApplyCorrection(entry, avgPos, avgYaw, dev, yawCounts, distance);
 
             // Rig oynadi: pencere artik eski cerceveye ait, temizle — yeni cercevede dolsun.
             _calibPos.Clear(); _calibYaw.Clear();
@@ -682,7 +682,7 @@ namespace VRMultiplayer
         /// tag'in duzeltmesini eziyordu).
         /// </summary>
         void ApplyCorrection(TagEntry entry, Vector3 measuredPos, float measuredYaw, float dev,
-                             bool applyYaw)
+                             bool applyYaw, float distance)
         {
             if (_cm == null) _cm = FindFirstObjectByType<CalibrationManager>();
             if (_rig == null)
@@ -723,14 +723,20 @@ namespace VRMultiplayer
             string px = _seenPixel.TryGetValue(entry.id, out Vector2 pc)
                 ? $"  px {pc.x:0},{pc.y:0}" : "";
 
+            // MESAFE de yazilir: acisal hata mesafeyle CARPILARAK konum hatasina donusur,
+            // konumsal/referans hatasi ise mesafeden BAGIMSIZDIR. Ikisini ayirt etmenin tek
+            // yolu ayni tag'i farkli mesafelerden olcup sapmanin olcekleneip olceklenmedigine
+            // bakmak. "sapma/mesafe" orani sabitse acisal, "sapma" sabitse konumsal.
+            string dm = $"  d {distance:0.00} m  sapma/d {dev / Mathf.Max(0.01f, distance) * 100f:0.0} cm/m";
+
             if (snap)
             {
-                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}");
+                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}");
             }
             else if (Time.time >= _nextStateDiagAt)
             {
                 _nextStateDiagAt = Time.time + 5f;
-                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}");
+                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}");
             }
 
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
