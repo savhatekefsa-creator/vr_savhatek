@@ -153,6 +153,23 @@ namespace VRMultiplayer.Weapons
             var nm = NetworkManager.Singleton;
             if (nm == null || !nm.IsServer || nm.CustomMessagingManager == null) return;
             _serverVersion++;
+
+            // ADANMIS SUNUCUDA ALICI OLMAYABILIR: LanBootstrap StartServer() cagiriyor
+            // (StartHost degil), yani sunucunun kendisi bir istemci DEGIL ve kulaklik
+            // baglanana kadar ConnectedClientsIds bostur. Bos listeyle yayin yapmak NGO'da
+            // "clientIds is empty!" LogError'u bastiriyordu — Inspector'da bir savas ayarina
+            // her dokunuldugunda bir tane. Yayini atliyoruz; versiyon ve YEREL tazeleme
+            // surer, cunku sonradan baglanan istemci guncel seti zaten iki yoldan alir:
+            // OnClientConnected -> SendSetTo, ve istemcinin kendi pull'u (TickClient).
+            // Versiyonun yine de artmasi SART: gonderilen set o sayiyi tasir, atlanirsa
+            // istemci eski versiyon gorup guncellemeyi reddedebilir.
+            if (nm.ConnectedClientsIds.Count == 0)
+            {
+                WeaponConfigRegistry.RaiseUpdatedLocal();
+                Debug.Log($"[SilahConfig] Set v{_serverVersion} hazir — bagli istemci yok, yayin atlandi.");
+                return;
+            }
+
             string json = JsonUtility.ToJson(WeaponConfigRegistry.BuildSetFromResources(_serverVersion));
             using var w = new FastBufferWriter(1024, Allocator.Temp, 1 << 20);
             w.WriteValueSafe(json);
