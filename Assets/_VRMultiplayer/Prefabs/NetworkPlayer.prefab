@@ -2712,6 +2712,8 @@ GameObject:
   - component: {fileID: 7316377061070769038}
   - component: {fileID: 165688490942211547}
   - component: {fileID: 4936700139560549304}
+  - component: {fileID: 6708492322109053427}
+  - component: {fileID: 1328378670932764659}
   m_Layer: 0
   m_Name: NetworkPlayer
   m_TagString: Untagged
@@ -2852,6 +2854,16 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: 0
+  Kills:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  Deaths:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
 --- !u!114 &1316491334253135425
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2960,6 +2972,44 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Constructor.ConstructorSync
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &6708492322109053427
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5293397041292697250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a61438c7a1f8c8c40a06359427dddcdd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.GripDebugRig
+  showOverlay: 1
+  axisLength: 0.1
+  axisThickness: 0.004
+  aimMarkerDistance: 3
+  refreshInterval: 0.1
+  steadySpeed: 0.15
+  mode: 0
+  fileName: grip-olcum
+  saveHoldSeconds: 1.5
+--- !u!114 &1328378670932764659
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5293397041292697250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5fe8085800079114aab7a0075fab7262, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponGripTuner
+  tuning: 1
+  degreesPerSecond: 12
+  metersPerSecond: 0.05
+  stickDeadzone: 0.2
+  fileName: grip-tune
 --- !u!1 &5518199563869288857
 GameObject:
   m_ObjectHideFlags: 0
