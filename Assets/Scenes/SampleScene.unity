@@ -1557,6 +1557,8 @@ MonoBehaviour:
   useAnchorHold: 0
   calibWindowMaxGap: 2
   calibSwitchMargin: 0.3
+  calibStabilitySpread: 0.02
+  calibOutlierDistance: 0.15
   correctionYawDeadzoneDegrees: 0.4
   smallCorrectionRate: 0.25
   snapThresholdMeters: 0.1

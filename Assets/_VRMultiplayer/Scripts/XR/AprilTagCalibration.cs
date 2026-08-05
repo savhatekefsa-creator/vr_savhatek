@@ -218,6 +218,20 @@ namespace VRMultiplayer
                  "Cihazda goruldu: sayac 4'e kadar cikip sifirlaniyordu.")]
         public float calibSwitchMargin = 0.3f;
 
+        [Tooltip("Duzeltmeden once pencerenin ne kadar SIKI olmasi gerektigi (m).\n\n" +
+                 "Ornek SAYISI tek basina bir sey soylemez: ornekler birbirini tutmuyorsa " +
+                 "ortalamalari da tutmaz. Bu kapi sabit bekleme suresinden hem daha hizli " +
+                 "(ornekler kararliysa hemen gecer) hem daha guvenli (kararsizsa sayac dolsa " +
+                 "bile bekler). Mikro hareket sayaci sifirlamaz, yalnizca sacilmayi buyutur.")]
+        public float calibStabilitySpread = 0.02f;
+
+        [Tooltip("Pencere ortalamasindan bu kadar uzak bir olcum AYKIRI sayilir (m).\n\n" +
+                 "Cerceve degistiginin gercek isareti, yeni olcumun penceredekilerle taban " +
+                 "tabana zit cikmasidir — zaman esigi bunun yalnizca DOLAYLI gostergesiydi. " +
+                 "Tek aykiri ornek atlanir (bozuk tespit olabilir); ust uste ikisi gelirse " +
+                 "dunya gercekten oynamis demektir ve pencere atilir.")]
+        public float calibOutlierDistance = 0.15f;
+
         [Tooltip("Yaw icin olu bolge (derece).\n\n" +
                  "MESAFEDE BASKIN HATA BUDUR: yaw sapmasi tag'den uzaklastikca dogrusal olarak " +
                  "yer degistirmeye donusur. 1,5 derece 4 metrede 10 cm demek. Olculdu: iki " +
@@ -526,7 +540,31 @@ namespace VRMultiplayer
         readonly List<Vector3> _calibPos = new List<Vector3>();
         readonly List<float> _calibYaw = new List<float>();
         float _calibLastSampleAt = -999f;   // bkz. calibWindowMaxGap
+        int _outlierRun;                    // ust uste kac aykiri ornek geldi
         int _calibId = -1;
+
+        /// <summary>
+        /// Duzeltme icin gereken EN AZ ornek.
+        ///
+        /// Kalibre degilken 2: ilk duzeltme metre mertebesindedir, 3 mm'lik ornekleme hatasi
+        /// yaninda gurultu bile sayilmaz ve ortalama beklemek oyuncuyu bosuna oyalar.
+        /// Kalibreyken 5: duzeltmeler cm'ye iner, orada ortalama gercekten degerlidir.
+        ///
+        /// SAYIYI BUYUTMEK ISE YARAMAZ. Ortalama gurultuyu kok-N ile bastirir: 5 ornek 1 m'de
+        /// 3 mm'lik jitter'i 1,3 mm'ye indiriyor, zaten olu bolgenin (1 cm) coktan altinda.
+        /// 50 ornege cikmak 17 saniye bekletir ve karsiliginda ~1 mm kazandirir; bizi yakan
+        /// hata ise ortalamayla GECMEYEN sistematik hata. Kalite sayidan degil, asagidaki
+        /// kararlilik kapisindan gelir.
+        /// </summary>
+        int CalibNeed => CalibrationManager.Calibrated ? Mathf.Min(5, calibrateSampleCount) : 2;
+
+        /// <summary>Ilerleme cubugu: "[####------] 4/5".</summary>
+        static string ProgressBar(int have, int need)
+        {
+            int w = 10;
+            int f = need <= 0 ? w : Mathf.Clamp(Mathf.RoundToInt(w * have / (float)need), 0, w);
+            return "[" + new string('#', f) + new string('-', w - f) + $"] {have}/{need}";
+        }
         string _calibNote = "";
 
         // ---- TESHIS (gecici, sorun cozulunce kaldirilabilir) ------------------------------
@@ -602,6 +640,38 @@ namespace VRMultiplayer
             }
             _calibLastSampleAt = Time.time;
 
+            // AYKIRI ORNEK ELEMESI — zaman esiginden daha DOGRUDAN bir olcut.
+            //
+            // Zaman boslugu, "cerceve degismis olabilir"in DOLAYLI gostergesiydi: tag birkac
+            // saniye gorunmedi diye pencereyi atiyorduk, oysa hicbir sey degismemis de olabilir.
+            // Cerceve degistiginin GERCEK isareti, yeni olcumun penceredekilerle taban tabana
+            // zit cikmasidir. Onu dogrudan sinayabiliyoruz.
+            //
+            // Tek bir aykiri ornek pencereyi bozmaz (bozuk bir tespit olabilir); UST USTE
+            // gelirse dunya gercekten oynamis demektir ve pencere atilir.
+            if (_calibPos.Count > 0)
+            {
+                Vector3 m = Vector3.zero;
+                foreach (var q in _calibPos) m += q;
+                m /= _calibPos.Count;
+
+                if (Vector3.Distance(worldPos, m) > calibOutlierDistance)
+                {
+                    if (++_outlierRun >= 2)
+                    {
+                        _calibPos.Clear(); _calibYaw.Clear();
+                        _outlierRun = 0;
+                    }
+                    else
+                    {
+                        // Tek seferlik sapma: orneği ATLA, pencereyi koru.
+                        _calibNote = $"olculuyor {ProgressBar(_calibPos.Count, CalibNeed)}";
+                        return;
+                    }
+                }
+                else _outlierRun = 0;
+            }
+
             // Kayan pencereye ekle, en fazla calibrateSampleCount tut.
             _calibPos.Add(worldPos);
             _calibYaw.Add(YawOf(worldRot));
@@ -612,10 +682,10 @@ namespace VRMultiplayer
             // bile sayilmaz, ortalama almak bosa beklemektir. Kalibre olduktan SONRA duzeltmeler
             // cm mertebesine iner ve ortalama gercekten degerli olur; orada 5 ornek kalir.
             // Kotu bir ilk hizalama zaten kendini onarir: bir sonraki tespit duzeltir.
-            int need = CalibrationManager.Calibrated ? Mathf.Min(5, calibrateSampleCount) : 2;
+            int need = CalibNeed;
             if (_calibPos.Count < need)
             {
-                _calibNote = $"olculuyor {_calibPos.Count}/{need}";
+                _calibNote = $"olculuyor {ProgressBar(_calibPos.Count, need)}";
                 return;
             }
 
@@ -623,6 +693,23 @@ namespace VRMultiplayer
             Vector3 avgPos = Vector3.zero;
             foreach (var p in _calibPos) avgPos += p;
             avgPos /= _calibPos.Count;
+
+            // KARARLILIK KAPISI — sayiyla degil, TUTARLILIKLA olculur.
+            //
+            // "N ornek topladim" tek basina bir sey soylemez: ornekler birbirini tutmuyorsa
+            // ortalamalari da tutmaz. Onemli olan pencerenin ne kadar SIKI oldugu. Bu, sabit
+            // bir bekleme suresi dayatmaktan hem daha hizli (ornekler zaten kararliysa hemen
+            // gecer) hem daha guvenli (kararsizsa sayac dolsa bile beklemeye devam eder).
+            //
+            // Ayrica mikro hareket artik sayaci SIFIRLAMIYOR — yalnizca sacilmayi buyutuyor,
+            // yani kendi kendini duzelten yumusak bir ceza.
+            float spread = 0f;
+            foreach (var p in _calibPos) spread = Mathf.Max(spread, Vector3.Distance(p, avgPos));
+            if (spread > calibStabilitySpread)
+            {
+                _calibNote = $"olculuyor {ProgressBar(_calibPos.Count, need)}  (sabitleniyor {spread * 100f:0.0} cm)";
+                return;
+            }
             Vector2 dir = Vector2.zero;
             foreach (var y in _calibYaw)
                 dir += new Vector2(Mathf.Sin(y * Mathf.Deg2Rad), Mathf.Cos(y * Mathf.Deg2Rad));
