@@ -47,22 +47,14 @@ namespace VRMultiplayer.UI
         // Masaustu yedegi icin (gozluksuz iterasyon).
         string _guiName = "";
 
-        // ARTIK KENDILIGINDEN ACILMAZ: uygulamanin ilk ekrani mod secimi
-        // (bkz. <see cref="ModeSelectUI"/>). Bootstrap kendini kurmak yerine yalnizca ABONE
-        // olur; ekran ancak OYUNCU modu secilince dogar. Yaratici modda hic dogmamasi sart —
-        // yoksa harita tasarlarken isim/takim paneli ortada kalirdi.
-        //
-        // Aboneligi AppMode.ResetStatics temizler: domain reload kapaliyken abonelik listesi
-        // oyunlar arasi tasinir ve ikinci Play'de IKI giris ekrani dogardi.
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        static void Bootstrap() => AppMode.Chosen += OnModeChosen;
-
-        static void OnModeChosen(AppMode.Mode m)
-        {
-            if (m == AppMode.Mode.Player) Create();
-        }
-
-        static void Create()
+        /// <summary>
+        /// Ekrani acar. MOD SECIMINE ARTIK KENDI ABONE DEGIL: OYUNCU modu secilince once
+        /// "oynanabilir harita var mi?" kontrolu yapiliyor ve bu ekran ancak o kapidan
+        /// gecilince dogar (bkz. <see cref="PlayerFlowUI"/>). Kendi aboneligi kalsaydi kontrol
+        /// bir sey soylemeden isim/takim paneli zaten acilmis olurdu — kapinin bir anlami
+        /// kalmazdi.
+        /// </summary>
+        public static void Create()
         {
             var go = new GameObject("~PlayerEntryUI");
             DontDestroyOnLoad(go);
@@ -172,6 +164,11 @@ namespace VRMultiplayer.UI
 
         void Update()
         {
+            // MOD DEGISTIYSE BU EKRAN YOK. Uyari ekranindan "yaratici moda gec" denebiliyor ve
+            // mac sonunda ana menuye donuluyor; moda ozel her ekran kendi kapanisindan sorumlu
+            // olmazsa o donuslerde isim/takim paneli havada kalir.
+            if (!AppMode.IsPlayer) { Destroy(gameObject); return; }
+
             if (_panel == null) return;
 
             // Giris baska bir yoldan tamamlandiysa (kayitli profille acilis, test/konsol) panel

@@ -49,10 +49,22 @@ namespace VRMultiplayer.UI
         bool _built;
 
         /// <param name="yesEdge">Onay dugmesinin rengi. Geri donussuz islemde KIRMIZI verilir.</param>
+        /// <summary>Panelin metinleri — masaustu yedegi bunlari cizer (gozluksuz iterasyon).</summary>
+        public string Title { get; private set; }
+        public string YesLabel { get; private set; }
+        public string NoLabel { get; private set; }
+
+        /// <summary>Masaustu yedeginden cevap: lazer imlec olmadan da akis surulebilsin.</summary>
+        public void AnswerFromDesktop(bool yes) => Answered?.Invoke(yes);
+
         public void Setup(string title, string message, string yesLabel, string noLabel, Color yesEdge)
         {
             if (_built) return;
             _built = true;
+
+            Title = title;
+            YesLabel = yesLabel;
+            NoLabel = noLabel;
 
             UITheme.MakeOutlined(transform, "Backdrop", Vector2.zero,
                 new Vector2(PanelW, PanelH), PanelR, UITheme.PanelEdge, UITheme.PanelBg,
