@@ -15,7 +15,7 @@ MonoBehaviour:
   weaponNameEquals: Sniper 1
   weaponNameContains: Sniper 1
   gripLocalPosition: {x: -0.0593, y: 0.1405, z: 0.3329}
-  gripLocalEuler: {x: 307.92084, y: 220.75534, z: 332.27054}
+  gripLocalEuler: {x: 303.03873, y: 211.36359, z: 343.7803}
   barrelLocalDirection: {x: -0, y: -0, z: -1}
   combat: {fileID: 11400000, guid: b728c7c9fdae47c08c50be56c74289fe, type: 2}
   mainHand:

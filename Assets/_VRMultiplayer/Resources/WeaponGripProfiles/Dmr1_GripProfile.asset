@@ -15,7 +15,7 @@ MonoBehaviour:
   weaponNameEquals: Dmr1
   weaponNameContains: Dmr1
   gripLocalPosition: {x: 0.0079, y: 0.1204, z: 0.3254}
-  gripLocalEuler: {x: 304.95184, y: 215.6471, z: 338.61557}
+  gripLocalEuler: {x: 304.40546, y: 214.52287, z: 339.98264}
   barrelLocalDirection: {x: 0, y: 0, z: -1}
   combat: {fileID: 11400000, guid: cc4e86c55501448f8272f105f4d4706c, type: 2}
   mainHand:

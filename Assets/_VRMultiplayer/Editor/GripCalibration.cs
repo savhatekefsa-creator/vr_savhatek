@@ -336,12 +336,27 @@ namespace VRMultiplayer.EditorTools
             // Kullanicinin dizdigi haldeki "yukari" yonleri topla: her silah icin, dunya
             // yukarisinin o silahin LOKAL uzayinda hangi yon oldugu. Eksik olan veri buydu.
             var upLocal = new Dictionary<string, Vector3>();
+            var drifted = new List<string>();
             foreach (Transform child in root.transform)
             {
                 var p = Find(profiles, child.name);
                 if (p == null) continue; // referans direkleri ve etiketler
                 upLocal[child.name] = (Quaternion.Inverse(child.rotation) * Vector3.up).normalized;
+
+                // Yalnizca BURGU cevrilmeliydi: namlu +Z'de kalmali. Kirmizi/yesil halka ile
+                // dondurmek namluyu eksenden cikarir. Kucuk sapma zararsiz (asagida LookRotation
+                // yukariyi zaten namluya dik izduSume alir) ama buyugu turetilen yukariyi
+                // bozar ve sessizce yanlis profil yazilirdi.
+                float off = Vector3.Angle(child.rotation * p.barrelLocalDirection.normalized, Vector3.forward);
+                if (off > 10f) drifted.Add(child.name + " (" + off.ToString("F0") + " derece)");
             }
+
+            if (drifted.Count > 0 && !EditorUtility.DisplayDialog("Yatiklik yaz",
+                "Bu silahlarda NAMLU +Z'den kaymis — burgu disinda bir eksende de dondurulmus:\n\n" +
+                string.Join("\n", drifted.ToArray()) +
+                "\n\nSahne gorunumunde kol GLOBAL modda olmali ve yalnizca MAVI halka " +
+                "cevrilmeli. Devam edersen bu silahlarin yatikligi yanlis hesaplanabilir.",
+                "Yine de yaz", "Vazgec")) return;
 
             // Ortak "yukari"yi referans silahlardan ogren: onlarin gripLocalEuler'i cihazda
             // dogrulandi, dolayisiyla lokal yukarilerini kumanda uzayina tasiyinca hepsi ayni

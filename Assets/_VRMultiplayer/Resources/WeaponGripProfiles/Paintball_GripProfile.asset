@@ -15,7 +15,7 @@ MonoBehaviour:
   weaponNameEquals: Weapon_Paintball
   weaponNameContains: Weapon_Paintball
   gripLocalPosition: {x: -0.02, y: -0.06, z: 0}
-  gripLocalEuler: {x: 303.62317, y: 122.78169, z: 342.0831}
+  gripLocalEuler: {x: 303.117, y: 121.56005, z: 343.54587}
   barrelLocalDirection: {x: 1, y: 0, z: 0}
   combat: {fileID: 11400000, guid: bd081a597a8240d785babaace7a548bf, type: 2}
   mainHand:

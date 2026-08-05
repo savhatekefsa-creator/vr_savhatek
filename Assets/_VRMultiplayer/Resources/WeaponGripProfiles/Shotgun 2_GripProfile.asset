@@ -15,7 +15,7 @@ MonoBehaviour:
   weaponNameEquals: Shotgun 2
   weaponNameContains: Shotgun 2
   gripLocalPosition: {x: -0.0502, y: 0.0774, z: 0.2188}
-  gripLocalEuler: {x: 309.5644, y: 223.03836, z: 329.344}
+  gripLocalEuler: {x: 303.30136, y: 212.01451, z: 343.0027}
   barrelLocalDirection: {x: 0, y: 0, z: -1}
   combat: {fileID: 11400000, guid: 81bec12acdd6445f851c1c4ee359c59c, type: 2}
   mainHand:
