@@ -158,7 +158,37 @@ namespace VRMultiplayer.Constructor
         /// doguyor ve iki bootstrap arasindaki sira GARANTI DEGIL. Start hepsinden sonra kosar,
         /// yani raf yuvalari henuz var olmayan bir respawner'a yazilmaz.
         /// </summary>
-        void Start() => BuildForPlay(DefaultMapName);
+        void Start()
+        {
+            if (BuildForPlay(PickPlayMap()) || !IsMapAuthority) return;
+
+            // Sessiz kalmamali: harita gelmedigi anda ortada duvar da raf da silah da yok, ve
+            // sebebi disaridan "bozuk" gorunuyor.
+            Debug.Log("[Constructor] Oynanacak harita yok: havuz bos ve '" + DefaultMapName +
+                      "' kayitli degil. Yaratici modda bir harita yapip HAVUZA EKLE.");
+        }
+
+        /// <summary>
+        /// Oynanacak haritanin adi: once HAVUZDAN, havuz bossa eski tek-harita adindan.
+        ///
+        /// HAVUZ OYUNCU MODUNUN TEK KAYNAGI (bkz. <see cref="MapCatalog"/>). Onceden burada
+        /// <see cref="DefaultMapName"/> SABITI vardi ve o ad yalnizca tek harita varken
+        /// anlamliydi: haritalar isimlenip yeniden adlandirilabilir olunca "Current" bir gun
+        /// baska bir ada tasindi ve oynanista hicbir harita kurulmaz oldu — hata da harita
+        /// yapana degil, oynayana ciktı.
+        ///
+        /// SECIM YALNIZCA OTORITEDE: rastgele secimi her gozluk kendi yaparsa herkes baska
+        /// haritaya duser. Istemci zaten buraya girmiyor — <see cref="BuildForPlay"/> onu
+        /// eliyor ve haritayi sunucudan aliyor.
+        ///
+        /// Havuz bos oldugunda eski ada dusmek geriye donuk uyum icin: havuz kavramindan once
+        /// kaydedilmis kurulumlar (tek "Current" dosyasi) calismaya devam etsin.
+        /// </summary>
+        static string PickPlayMap()
+        {
+            string fromPool = MapCatalog.PickRandomFromPool();
+            return !string.IsNullOrEmpty(fromPool) ? fromPool : DefaultMapName;
+        }
 
         void Update()
         {
