@@ -234,6 +234,235 @@ namespace VRMultiplayer.EditorTools
                 "Tamam");
         }
 
+        // ═══ YATIKLIK (ROLL) DUZELTME — masa isi, VR gerekmez ════════════════════════════
+        //
+        // Kalibrasyon namlunun BAKTIGI YONU cozdu ama namlu etrafindaki burguyu cozemez:
+        // bunun icin her modelde "yukarisi neresi" bilgisi gerekir ve o bilgi hicbir yerde
+        // yazili degil. Kabza konumundan cikarmayi denedik, referanslar 25-34 derece
+        // uyusmazlikla reddetti (HK416'nin orijini namlu ekseninde degil).
+        //
+        // Cozum, eksik veriyi UCUZA girmek: silahlari namlulari ayni yone bakacak sekilde
+        // yan yana diz, kullanici hangisi yan yatmis GORSUN ve duzeltsin. Gozun yatikligi
+        // secmesi kolaydir (5 derecelik bir yaw hatasini secemez, ama yan yatmis silahi
+        // aninda gorur) — o yuzden bu is kulaklikta degil masada yapilir.
+
+        const string RigName = "~Yatiklik Duzeltme";
+
+        [MenuItem("Tools/VR Multiplayer/47. Yatiklik Duzeltme Sahnesi Kur")]
+        public static void BuildRollRig()
+        {
+            var old = GameObject.Find(RigName);
+            if (old != null) Object.DestroyImmediate(old);
+
+            if (!TryCanonicalBarrel(LoadProfiles(), out Vector3 canonBarrel, out _, out string err))
+            { EditorUtility.DisplayDialog("Yatiklik duzeltme", err, "Tamam"); return; }
+
+            // Kumanda cercevesini EKRAN cercevesine tasiyan sabit donus: namlu dunya +Z'ye
+            // gider. Butun silahlarda AYNI donus kullanildigi icin aralarindaki yatiklik
+            // farki oldugu gibi korunur — yan yana dizilince karsilastirilabilir olurlar.
+            Quaternion toDisplay = Quaternion.FromToRotation(canonBarrel, Vector3.forward);
+
+            var root = new GameObject(RigName);
+            var profiles = LoadProfiles();
+            int placed = 0;
+
+            foreach (var prefab in Resources.LoadAll<GameObject>("WeaponPrefabs"))
+            {
+                var profile = BestProfile(profiles, prefab.name);
+                if (profile == null || IsSkipped(profile.name)) continue;
+                if (profile.barrelLocalDirection.sqrMagnitude < 1e-6f) continue;
+
+                // Tasiyici bos obje DONER, okunan da odur; silah modeli icine kimlik
+                // rotasyonuyla girer. Boylece "kullanici ne kadar cevirdi" tek yerde durur.
+                var holder = new GameObject(profile.name);
+                holder.transform.SetParent(root.transform, false);
+                holder.transform.SetPositionAndRotation(
+                    new Vector3(placed * 1.2f, 0f, 0f),
+                    toDisplay * Quaternion.Inverse(Quaternion.Euler(profile.gripLocalEuler)));
+
+                var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab, holder.transform);
+                inst.transform.localPosition = Vector3.zero;
+                inst.transform.localRotation = Quaternion.identity;
+
+                // Dikey referans: DONMEYEN ayri obje, yoksa silahla birlikte yatar ve
+                // karsilastirilacak bir sey kalmaz.
+                var post = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                post.name = profile.name + " — dikey referans";
+                post.transform.SetParent(root.transform, false);
+                post.transform.localPosition = new Vector3(placed * 1.2f, 0f, 0f);
+                post.transform.localScale = new Vector3(0.004f, 0.8f, 0.004f);
+                Object.DestroyImmediate(post.GetComponent<Collider>());
+
+                var label = new GameObject(profile.name + " — etiket");
+                label.transform.SetParent(root.transform, false);
+                label.transform.localPosition = new Vector3(placed * 1.2f, 0.5f, 0f);
+                var tm = label.AddComponent<TextMesh>();
+                VRMultiplayer.UI.UITheme.ApplyFont(tm);
+                tm.text = prefab.name;
+                tm.characterSize = 0.03f;
+                tm.fontSize = 60;
+                tm.anchor = TextAnchor.MiddleCenter;
+
+                placed++;
+            }
+
+            Selection.activeGameObject = root;
+            SceneView.lastActiveSceneView?.FrameSelected();
+
+            EditorUtility.DisplayDialog("Yatiklik duzeltme",
+                placed + " silah dizildi. Hepsinin NAMLUSU ayni yone (+Z) bakiyor.\n\n" +
+                "Yan yatmis olanlari, TASIYICI bos objeyi (silah modelini degil) dunya Z ekseni " +
+                "etrafinda dondurerek duzelt — kabza asagi, ust ray yukari baksin.\n\n" +
+                "Bitince '48. Yatikliklari Profillere Yaz'.\n\n" +
+                "Sahneyi KAYDETME; arac isi bitince '" + RigName + "' objesini silmen yeterli.",
+                "Tamam");
+        }
+
+        [MenuItem("Tools/VR Multiplayer/48. Yatikliklari Profillere Yaz")]
+        public static void BakeRoll()
+        {
+            var root = GameObject.Find(RigName);
+            if (root == null)
+            {
+                EditorUtility.DisplayDialog("Yatiklik yaz",
+                    "'" + RigName + "' sahnede yok. Once '47. Yatiklik Duzeltme Sahnesi Kur'.", "Tamam");
+                return;
+            }
+
+            var profiles = LoadProfiles();
+            if (!TryCanonicalBarrel(profiles, out Vector3 canonBarrel, out int nref, out string err))
+            { EditorUtility.DisplayDialog("Yatiklik yaz", err, "Tamam"); return; }
+
+            // Kullanicinin dizdigi haldeki "yukari" yonleri topla: her silah icin, dunya
+            // yukarisinin o silahin LOKAL uzayinda hangi yon oldugu. Eksik olan veri buydu.
+            var upLocal = new Dictionary<string, Vector3>();
+            foreach (Transform child in root.transform)
+            {
+                var p = Find(profiles, child.name);
+                if (p == null) continue; // referans direkleri ve etiketler
+                upLocal[child.name] = (Quaternion.Inverse(child.rotation) * Vector3.up).normalized;
+            }
+
+            // Ortak "yukari"yi referans silahlardan ogren: onlarin gripLocalEuler'i cihazda
+            // dogrulandi, dolayisiyla lokal yukarilerini kumanda uzayina tasiyinca hepsi ayni
+            // yeri gostermeli.
+            Vector3 canonUp = Vector3.zero;
+            float upSpread = 0f;
+            var refUps = new List<Vector3>();
+            foreach (var name in Reference)
+            {
+                var p = Find(profiles, name);
+                if (p == null || !upLocal.TryGetValue(name, out Vector3 u)) continue;
+                refUps.Add((Quaternion.Inverse(Quaternion.Euler(p.gripLocalEuler)) * u).normalized);
+            }
+            if (refUps.Count < 2)
+            {
+                EditorUtility.DisplayDialog("Yatiklik yaz",
+                    "Referans silahlar sahnede bulunamadi. '47'yi calistirip referanslari da " +
+                    "dogru (kabza asagi) cevirmen gerekiyor.", "Tamam");
+                return;
+            }
+            foreach (var u in refUps) canonUp += u;
+            canonUp = Vector3.ProjectOnPlane(canonUp, canonBarrel).normalized;
+            for (int i = 0; i < refUps.Count; i++)
+                for (int j = i + 1; j < refUps.Count; j++)
+                    upSpread = Mathf.Max(upSpread, Vector3.Angle(refUps[i], refUps[j]));
+
+            if (upSpread > 15f && !EditorUtility.DisplayDialog("Yatiklik yaz",
+                string.Format("UYARI: referans silahlarin 'yukari' yonu {0:F1} derece ayrisiyor.\n\n" +
+                "Bu, referanslardan en az birinin sahnede yanlis cevrildigi anlamina gelir — " +
+                "sonuc butun silahlara yansir. Once onlari duzeltmen onerilir.", upSpread),
+                "Yine de yaz", "Vazgec")) return;
+
+            // Hedef donus: namlu ortak yone, yukari ortak yukariya. Iki eksen sabitlenince
+            // rotasyon TAM belirlidir — FromToRotation'daki tanimsiz burgu sorunu kalmaz.
+            Quaternion target = Quaternion.LookRotation(canonBarrel, canonUp);
+
+            var rows = new List<Row>();
+            foreach (var p in profiles)
+            {
+                if (System.Array.IndexOf(Reference, p.name) >= 0) continue; // dogrulanmis, dokunma
+                if (IsSkipped(p.name)) continue;
+                if (p.barrelLocalDirection.sqrMagnitude < 1e-6f) continue;
+                if (!upLocal.TryGetValue(p.name, out Vector3 u)) continue;
+
+                Vector3 b = p.barrelLocalDirection.normalized;
+                if (Vector3.Cross(b, u).sqrMagnitude < 1e-6f) continue; // yukari namluya paralel: cozulemez
+
+                Quaternion R = target * Quaternion.Inverse(Quaternion.LookRotation(b, u));
+                Quaternion newGrip = Quaternion.Inverse(R);
+                float delta = Quaternion.Angle(Quaternion.Euler(p.gripLocalEuler), newGrip);
+                rows.Add(new Row { profile = p, newEuler = newGrip.eulerAngles, deltaDegrees = delta });
+            }
+
+            if (rows.Count == 0)
+            { EditorUtility.DisplayDialog("Yatiklik yaz", "Yazilacak profil yok.", "Tamam"); return; }
+
+            var log = new StringBuilder();
+            log.AppendFormat("[GripCalibration] yatiklik onizleme — referans {0}, yukari dagilimi {1:F1} derece\n",
+                nref, upSpread);
+            float sum = 0f;
+            foreach (var r in rows) { log.AppendFormat("  {0,-28} {1,7:F2} derece\n", r.profile.name, r.deltaDegrees); sum += r.deltaDegrees; }
+            Debug.Log(log.ToString());
+
+            if (!EditorUtility.DisplayDialog("Yatiklik yaz",
+                string.Format("{0} profil guncellenecek (ortalama {1:F1} derece).\n\n" +
+                "Referans dagilimi: {2:F1} derece\n\n" +
+                "Yedek alinacak; '46. Geri Al' ve Ctrl+Z calisir. Detay Console'da.",
+                rows.Count, sum / rows.Count, upSpread), "Yaz", "Vazgec")) return;
+
+            string backup = WriteBackup(profiles);
+            var objs = new Object[rows.Count];
+            for (int i = 0; i < rows.Count; i++) objs[i] = rows[i].profile;
+            Undo.RecordObjects(objs, "Yatiklik yaz");
+            foreach (var r in rows) { r.profile.gripLocalEuler = r.newEuler; EditorUtility.SetDirty(r.profile); }
+            AssetDatabase.SaveAssets();
+
+            Debug.Log("[GripCalibration] yatiklik yazildi: " + rows.Count + " profil. Yedek: " + backup);
+            EditorUtility.DisplayDialog("Yatiklik yaz",
+                rows.Count + " profil guncellendi.\n\nYedek:\n" + backup, "Tamam");
+        }
+
+        static WeaponGripProfile Find(List<WeaponGripProfile> list, string name)
+        {
+            foreach (var p in list) if (p.name == name) return p;
+            return null;
+        }
+
+        static WeaponGripProfile BestProfile(List<WeaponGripProfile> list, string weaponName)
+        {
+            WeaponGripProfile best = null; int bestScore = 0;
+            foreach (var p in list)
+            {
+                int s = p.MatchScore(weaponName);
+                if (s > bestScore) { bestScore = s; best = p; }
+            }
+            return best;
+        }
+
+        /// <summary>Referans silahlardan ortak namlu yonu. Iki yerde de ayni sekilde
+        /// hesaplanmali, yoksa 45 ile 48 birbirinden kayar.</summary>
+        static bool TryCanonicalBarrel(List<WeaponGripProfile> all, out Vector3 canonical,
+            out int refCount, out string error)
+        {
+            canonical = Vector3.forward; refCount = 0; error = null;
+            Vector3 sum = Vector3.zero;
+            foreach (var p in all)
+            {
+                if (System.Array.IndexOf(Reference, p.name) < 0) continue;
+                if (!BarrelInController(p, out Vector3 v)) continue;
+                sum += v; refCount++;
+            }
+            if (refCount < 2)
+            {
+                error = "En az 2 referans profil gerekli, " + refCount + " bulundu.\nBeklenen: " +
+                        string.Join(", ", Reference);
+                return false;
+            }
+            canonical = sum.normalized;
+            return true;
+        }
+
         // ─── Yardimcilar ──────────────────────────────────────────────────────────────────
 
         /// <summary>
