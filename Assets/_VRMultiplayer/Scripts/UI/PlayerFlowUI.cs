@@ -58,6 +58,11 @@ namespace VRMultiplayer.UI
 
             if (_warn != null) { Place(_warn.transform); _warn.Tick(_pointer); return; }
 
+            // IMLEC PANELE BAGLI. Lazer kendini her karede panelin Tick'inde ciziyor; panel
+            // kapaninca cizen de silen de kalmiyor ve SON CIZILEN ISIN HAVADA ASILI KALIYOR.
+            // Acik panel yoksa imleci de kaldiriyoruz; bir panel acilinca yeniden dogar.
+            if (_mapList == null) ReleasePointer();
+
             // 2. EVRE — MAC HARITASI. Giris ekranindan sonra sunucu "haritayi sen sec" diyebilir:
             // macin haritasi HENUZ secilmemis demektir. Secim yapilinca sunucu haritayi herkese
             // yayiyor, sonradan katilan bu evreden hic gecmiyor (bkz. ConstructorSync).
@@ -229,6 +234,13 @@ namespace VRMultiplayer.UI
             var go = new GameObject("UI Pointer");
             go.transform.SetParent(transform, false);
             _pointer = go.AddComponent<VRPointer>();
+        }
+
+        void ReleasePointer()
+        {
+            if (_pointer == null) return;
+            Destroy(_pointer.gameObject);
+            _pointer = null;
         }
 
         /// <summary>
