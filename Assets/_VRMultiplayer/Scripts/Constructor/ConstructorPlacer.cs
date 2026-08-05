@@ -643,13 +643,24 @@ namespace VRMultiplayer.Constructor
             }
 
             bool del = Edge(DeleteHeld(), ref _prevDelete);
-            if (del && _hasCursor)
+            if (del)
             {
-                // Isaret edilen hucrenin sahibini sil — ayak izinin min kosesini degil, imlecin
-                // TAM ALTINDAKI hucreyi soruyoruz, yoksa buyuk bir propun kenarina bakarken
-                // yanindaki bos hucre sorulup hicbir sey silinmezdi.
-                uint id = Session.InstanceIdAt(CursorCell(), _placeLevel);
-                if (id != 0) Session.TryRemove(id);
+                // Yerlestirmedeki gibi: SESSIZ RED YOK. Imlecin altinda prop yoksa eskiden
+                // hicbir sey olmuyordu ve oyuncu yanlis yere mi baktigini, yanlis katta mi
+                // oldugunu bilemiyordu.
+                if (!_hasCursor)
+                {
+                    Show("SILINEMEZ\n\nImlec bir yuzeye bakmiyor", 2f);
+                }
+                else
+                {
+                    // Isaret edilen hucrenin sahibini sil — ayak izinin min kosesini degil,
+                    // imlecin TAM ALTINDAKI hucreyi soruyoruz, yoksa buyuk bir propun kenarina
+                    // bakarken yanindaki bos hucre sorulup hicbir sey silinmezdi.
+                    uint id = Session.InstanceIdAt(CursorCell(), _placeLevel);
+                    if (id != 0) Session.TryRemove(id);
+                    else Show($"SILINECEK SEY YOK\n\nImlecin altinda prop yok (kat {_placeLevel})", 2f);
+                }
             }
         }
 
