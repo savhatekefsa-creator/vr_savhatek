@@ -26,7 +26,7 @@ namespace VRMultiplayer.EditorTools
     {
         [MenuItem("Tools/VR Multiplayer/32. Haritayi Guncel Izgaraya Tasi")]
         public static void MigrateMenu() =>
-            EditorUtility.DisplayDialog("VR Multiplayer", Migrate(ConstructorSession.WorkingMapName), "Tamam");
+            EditorUtility.DisplayDialog("VR Multiplayer", Migrate(ConstructorSession.DefaultMapName), "Tamam");
 
         public static string Migrate(string mapName, float newCellSize = RoomGrid.DefaultCellSize,
             float newMargin = RoomGrid.DefaultOutsideMargin)

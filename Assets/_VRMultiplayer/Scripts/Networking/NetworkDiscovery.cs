@@ -47,6 +47,39 @@ namespace VRMultiplayer
         string Query => "SAVHATEKS_DISCOVER:" + appId;
         string ReplyPrefix => "SAVHATEKS_HOST:" + appId;
 
+        // ---------------- havuz durumu (Serit 3) ----------------
+
+        /// <summary>Sunucunun havuzunda oynanabilir harita var mi — istemcinin BAGLANMADAN
+        /// once ogrenebildigi tek sey.</summary>
+        public enum PoolHint { Unknown, Empty, HasMaps }
+
+        /// <summary>
+        /// SUNUCU: yayina eklenecek havuz durumu.
+        ///
+        /// DISARIDAN BESLENIR, BURADA OKUNMAZ: yayin dongusleri arka planda (Task) kosuyor ve
+        /// MapCatalog dosya okuyup Unity olayi tetikliyor — ana is parcacigi disinda cagirmak
+        /// yasak. Sunucu tarafi bunu ana is parcacigindan set eder (bkz. LanBootstrap).
+        ///
+        /// volatile: iki is parcacigi arasinda paylasilan tek bir bayrak; kilit kurmaya degmez.
+        /// </summary>
+        public volatile bool poolHasMaps;
+
+        /// <summary>
+        /// ISTEMCI: bulunan sunucunun havuz durumu. <see cref="PoolHint.Unknown"/> = sunucu bu
+        /// bilgiyi yollamiyor (eski surum) — o durumda ENGELLEME, karari sunucuya birak.
+        /// </summary>
+        public PoolHint FoundHostPool { get { lock (_lock) return _foundHostPool; } }
+
+        PoolHint _foundHostPool = PoolHint.Unknown;
+
+        // Havuz alani PORTUN ONUNE giriyor. Sira onemli: eski bir istemci portu
+        // LastIndexOf(':') ile okuyor, yani son alan port kalmali — yoksa eski bir gozluk
+        // build'i havuz bayragini port sanip baglanamaz. Bu sekilde eski istemci yeni sunucuya
+        // sorunsuz baglanir, alani gormezden gelir.
+        const string PoolYes = "MAP1", PoolNo = "MAP0";
+
+        string ReplyMessage => ReplyPrefix + ":" + (poolHasMaps ? PoolYes : PoolNo) + ":" + gamePort;
+
         // ---------------- SERVER ----------------
         public void StartAdvertising()
         {
@@ -63,14 +96,19 @@ namespace VRMultiplayer
 
         async Task ServerReplyLoop(UdpClient udp, CancellationToken token)
         {
-            byte[] reply = Encoding.UTF8.GetBytes(ReplyPrefix + ":" + gamePort);
             while (!token.IsCancellationRequested)
             {
                 try
                 {
                     var res = await udp.ReceiveAsync();
                     if (Encoding.UTF8.GetString(res.Buffer) == Query)
+                    {
+                        // Cevap HER SEFERINDE kuruluyor: havuz durumu oyun sirasinda degisiyor
+                        // (tasarimci harita ekliyor/cikariyor) ve bir kez hazirlanan mesaj
+                        // bayat bir cevabi sonsuza kadar yayinlardi.
+                        byte[] reply = Encoding.UTF8.GetBytes(ReplyMessage);
                         await udp.SendAsync(reply, reply.Length, res.RemoteEndPoint);
+                    }
                 }
                 catch
                 {
@@ -82,9 +120,9 @@ namespace VRMultiplayer
 
         async Task ServerAnnounceLoop(UdpClient udp, CancellationToken token)
         {
-            byte[] msg = Encoding.UTF8.GetBytes(ReplyPrefix + ":" + gamePort);
             while (!token.IsCancellationRequested)
             {
+                byte[] msg = Encoding.UTF8.GetBytes(ReplyMessage);   // her turda taze (bkz. yukarisi)
                 foreach (var target in BroadcastTargets(announcePort))
                 {
                     try { await udp.SendAsync(msg, msg.Length, target); } catch { }
@@ -98,7 +136,7 @@ namespace VRMultiplayer
         {
             StopDiscovery();
             AcquireMulticastLock();
-            lock (_lock) { _foundHostIp = null; _foundHostPort = 0; }
+            lock (_lock) { _foundHostIp = null; _foundHostPort = 0; _foundHostPool = PoolHint.Unknown; }
             _cts = new CancellationTokenSource();
 
             _queryUdp = NewBroadcastClient(0); // ephemeral port
@@ -142,18 +180,36 @@ namespace VRMultiplayer
                     string msg = Encoding.UTF8.GetString(res.Buffer);
                     if (msg.StartsWith(ReplyPrefix))
                     {
-                        // Reply is "SAVHATEKS_HOST:<appId>:<gamePort>". The PORT matters: a
-                        // leaked socket can push the server off the default port, and clients
-                        // must follow it there — connecting to a fixed 7777 hangs forever.
+                        // Cevap: "SAVHATEKS_HOST:<appId>[:MAP0|MAP1]:<gamePort>". PORT SON ALAN
+                        // ve oyle kalmali: sizmis bir soket sunucuyu varsayilan porttan
+                        // kaydirabiliyor, istemci onu takip etmezse sabit 7777'ye baglanmaya
+                        // calisip sonsuza kadar bekler.
                         ushort advertised = 0;
                         int colon = msg.LastIndexOf(':');
                         if (colon >= 0) ushort.TryParse(msg.Substring(colon + 1), out advertised);
+
+                        // Havuz alani portun ONUNDE. Yoksa (eski sunucu) Unknown kalir ve
+                        // istemci kimseyi engellemez — karar sunucuda verilir.
+                        var pool = PoolHint.Unknown;
+                        if (colon > 0)
+                        {
+                            int prev = msg.LastIndexOf(':', colon - 1);
+                            if (prev >= 0)
+                            {
+                                string tok = msg.Substring(prev + 1, colon - prev - 1);
+                                if (tok == PoolYes) pool = PoolHint.HasMaps;
+                                else if (tok == PoolNo) pool = PoolHint.Empty;
+                            }
+                        }
+
                         lock (_lock)
                         {
                             _foundHostIp = res.RemoteEndPoint.Address.ToString();
                             _foundHostPort = advertised;
+                            _foundHostPool = pool;
                         }
-                        Debug.Log("[NetworkDiscovery] Found server at " + _foundHostIp + ":" + advertised);
+                        Debug.Log("[NetworkDiscovery] Found server at " + _foundHostIp + ":" + advertised +
+                                  "  havuz=" + pool);
                         return;
                     }
                 }

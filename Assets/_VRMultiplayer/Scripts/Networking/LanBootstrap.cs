@@ -103,15 +103,50 @@ namespace VRMultiplayer
                 }
             }
 
+            // Yaratici moddan cikinca kendiliginden baglanma hakki geri gelir: ana menuye donup
+            // tekrar YARATICI'yi secen biri yeniden baglanabilmeli.
+            if (!AppMode.IsCreative) _creativeJoinStarted = false;
+
+            // Kumanda gecerliligi ARANMAZ: katilim artik tussuz (B skorbordun oldu), dolayisiyla
+            // kumanda uykuya dalmis olsa da baglanti kurulabilmeli.
             if (_busy) return;
 
-            // OYUNCU modu secilmeden ve isim + takim onaylanmadan katilim yok (bkz. AppMode,
-            // UI.PlayerEntryUI). Katilimi OYUNA BASLA butonu baslatir; buradaki zamanlayici
-            // yalnizca KOPAN baglantiyi geri getirir. YARATICI modda hic calismaz: harita
-            // tasarlarken ag baslatmak istemiyoruz. PC'nin SUNUCU butonu bu kapiya TAKILMAZ:
-            // sunucu avatar spawn etmiyor, profile de mod secimine de ihtiyaci yok
-            // (bkz. StartAsServer).
-            if (!AppMode.IsPlayer || !PlayerProfile.Confirmed) return;
+            // OYUNCU modu: isim + takim onaylanmadan katilim yok (bkz. AppMode, UI.PlayerEntryUI).
+            // Katilimi OYUNA BASLA butonu baslatir; kopan baglantiyi zamanlayici geri getirir
+            // (bkz. ScheduleRetry).
+            //
+            // YARATICI modda da katiliyoruz, ve bu bilincli bir DEGISIKLIK: haritalar PC'de
+            // yasiyor (MapCatalog otoritesi), tasarim ise gozlukte yapiliyor. Baglanmayan bir
+            // gozluk kendi diskine yazardi ve o harita macta hic gorunmezdi. Yaratici modda
+            // profil ARANMAZ — isim/takim ekrani oyuncu akisina ait, harita tasarlarken
+            // sorulacak bir sey degil.
+            //
+            // PC'nin SUNUCU butonu bu kapiya TAKILMAZ: sunucu avatar spawn etmiyor, profile de
+            // mod secimine de ihtiyaci yok (bkz. StartAsServer).
+            if (AppMode.IsPlayer) { if (!PlayerProfile.Confirmed) return; }
+            else if (!AppMode.IsCreative) return;
+
+            // YARATICI SIRASI: ONCE KALIBRASYON, SONRA BAGLANTI.
+            //
+            // Harita KALIBRE CERCEVEDE oruluyor. Kalibre olmadan baglanmak, sunucunun haritasini
+            // gozlugun daha oturmamis cercevesinde kurmak demek: duvarlar gorunur ama gercek
+            // odaya gore yanlis yerde durur, ve kalibrasyon sonradan yapildiginda zemin
+            // oyuncunun altinda kayar. Insa modu ayni kurala zaten tabi (bkz.
+            // ConstructorPlacer.RequireCalibration) — baglantiyi disarida birakmak sirayi yarim
+            // birakirdi.
+            if (AppMode.IsCreative && !CalibrationManager.Calibrated) return;
+
+            // Kalibrasyon bitti: baglantiyi BIR KEZ kendiliginden baslat. Yaratici modda ag
+            // istege bagli degil — haritalar PC'de, baglanmayan gozlukte gosterilecek liste de
+            // kaydedilecek yer de yok. Dal bunu "B ile yeniden dene" ile tamamliyordu; B artik
+            // yok, o yuzden kopan/basarisiz baglantiyi asagidaki zamanlayici toparliyor
+            // (ScheduleRetry yaratici modu da kabul eder).
+            if (AppMode.IsCreative && !_creativeJoinStarted && !connected)
+            {
+                _creativeJoinStarted = true;
+                StartCoroutine(JoinAsClient());
+                return;
+            }
 
             // Otomatik yeniden baglanma. Kumanda gecerliligi ARANMAZ (panelin aksine): kumanda
             // uykuya daldiginda baglantinin geri gelmemesi icin bir sebep yok.
@@ -123,11 +158,17 @@ namespace VRMultiplayer
         }
 
         /// <summary>Bir sonraki otomatik denemeyi kurar ve sebebini panele yazar.
-        /// Yalnizca OYUNCU modunda ve profil onayliyken anlamli — yaratici modda ya da giris
-        /// tamamlanmadan yeniden baglanmaya calismak yanlis olurdu.</summary>
+        /// OYUNCU modunda profil onayliysa, YARATICI modda kosulsuz anlamli; giris tamamlanmadan
+        /// ya da mod secilmeden yeniden baglanmaya calismak yanlis olurdu.
+        ///
+        /// YARATICI DALI BIRLESIRKEN EKLENDI: o dal kopan baglantiyi "B = yeniden dene" ile
+        /// toparliyordu, main ise B'li katilimi tamamen kaldirdi. Yaratici modu buraya almasak
+        /// birlesme sonrasi yaratici modda HIC yeniden deneme kalmazdi — _creativeJoinStarted
+        /// tek atislik oldugu icin kullanici moddan cikip girene kadar kopuk kalirdi.</summary>
         void ScheduleRetry(string reason)
         {
-            if (!AppMode.IsPlayer || !PlayerProfile.Confirmed)
+            bool canRetry = AppMode.IsCreative || (AppMode.IsPlayer && PlayerProfile.Confirmed);
+            if (!canRetry)
             {
                 SetStatus(reason);
                 return;
@@ -136,17 +177,52 @@ namespace VRMultiplayer
             SetStatus(reason + "\nYeniden baglaniliyor...");
         }
 
+        // Yaratici moddaki kendiliginden baglanma bir KEZ denenir; sonrasi oyuncunun elinde
+        // (B). Yoksa sunucu kapaliyken her karede yeni bir deneme baslardi.
+        bool _creativeJoinStarted;
+
+        /// <summary>
+        /// Havuz durumunu keskif yayinina yazar. ANA IS PARCACIGI: yayin dongusu Task uzerinde
+        /// kosuyor ve MapCatalog dosya okuyup Unity olayi tetikliyor.
+        /// </summary>
+        void PushPoolStateToDiscovery()
+        {
+            if (discovery == null) return;
+            discovery.poolHasMaps = !Constructor.MapCatalog.PoolIsEmpty;
+        }
+
+        void OnDestroy() => Constructor.MapCatalog.Changed -= PushPoolStateToDiscovery;
+
         void EnsureJoinPanel()
         {
             // Once MOD SECIMI, sonra GIRIS EKRANI (isim + takim). O ekranlar aciktayken bu
-            // paneli kurmayiz: paneller ust uste binerdi. YARATICI modda hic kurulmaz.
+            // paneli kurmayiz: paneller ust uste binerdi.
             //
             // Panel artik TUS ISTEMIYOR, yalnizca DURUM bildiriyor: katilimi OYUNA BASLA
             // baslatiyor, kopan baglantiyi da zamanlayici geri getiriyor (bkz. ScheduleRetry).
+            //
+            // YARATICI modda panel metni farkli: orada katilim "maca girmek" degil, haritalarin
+            // durdugu PC'ye baglanmak demek.
+            if (AppMode.IsCreative) { EnsureCreativeJoinPanel(); return; }
             if (!AppMode.IsPlayer || !PlayerProfile.Confirmed) return;
             if (statusLabel != null) return;
             statusLabel = UI.HeadFollowPanel.Create("Join Panel",
                 "SUNUCUYA BAGLANILIYOR...", Color.white);
+        }
+
+        /// <summary>
+        /// Yaratici modun katilim daveti. Baglanmadan harita listesi bos kalir ve kaydedilen
+        /// harita hicbir yere gitmez — bu yuzden sebebi yaziyor, "B'ye bas" demekle yetinmiyor.
+        /// </summary>
+        void EnsureCreativeJoinPanel()
+        {
+            // KALIBRASYON PANELIYLE YAN YANA DURMAZ: ikisi de kafanin 1.4 m onunde duruyor,
+            // ikisini birden acmak ust uste iki yazi demek (aeb92ec'de ayni ders). Sira zaten
+            // once kalibrasyon; bu panel ancak o bitince anlamli.
+            if (!CalibrationManager.Calibrated) return;
+            if (statusLabel != null) return;
+            statusLabel = UI.HeadFollowPanel.Create("Join Panel",
+                "HARITALAR PC'DE\nBAGLANILIYOR...", Color.white);
         }
 
         // PC screen: the only thing the PC does is run the server.
@@ -268,7 +344,16 @@ namespace VRMultiplayer
             if (discovery != null)
             {
                 discovery.gamePort = serverPort;
+                PushPoolStateToDiscovery();
                 discovery.StartAdvertising();
+
+                // HAVUZ DURUMU YAYINA BINER. Serit 3'un ilk sorusu "havuzda harita var mi?" ve
+                // sorunun sorulacagi an gozlugun HENUZ BAGLI OLMADIGI an — bagli olmadan
+                // sunucuya soramaz. Keskif yayini zaten dinleniyor, cevap oraya ekleniyor.
+                //
+                // Olayla besleniyor, her kare degil: PoolIsEmpty listeyi kuruyor ve yayin
+                // dongusu arka planda kostugu icin oradan MapCatalog'a dokunmak yasak.
+                Constructor.MapCatalog.Changed += PushPoolStateToDiscovery;
             }
             SetStatus("SUNUCU AKTIF (PC)\nIP: " + ip + "  port: " + serverPort + "\nGözlükler B ile katılsın");
 
