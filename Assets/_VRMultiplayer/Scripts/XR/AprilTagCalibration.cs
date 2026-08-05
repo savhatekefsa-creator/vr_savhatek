@@ -746,7 +746,8 @@ namespace VRMultiplayer
             // ki iki sistemin eski kavgasi tam olarak buydu.
             TickAnchorHold();
 
-            _calibNote = $"duzeltildi ({dev * 100f:0.0} cm)";
+            // Oyuncu bunu okuyacak: "duzeltildi" tek basina neyin duzeldigini soylemiyordu.
+            _calibNote = $"KALIBRE EDILDI ({dev * 100f:0.0} cm duzeltildi)";
             Debug.Log($"[AprilTagCalib] Tag {entry.id} duzeltme: sapma {dev * 100f:0.0} cm, " +
                       $"yaw {yawDelta:0.0} derece, oteleme {delta.magnitude:0.000} m.");
         }
@@ -1904,6 +1905,27 @@ namespace VRMultiplayer
         /// </summary>
         string PanelText(bool seen, bool cameraRunning)
         {
+            // OYUN MODU: yalnizca oyuncunun bilmesi gereken uc sey.
+            //
+            // Teshis paneli oyunda kapatilinca hicbir geri bildirim kalmiyordu ve "kalibre
+            // etmiyor" ile "kalibre ettigini goremiyorum" ayirt edilemez hale geliyordu.
+            // Cihazda yasandi: oyuncu tag 2'ye bakti, hicbir sey olmadi sandi.
+            if (!learnMode)
+            {
+                if (!seen)
+                    return "Tag GORUNMUYOR" + (cameraRunning ? "" : "\nKAMERA YOK (izin?)");
+
+                var q = new System.Text.StringBuilder($"Tag {_lastId} GORUNDU   {_lastDistance:0.00} m\n");
+
+                // Kapi kapaliysa SEBEBI yazilir: yoksa oyuncu bekledigini bilmeden bekler.
+                if (!MotionOk(_lastDistance))
+                    q.Append($"BEKLE — sabit dur ({MotionError(_lastDistance) * 100f:0.0} cm hata)");
+                else
+                    q.Append(_calibNote);   // "olculuyor 3/5" / "duzeltildi (2.1 cm)" / "HIZALI"
+
+                return q.ToString();
+            }
+
             var p = new System.Text.StringBuilder("APRILTAG\n");
 
             p.Append(seen
