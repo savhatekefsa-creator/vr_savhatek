@@ -231,11 +231,23 @@ namespace VRMultiplayer
         bool _alignedNow;   // son olcumde hiza olu bolge icinde miydi (tespit hizini belirler)
 
         // Olcum (FAZ 0): son tespitler uzerinden menzil ve jitter
-        readonly Queue<Vector3> _recent = new Queue<Vector3>();
+        // JITTER TAG BASINA tutulur.
+        //
+        // Eskiden TEK bir kuyruk vardi ve RecordMeasurement dongude HER tag icin cagriliyordu:
+        // iki tag ayni anda gorundugunde metrelerce ayrik konumlar ayni kuyruga giriyor,
+        // "jitter" diye gosterilen sey aslinda TAG'LER ARASI MESAFE oluyordu. Duzeltme yolunu
+        // etkilemiyordu (o ayri, tag basina pencere kullaniyor) ama biz bu sayiya bakarak
+        // karar veriyoruz — yalan soyleyen bir olcum, hic olmayandan kotudur.
+        readonly Dictionary<int, Queue<Vector3>> _recentByTag = new Dictionary<int, Queue<Vector3>>();
         const int RecentMax = 30;
         int _lastId = -1;
         float _lastDistance;
         float _jitterMm;
+
+        // Panelde EN YAKIN tag gosterilir. Eskiden "dongudeki SON tag" gosteriliyordu ve
+        // iki tag gorunurken hangisinin yazdigi dongü sirasina kaliyordu.
+        int _nearestId = -1;
+        float _nearestDist = float.MaxValue;
 
         // DIKKAT — iki AYRI zaman: tespit turu her seferinde calisir, ama tag her turda
         // BULUNMAZ. Ilk surumde ikisi karistirilmisti ve panel, arada duvar olsa bile
@@ -385,6 +397,8 @@ namespace VRMultiplayer
             Vector3 bestPos = Vector3.zero;
             Quaternion bestRot = Quaternion.identity;
             _checkDist = float.MaxValue;   // her turda yeniden secilir
+            _nearestId = -1;
+            _nearestDist = float.MaxValue;
 
             // TESHIS: tag'in GORUNTUDEKI yeri. Hem lens distorsiyonu hem ana nokta hatasi
             // KONUMA BAGLI etkiler — kadrajin ortasindaki tag ile kenarindaki tag farkli
@@ -455,6 +469,14 @@ namespace VRMultiplayer
             // duzeltilir. Boylece uyku / konum degisimi / drift sonrasi kendini onarir.
             // Kazanan tag degisirse ContinuousCorrect kayan pencereyi zaten temizler
             // (_calibId kontrolu), yani tag'ler arasi gecis pozu bozmaz.
+            // Panel degerleri EN YAKIN tag'den — dongudeki sonuncusundan degil.
+            if (_nearestId >= 0)
+            {
+                _lastId = _nearestId;
+                _lastDistance = _nearestDist;
+                _jitterMm = JitterMmFor(_nearestId);
+            }
+
             if (bestEntry != null)
                 ContinuousCorrect(bestEntry, bestDist, bestPos, bestRot);
 
@@ -1746,22 +1768,31 @@ namespace VRMultiplayer
         /// oynadigi, buyuk alandaki hata butcesini dogrudan belirler.</summary>
         void RecordMeasurement(int id, float distance, Vector3 worldPos)
         {
-            _lastId = id;
-            _lastDistance = distance;
             _lastTagTime = Time.time;   // tag GERCEKTEN bulundu
 
-            _recent.Enqueue(worldPos);
-            while (_recent.Count > RecentMax) _recent.Dequeue();
+            if (distance < _nearestDist) { _nearestDist = distance; _nearestId = id; }
 
-            if (_recent.Count < 5) { _jitterMm = 0f; return; }
+            if (!_recentByTag.TryGetValue(id, out var q))
+            {
+                q = new Queue<Vector3>();
+                _recentByTag[id] = q;
+            }
+            q.Enqueue(worldPos);
+            while (q.Count > RecentMax) q.Dequeue();
+        }
+
+        /// <summary>Bir tag'in kendi olcumlerindeki titreme (mm). Baska tag karismaz.</summary>
+        float JitterMmFor(int id)
+        {
+            if (!_recentByTag.TryGetValue(id, out var q) || q.Count < 5) return 0f;
 
             Vector3 mean = Vector3.zero;
-            foreach (var p in _recent) mean += p;
-            mean /= _recent.Count;
+            foreach (var p in q) mean += p;
+            mean /= q.Count;
 
             float maxDev = 0f;
-            foreach (var p in _recent) maxDev = Mathf.Max(maxDev, Vector3.Distance(p, mean));
-            _jitterMm = maxDev * 1000f;
+            foreach (var p in q) maxDev = Mathf.Max(maxDev, Vector3.Distance(p, mean));
+            return maxDev * 1000f;
         }
 
         void TickPanel()
@@ -1791,9 +1822,9 @@ namespace VRMultiplayer
             // 2 sn: bos gezerken tespit araligi 1 sn oldugu icin 1 sn'lik esik her turda
             // tetikleniyordu — kuyruk surekli bosalip birkac ornekle dolunca panel gercekte
             // olandan daha kotu bir jitter gosteriyordu.
-            if (!seen && _recent.Count > 0 && Time.time - _lastTagTime > 2f)
+            if (!seen && _recentByTag.Count > 0 && Time.time - _lastTagTime > 2f)
             {
-                _recent.Clear();
+                _recentByTag.Clear();
                 _jitterMm = 0f;
             }
 
