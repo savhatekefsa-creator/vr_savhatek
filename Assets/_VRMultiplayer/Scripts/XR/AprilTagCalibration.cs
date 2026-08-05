@@ -1958,11 +1958,27 @@ namespace VRMultiplayer
 
                 var q = new System.Text.StringBuilder($"Tag {_lastId} GORUNDU   {_lastDistance:0.00} m\n");
 
-                // Kapi kapaliysa SEBEBI yazilir: yoksa oyuncu bekledigini bilmeden bekler.
-                if (!MotionOk(_lastDistance))
+                // DURUM SATIRI, GORULEN TAG'E AIT OLMALI.
+                //
+                // _calibNote GLOBAL: kalibrasyonu SUREN tag'in son durumunu tutuyor. Panel onu
+                // dogrudan yazinca, gorulen tag baska biriyse BASKA BIR TAG'IN mesajini o
+                // tag'e aitmis gibi gosteriyordu.
+                //
+                // Cihazda yasandi: oyuncu tag 2'nin yarim metre onunde dururken panel
+                // "yaklas (3.20 > 2.00 m)" yaziyordu — tag 0'dan kalma bayat mesaj. Tag 2
+                // yerlesimde bulunmadigi icin onun adina hicbir sey calismiyordu ve bunu
+                // soyleyen de yoktu.
+                var e = Find(_lastId);
+                if (e == null)
+                    q.Append("bu tag YERLESIMDE YOK — kalibre etmez");
+                else if (!e.useForCalibration)
+                    q.Append("bu tag kalibrasyonda KAPALI");
+                else if (!MotionOk(_lastDistance))
                     q.Append($"BEKLE — sabit dur ({MotionError(_lastDistance) * 100f:0.0} cm hata)");
+                else if (_lastId != _calibId)
+                    q.Append($"tag {_calibId} kalibre ediyor");
                 else
-                    q.Append(_calibNote);   // "olculuyor 3/5" / "duzeltildi (2.1 cm)" / "HIZALI"
+                    q.Append(_calibNote);   // "olculuyor 3/5" / "KALIBRE EDILDI" / "HIZALI" / "yaklas"
 
                 return q.ToString();
             }
