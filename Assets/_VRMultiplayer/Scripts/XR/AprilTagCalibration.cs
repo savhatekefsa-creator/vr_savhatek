@@ -206,6 +206,18 @@ namespace VRMultiplayer
                  "karsilastirilmadan varsayilan yapilmamali.")]
         public bool useAnchorHold = false;
 
+        [Tooltip("Kayan pencere bu kadar sure ornek almadiysa TEMIZLENIR (sn).\n\n" +
+                 "Ornekler bir CERCEVEYE aittir; tag gorus alanindan cikip geri geldiginde ya " +
+                 "da gozluk uyuyup uyandiginda cerceve degismis olabilir. Bayat ornekler " +
+                 "ortalamaya karisip sapmayi seyreltir ve sistem hizasizken 'HIZALI' der.")]
+        public float calibWindowMaxGap = 2f;
+
+        [Tooltip("Kazanan tag'i degistirmek icin yeni tag'in bu kadar DAHA YAKIN olmasi gerekir (m).\n\n" +
+                 "Tag degisimi kayan pencereyi temizliyor. Iki tag benzer mesafedeyse secim her " +
+                 "turda salinir ve pencere hicbir zaman dolmaz — kalibrasyon tamamlanmaz. " +
+                 "Cihazda goruldu: sayac 4'e kadar cikip sifirlaniyordu.")]
+        public float calibSwitchMargin = 0.3f;
+
         [Tooltip("Yaw icin olu bolge (derece).\n\n" +
                  "MESAFEDE BASKIN HATA BUDUR: yaw sapmasi tag'den uzaklastikca dogrusal olarak " +
                  "yer degistirmeye donusur. 1,5 derece 4 metrede 10 cm demek. Olculdu: iki " +
@@ -416,7 +428,8 @@ namespace VRMultiplayer
             // 2 m'de 15 mm), yani en yakin tag her zaman en guvenilir olandir. Agirlikli
             // fuzyon (birden fazla tag'i birlestirme) gerekmiyor; gerekirse sonraki faz.
             TagEntry bestEntry = null;
-            float bestDist = float.MaxValue;
+            float bestScore = float.MaxValue;   // histerezisli secim puani (bkz. calibSwitchMargin)
+            float bestDist = float.MaxValue;    // GERCEK mesafe — esiklerde bu kullanilir
             Vector3 bestPos = Vector3.zero;
             Quaternion bestRot = Quaternion.identity;
             _nearestId = -1;
@@ -464,8 +477,18 @@ namespace VRMultiplayer
                 if (autoCalibrate)
                 {
                     var entry = Find(tag.ID);
-                    if (entry != null && entry.useForCalibration && dist < bestDist)
+
+                    // HISTEREZIS: kazanan tag'i degistirmek kayan pencereyi TEMIZLIYOR.
+                    // Iki tag benzer mesafedeyse en-yakin secimi her turda salinir, pencere
+                    // hicbir zaman dolmaz ve kalibrasyon TAMAMLANMAZ. Cihazda goruldu: sayac
+                    // 4'e kadar cikip sifirlaniyordu. Mevcut tag'e avantaj taniyoruz —
+                    // yenisi belirgin olcude yakin olmali.
+                    float score = (entry != null && entry.id == _calibId)
+                                ? dist - calibSwitchMargin : dist;
+
+                    if (entry != null && entry.useForCalibration && score < bestScore)
                     {
+                        bestScore = score;
                         bestEntry = entry;
                         bestDist = dist;
                         bestPos = worldPos;
@@ -502,6 +525,7 @@ namespace VRMultiplayer
         // cunku duzeltme rig'i oynatir, eski ornekler eski cerceveye aittir.
         readonly List<Vector3> _calibPos = new List<Vector3>();
         readonly List<float> _calibYaw = new List<float>();
+        float _calibLastSampleAt = -999f;   // bkz. calibWindowMaxGap
         int _calibId = -1;
         string _calibNote = "";
 
@@ -560,6 +584,23 @@ namespace VRMultiplayer
                 _switchPending = true;
             }
             _calibId = entry.id;
+
+            // ZAMAN BOSLUGU: son ornekten bu yana uzun sure gectiyse pencere TEMIZLENIR.
+            //
+            // Ornekler bir CERCEVEYE aittir. Tag gorus alanindan cikip geri geldiginde ya da
+            // gozluk uyuyup uyandiginda cerceve degismis olabilir; eski ornekler artik var
+            // olmayan bir dunyayi anlatir. Ortalamaya karisinca sapmayi SEYRELTIRLER.
+            //
+            // CIHAZDA YASANDI: uyku sonrasi tag 2 acikca hizasizken, penceredeki 15 bayat
+            // ornek yeni olcumleri bastirdi, sapma olu bolgenin altinda kaldi ve panel surekli
+            // "HIZALI" yazdi. Duzeltme yapilmadigi icin pencere de temizlenmedi — kalici
+            // kilitlenme. Tag'i gorus alanindan cikarip geri bakmak da ise yaramiyordu, cunku
+            // bayat ornekler orada duruyordu.
+            if (_calibPos.Count > 0 && Time.time - _calibLastSampleAt > calibWindowMaxGap)
+            {
+                _calibPos.Clear(); _calibYaw.Clear();
+            }
+            _calibLastSampleAt = Time.time;
 
             // Kayan pencereye ekle, en fazla calibrateSampleCount tut.
             _calibPos.Add(worldPos);

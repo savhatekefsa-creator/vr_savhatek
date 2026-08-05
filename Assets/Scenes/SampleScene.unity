@@ -1547,6 +1547,8 @@ MonoBehaviour:
   assumedFrameLatency: 0.05
   motionErrorBudget: 0.02
   useAnchorHold: 0
+  calibWindowMaxGap: 2
+  calibSwitchMargin: 0.3
   correctionYawDeadzoneDegrees: 0.4
   smallCorrectionRate: 0.25
   snapThresholdMeters: 0.1
