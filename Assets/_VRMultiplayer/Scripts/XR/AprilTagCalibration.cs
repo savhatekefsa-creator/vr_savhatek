@@ -94,12 +94,18 @@ namespace VRMultiplayer
                  "kullanilan tag, sari plaka dogrulama bekleyen tag.")]
         public bool showTagMarkers = true;
 
-        [Tooltip("Ogrenme modunda passthrough'u AC.\n\n" +
-                 "Plakanin gercek tag'in ustune oturup oturmadigini gormek icin ikisini AYNI " +
-                 "ANDA gormek gerekir; sanal dunya aciksa gercek tag zaten gorunmez. Sanal " +
-                 "dunyayi da gizler — isaretciler ve olcum paneli '~' onekli oldugu icin " +
-                 "ayakta kalir.")]
-        public bool learnPassthrough = true;
+        [Tooltip("Passthrough'u AC ve sanal dunyayi gizle.\n\n" +
+                 "OGRENME MODUNDAN BAGIMSIZ. Once ogrenmeye bagliydi, ama iki ayri ihtiyaci " +
+                 "birbirine kilitliyordu:\n\n" +
+                 "  olcum icin: plakanin gercek tag'e oturup oturmadigini gormek — ikisini " +
+                 "AYNI ANDA gormek sart\n" +
+                 "  oyun icin : harita ZEMIN URETMIYOR ve sahnede de zemin yok; passthrough " +
+                 "kapaninca oyuncu bosluktu kalir\n\n" +
+                 "Kilitli oldugu surece 'panel gorunmesin' istemek, passthrough'u da kapatip " +
+                 "oyuncuyu boslukta birakiyordu. Isaretciler ve panel '~' onekli oldugu icin " +
+                 "sanal dunya gizlenirken ayakta kalir.")]
+        [UnityEngine.Serialization.FormerlySerializedAs("learnPassthrough")]
+        public bool showPassthrough = true;
 
         [Tooltip("Kumanda ofsetinin olculecegi tag. Ofset havuzuna YALNIZCA bu tag'e yapilan " +
                  "dokunuslar girer, ve bu tag dokunusla YENIDEN YAZILAMAZ.\n\n" +
@@ -314,6 +320,11 @@ namespace VRMultiplayer
             TickFloor();
             TickHeadMotion();
             TickFrameFreshness();
+
+            // OGRENME MODUNDAN BAGIMSIZ: passthrough bir GORUNTULEME tercihi, olcum araci
+            // degil. Ogrenmeye bagliyken "paneli kapat" demek passthrough'u da kapatiyor ve
+            // oyuncuyu boslukta birakiyordu — harita zemin uretmiyor, sahnede de zemin yok.
+            EnsurePassthrough();
 
             if (Time.time < _nextDetectAt) { TickPanel(); return; }
 
@@ -848,7 +859,6 @@ namespace VRMultiplayer
                 return;
             }
 
-            EnsureLearnPassthrough();
             TickNudge();
 
             // TUS SECIMI — sag A.
@@ -1588,9 +1598,9 @@ namespace VRMultiplayer
         /// Her karede kontrol edilir: insa moduna girip cikmak passthrough'u kapatabilir,
         /// bu da onu geri acar. SetActive ayni degerde erken donuyor, bosuna is olmuyor.
         /// </summary>
-        void EnsureLearnPassthrough()
+        void EnsurePassthrough()
         {
-            if (!learnPassthrough) return;
+            if (!showPassthrough) return;
             if (_pt == null)
             {
                 _pt = FindFirstObjectByType<Constructor.ConstructorPassthrough>();
@@ -1902,7 +1912,7 @@ namespace VRMultiplayer
                   (_lastTagTime > 0f ? $"{Time.time - _lastTagTime:0} sn once\n" : "hic gorulmedi\n"));
 
             if (!cameraRunning) p.Append("KAMERA YOK (izin?)\n");
-            if (learnPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
+            if (showPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
                 p.Append("PASSTHROUGH ACILAMADI\n");
 
             // Kapi kapaliysa SOYLE. Yoksa oyuncu tag'e bakip hicbir sey olmamasini

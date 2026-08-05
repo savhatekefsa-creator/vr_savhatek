@@ -1415,12 +1415,12 @@ MonoBehaviour:
   detectionsPerSecond: 3
   idleDetectionsPerSecond: 1
   decimation: 3
-  learnMode: 1
+  learnMode: 0
   learnTargetId: -1
   learnMaxDistance: 1
   learnSampleCount: 30
-  showTagMarkers: 1
-  learnPassthrough: 1
+  showTagMarkers: 0
+  showPassthrough: 1
   offsetReferenceTagId: 0
   autoCalibrate: 1
   correctVertical: 1
@@ -1439,7 +1439,7 @@ MonoBehaviour:
   smallCorrectionRate: 0.25
   snapThresholdMeters: 0.1
   snapThresholdDegrees: 3
-  showPanel: 1
+  showPanel: 0
 --- !u!114 &1565593142
 MonoBehaviour:
   m_ObjectHideFlags: 0
