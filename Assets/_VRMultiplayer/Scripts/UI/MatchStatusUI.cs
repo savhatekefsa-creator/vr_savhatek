@@ -10,9 +10,14 @@ namespace VRMultiplayer.UI
     /// (B basili tutmak). Yani oyuncu gozlugu takiyor, ates ediyor, kimse olmuyor ve sebebini
     /// bilmiyor — "oyun bozuk" saniyor. Faz bilgisi istege bagli olamaz.
     ///
-    /// NISANI KAPATMAZ: yazi gorus merkezinin ALTINDA (-19 derece) duruyor ve MAC SIRASINDA
-    /// tamamen kayboluyor. Yalnizca son 10 saniyede geri geliyor — o an zaten herkes sureye
-    /// bakiyor.
+    /// NISANI KAPATMAZ: durum yazisi gorus merkezinin USTUNDE (~18 derece; kullanici istegi
+    /// 2026-08-05 — oyun bilgisi tepede dursun) ve MAC SIRASINDA tamamen kayboluyor. Yalnizca
+    /// son 10 saniyede sayac geri geliyor — o an zaten herkes sureye bakiyor.
+    ///
+    /// ILK DOGUMDAN ONCE YAZI YOK: oyuncu OLU KATILIR (takim secimi/kalibrasyon lobisi) ve o
+    /// asamada "ISINMA" yazisi kafa karistiriyordu. Durum satiri, yerel oyuncu EN AZ BIR KEZ
+    /// dogana kadar gizli; sonra olse de acik kalir (olu oyuncu mac durumunu gormeli).
+    /// Geri sayim rakamlarina dokunulmaz — onlar faz bilgisi degil oynanis bilgisidir.
     ///
     /// SES EN GUCLU KANAL: VR'da oyuncu bakmadigi bir yaziyi kacirir, sesi kacirmaz. Klipler
     /// kodda uretiliyor (bkz. <see cref="Match.MatchSounds"/>), 2B calindiklari icin herkes
@@ -25,8 +30,9 @@ namespace VRMultiplayer.UI
     {
         [Header("Yerlesim (kafaya gore, metre)")]
         public float distance = 1.2f;
-        [Tooltip("Durum yazisi: -0.42 @ 1.2 m ≈ 19 derece ASAGI — nisan hattinin disinda.")]
-        public float statusOffsetUp = -0.42f;
+        [Tooltip("Durum yazisi: +0.38 @ 1.2 m ≈ 18 derece YUKARI — oyun bilgisi tepede, nisan " +
+                 "hattinin disinda (lens kenari ~45 derecede; 42+ derece cihazda gorunmez olur).")]
+        public float statusOffsetUp = 0.38f;
         [Tooltip("Geri sayim: daha merkeze yakin, cunku o an nisan alinmiyor.")]
         public float countdownOffsetUp = -0.16f;
         public float followSpeed = 9f;
@@ -53,6 +59,24 @@ namespace VRMultiplayer.UI
         Match.MatchManager.Phase _lastPhase = (Match.MatchManager.Phase)255;
         int _lastWholeSecond = -1;
         float _goFlashUntil;   // "BASLA!" bu ana kadar ekranda kalir
+
+        // Yerel oyuncu EN AZ BIR KEZ dogdu mu? Mandal: bir kez true olunca oyle kalir —
+        // sonradan olen oyuncu mac durumunu gormeye devam eder (bilincli tasarim).
+        bool _everSpawned;
+        PlayerHealth _localHealth;
+
+        bool LocalPlayerEverSpawned()
+        {
+            if (_everSpawned) return true;
+            if (_localHealth == null)
+            {
+                var nm = Unity.Netcode.NetworkManager.Singleton;
+                var po = nm != null && nm.LocalClient != null ? nm.LocalClient.PlayerObject : null;
+                if (po != null) _localHealth = po.GetComponent<PlayerHealth>();
+            }
+            if (_localHealth != null && !_localHealth.IsDead) _everSpawned = true;
+            return _everSpawned;
+        }
 
         void Awake()
         {
@@ -102,16 +126,20 @@ namespace VRMultiplayer.UI
                 else if (phase == Match.MatchManager.Phase.Ended) Play(Match.MatchSounds.EndHorn);
             }
 
+            // Durum SATIRI ilk dogumdan once cizilmez (lobide "ISINMA" kafa karistiriyordu);
+            // geri sayim rakamlari ve sesler etkilenmez.
+            bool showStatus = LocalPlayerEverSpawned();
+
             switch (phase)
             {
                 case Match.MatchManager.Phase.Warmup:
-                    SetStatus("ISINMA — hasar yok, maç bekleniyor", UITheme.TextMuted);
+                    SetStatus(showStatus ? "ISINMA — hasar yok, maç bekleniyor" : null, UITheme.TextMuted);
                     SetCountdown(null, 0f, Color.white);
                     break;
 
                 case Match.MatchManager.Phase.Starting:
                 {
-                    SetStatus("MAÇ BAŞLIYOR", UITheme.AccentCyan);
+                    SetStatus(showStatus ? "MAÇ BAŞLIYOR" : null, UITheme.AccentCyan);
                     int s = Mathf.CeilToInt(m.SecondsLeft);
                     SetCountdown(Mathf.Max(1, s).ToString(), countdownSize, UITheme.TextPrimary);
                     TickOnSecondChange(s, Match.MatchSounds.Beep);
@@ -144,7 +172,7 @@ namespace VRMultiplayer.UI
                 }
 
                 case Match.MatchManager.Phase.Ended:
-                    SetStatus("MAÇ BİTTİ", UITheme.TextPrimary);
+                    SetStatus(showStatus ? "MAÇ BİTTİ" : null, UITheme.TextPrimary);
                     SetCountdown(null, 0f, Color.white);
                     break;
             }

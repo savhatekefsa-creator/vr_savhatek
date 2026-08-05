@@ -28,9 +28,24 @@ namespace VRMultiplayer.Match
         public static AudioClip Tick => _tick != null ? _tick
             : _tick = Tone("MatchTick", 0.055f, 1250f, 1250f, 0.22f);
 
-        /// <summary>Baslangic dudugu: yukselen ton. "Basladi" hissi yukari dogru gider.</summary>
-        public static AudioClip StartHorn => _startHorn != null ? _startHorn
-            : _startHorn = Tone("MatchStart", 0.50f, 420f, 840f, 0.55f);
+        /// <summary>Baslangic sesi. Prosedurel duduk KALDIRILDI (2026-08-05, kullanici istegi):
+        /// yerine gercek kayit konacak. Dosyayi
+        /// <c>Assets/_VRMultiplayer/Resources/MatchSfx/MacBaslangic.wav</c> olarak birak —
+        /// kod adiyla yukler (wav/ogg/mp3 fark etmez, onemli olan "MacBaslangic" adi).
+        /// Dosya yoksa null doner = mac SESSIZ baslar (calan taraf null'a dayanikli).</summary>
+        public static AudioClip StartHorn
+        {
+            get
+            {
+                if (_startHorn == null && !_startHornTried)
+                {
+                    _startHornTried = true;
+                    _startHorn = Resources.Load<AudioClip>("MatchSfx/MacBaslangic");
+                }
+                return _startHorn;
+            }
+        }
+        static bool _startHornTried;
 
         /// <summary>Bitis dudugu: alcalan ton. Baslangicin tersi — kelimesiz anlasilir.</summary>
         public static AudioClip EndHorn => _endHorn != null ? _endHorn
@@ -74,6 +89,7 @@ namespace VRMultiplayer.Match
             _beep = null;
             _tick = null;
             _startHorn = null;
+            _startHornTried = false;
             _endHorn = null;
         }
     }
