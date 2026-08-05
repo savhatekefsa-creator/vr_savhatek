@@ -38,21 +38,6 @@ namespace VRMultiplayer.Constructor
             if (root == null) return;
             for (int i = root.childCount - 1; i >= 0; i--)
                 DestroySafe(root.GetChild(i).gameObject);
-            SyncSceneMap(root);
-        }
-
-        /// <summary>
-        /// Sahnedeki harita (RoomMap) ile havuz haritasinin ic ice girmesini engeller: kokte
-        /// prop varsa sahne haritasi kapanir, kok bosaldiysa geri acilir.
-        ///
-        /// YALNIZCA OYUN KOKU ICIN: Editor'un bebek evi onizlemesi kendi kokunu kullaniyor
-        /// (bkz. ConstructorDollhouse) — orada sahne haritasini kapatmak, kullanicinin
-        /// dokunmadigi sahneyi Editor'de yok etmek olurdu.
-        /// </summary>
-        static void SyncSceneMap(Transform root)
-        {
-            if (root == null || root.name != DefaultRootName) return;
-            SceneMapVisibility.SetVisible(root.childCount == 0);
         }
 
         // ------------------------------------------------------------- build
@@ -79,7 +64,6 @@ namespace VRMultiplayer.Constructor
                 if (go != null) built[p.instanceId] = go;
             }
 
-            SyncSceneMap(ctx.root); // prop girdi -> sahne haritasi kapansin
             Debug.Log($"[MapBuilder] '{ctx.layout.name}' kuruldu: {built.Count}/{ctx.layout.Count} prop.");
             return built;
         }
@@ -117,7 +101,6 @@ namespace VRMultiplayer.Constructor
                 }
             }
 
-            SyncSceneMap(ctx.root); // prop girdi -> sahne haritasi kapansin
             Debug.Log($"[MapBuilder] '{ctx.layout.name}' kuruldu (kareye yayilmis): " +
                       $"{built.Count}/{ctx.layout.Count} prop.");
             onDone?.Invoke(built);
