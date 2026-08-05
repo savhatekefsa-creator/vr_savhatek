@@ -149,6 +149,14 @@ namespace VRMultiplayer
                  "gecisler tek bir uzak yaw duzeltmesinden sonra 20 cm'e firladi.")]
         public float yawCorrectionMaxDistance = 1.5f;
 
+        [Tooltip("Bu kadar buyuk bir yaw sapmasi GERCEK KAYIP sayilir ve mesafe/referans " +
+                 "kisitlari asilarak duzeltilir (derece).\n\n" +
+                 "Uykudan uyanma ya da takip kaybi sonrasi yon tamamen kayabilir; o durumda " +
+                 "duzeltecek baska hicbir sey yoktur. Esik YUKSEK tutulmali: yaw olcum " +
+                 "gurultusu 1-3 derece, ve esik oraya yakin konuldugunda gurultuyu kurtarma " +
+                 "sanip kacak bir geri besleme kuruyor (cihazda yasandi, 3 derece ile).")]
+        public float yawRecoveryDegrees = 10f;
+
         [Header("Anchor destegi (deneysel)")]
         [Tooltip("Tag GORUNMEZKEN cerceveyi Meta spatial anchor'i tutsun.\n\n" +
                  "IS BOLUMU: tag sifir noktasinin NEREDE oldugunu tanimlar (oturumlar arasi ayni " +
@@ -492,18 +500,32 @@ namespace VRMultiplayer
             // Karar burada da verilmeli, yalnizca ApplyCorrection'da degil: yaw
             // uygulanmayacaksa yaw sapmasi duzeltmeyi TETIKLEMEMELI. Aksi halde sapma hic
             // kapanmaz ve her tespitte bosuna duzeltme calisir — sonsuz dongü.
-            // KURTARMA KAPISI KALDIRILDI. "Sapma buyukse yaw'i yine duzelt" kurali, tam olarak
-            // dislamaya calistigimiz gurultulu yaw'i geri iceri aliyordu ve KACAK bir geri
-            // besleme kuruyordu: sapma buyur -> kapi acilir -> dunya doner -> uzaktaki tag daha
-            // da sapar -> kapi yine acilir. Cihazda olculdu: 2,4 cm'de seyreden gecisler bir
-            // yaw duzeltmesinden sonra 10,7 -> 20,4 -> 9,3 -> 11,6 -> 12,8 cm diye salindi,
-            // yakinsamadi. Yon kaybolursa care referans tag'e bakmaktir.
-            bool yawCounts = !yawFromReferenceOnly || entry.id == offsetReferenceTagId;
+            // KURTARMA KAPISI VAR AMA COK YUKSEKTE.
+            //
+            // Ilk denemede esik snapThresholdDegrees'ti (3 derece) ve bu FELAKETTI: yaw olcum
+            // gurultusu zaten 1-3 derece, yani kapi gurultuyu "kurtarma" sanip suruyor aciliyordu
+            // ve KACAK bir geri besleme kuruyordu -- sapma buyur, kapi acilir, dunya doner,
+            // uzaktaki tag daha da sapar, kapi yine acilir. Cihazda olculdu: 2,4 cm'de seyreden
+            // gecisler tek bir yaw duzeltmesinden sonra 10,7 -> 20,4 -> 9,3 -> 11,6 -> 12,8 cm
+            // diye salindi, yakinsamadi.
+            //
+            // Ama kapiyi tamamen kapatmak da yanlis: uykudan uyanma ya da takip kaybi sonrasi
+            // yon GERCEKTEN kaybolabilir ve o zaman duzeltecek baska bir sey yok. Kaybi
+            // gurultuden ayiran sey buyukluk -- gercek kayip 10 derece mertebesindedir,
+            // gurultu tabaninin cok uzaginda. Esik oraya konuldu.
+            bool yawRecovery = yawDev > yawRecoveryDegrees;
+            bool yawCounts = !yawFromReferenceOnly
+                             || entry.id == offsetReferenceTagId
+                             || yawRecovery;
 
             // REFERANS TAG'DE BILE yaw yalnizca YAKINDAN duzeltilir. Duzlemsel poz kestiriminde
-            // duzlem disi acinin hatasi tag'in goruntudeki buyuklugu kucüldükce hizla artar;
-            // uzaktan olculen yaw, duzeltmedigi kadar hata katar.
-            if (yawCounts && yawCorrectionMaxDistance > 0f && distance > yawCorrectionMaxDistance)
+            // duzlem disi acinin hatasi, tag'in goruntudeki buyuklugu kucüldükce hizla artar;
+            // uzaktan olculen yaw duzelttiginden fazla hata katar.
+            //
+            // KURTARMA bu kisittan MUAF: yon tamamen kaybolduysa oyuncuyu once tag'e 1,5 m
+            // yaklasmaya zorlamak, dunyasi 20 derece donukken yurumesi demek olurdu.
+            if (yawCounts && !yawRecovery &&
+                yawCorrectionMaxDistance > 0f && distance > yawCorrectionMaxDistance)
                 yawCounts = false;
 
             if (dev <= correctionDeadzoneMeters &&
