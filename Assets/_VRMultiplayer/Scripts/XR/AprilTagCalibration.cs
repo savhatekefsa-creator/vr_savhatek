@@ -269,6 +269,18 @@ namespace VRMultiplayer
                 Debug.Log($"[AprilTagCalib] Yerlesim DISKTEN yuklendi ({stored.Length} tag): " +
                           TagLayoutStore.FilePath);
             }
+
+            // Kumanda ofseti de diskten. Sabit fiziksel bir ozellik oldugu icin oturumlar
+            // arasi tasinir; yoksa her acilista yeniden olculmesi gerekir ve unutuldugunda
+            // dokunusla yazma sessizce calismaz (cihazda yasandi).
+            if (TagLayoutStore.LoadOffset(out Vector3 off, out int cnt, out int rt))
+            {
+                _storedOffset = off;
+                _storedCount = cnt;
+                Debug.Log($"[AprilTagCalib] Kumanda ofseti DISKTEN: {off.magnitude * 100f:0.0} cm, " +
+                          $"{cnt} ornek (referans tag {rt}).");
+            }
+
             RebuildMarkers();
         }
 
@@ -911,6 +923,11 @@ namespace VRMultiplayer
 
             Debug.Log($"[AprilTagCalib] Tag {entry.id} useForCalibration = {entry.useForCalibration} " +
                       $"({(saved ? "diske yazildi" : "DISKE YAZILAMADI")}).");
+
+            // Log'a da yazilir: acma/kapama olayi gorunmezse, "neden yazilmadi" sorusunu
+            // cevaplamak icin tahmin yurutmek gerekiyordu.
+            WriteDiag($"IZIN   tag {entry.id} kalibrasyon " +
+                      (entry.useForCalibration ? "ACIK" : "KAPALI"));
         }
 
         // ---- ELLE INCE AYAR ---------------------------------------------------------------
@@ -1151,7 +1168,13 @@ namespace VRMultiplayer
                     {
                         _refOffsets.Add(Quaternion.Inverse(_approachRot) *
                                         (refEntry.position - _approachPos));
-                        WriteDiag($"OFSET  ornek {_refOffsets.Count}  sacilma {RefOffsetSpread() * 100f:0.0} cm");
+
+                        // DISKE yaz: ofset kumandanin sabit ozelligi, her oturumda yeniden
+                        // olcturmek gereksiz ve unutuldugunda sistemi sessizce durduruyor.
+                        TouchOffsetLocal(out Vector3 mean, out _);
+                        bool ok = TagLayoutStore.SaveOffset(mean, OffsetSampleCount, offsetReferenceTagId);
+                        WriteDiag($"OFSET  ornek {OffsetSampleCount}  {mean.magnitude * 100f:0.0} cm  " +
+                                  $"sacilma {RefOffsetSpread() * 100f:0.0} cm" + (ok ? "  (diske yazildi)" : "  (YAZILAMADI)"));
                     }
                     else
                     {
@@ -1201,17 +1224,29 @@ namespace VRMultiplayer
         // bastirir ve her yeni referans dokunusu tahmini IYILESTIRIR, bozmaz.
         readonly List<Vector3> _refOffsets = new List<Vector3>();
 
+        // DISKTEN gelen ofset: onceki oturumlarin ortalamasi + kac ornekten geldigi.
+        // Bu oturumun ornekleriyle AGIRLIKLI birlestirilir, boylece her dokunus tahmini
+        // iyilestirir ve hicbir oturum sifirdan baslamaz.
+        Vector3 _storedOffset;
+        int _storedCount;
+
         /// <summary>Referans tag'de olculen kumanda ofseti — KUMANDANIN kendi cercevesinde.</summary>
         bool TouchOffsetLocal(out Vector3 offsetLocal, out int refId)
         {
             offsetLocal = Vector3.zero;
             refId = offsetReferenceTagId;
-            if (_refOffsets.Count == 0) return false;
 
+            int n = _refOffsets.Count + _storedCount;
+            if (n == 0) return false;
+
+            // Diskteki ortalama, kac ornekten geldiyse o agirlikla katilir.
+            offsetLocal = _storedOffset * _storedCount;
             foreach (var o in _refOffsets) offsetLocal += o;
-            offsetLocal /= _refOffsets.Count;
+            offsetLocal /= n;
             return true;
         }
+
+        int OffsetSampleCount => _refOffsets.Count + _storedCount;
 
         /// <summary>Ortalamadan ortalama sapma (m) — ofsetin ne kadar oturdugunu soyler.</summary>
         float RefOffsetSpread()
@@ -1885,11 +1920,16 @@ namespace VRMultiplayer
             if (autoCalibrate && !string.IsNullOrEmpty(_calibNote)) p.Append(_calibNote + "\n");
 
             // Ofsetin ne kadar oturdugu: turetilen konumlara guvenilip guvenilmeyecegini soyler.
-            if (_refOffsets.Count > 0)
+            if (OffsetSampleCount > 0)
             {
                 TouchOffsetLocal(out Vector3 off, out _);
-                p.Append($"OFSET {off.magnitude * 100f:0.0} cm  {_refOffsets.Count} olcum  " +
-                         $"sacilma {RefOffsetSpread() * 100f:0.0} cm\n");
+                p.Append($"OFSET {off.magnitude * 100f:0.0} cm  {OffsetSampleCount} olcum" +
+                         (_refOffsets.Count >= 2 ? $"  sacilma {RefOffsetSpread() * 100f:0.0} cm" : "") + "\n");
+            }
+            else
+            {
+                // Ofset yoksa dokunustan konum turetilemez ve solTETIK+A sessizce reddeder.
+                p.Append("OFSET YOK — once tag " + offsetReferenceTagId + "'a dokun\n");
             }
 
             if (_hasFloor) p.Append($"ZEMIN {_floorY:+0.000;-0.000}\n");

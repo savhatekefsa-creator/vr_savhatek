@@ -63,6 +63,71 @@ namespace VRMultiplayer
             }
         }
 
+        // ---- KUMANDA OFSETI ---------------------------------------------------------------
+        //
+        // Ofset kumandanin SABIT fiziksel ozelligi: izlenen noktanin degdirdigin noktaya
+        // uzakligi. Her acilista yeniden olcturmenin bir anlami yok, ustelik unutuldugunda
+        // sessizce ise yaramaz hale geliyor -- cihazda yasandi: kullanici tag 1 ve 2'yi
+        // olctugunu sandi, ofset olmadigi icin tek bir deger bile yazilamadi.
+        //
+        // ORTALAMA + SAYI saklanir, ornek listesi degil: yeni dokunuslar kaydi iyilestirsin
+        // diye. Sayi UST SINIRLI tutulur, yoksa yuzlerce eski ornek birikince kumandayi
+        // farkli tutmaya baslasan bile tahmin donmaz.
+        public const int MaxOffsetSamples = 10;
+
+        [Serializable]
+        class OffsetFile
+        {
+            public float x, y, z;
+            public int count;
+            public int refTag;
+        }
+
+        static string OffsetPath =>
+            Path.Combine(Application.persistentDataPath, "TouchOffset.json");
+
+        public static bool LoadOffset(out Vector3 offsetLocal, out int count, out int refTag)
+        {
+            offsetLocal = Vector3.zero;
+            count = 0;
+            refTag = -1;
+            try
+            {
+                if (!File.Exists(OffsetPath)) return false;
+                var o = JsonUtility.FromJson<OffsetFile>(File.ReadAllText(OffsetPath));
+                if (o == null || o.count <= 0) return false;
+
+                offsetLocal = new Vector3(o.x, o.y, o.z);
+                count = Mathf.Min(o.count, MaxOffsetSamples);
+                refTag = o.refTag;
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[TagLayoutStore] Ofset okunamadi: {e.Message}");
+                return false;
+            }
+        }
+
+        public static bool SaveOffset(Vector3 offsetLocal, int count, int refTag)
+        {
+            try
+            {
+                File.WriteAllText(OffsetPath, JsonUtility.ToJson(new OffsetFile
+                {
+                    x = offsetLocal.x, y = offsetLocal.y, z = offsetLocal.z,
+                    count = Mathf.Min(count, MaxOffsetSamples),
+                    refTag = refTag
+                }, true));
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[TagLayoutStore] Ofset yazilamadi: {e.Message}");
+                return false;
+            }
+        }
+
         public static bool Delete()
         {
             try
