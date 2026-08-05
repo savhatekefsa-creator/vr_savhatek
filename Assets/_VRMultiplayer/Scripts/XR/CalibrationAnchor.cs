@@ -427,6 +427,41 @@ namespace VRMultiplayer
             return mgr;
         }
 
+        /// <summary>
+        /// Anchor'in TUTACAGI cerceveyi, rig'in SU ANKI haline gore yeniden ogretir.
+        ///
+        /// TAG ILE ANCHOR'IN ESKI KAVGASI BURADAYDI: tag Update'te rig'i duzeltiyor, anchor
+        /// LateUpdate'te eski _target'a gore MUTLAK poz yazip o duzeltmeyi eziyordu. Cozum
+        /// birini kapatmak degil, is bolumu:
+        ///
+        ///   tag    -> sifir noktasinin NEREDE oldugunu soyler (anlamsal cipa, oturumlar arasi
+        ///             ayni fiziksel kagit)
+        ///   anchor -> tag GORUNMEZKEN onu yerinde tutar (odaya kilitli hafiza; gozlugun kendi
+        ///             ozellik haritasina bagli oldugu icin odometriden cok daha az kayar)
+        ///
+        /// Tag her duzeltme yaptiginda anchor yeni cerceveyi ogrenir; aralarda o cerceveyi
+        /// korur. Boylece iki sistem birbirini ezmek yerine tamamlar.
+        ///
+        /// Hesap LateUpdate'in TERSI olmali, yoksa bir sonraki karede rig geri ziplar:
+        ///   LateUpdate:  rot = yaw(_target) - yaw(ps) ,  pos = _target.pos - rot * ps.pos
+        ///   burada    :  _target.rot = yaw(ps) + rigYaw ,  _target.pos = rigPos + rot * ps.pos
+        /// </summary>
+        public void ReanchorToCurrentRig()
+        {
+            if (_rig == null || _anchor == null) return;
+            if (_anchor.trackingState != TrackingState.Tracking) return;
+
+            Pose ps = _anchor.pose;   // SESSION uzayi
+            float rigYaw = _rig.eulerAngles.y;
+            Quaternion rot = Quaternion.Euler(0f, rigYaw, 0f);
+
+            _target = new Pose(_rig.position + rot * ps.position,
+                               Quaternion.Euler(0f, YawOf(ps.rotation) + rigYaw, 0f));
+
+            _baselineRigY = _rig.position.y;
+            _rejectedFrames = 0;
+        }
+
         void LateUpdate()
         {
             TickHeartbeat();

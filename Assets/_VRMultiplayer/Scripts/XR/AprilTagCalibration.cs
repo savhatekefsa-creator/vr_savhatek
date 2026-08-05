@@ -143,6 +143,25 @@ namespace VRMultiplayer
                  "sonrasi ya da takip kaybinda yonun kilitli kalmasi cok daha kotu olurdu.")]
         public bool yawFromReferenceOnly = true;
 
+        [Tooltip("Yaw yalnizca referans tag bu mesafeden YAKINKEN duzeltilir (m). 0 = sinir yok.\n\n" +
+                 "Duzlem disi aci hatasi, tag'in goruntudeki buyuklugu kuculdukce hizla artar. " +
+                 "Uzaktan olculen yaw, duzeltmedigi kadar hata katar: cihazda 2,4 cm'de seyreden " +
+                 "gecisler tek bir uzak yaw duzeltmesinden sonra 20 cm'e firladi.")]
+        public float yawCorrectionMaxDistance = 1.5f;
+
+        [Header("Anchor destegi (deneysel)")]
+        [Tooltip("Tag GORUNMEZKEN cerceveyi Meta spatial anchor'i tutsun.\n\n" +
+                 "IS BOLUMU: tag sifir noktasinin NEREDE oldugunu tanimlar (oturumlar arasi ayni " +
+                 "fiziksel kagit); anchor tag gorunmezken onu yerinde tutar. Su an o araligi " +
+                 "yalnizca gozlugun odometrisi tasiyor ve yavasca kayiyor; anchor gozlugun kendi " +
+                 "ozellik haritasina bagli oldugu icin cok daha az kayar.\n\n" +
+                 "Eski catisma cozuldu: tag her duzeltmede anchor'a yeni cerceveyi OGRETIYOR " +
+                 "(ReanchorToCurrentRig), anchor da aralarda onu koruyor. Eskiden anchor mutlak " +
+                 "poz yazip tag'in duzeltmesini eziyordu.\n\n" +
+                 "VARSAYILAN KAPALI: kazanci OLCULMELI. Acik ve kapali hali ayni turda " +
+                 "karsilastirilmadan varsayilan yapilmamali.")]
+        public bool useAnchorHold = false;
+
         [Tooltip("Yaw icin olu bolge (derece).\n\n" +
                  "MESAFEDE BASKIN HATA BUDUR: yaw sapmasi tag'den uzaklastikca dogrusal olarak " +
                  "yer degistirmeye donusur. 1,5 derece 4 metrede 10 cm demek. Olculdu: iki " +
@@ -473,9 +492,19 @@ namespace VRMultiplayer
             // Karar burada da verilmeli, yalnizca ApplyCorrection'da degil: yaw
             // uygulanmayacaksa yaw sapmasi duzeltmeyi TETIKLEMEMELI. Aksi halde sapma hic
             // kapanmaz ve her tespitte bosuna duzeltme calisir — sonsuz dongü.
-            bool yawCounts = !yawFromReferenceOnly
-                             || entry.id == offsetReferenceTagId
-                             || yawDev > snapThresholdDegrees;   // kurtarma kapisi
+            // KURTARMA KAPISI KALDIRILDI. "Sapma buyukse yaw'i yine duzelt" kurali, tam olarak
+            // dislamaya calistigimiz gurultulu yaw'i geri iceri aliyordu ve KACAK bir geri
+            // besleme kuruyordu: sapma buyur -> kapi acilir -> dunya doner -> uzaktaki tag daha
+            // da sapar -> kapi yine acilir. Cihazda olculdu: 2,4 cm'de seyreden gecisler bir
+            // yaw duzeltmesinden sonra 10,7 -> 20,4 -> 9,3 -> 11,6 -> 12,8 cm diye salindi,
+            // yakinsamadi. Yon kaybolursa care referans tag'e bakmaktir.
+            bool yawCounts = !yawFromReferenceOnly || entry.id == offsetReferenceTagId;
+
+            // REFERANS TAG'DE BILE yaw yalnizca YAKINDAN duzeltilir. Duzlemsel poz kestiriminde
+            // duzlem disi acinin hatasi tag'in goruntudeki buyuklugu kucüldükce hizla artar;
+            // uzaktan olculen yaw, duzeltmedigi kadar hata katar.
+            if (yawCounts && yawCorrectionMaxDistance > 0f && distance > yawCorrectionMaxDistance)
+                yawCounts = false;
 
             if (dev <= correctionDeadzoneMeters &&
                 (!yawCounts || yawDev <= correctionYawDeadzoneDegrees))
@@ -556,6 +585,11 @@ namespace VRMultiplayer
             // CompleteFromTag rig'e DOKUNMAZ ve anchor'i uyandirmaz — yalnizca durumu isaretler,
             // zaten kalibreyse hicbir sey yapmaz. Boylece tag tek referans olmaya devam eder.
             if (_cm != null) _cm.CompleteFromTag();
+
+            // ANCHOR'A YENI CERCEVEYI OGRET — SIRASI KRITIK. Rig bu karede Update'te oynadi;
+            // anchor LateUpdate'te mutlak poz yazacak. Once ogretmezsek duzeltmemizi ezer,
+            // ki iki sistemin eski kavgasi tam olarak buydu.
+            TickAnchorHold();
 
             _calibNote = $"duzeltildi ({dev * 100f:0.0} cm)";
             Debug.Log($"[AprilTagCalib] Tag {entry.id} duzeltme: sapma {dev * 100f:0.0} cm, " +
@@ -1119,26 +1153,30 @@ namespace VRMultiplayer
         /// <summary>Son dokunulan (referans olmayan) tag'in konumunu kumandadan yazar.</summary>
         void ApplyTouchDerived()
         {
+            // YALNIZCA EN SON dokunulan tag yazilir — uygunsa.
+            //
+            // Eskiden "uygun olanlar arasinda en yeni" seciliyordu ve bu, hedef tag uygun
+            // degilse SESSIZCE BASKA bir tag'i yaziyordu. Cihazda yasandi: tag 1'in yanindayken
+            // (kalibrasyonu o an tag 1 suruyordu) uc kez basildi, ucunde de TAG 2 yazildi,
+            // ustelik bir dakika onceki bayat dokunusuyla. Kullanici tag 1'i olctugunu sandi.
+            //
+            // Yanlis tag'i sessizce yazmaktansa reddedip SEBEBINI soylemek gerekir.
             int best = -1;
             float bestT = -1f;
             foreach (var kv in _touchTime)
-            {
-                // KORUNAN TEK TAG: su an kalibrasyonu SUREN olan. Onu kendi cercevesinde
-                // olcmek dongusel olur.
-                //
-                // Eskiden useForCalibration acik olan HER tag korunuyordu — bu, bir tag'i
-                // dogrulayip actiktan sonra onu YENIDEN OLCMEYI imkansiz kiliyordu. Cihazda
-                // yasandi: tag 1 ve 2 acildiktan sonra sol tetik+A sessizce reddetti, log'da
-                // tek bir YAZILDI satiri bile olusmadi ve olcum yapildi saniladi.
-                if (kv.Key == _calibId) continue;
-                if (kv.Key == offsetReferenceTagId) continue;   // sifir noktasinin TANIMI
                 if (kv.Value > bestT) { bestT = kv.Value; best = kv.Key; }
-            }
-            if (best < 0)
+
+            if (best < 0) { _learnNote = "once kumandayla bir tag'e degdir"; return; }
+
+            if (best == _calibId)
             {
-                _learnNote = _touchPos.Count == 0
-                    ? "once kumandayla bir tag'e degdir"
-                    : $"yazilabilir tag yok (tag {_calibId} su an referans)";
+                // Kendi cercevesinde olcmek dongusel olurdu.
+                _learnNote = $"tag {best} SU AN kalibre ediyor — once solGRIP+A ile kapat";
+                return;
+            }
+            if (best == offsetReferenceTagId)
+            {
+                _learnNote = $"tag {best} sifir noktasinin TANIMI — yazilamaz";
                 return;
             }
 
@@ -1186,6 +1224,33 @@ namespace VRMultiplayer
             WriteDiag($"YAZILDI tag {best} {(isNew ? "(YENI)" : "")}  " +
                       $"{pos.x:0.000} {pos.y:0.000} {pos.z:0.000}  yaw {entry.yawDegrees:0.0}" +
                       $"  once {before.x:0.000} {before.y:0.000} {before.z:0.000}");
+        }
+
+        // ---- ANCHOR TUTUSU ----------------------------------------------------------------
+        bool _anchorBound;
+
+        void TickAnchorHold()
+        {
+            if (!useAnchorHold) { _anchorBound = false; return; }
+            if (_rig == null) return;
+
+            if (!_anchorBound)
+            {
+                // Anchor ILK saglam hizalamada kurulur. Verilen hedef poz onemsiz —
+                // ReanchorToCurrentRig hemen ardindan dogru cerceveyi ogretiyor. Onemli olan
+                // anchor'in odada olusmasi. Bind eski anchor'i atip yenisini ASENKRON yaratir,
+                // o yuzden tek sefer cagrilir.
+                CalibrationAnchor.Bind(_rig, new Pose(_rig.position, _rig.rotation));
+                var created = CalibrationAnchor.Instance;
+                if (created == null) return;
+
+                created.driveRig = true;
+                _anchorBound = true;
+                WriteDiag("ANCHOR kuruldu (tag gorunmezken cerceveyi tutacak)");
+                return;   // anchor henuz olusmadi; bu karede surmez
+            }
+
+            CalibrationAnchor.Instance?.ReanchorToCurrentRig();
         }
 
         Constructor.ConstructorPassthrough _pt;

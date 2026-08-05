@@ -1428,6 +1428,8 @@ MonoBehaviour:
   calibrateMaxDistance: 2
   correctionDeadzoneMeters: 0.01
   yawFromReferenceOnly: 1
+  yawCorrectionMaxDistance: 1.5
+  useAnchorHold: 0
   correctionYawDeadzoneDegrees: 0.4
   smallCorrectionRate: 0.25
   snapThresholdMeters: 0.1
