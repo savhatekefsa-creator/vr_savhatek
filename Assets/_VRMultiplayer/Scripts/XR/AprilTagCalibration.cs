@@ -157,6 +157,21 @@ namespace VRMultiplayer
                  "sanip kacak bir geri besleme kuruyor (cihazda yasandi, 3 derece ile).")]
         public float yawRecoveryDegrees = 10f;
 
+        [Header("Hareket kapisi")]
+        [Tooltip("Kafa bu hizdan hizli hareket ederken tespitler kalibrasyona ve olcume " +
+                 "KATILMAZ (m/sn). 0 = kapali.\n\n" +
+                 "NEDEN: kamera karesi t0'da yakalaniyor ama biz onu SU ANKI kafa poziyla " +
+                 "birlestiriyoruz (PassthroughCameraUtils satir 223'un kendi notu). Quest'te " +
+                 "passthrough gecikmesi 30-60 ms; 0,3 m/sn yururken bu 1,5 cm konum hatasi " +
+                 "demek. Hata NASIL HAREKET ETTIGINE bagli oldugu icin her tag'e farkli " +
+                 "yaklastiginda farkli cikar ve ortalamayla GECMEZ.")]
+        public float maxHeadSpeed = 0.15f;
+
+        [Tooltip("Kafa bu acisal hizdan hizli donerken tespitler katilmaz (derece/sn). 0 = kapali.\n\n" +
+                 "Donme daha zararli: 30 derece/sn ile 50 ms gecikme 1,5 derece eder, bu da " +
+                 "2 metrede 5 cm yer degistirme demektir.")]
+        public float maxHeadAngularSpeed = 15f;
+
         [Header("Anchor destegi (deneysel)")]
         [Tooltip("Tag GORUNMEZKEN cerceveyi Meta spatial anchor'i tutsun.\n\n" +
                  "IS BOLUMU: tag sifir noktasinin NEREDE oldugunu tanimlar (oturumlar arasi ayni " +
@@ -258,6 +273,7 @@ namespace VRMultiplayer
             TickLearnInput();
             TickTouch();   // her karede: en yakin yaklasmayi kacirmamak icin
             TickFloor();
+            TickHeadMotion();
 
             if (Time.time < _nextDetectAt) { TickPanel(); return; }
 
@@ -355,6 +371,11 @@ namespace VRMultiplayer
                 _seenPos[tag.ID] = worldPos;
                 _seenYaw[tag.ID] = YawOf(worldRot);
                 _seenTime[tag.ID] = Time.time;
+
+                // HAREKET KAPISI: kare ile kafa pozu ayni ana ait olmadigi icin, kafa
+                // hareket ederken cikan poz sistematik olarak kaymistir. Panelde gorunmeye
+                // devam etsin (oyuncu tag'i gordugunu bilsin) ama CERCEVEYE KARISMASIN.
+                if (!HeadSteady) continue;
 
                 if (learnMode)
                     Learn(tag.ID, dist, worldPos, worldRot);
@@ -1193,6 +1214,56 @@ namespace VRMultiplayer
         /// sesli aktarmak hem yavas hem hataya acik. Dosya iki tarafta da guvenilir ve
         /// adb ile dogrudan cekilebiliyor.
         /// </summary>
+        // ---- KAFA HAREKETI ----------------------------------------------------------------
+        //
+        // Kamera karesi ile kafa pozu AYNI ANA ait degil (bkz. maxHeadSpeed notu). Zaman
+        // damgasi boru hattı kurmak yerine, uyusmazligin ZARARSIZ oldugu ani bekliyoruz:
+        // kafa duruyorsa gecikmenin bir onemi kalmaz.
+        //
+        // OLCUM RIG'E GORE YAPILIR, dunyaya gore degil: kalibrasyon duzeltmesi rig'i oynatir
+        // ve dunya cercevesinde bu, kafa hareket etmis gibi gorunurdu — kendi duzeltmemiz
+        // kapiyi kapatirdi.
+        Transform _head;
+        Vector3 _headPosPrev;
+        Quaternion _headRotPrev;
+        bool _headPrevValid;
+        float _headSpeed, _headAngSpeed;
+
+        void TickHeadMotion()
+        {
+            if (_head == null)
+            {
+                _head = XRRigReference.HeadOrCamera;
+                if (_head == null) return;
+            }
+
+            float dt = Time.deltaTime;
+            if (dt <= 0.0001f) return;
+
+            var rigRef = XRRigReference.Instance;
+            Transform rig = rigRef != null ? rigRef.transform : null;
+
+            Vector3 p = rig != null ? rig.InverseTransformPoint(_head.position) : _head.position;
+            Quaternion r = rig != null ? Quaternion.Inverse(rig.rotation) * _head.rotation
+                                       : _head.rotation;
+
+            if (_headPrevValid)
+            {
+                // Yumusatma: tek karelik gurultu kapiyi rastgele acip kapatmasin.
+                _headSpeed = Mathf.Lerp(_headSpeed, Vector3.Distance(p, _headPosPrev) / dt, 0.3f);
+                _headAngSpeed = Mathf.Lerp(_headAngSpeed, Quaternion.Angle(r, _headRotPrev) / dt, 0.3f);
+            }
+
+            _headPosPrev = p;
+            _headRotPrev = r;
+            _headPrevValid = true;
+        }
+
+        /// <summary>Kafa, gecikmeyi zararsiz kilacak kadar sakin mi.</summary>
+        bool HeadSteady =>
+            (maxHeadSpeed <= 0f || _headSpeed <= maxHeadSpeed) &&
+            (maxHeadAngularSpeed <= 0f || _headAngSpeed <= maxHeadAngularSpeed);
+
         bool _intrinsicsLogged;
 
         /// <summary>
@@ -1658,6 +1729,11 @@ namespace VRMultiplayer
             if (!cameraRunning) p.Append("KAMERA YOK (izin?)\n");
             if (learnPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
                 p.Append("PASSTHROUGH ACILAMADI\n");
+
+            // Kapi kapaliysa SOYLE. Yoksa oyuncu tag'e bakip hicbir sey olmamasini
+            // "sistem bozuk" diye yorumlar; oysa kasitli olarak bekliyoruz.
+            if (!HeadSteady)
+                p.Append($"BEKLE — kafa hareketli ({_headSpeed:0.00} m/sn, {_headAngSpeed:0} der/sn)\n");
 
             if (autoCalibrate && !string.IsNullOrEmpty(_calibNote)) p.Append(_calibNote + "\n");
 

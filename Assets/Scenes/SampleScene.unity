@@ -1430,6 +1430,8 @@ MonoBehaviour:
   yawFromReferenceOnly: 1
   yawCorrectionMaxDistance: 1.5
   yawRecoveryDegrees: 10
+  maxHeadSpeed: 0.15
+  maxHeadAngularSpeed: 15
   useAnchorHold: 0
   correctionYawDeadzoneDegrees: 0.4
   smallCorrectionRate: 0.25
