@@ -386,6 +386,17 @@ namespace VRMultiplayer
             Quaternion bestRot = Quaternion.identity;
             _checkDist = float.MaxValue;   // her turda yeniden secilir
 
+            // TESHIS: tag'in GORUNTUDEKI yeri. Hem lens distorsiyonu hem ana nokta hatasi
+            // KONUMA BAGLI etkiler — kadrajin ortasindaki tag ile kenarindaki tag farkli
+            // yanilir. "Tag neredeydi" bilgisi olmadan bu ikisini olcmek mumkun degil.
+            // Ayni tag'i merkezde ve kenarda olcup sonuc degisiyorsa suclu bunlardan biridir.
+            _seenPixel.Clear();
+            foreach (var d in _detector.RawDetections)
+            {
+                var c = d.Center;
+                _seenPixel[d.ID] = new Vector2((float)c.x, (float)c.y);
+            }
+
             foreach (var tag in _detector.DetectedTags)
             {
                 // Tag'in DUNYA pozu (mevcut, muhtemelen kaymis rig'e gore).
@@ -671,14 +682,21 @@ namespace VRMultiplayer
             // Log'da HAM yaw sapmasi yazilir (uygulanmasa bile): tag'in yaw kestiriminin ne
             // kadar tutarsiz oldugunu gormek, yaw'i devre disi biraktiktan SONRA da gerekli.
             string yawNot = applyYaw ? "" : " (uygulanmadi)";
+
+            // PIKSEL KONUMU log'a girer: distorsiyon ve ana nokta hatasi konuma bagli
+            // oldugu icin, sapmanin kadraj konumuyla ILISKILI olup olmadigi ancak boyle
+            // gorulur. Iliski varsa optik kaynakli, yoksa baska yerde aramak gerekir.
+            string px = _seenPixel.TryGetValue(entry.id, out Vector2 pc)
+                ? $"  px {pc.x:0},{pc.y:0}" : "";
+
             if (snap)
             {
-                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}");
+                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}");
             }
             else if (Time.time >= _nextStateDiagAt)
             {
                 _nextStateDiagAt = Time.time + 5f;
-                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}");
+                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}");
             }
 
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
@@ -1011,6 +1029,7 @@ namespace VRMultiplayer
         const float TouchExit = 0.70f;    // ustune cikinca biter, en yakin nokta saklanir
 
         // Kameranin SON OLCTUGU tag pozlari. Dokunusun yakinlik testi bunlara baglidir.
+        readonly Dictionary<int, Vector2> _seenPixel = new Dictionary<int, Vector2>();
         readonly Dictionary<int, Vector3> _seenPos = new Dictionary<int, Vector3>();
         readonly Dictionary<int, float> _seenYaw = new Dictionary<int, float>();
         readonly Dictionary<int, float> _seenTime = new Dictionary<int, float>();
@@ -1365,6 +1384,31 @@ namespace VRMultiplayer
             WriteDiag($"  ANA NOKTA KAYMASI {dpx:0.0} px = {ang:0.00} derece" +
                       $"  ->  2 m'de {200.0 * System.Math.Tan(ang * Mathf.Deg2Rad):0.0} cm yanal hata");
             WriteDiag($"  skew {intr.Skew:0.0000}");
+
+            // DISTORSIYON. Native cozucu bunlari KABUL ETMEZ (apriltag_detection_info_t
+            // yalnizca tagsize/fx/fy/cx/cy tutar; tasarim geregi DUZELTILMIS kose bekler).
+            // Yani "iletmek" diye bir secenek yok — kullanilacaksa kose piksellerini biz
+            // duzeltmeliyiz. Once buyuklugunu OLCUYORUZ: kareler zaten rektifiyeyse
+            // katsayilar sifira yakin cikar ve is buraya kadar.
+            var dist = PassthroughCameraUtils.GetCameraDistortion(_camMgr.Eye);
+            if (dist == null || dist.Length == 0)
+            {
+                WriteDiag("  DISTORSIYON: cihaz vermiyor (muhtemelen kareler rektifiye)");
+            }
+            else
+            {
+                var sb = new System.Text.StringBuilder("  DISTORSIYON [k1,k2,k3,p1,p2] =");
+                float maxAbs = 0f;
+                foreach (var k in dist)
+                {
+                    sb.Append($" {k:0.00000}");
+                    if (Mathf.Abs(k) > maxAbs) maxAbs = Mathf.Abs(k);
+                }
+                WriteDiag(sb.ToString());
+                WriteDiag(maxAbs < 1e-4f
+                    ? "  -> hepsi ~0: kareler rektifiye, duzeltmeye GEREK YOK"
+                    : $"  -> en buyuk |k| = {maxAbs:0.00000} — ONEMLI, kose duzeltmesi gerekebilir");
+            }
         }
 
         static void WriteDiag(string line)

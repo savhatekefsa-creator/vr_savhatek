@@ -155,6 +155,35 @@ namespace PassthroughCameraSamples
         }
 
         /// <summary>
+        /// Lensin distorsiyon katsayilari: [k1, k2, k3, p1, p2] (Android LENS_DISTORTION).
+        /// Cihaz vermiyorsa null.
+        ///
+        /// NEDEN BURADA: AprilTag'in native cozucusu (estimate_tag_pose) distorsiyon KABUL
+        /// ETMEZ — apriltag_detection_info_t yalnizca tagsize, fx, fy, cx, cy tutar. Tasarim
+        /// geregi ideal pinhole varsayar ve DUZELTILMIS kose koordinati bekler. Yani bu
+        /// katsayilari cozucuye "iletmek" diye bir secenek yok; kullanilacaksa kose
+        /// piksellerini biz duzeltmeliyiz.
+        ///
+        /// Once OLCMEK gerekiyor: Meta'nin verdigi kareler zaten rektifiye edilmis olabilir.
+        /// Oyleyse katsayilar sifira yakin cikar ve konu kapanir. Meta'nin kendi
+        /// ScreenPointToRayInCamera'si de saf pinhole tersi kullaniyor — bu, kareleri pinhole
+        /// modelle tarif edilebilir kabul ettiklerine dair bir isaret, ama kanit degil.
+        /// </summary>
+        public static float[] GetCameraDistortion(PassthroughCameraEye cameraEye)
+        {
+            try
+            {
+                var cameraCharacteristics = GetCameraCharacteristics(cameraEye);
+                return GetCameraValueByKey<float[]>(cameraCharacteristics, "LENS_DISTORTION");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[PassthroughCamera] LENS_DISTORTION okunamadi: {e.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Returns an Android Camera2 API's cameraId associated with the passthrough camera specified in the argument.
         /// </summary>
         /// <param name="cameraEye">The passthrough camera</param>
