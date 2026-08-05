@@ -230,6 +230,19 @@ namespace VRMultiplayer
             RebuildMarkers();
         }
 
+        /// <summary>
+        /// Uyku sinirini LOG'A isaretler.
+        ///
+        /// Gozluk kafadan cikarilinca uygulama duraklatilir. O sinir log'da gorunmezse
+        /// "uyandiktan sonraki ilk sapma" ile "zaten devam eden sapma" ayirt edilemez —
+        /// oysa uyku sonrasi toparlanmayi olcmenin tek yolu tam olarak o ilk sayidir.
+        /// </summary>
+        void OnApplicationPause(bool paused)
+        {
+            WriteDiag(paused ? "=== UYKU (uygulama duraklatildi) ==="
+                             : "=== UYANDI — bundan sonraki ilk tag tespiti belirleyici ===");
+        }
+
         void OnDestroy()
         {
             _detector?.Dispose();
