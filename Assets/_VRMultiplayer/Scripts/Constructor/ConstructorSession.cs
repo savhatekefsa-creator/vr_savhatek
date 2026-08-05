@@ -184,42 +184,9 @@ namespace VRMultiplayer.Constructor
         /// ACIK OTURUMA DOKUNMAMAK MACIN AYNI HARITADA GECMESINI SAGLIYOR: sonradan katilan
         /// oyuncu yeni bir secim tetiklemez, devam eden maca girer.
         /// </summary>
-        public bool EnsureMatchMap()
-        {
-            if (IsActive) return true;
-            if (!IsMapAuthority) return false;
-
-            string map = PickPlayMap();
-            if (BuildForPlay(map)) return true;
-
-            // Sessiz kalmamali: harita gelmedigi anda ortada duvar da raf da silah da yok, ve
-            // sebebi disaridan "bozuk" gorunuyor.
-            Debug.LogWarning("[Constructor] Oynanacak harita yok: havuz bos ve '" + DefaultMapName +
-                             "' kayitli degil. Yaratici modda bir harita yapip HAVUZA EKLE.");
-            return false;
-        }
-
-        /// <summary>
-        /// Oynanacak haritanin adi: once HAVUZDAN, havuz bossa eski tek-harita adindan.
-        ///
-        /// HAVUZ OYUNCU MODUNUN TEK KAYNAGI (bkz. <see cref="MapCatalog"/>). Onceden burada
-        /// <see cref="DefaultMapName"/> SABITI vardi ve o ad yalnizca tek harita varken
-        /// anlamliydi: haritalar isimlenip yeniden adlandirilabilir olunca "Current" bir gun
-        /// baska bir ada tasindi ve oynanista hicbir harita kurulmaz oldu — hata da harita
-        /// yapana degil, oynayana ciktı.
-        ///
-        /// SECIM YALNIZCA OTORITEDE: rastgele secimi her gozluk kendi yaparsa herkes baska
-        /// haritaya duser. Istemci zaten buraya girmiyor — <see cref="BuildForPlay"/> onu
-        /// eliyor ve haritayi sunucudan aliyor.
-        ///
-        /// Havuz bos oldugunda eski ada dusmek geriye donuk uyum icin: havuz kavramindan once
-        /// kaydedilmis kurulumlar (tek "Current" dosyasi) calismaya devam etsin.
-        /// </summary>
-        static string PickPlayMap()
-        {
-            string fromPool = MapCatalog.PickRandomFromPool();
-            return !string.IsNullOrEmpty(fromPool) ? fromPool : DefaultMapName;
-        }
+        // KALDIRILDI: "havuzdan rastgele sec". Haritayi artik oyuncu seciyor
+        // (ConstructorSync.PickMatchMapServerRpc). Olu kod artik var olmayan bir davranisi
+        // varmis gibi gosterir, o yuzden duruyor degil siliniyor.
 
         void Update()
         {

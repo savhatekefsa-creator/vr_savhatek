@@ -55,6 +55,8 @@ namespace VRMultiplayer.Constructor
             ReadyClients.Clear();
             _hookedReady = false;
             Spawned.Clear();
+            MatchMapChosen = false;
+            MapChoiceRequested = false;
         }
 
         static ConstructorSession Session => ConstructorSession.Instance;
@@ -128,7 +130,32 @@ namespace VRMultiplayer.Constructor
         /// <summary>Last thing the server said about why building is not possible yet.</summary>
         public static string PendingMessage { get; set; }
 
-        public override void OnNetworkDespawn() => Spawned.Remove(this);
+        public override void OnNetworkDespawn()
+        {
+            Spawned.Remove(this);
+
+            // SON OYUNCU CIKTI -> MAC BITTI. Karar dusuyor ki sunucuya sonra gelen oyuncuya
+            // harita yeniden sorulsun; yoksa bombos bir sunucuda onceki macin haritasi
+            // dayatilirdi.
+            //
+            // Sayim Spawned uzerinden: bu liste yalnizca GERCEK oyuncularin borularini tutuyor
+            // (adanmis sunucunun kendi oyuncu objesi yok) ve kendimizi yukarida cikardik. Netcode'un
+            // baglanti listesine bakmak, kopma anindaki sirasina bagimli olurdu.
+            if (IsServer && Spawned.Count == 0) ClearMatchMap();
+        }
+
+        /// <summary>
+        /// Macin harita karari sifirlanir. HARITA SAHNEDEN KALDIRILMAZ: bir sonraki oyuncu
+        /// zaten secim yapacak ve secimi haritayi degistirecek. Kaldirmak, tasarimcinin
+        /// duzenledigi ve HENUZ KAYDEDILMEMIS oturumu da goturme riski tasiyordu.
+        /// </summary>
+        static void ClearMatchMap()
+        {
+            if (!MatchMapChosen) return;
+            MatchMapChosen = false;
+            Debug.Log("[ConstructorSync] Sunucuda oyuncu kalmadi — mac haritasi karari sifirlandi; " +
+                      "sonraki oyuncu yeniden secer.");
+        }
 
         // ------------------------------------------------------------- session entry points
 
@@ -386,6 +413,23 @@ namespace VRMultiplayer.Constructor
         /// </summary>
         public static bool MapChoiceRequested { get; set; }
 
+        /// <summary>
+        /// SUNUCU: bu macin haritasini bir oyuncu SECTI mi?
+        ///
+        /// "Oturumda harita yuklu mu" ile AYNI SEY DEGIL, ve ikisini bir sanmak iki hataya yol
+        /// acmisti:
+        ///  - Tasarimci yaratici modda harita duzenleyip oyuncu moduna gecince oturum zaten
+        ///    ACIK oluyordu; kimse secim yapmadigi halde "harita hazir" sayilip editordeki
+        ///    harita maca giriyordu.
+        ///  - Bir oyuncu harita secip cikinca oturum acik kaliyordu; sunucu bombosken gelen
+        ///    yeni oyuncuya secim sorulmuyor, onceki macin haritasi dayatiliyordu.
+        ///
+        /// Oturum "sahnede su an ne kurulu"yu soyler; bu bayrak "bu mac icin karar verildi mi"yi.
+        /// Karar SON OYUNCU CIKINCA dusuyor (bkz. OnNetworkDespawn) — sunucuda kimse kalmadiysa
+        /// devam eden bir mac da yoktur.
+        /// </summary>
+        public static bool MatchMapChosen { get; private set; }
+
         [Rpc(SendTo.Owner)]
         void ChooseMapOwnerRpc() => MapChoiceRequested = true;
 
@@ -407,7 +451,7 @@ namespace VRMultiplayer.Constructor
             // ILK SECEN KAZANIR. Iki oyuncu ayni anda sectiyse ikincisinin secimi YOK SAYILIR ve
             // ona acik harita yollanir — mac tek harita uzerinde gecmeli, "sonradan gelen
             // herkesi tasir" olsaydi devam eden mac ayaginin altindan kayardi.
-            if (Session.IsActive) { StartCoroutine(SendLayout(false)); return; }
+            if (MatchMapChosen) { StartCoroutine(SendLayout(false)); return; }
 
             var e = MapCatalog.Find(mapName);
             if (e == null || !e.inPool)
@@ -422,6 +466,7 @@ namespace VRMultiplayer.Constructor
                 return;
             }
 
+            MatchMapChosen = true;
             Debug.Log($"[ConstructorSync] Mac haritasi secildi: '{mapName}' (istemci {OwnerClientId}).");
             StartCoroutine(SendLayout(true));   // secimi HERKESE yay
         }
@@ -662,7 +707,7 @@ namespace VRMultiplayer.Constructor
             // KESIN KONTROL DE BURASI: gozluk havuz durumunu kesif yayinindan ogreniyor ve o
             // bir IPUCU — yayinla katilim arasinda son harita havuzdan cikarilmis olabilir.
             // Ipucuna guvenip sessizce bos bir dunyaya birakmak yerine sebebini soyluyoruz.
-            if (Session != null && !Session.IsActive)
+            if (Session != null && !MatchMapChosen)
             {
                 if (MapCatalog.PoolIsEmpty)
                 {
