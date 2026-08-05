@@ -271,7 +271,19 @@ namespace VRMultiplayer.Constructor
             // Sunucunun kendi oyuncu objesi yok; bu yalnizca istemci objeleri icin anlamli.
             if (OwnerClientId == NetworkManager.ServerClientId) yield break;
 
-            // Oturum henuz acilmamis olabilir (oda taramasi gelmemis) — bir sure bekle.
+            // Oturumu ACTIRIR, beklemekle yetinmez.
+            //
+            // Eskiden yalnizca beklenirdi: "oda taramasi gelirse oturum kendiliginden acilir"
+            // varsayimi. Ama sunucu oturumunu YALNIZCA TALEP UZERINE aciyor (EnsureStarted iki
+            // yerden cagriliyor: insa moduna girerken ve RequestLayoutServerRpc'de). Kimse insa
+            // moduna girmezse oturum hic acilmiyor, bu dongü 10 saniye donup pes ediyor ve
+            // KATILAN OYUNCU HARITASIZ KALIYOR -- kayitli harita diskte dururken.
+            //
+            // Yasandi: sunucu acildi, harita Current.json'da hazir, oyuncu katildi, oda gelmedi.
+            if (Session != null && !Session.IsActive) Session.EnsureStarted();
+
+            // Yine de kisa bir bekleme kalir: oda taramasi ag uzerinden geliyorsa EnsureStarted
+            // simdilik basarisiz olabilir, birkac kare sonra basarir.
             float deadline = Time.time + 10f;
             while (Time.time < deadline && (Session == null || !Session.IsActive))
                 yield return null;
