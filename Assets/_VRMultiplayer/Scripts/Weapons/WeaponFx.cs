@@ -23,11 +23,20 @@ namespace VRMultiplayer.Weapons
     {
         WeaponGripProfile _profile;
 
-        // Effects: iz cizgileri havuzdan (pellet = ayni anda birden cok ucan iz), alev tek.
+        // Effects: iz cizgileri havuzdan (pellet = ayni anda birden cok iz), alev tek.
         readonly List<LineRenderer> _tracers = new List<LineRenderer>();
         Material _tracerMat;
         Light _flash;
         Material _impactMat; // bu silahin iz malzemesi (paylasimli cache'ten)
+
+        // Namlu alevi GORSELI: isik tek basina gunduz sahnede gorunmuyordu (cihazda olculdu) —
+        // alev, WarFX dokulu uc quad'lik bir rig: iki capraz yan alev (namlu ekseni boyunca)
+        // + bir on yildiz. Malzemeler PAYLASIMLI (Resources'tan, additive A8 — renk malzemeden);
+        // bu yuzden solma alfa ile degil RIG OLCEGIYLE yapilir, kimsenin malzemesi kirlenmez.
+        Transform _flashRig;
+        Vector3 _flashRigBaseScale = Vector3.one; // ebeveyn olceginin telafisi * atis jitter'i
+        float _flashShownAt = -1f;
+        static Material _flashSideMat, _flashFrontMat;
 
         const int DecalCount = 96;
         static Transform _sharedDecalRoot;
@@ -62,6 +71,8 @@ namespace VRMultiplayer.Weapons
             _dropMat = null;
             _puffTex = null;
             _dropTex = null;
+            _flashSideMat = null;
+            _flashFrontMat = null;
         }
 
         // Ucan ates izleri: her atis/pellet dunya uzayinda saklanir, her kare ilerletilir.
@@ -103,6 +114,8 @@ namespace VRMultiplayer.Weapons
             _flash.intensity = 3f;
             _flash.range = 4f;
             _flash.enabled = false;
+
+            BuildFlashRig();
 
             // Iz malzemesi paylasimli cache'ten; global iz havuzunu ilk ShowImpact tembel kurar.
             if (ImpactSize > 0f) _impactMat = GetFxMaterial(ImpactColor);
@@ -202,6 +215,7 @@ namespace VRMultiplayer.Weapons
                 _flash.enabled = true;
                 _flashOffAt = Time.time + FlashDuration;
             }
+            ShowMuzzleFlash(origin, smokeDir);
 
             // Namlu dumani: pellet sayisindan bagimsiz atis basina TEK salvo (alev gibi).
             EmitMuzzleSmoke(origin, smokeDir);
@@ -222,6 +236,7 @@ namespace VRMultiplayer.Weapons
                 _flashOffAt = -1f;
                 if (_flash != null) _flash.enabled = false;
             }
+            TickMuzzleFlash();
 
             if (_flights.Count == 0)
             {
@@ -317,6 +332,106 @@ namespace VRMultiplayer.Weapons
         {
             if (f.flesh) EmitBlood(f.end, f.dir);
             else ShowImpact(f.end, f.normal);
+        }
+
+        // ------------------------------------------------- namlu alevi (gorsel rig)
+
+        /// <summary>Uc quad'lik alev rig'i: iki capraz YAN alev (uzunluk namlu ekseninde) + bir
+        /// ON yildiz. WFX shader'lari cift yuzlu, yani her bakis acisindan okunur — VR'da goz
+        /// basina billboard derdine girmeden calisir. Rig silahin cocugu: iki-uc karelik omrunde
+        /// namluyla birlikte hareket eder (hizli bilek cevirmede alev namludan kopmaz).</summary>
+        void BuildFlashRig()
+        {
+            EnsureFlashMaterials();
+
+            _flashRig = new GameObject("Muzzle Flash Rig").transform;
+            _flashRig.SetParent(transform, false);
+
+            // Ebeveyn olcegi silahtan silaha degisiyor; alevin DUNYA boyu sabit kalsin.
+            Vector3 ls = transform.lossyScale;
+            _flashRigBaseScale = new Vector3(
+                1f / Mathf.Max(1e-4f, Mathf.Abs(ls.x)),
+                1f / Mathf.Max(1e-4f, Mathf.Abs(ls.y)),
+                1f / Mathf.Max(1e-4f, Mathf.Abs(ls.z)));
+
+            // Yan alevler: quad'in +Y'si rig'in +Z'sine (namlu yonu) cevrilir; taban namluda.
+            const float len = 0.30f, wid = 0.16f, front = 0.17f;
+            for (int i = 0; i < 2; i++)
+            {
+                var q = FlashQuad("Yan " + i, _flashSideMat);
+                q.localRotation = Quaternion.AngleAxis(i * 90f, Vector3.forward)
+                                * Quaternion.Euler(90f, 0f, 0f);
+                q.localPosition = Vector3.forward * (len * 0.42f);
+                q.localScale = new Vector3(wid, len, 1f);
+            }
+            var f = FlashQuad("On", _flashFrontMat);
+            f.localPosition = Vector3.forward * 0.03f;
+            f.localScale = new Vector3(front, front, 1f);
+
+            _flashRig.gameObject.SetActive(false);
+        }
+
+        Transform FlashQuad(string name, Material mat)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            go.name = name;
+            Destroy(go.GetComponent<Collider>());
+            go.transform.SetParent(_flashRig, false);
+            var mr = go.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = mat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            return go.transform;
+        }
+
+        /// <summary>Atis basina: rig namluya tasinir, namlu ekseni etrafinda rastgele yuvarlanir
+        /// ve boyu hafif degisir — iki atis ust uste ayni kareyi gostermez (film karesi hissi
+        /// yerine canli alev). Solma TickMuzzleFlash'ta olcekle yapilir.</summary>
+        void ShowMuzzleFlash(Vector3 origin, Vector3 dir)
+        {
+            if (_flashRig == null) return;
+            if (dir.sqrMagnitude < 1e-6f) dir = transform.forward;
+
+            _flashRig.SetPositionAndRotation(origin,
+                Quaternion.LookRotation(dir) * Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.forward));
+            float jitter = Random.Range(0.85f, 1.25f);
+            _flashRig.localScale = _flashRigBaseScale * jitter;
+            _flashRig.gameObject.SetActive(true);
+            _flashShownAt = Time.time;
+        }
+
+        void TickMuzzleFlash()
+        {
+            if (_flashShownAt < 0f || _flashRig == null) return;
+
+            // Isikla ayni omur ailesi: FlashDuration'in 1.6 kati (~3-4 kare @72 Hz). Additive
+            // malzeme paylasimli oldugu icin solma alfayla degil kuculmeyle: parlak dogar,
+            // hizla buzulup soner — gercek namlu gazinin okunusu da bu.
+            float life = Mathf.Max(0.03f, FlashDuration * 1.6f);
+            float t = (Time.time - _flashShownAt) / life;
+            if (t >= 1f)
+            {
+                _flashShownAt = -1f;
+                _flashRig.gameObject.SetActive(false);
+                return;
+            }
+            float shrink = 1f - t * t * 0.85f;
+            _flashRig.localScale = _flashRigBaseScale * shrink;
+        }
+
+        /// <summary>Alev malzemeleri: Resources'taki hazir asset'ler (WarFX Additive A8 + resmi
+        /// WarFX namlu dokusu, turuncu tint). Asset yoksa (henuz uretilmedi) iz rengindeki
+        /// unlit'e duser — alev yine gorunur, sadece dokusuz. Resources'ta durmalari WFX
+        /// shader'inin build'den strip edilmemesini de garantiler (WeaponParticle.mat kurali).</summary>
+        static void EnsureFlashMaterials()
+        {
+            if (_flashSideMat == null)
+                _flashSideMat = Resources.Load<Material>("WeaponFx/WeaponFlashSide");
+            if (_flashFrontMat == null)
+                _flashFrontMat = Resources.Load<Material>("WeaponFx/WeaponFlashFront");
+
+            if (_flashSideMat == null) _flashSideMat = GetFxMaterial(new Color(1f, 0.55f, 0.15f));
+            if (_flashFrontMat == null) _flashFrontMat = _flashSideMat;
         }
 
         // ------------------------------------------------- paylasimli partikul FX (duman + kan)
