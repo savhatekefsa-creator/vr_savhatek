@@ -134,6 +134,18 @@ namespace VRMultiplayer
         // (B). Yoksa sunucu kapaliyken her karede yeni bir deneme baslardi.
         bool _creativeJoinStarted;
 
+        /// <summary>
+        /// Havuz durumunu keskif yayinina yazar. ANA IS PARCACIGI: yayin dongusu Task uzerinde
+        /// kosuyor ve MapCatalog dosya okuyup Unity olayi tetikliyor.
+        /// </summary>
+        void PushPoolStateToDiscovery()
+        {
+            if (discovery == null) return;
+            discovery.poolHasMaps = !Constructor.MapCatalog.PoolIsEmpty;
+        }
+
+        void OnDestroy() => Constructor.MapCatalog.Changed -= PushPoolStateToDiscovery;
+
         void EnsureJoinPanel()
         {
             // Once MOD SECIMI, sonra GIRIS EKRANI (isim + takim). O ekranlar aciktayken katilim
@@ -223,7 +235,16 @@ namespace VRMultiplayer
             if (discovery != null)
             {
                 discovery.gamePort = serverPort;
+                PushPoolStateToDiscovery();
                 discovery.StartAdvertising();
+
+                // HAVUZ DURUMU YAYINA BINER. Serit 3'un ilk sorusu "havuzda harita var mi?" ve
+                // sorunun sorulacagi an gozlugun HENUZ BAGLI OLMADIGI an — bagli olmadan
+                // sunucuya soramaz. Keskif yayini zaten dinleniyor, cevap oraya ekleniyor.
+                //
+                // Olayla besleniyor, her kare degil: PoolIsEmpty listeyi kuruyor ve yayin
+                // dongusu arka planda kostugu icin oradan MapCatalog'a dokunmak yasak.
+                Constructor.MapCatalog.Changed += PushPoolStateToDiscovery;
             }
             SetStatus("SUNUCU AKTIF (PC)\nIP: " + ip + "  port: " + serverPort + "\nGözlükler B ile katılsın");
 
