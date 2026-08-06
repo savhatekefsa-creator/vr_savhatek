@@ -260,6 +260,12 @@ namespace VRMultiplayer.EditorTools
 
             string line = Build(name, material, boxes.ToArray(), root =>
             {
+                // Levha TEL IZGARA: aradan gorunuyor, o halde mermi de gecmeli. Kutu
+                // carpisicilar duruyor (oyuncu rafin icinde duramaz), yalnizca silah isinlari
+                // onlari gormezden geliyor — bkz. BulletPassThrough. Menu 30 yeniden
+                // calistiginda kaybolmasin diye URETIMDE ekleniyor.
+                root.AddComponent<VRMultiplayer.Weapons.BulletPassThrough>();
+
                 foreach (var s in RackSlots)
                 {
                     var marker = new GameObject("Slot_" + s.weapon);

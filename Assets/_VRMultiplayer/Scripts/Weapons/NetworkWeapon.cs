@@ -144,7 +144,9 @@ namespace VRMultiplayer
             AttachRecoil();
             ComputeBarrel();
             _fx = gameObject.AddComponent<WeaponFx>();
-            _fx.Setup(_profile);
+            // Namlu ekseni de veriliyor: profilsiz silahta surgu/kovan yonu ComputeBarrel'in
+            // geometriden cikardigi eksenden gelsin (profil doluysa profil kazanir).
+            _fx.Setup(_profile, _barrelLocal);
         }
 
         /// <summary>Savas degerlerini kaynak zincirinden cozer:
@@ -742,6 +744,11 @@ namespace VRMultiplayer
             // Dolum bitis sesi HERKESTE (tutan filtresinden ONCE); titresim yalniz tutana.
             WeaponAudioPlayer.PlayAt(_cv.reloadEndClip, transform.position, _cv.reloadVolume,
                 1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance), priority: true);
+
+            // Yeni sarjor girdi -> surgu kurulur ve ilk mermi fisege surulur. Sesle AYNI
+            // yerde ve ayni gerekceyle: tutan filtresinden ONCE, yani karsidaki oyuncunun
+            // silahinda da gorunur (bkz. WeaponFx.RackSlide).
+            if (_fx != null) _fx.RackSlide();
 
             if (NetworkManager == null || _grab == null || !_grab.IsHeld) return;
             if (_grab.HolderClientId != NetworkManager.LocalClientId) return;
