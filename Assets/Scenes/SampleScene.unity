@@ -1358,6 +1358,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Meshy_AI_Metal_Wire_Grid_Wall__0706101637_image-to-3d-texture
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 329974d86b426e04a8edde4f30db09f1, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2488,6 +2492,10 @@ PrefabInstance:
     - target: {fileID: 7342945010738435637, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
       propertyPath: m_Name
       value: Rifle_HK416
+      objectReference: {fileID: 0}
+    - target: {fileID: 7342945010738435637, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7974943901506784399, guid: f62b5068047cd4a4ba988852d05acfe5, type: 3}
       propertyPath: m_LocalScale.x
@@ -4576,6 +4584,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Grenade 2
       objectReference: {fileID: 0}
+    - target: {fileID: 7277003235346693276, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -4742,6 +4754,118 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
+--- !u!1 &244371762
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 244371766}
+  - component: {fileID: 244371765}
+  - component: {fileID: 244371764}
+  - component: {fileID: 244371763}
+  m_Layer: 0
+  m_Name: Zemin
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 2147483647
+  m_IsActive: 1
+--- !u!23 &244371763
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 244371762}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: c73a8dd7710a82d4a986145ab353a3b0, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 1
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!65 &244371764
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 244371762}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!33 &244371765
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 244371762}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!4 &244371766
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 244371762}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0.05, z: 0}
+  m_LocalScale: {x: 30, y: 0.1, z: 30}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &245401459
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -6919,6 +7043,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Rifle 1 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 6648396557018715953, guid: d66b61a3706d56b43a58f88142d6df25, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
@@ -8815,6 +8943,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Meshy_AI_Metal_Wire_Grid_Wall__0706101637_image-to-3d-texture (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 329974d86b426e04a8edde4f30db09f1, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -9593,6 +9725,10 @@ PrefabInstance:
     - target: {fileID: 5558426847942843000, guid: 91ed06707eddc8f4aa7df331c883b74b, type: 3}
       propertyPath: m_Name
       value: Rifle 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 5558426847942843000, guid: 91ed06707eddc8f4aa7df331c883b74b, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7177484132177596964, guid: 91ed06707eddc8f4aa7df331c883b74b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -10505,6 +10641,10 @@ PrefabInstance:
     - target: {fileID: 3688308230504868742, guid: 890330410c4805e4aabe6b916f53f3b9, type: 3}
       propertyPath: m_Name
       value: Pistol 3 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3688308230504868742, guid: 890330410c4805e4aabe6b916f53f3b9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4207378643616716899, guid: 890330410c4805e4aabe6b916f53f3b9, type: 3}
       propertyPath: m_LocalPosition.x
@@ -14791,6 +14931,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Pistol 4
       objectReference: {fileID: 0}
+    - target: {fileID: 6131807356864460725, guid: 89b7bdb52454ce84ebede77c0730c709, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7491214270350151290, guid: 89b7bdb52454ce84ebede77c0730c709, type: 3}
       propertyPath: m_LocalPosition.x
       value: 3.375
@@ -16688,6 +16832,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Rifle 1
       objectReference: {fileID: 0}
+    - target: {fileID: 6648396557018715953, guid: d66b61a3706d56b43a58f88142d6df25, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
@@ -17101,6 +17249,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Rifle 3
       objectReference: {fileID: 0}
+    - target: {fileID: 3578321073044382131, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4307620900068869190, guid: 82abec453413dc347855d43e95ba9b07, type: 3}
       propertyPath: m_LocalPosition.x
       value: 2.062
@@ -17371,7 +17523,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &729473035
 Transform:
   m_ObjectHideFlags: 0
@@ -17475,6 +17627,10 @@ PrefabInstance:
     - target: {fileID: 2180905552888971815, guid: 26998a00fded88942b58e933efd78878, type: 3}
       propertyPath: m_Name
       value: Smg 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2180905552888971815, guid: 26998a00fded88942b58e933efd78878, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5941002346359249904, guid: 26998a00fded88942b58e933efd78878, type: 3}
       propertyPath: m_LocalPosition.x
@@ -18139,6 +18295,10 @@ PrefabInstance:
     - target: {fileID: 6936862231133190960, guid: f9c35b2351bd45c44aa90a9b22eba43c, type: 3}
       propertyPath: m_Name
       value: Wood_Modular_5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6936862231133190960, guid: f9c35b2351bd45c44aa90a9b22eba43c, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7714525281057513866, guid: f9c35b2351bd45c44aa90a9b22eba43c, type: 3}
       propertyPath: m_LocalPosition.x
@@ -18942,6 +19102,10 @@ PrefabInstance:
     - target: {fileID: 2180905552888971815, guid: 26998a00fded88942b58e933efd78878, type: 3}
       propertyPath: m_Name
       value: Smg 1 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 2180905552888971815, guid: 26998a00fded88942b58e933efd78878, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5941002346359249904, guid: 26998a00fded88942b58e933efd78878, type: 3}
       propertyPath: m_LocalPosition.x
@@ -21271,6 +21435,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Dmr1
       objectReference: {fileID: 0}
+    - target: {fileID: 8828108087950722440, guid: 1427cb5d13038d2418455032112e5ced, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
@@ -21774,6 +21942,10 @@ PrefabInstance:
     - target: {fileID: 7277003235346693276, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
       propertyPath: m_Name
       value: Grenade 2 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7277003235346693276, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -24465,6 +24637,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Grenade 3
       objectReference: {fileID: 0}
+    - target: {fileID: 1410561311835142700, guid: ab9ed78823bd2694686c02c0fa34b04c, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -26266,7 +26442,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1118607236
 Transform:
   m_ObjectHideFlags: 0
@@ -27009,6 +27185,10 @@ PrefabInstance:
     - target: {fileID: 954889654974780685, guid: 1a38dbba699f26a43a061b892b92acd8, type: 3}
       propertyPath: m_Name
       value: Pistol 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 954889654974780685, guid: 1a38dbba699f26a43a061b892b92acd8, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -28631,6 +28811,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Sniper 1
       objectReference: {fileID: 0}
+    - target: {fileID: 3617678713079805330, guid: 647cc3cabb04b7b4790b2c2f772b1a51, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8965970484705646015, guid: 647cc3cabb04b7b4790b2c2f772b1a51, type: 3}
       propertyPath: m_LocalPosition.x
       value: 1.205
@@ -30241,6 +30425,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: target
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 8573f9abde59ba0458254c733187e554, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -30305,6 +30493,10 @@ PrefabInstance:
     - target: {fileID: 2013578663232966064, guid: dd6e3ca704938d549af0c23a68d2f8c4, type: 3}
       propertyPath: m_Name
       value: Bunkers_2
+      objectReference: {fileID: 0}
+    - target: {fileID: 2013578663232966064, guid: dd6e3ca704938d549af0c23a68d2f8c4, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -30596,6 +30788,10 @@ PrefabInstance:
     - target: {fileID: 7162472632385667198, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
       propertyPath: m_Name
       value: Grenade 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7162472632385667198, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -33911,6 +34107,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Smg 3
       objectReference: {fileID: 0}
+    - target: {fileID: 2613758375344783765, guid: a8ace8f9579004a4589989d8565c6a89, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3126833878442254815, guid: a8ace8f9579004a4589989d8565c6a89, type: 3}
       propertyPath: m_LocalPosition.x
       value: 2.847
@@ -36468,7 +36668,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1522615917
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -37483,7 +37683,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1567608515
 Transform:
   m_ObjectHideFlags: 0
@@ -37647,6 +37847,10 @@ PrefabInstance:
     - target: {fileID: 7162472632385667198, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
       propertyPath: m_Name
       value: Grenade 1 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7162472632385667198, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -39821,6 +40025,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Pistol 3
       objectReference: {fileID: 0}
+    - target: {fileID: 3688308230504868742, guid: 890330410c4805e4aabe6b916f53f3b9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4207378643616716899, guid: 890330410c4805e4aabe6b916f53f3b9, type: 3}
       propertyPath: m_LocalPosition.x
       value: 3.105
@@ -40130,7 +40338,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1696935635
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -40607,6 +40815,10 @@ PrefabInstance:
     - target: {fileID: 5558426847942843000, guid: 91ed06707eddc8f4aa7df331c883b74b, type: 3}
       propertyPath: m_Name
       value: Rifle 2 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 5558426847942843000, guid: 91ed06707eddc8f4aa7df331c883b74b, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7177484132177596964, guid: 91ed06707eddc8f4aa7df331c883b74b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -42712,6 +42924,10 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 329974d86b426e04a8edde4f30db09f1, type: 3}
       propertyPath: m_Name
       value: Meshy_AI_Metal_Wire_Grid_Wall__0706101637_image-to-3d-texture (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 329974d86b426e04a8edde4f30db09f1, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -45158,6 +45374,10 @@ PrefabInstance:
     - target: {fileID: 6296907559503187472, guid: 78365614615687a4da9fae593fc5b026, type: 3}
       propertyPath: m_Name
       value: Smg 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 6296907559503187472, guid: 78365614615687a4da9fae593fc5b026, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7201090529197353091, guid: 78365614615687a4da9fae593fc5b026, type: 3}
       propertyPath: m_LocalPosition.x
@@ -50466,6 +50686,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Grenade 3 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 1410561311835142700, guid: ab9ed78823bd2694686c02c0fa34b04c, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -51275,6 +51499,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Shotgun 2
       objectReference: {fileID: 0}
+    - target: {fileID: 7511609348966785931, guid: 8de9ddd491c188648805f51f8ea41ee7, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
@@ -51819,6 +52047,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Barrier_1
       objectReference: {fileID: 0}
+    - target: {fileID: 1439118902092037865, guid: 593fc4de788b92e4e82175b0d48589bd, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3132758781392633212, guid: 593fc4de788b92e4e82175b0d48589bd, type: 3}
       propertyPath: m_LocalScale.x
       value: 0.6
@@ -52006,3 +52238,4 @@ SceneRoots:
   - {fileID: 305932078}
   - {fileID: 1278331107}
   - {fileID: 301186682}
+  - {fileID: 244371766}
