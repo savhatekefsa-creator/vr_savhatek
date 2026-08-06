@@ -745,6 +745,11 @@ namespace VRMultiplayer
             WeaponAudioPlayer.PlayAt(_cv.reloadEndClip, transform.position, _cv.reloadVolume,
                 1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance), priority: true);
 
+            // Yeni sarjor girdi -> surgu kurulur ve ilk mermi fisege surulur. Sesle AYNI
+            // yerde ve ayni gerekceyle: tutan filtresinden ONCE, yani karsidaki oyuncunun
+            // silahinda da gorunur (bkz. WeaponFx.RackSlide).
+            if (_fx != null) _fx.RackSlide();
+
             if (NetworkManager == null || _grab == null || !_grab.IsHeld) return;
             if (_grab.HolderClientId != NetworkManager.LocalClientId) return;
             Buzz(_grab.HolderHand == 0 ? XRNode.LeftHand : XRNode.RightHand, 0.75f, 0.09f);

@@ -825,6 +825,15 @@ namespace VRMultiplayer.Weapons
         float _slideFiredAt = -1f;
         float _slideStartOffset;   // bu cevrime hangi offsetten baslandi (retrigger icin)
         float _slideCurOffset;
+        // Faz sureleri CEVRIM BASINA: atis ile elle kurma ayni parcayi bambaska tempoda
+        // oynatiyor (bkz. KickSlide / RackSlide).
+        float _slideBackT, _slideHoldT, _slideFwdT;
+
+        // ELLE KURMA temposu. Atis cevriminden (30/0/70 ms) belirgin sekilde farkli olmali,
+        // yoksa sarjor degisimi "bir el ates edilmis" gibi okunuyor:
+        //   geri YAVAS ve iradeli (el cekiyor), tepede kisa bir DURAKLAMA, sonra yay birakinca
+        //   ileri SERT. Duraklama az ama sart — onsuz hareket tek bir titremeye donuyor.
+        const float RackBackT = 0.15f, RackHoldT = 0.06f, RackFwdT = 0.07f;
 
         // --- kovan gorseli (silah basina, Setup'ta bir kez)
         struct ShellVisual
@@ -1098,6 +1107,32 @@ namespace VRMultiplayer.Weapons
         {
             if (_slideParts == null) return;
             _slideStartOffset = _slideCurOffset;
+            _slideBackT = _mech.backT;
+            _slideHoldT = 0f;             // atista tepede bekleme yok, yay aninda geri iter
+            _slideFwdT = _mech.fwdT;
+            _slideFiredAt = Time.time;
+        }
+
+        /// <summary>
+        /// SARJOR DEGISIMINDE surguyu bir kez kurar (geri cek - kisa bekle - birak).
+        ///
+        /// El animasyonu YOK ve olmayacak: bu iskelette elleri ayri bir clip'le oynatacak bir
+        /// yapi yok. Ama surgunun KENDISI zaten hareket edebiliyor, ve mermiyi fisege suren
+        /// sey de odur — dolum bittigi anda kurulmasi hem dogru hem tek basina yeterli okunuyor.
+        ///
+        /// KOVAN ATILMAZ: normal dolum bos sarjorle yapiliyor, yani atilacak fisek yok.
+        /// (Dolu sarjor zaten degistirilemiyor — bkz. NetworkWeapon.ReloadServerRpc.)
+        ///
+        /// Cagiran: NetworkWeapon.ReloadDoneClientRpc — SendTo.Everyone ve tutan filtresinden
+        /// ONCE, yani karsidaki oyuncunun silahinda da gorunur. Ek ag trafigi yok.
+        /// </summary>
+        public void RackSlide()
+        {
+            if (_slideParts == null) return;
+            _slideStartOffset = _slideCurOffset;
+            _slideBackT = RackBackT;
+            _slideHoldT = RackHoldT;
+            _slideFwdT = RackFwdT;
             _slideFiredAt = Time.time;
         }
 
@@ -1107,8 +1142,9 @@ namespace VRMultiplayer.Weapons
             if (_slideParts == null) { _slideFiredAt = -1f; return; }
 
             float t = Time.time - _slideFiredAt;
-            float back = Mathf.Max(0.005f, _mech.backT);
-            float fwd = Mathf.Max(0.005f, _mech.fwdT);
+            float back = Mathf.Max(0.005f, _slideBackT);
+            float hold = Mathf.Max(0f, _slideHoldT);
+            float fwd = Mathf.Max(0.005f, _slideFwdT);
 
             float offset;
             bool done = false;
@@ -1116,10 +1152,15 @@ namespace VRMultiplayer.Weapons
             {
                 offset = Mathf.Lerp(_slideStartOffset, _mech.travel, t / back);
             }
-            else if (t <= back + fwd)
+            else if (t <= back + hold)
+            {
+                offset = _mech.travel;   // tepede duraklama (yalnizca elle kurmada)
+            }
+            else if (t <= back + hold + fwd)
             {
                 // Ileri donus yavas ve yumusak: SmoothStep, yaya oturan surgunun okunusu.
-                offset = Mathf.Lerp(_mech.travel, 0f, Mathf.SmoothStep(0f, 1f, (t - back) / fwd));
+                offset = Mathf.Lerp(_mech.travel, 0f,
+                    Mathf.SmoothStep(0f, 1f, (t - back - hold) / fwd));
             }
             else
             {
@@ -1312,5 +1353,10 @@ namespace VRMultiplayer.Weapons
             Vector3 origin = transform.position + dir * 0.2f;
             ShowVolley(origin, new[] { origin + dir * 5f }, new[] { Vector3.up });
         }
+
+        /// <summary>Sarjor degisimindeki surgu kurmasini tek basina denemek icin — gercek
+        /// dolumu (savurma hareketi + sunucu onayi) beklemeden.</summary>
+        [ContextMenu("Test Rack")]
+        void TestRack() => RackSlide();
     }
 }
