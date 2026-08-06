@@ -4,6 +4,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using VRMultiplayer.Constructor;
 using VRMultiplayer.UI;
+using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer.EditorTools
 {
@@ -836,14 +837,23 @@ namespace VRMultiplayer.EditorTools
         ///
         /// Kapatmak yetmiyor: FindObjectsByType kapali bileseni de bulur, yani devre disi
         /// bir TeamSpawnZone bile menu 23'un dogum-baglanti dogrulamasini yaniltir
-        /// (olculdu: B'yi B'yle karsilastirip "0.0 m baglantili" dedi).</summary>
+        /// (olculdu: B'yi B'yle karsilastirip "0.0 m baglantili" dedi).
+        ///
+        /// TEK ISTISNA <see cref="BulletPassThrough"/>: o bir DAVRANIS degil, fizik etiketi —
+        /// hicbir sey dogurmaz, hicbir sorguya karismaz, yalnizca "bu parca mermi gecirir"
+        /// der. Sokulseydi dekordaki raf gorunusu tel izgara olmasina ragmen mermiyi
+        /// durdururdu ve menu 45'in prefaba yazdigi kural her dekor calisinda sessizce
+        /// geri alinirdi.</summary>
         static bool PlaceVisual(string prefabPath, Transform parent, Vector3 pos,
             float yaw = 0f, Vector2 footprint = default, float height = 0f)
         {
             if (!Place(prefabPath, parent, pos, yaw, footprint, height)) return false;
             var inst = parent.GetChild(parent.childCount - 1);
             foreach (var mb in inst.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                if (mb is BulletPassThrough) continue;
                 Object.DestroyImmediate(mb);
+            }
             return true;
         }
 

@@ -89,6 +89,11 @@ namespace VRMultiplayer.Weapons
                     break;
                 }
 
+                // MERMI GECIREN GEOMETRI (tel raf, merdiven): isin durmaz, iz de birakmaz.
+                // Bkz. BulletPassThrough — collider fiziksel olarak duruyor, yalnizca
+                // silah isinlari onu gormuyor.
+                if (BulletPassThrough.Passes(h.collider)) continue;
+
                 end = h.point; // first solid/non-player hit stops the ray
                 hitNormal = h.normal;
                 break;
@@ -146,6 +151,8 @@ namespace VRMultiplayer.Weapons
                     hitFlesh = t == 0 || t != shooterTeam;
                     return;
                 }
+
+                if (BulletPassThrough.Passes(h.collider)) continue; // RaycastOne ile ayni kural
 
                 end = h.point;
                 hitNormal = h.normal;

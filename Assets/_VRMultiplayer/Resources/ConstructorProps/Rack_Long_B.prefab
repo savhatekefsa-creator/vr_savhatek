@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 6198764323976901614}
   - component: {fileID: 2599656492828022699}
   - component: {fileID: 7211438185978277181}
+  - component: {fileID: 2681581144689322667}
   m_Layer: 0
   m_Name: Rack_Long_B
   m_TagString: Untagged
@@ -313,7 +314,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 804371035748764917}
-  m_Mesh: {fileID: 4300000, guid: 7f59986ccc28d914cb63c87ae5bc9dfe, type: 2}
+  m_Mesh: {fileID: 0}
 --- !u!65 &7211438185978277181
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -335,6 +336,18 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.25, y: 1.4, z: 0.125}
   m_Center: {x: 0, y: 0.7, z: 0}
+--- !u!114 &2681581144689322667
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 804371035748764917}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 343baff8f15fef14db3b589488ab52db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.BulletPassThrough
 --- !u!1 &4727637881637514614
 GameObject:
   m_ObjectHideFlags: 0
