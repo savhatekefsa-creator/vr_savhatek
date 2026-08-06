@@ -937,6 +937,40 @@ namespace VRMultiplayer.EditorTools
             Check(Mathf.Abs(FreeEditGizmo.SnapTo(0.037f, 0f) - 0.037f) < 0.0001f,
                 "SnapTo: kademe 0 iken deger degismemeli");
 
+            // --- boy kollari: carpan ve alt sinir ---
+            // Kolu KENDI UZUNLUGU kadar disari cekmek iki kat, yerinde durmak aynen birakmali.
+            Check(Mathf.Abs(FreeEditGizmo.ScaleFactor(0f, 0.5f) - 1f) < 0.0001f,
+                "ScaleFactor: kol oynamadiysa carpan 1 olmali");
+            Check(Mathf.Abs(FreeEditGizmo.ScaleFactor(0.5f, 0.5f) - 2f) < 0.0001f,
+                "ScaleFactor: kol boyu kadar disari cekmek iki katina cikarmali");
+            Check(Mathf.Abs(FreeEditGizmo.ScaleFactor(-0.25f, 0.5f) - 0.5f) < 0.0001f,
+                "ScaleFactor: kol boyunun yarisi kadar iceri itmek yariya indirmeli");
+            // Mesafeden BAGIMSIZ: uzaktaki prop icin kol uzar, ayni oran ayni carpani vermeli.
+            Check(Mathf.Abs(FreeEditGizmo.ScaleFactor(4f, 4f) -
+                            FreeEditGizmo.ScaleFactor(0.5f, 0.5f)) < 0.0001f,
+                "ScaleFactor: carpan kol uzunluguna degil ORANA bagli olmali");
+            // Kolu sonuna kadar iceri itmek bile olcegi ters cevirmemeli.
+            Check(FreeEditGizmo.ScaleFactor(-10f, 0.5f) > 0f,
+                "ScaleFactor: asiri iceri itmede bile carpan pozitif kalmali");
+
+            Check(Mathf.Abs(FreeEditGizmo.ApplyScale(2f, 1.5f, 0f) - 3f) < 0.0001f,
+                "ApplyScale: kademe yokken olcek carpanla dogrudan carpilmali");
+            Check(Mathf.Abs(FreeEditGizmo.ApplyScale(1f, 1.13f, 0.05f) - 1.15f) < 0.0001f,
+                "ApplyScale: Ctrl kademesi SONUCU yuvarlamali (1.13 -> 1.15)");
+            Check(FreeEditGizmo.ApplyScale(1f, 0.0001f, 0f) >= FreeEditGizmo.MinScale,
+                "ApplyScale: olcek MinScale altina inmemeli");
+            Check(FreeEditGizmo.ApplyScale(1f, -3f, 0f) >= FreeEditGizmo.MinScale,
+                "ApplyScale: olcek NEGATIFE dusmemeli (mesh ic ters donerdi)");
+            // Kademe, alt siniri deler gibi gorunse de sinir en son sozu soylemeli.
+            Check(FreeEditGizmo.ApplyScale(0.01f, 0.1f, 0.05f) >= FreeEditGizmo.MinScale,
+                "ApplyScale: kademe sifira yuvarlasa da alt sinir korunmali");
+
+            // N tusu: uc takim da sirayla gelmeli ve basa donmeli.
+            Check(FreeEditGizmo.NextMode(FreeEditGizmo.Mode.Move) == FreeEditGizmo.Mode.Rotate &&
+                  FreeEditGizmo.NextMode(FreeEditGizmo.Mode.Rotate) == FreeEditGizmo.Mode.Scale &&
+                  FreeEditGizmo.NextMode(FreeEditGizmo.Mode.Scale) == FreeEditGizmo.Mode.Move,
+                "NextMode: N tusu tasi -> dondur -> boy -> tasi dongusunu kurmali");
+
             // --- duzlem kollari: kesisim ve eksen esleme ---
             // Y normalli (yatay) duzleme yukaridan inen isin, tam indigi noktada kesmeli.
             Check(FreeEditGizmo.PlanePoint(new Ray(new Vector3(1.5f, 4f, -2f), Vector3.down),

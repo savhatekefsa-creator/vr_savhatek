@@ -83,6 +83,7 @@ namespace VRMultiplayer.Constructor
 
             _gizmo = gameObject.AddComponent<FreeEditGizmo>();
             _gizmo.Moved += OnGizmoMoved;
+            _gizmo.Scaled += OnGizmoScaled;
         }
 
         void OnDisable() => Deselect();
@@ -204,11 +205,11 @@ namespace VRMultiplayer.Constructor
             // L = izgaraya geri oturt (J'nin tersi). K DEGIL: placer'da K kaydetme.
             if (kb.lKey.wasPressedThisFrame) { SnapSelectedToGrid(); return; }
 
-            // N: gizmo takimi (tasi <-> dondur). Unity'de W/E ama ikisi de burada DOLU:
-            // E yaw ince ayari, W ise serbest-ucus kamerasinin ileri tusu.
+            // N: gizmo takimi (tasi -> dondur -> boy -> tasi). Unity'de W/E/R ama ucu de burada
+            // DOLU: E yaw ince ayari, W serbest-ucus kamerasinin ileri tusu, R ise placer'da.
+            // Tek tusla cevirmek ayri tuslar aramaktan da hizli cikti.
             if (kb.nKey.wasPressedThisFrame && _gizmo != null)
-                _gizmo.EditMode = _gizmo.EditMode == FreeEditGizmo.Mode.Move
-                    ? FreeEditGizmo.Mode.Rotate : FreeEditGizmo.Mode.Move;
+                _gizmo.EditMode = FreeEditGizmo.NextMode(_gizmo.EditMode);
 
             float fine = (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed) ? 0.1f : 1f;
             bool tilt = kb.leftAltKey.isPressed || kb.rightAltKey.isPressed;
@@ -379,14 +380,17 @@ namespace VRMultiplayer.Constructor
             if (_gizmo == null) return;
 
             var go = _selectedId != 0 ? s.InstanceOf(_selectedId) : null;
-            bool free = _selectedId != 0 && s.Layout.FindFree(_selectedId) != null;
-            if (go == null || !free) { _gizmo.Hide(); return; }
+            var f = _selectedId != 0 ? s.Layout.FindFree(_selectedId) : null;
+            if (go == null || f == null) { _gizmo.Hide(); return; }
 
             // Surukleme sirasinda hedefi TAZELEMIYORUZ: gizmo kendi hesabini surukleme
             // baslangicindaki poza gore yapiyor, her kare geri yazmak jesti kendi kuyruguna
             // kilitlerdi.
+            //
+            // Olcek VERI MODELINDEN okunuyor (go.transform.localScale degil): ikisi normalde
+            // ayni ama tek dogru kaynak kayit — jest de sonucu oraya yaziyor.
             if (_gizmo.Dragging == FreeEditGizmo.Handle.None)
-                _gizmo.Show(go.transform.position, go.transform.rotation, VisualBounds(go));
+                _gizmo.Show(go.transform.position, go.transform.rotation, VisualBounds(go), f.scale);
         }
 
         /// <summary>
@@ -424,6 +428,24 @@ namespace VRMultiplayer.Constructor
             Quaternion rot = root != null ? Quaternion.Inverse(root.rotation) * worldRot : worldRot;
 
             s.TryMoveFree(_selectedId, pos, rot.eulerAngles, f.scale, commit);
+            if (commit) RefreshFields();   // panel kesin degeri gostersin
+        }
+
+        /// <summary>
+        /// Gizmodan gelen YENI olcegi oturuma verir. <see cref="OnGizmoMoved"/>'in aksine uzay
+        /// donusumu YOK: olcek bir kat sayisi, kokun maket kuculmesinden etkilenmez — donusum
+        /// uygulansaydi maket acikken her jest propu ayrica kucultuyor olurdu.
+        ///
+        /// Konum ve aci KAYITTAN oldugu gibi geri yazilir: bu jest onlara dokunmuyor.
+        /// </summary>
+        void OnGizmoScaled(Vector3 scale, bool commit)
+        {
+            var s = Session;
+            if (s == null || _selectedId == 0) return;
+            var f = s.Layout.FindFree(_selectedId);
+            if (f == null) return;
+
+            s.TryMoveFree(_selectedId, f.position, f.rotationEuler, scale, commit);
             if (commit) RefreshFields();   // panel kesin degeri gostersin
         }
 
@@ -520,15 +542,27 @@ namespace VRMultiplayer.Constructor
                          (ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter);
             if (GUILayout.Button("Uygula (Enter)") || enter) ApplyFields();
 
-            GUILayout.Label("[N] kollar: " +
-                            (_gizmo != null && _gizmo.EditMode == FreeEditGizmo.Mode.Rotate
-                                ? "DONDUR (halkalar)" : "TASI (oklar + kareler)"));
+            GUILayout.Label("[N] kollar: " + ModeLabel());
             GUILayout.Label("Kollari SOL TIK ile surukle (Ctrl = kademeli)\n" +
+                            "Boy: kolu disari cek buyur, iceri it kucul\n" +
+                            "     ortadaki BEYAZ kup uc ekseni birden\n" +
                             "Ok: X/Z ±1 cm   G/V: yukari/asagi   Shift: mm\n" +
                             "Q/E: aci ±1°   Alt+Ok: yatir/devir\n" +
                             "[L] izgaraya oturt (olcek %100'e doner)\n" +
                             "Delete: sil   Esc: birak   B/U: geri al");
             GUILayout.EndArea();
+        }
+
+        /// <summary>Panelde okunan takim adi — parantez ici hangi SEKLI arayacagini soyluyor.</summary>
+        string ModeLabel()
+        {
+            if (_gizmo == null) return "TASI (oklar + kareler)";
+            switch (_gizmo.EditMode)
+            {
+                case FreeEditGizmo.Mode.Rotate: return "DONDUR (halkalar)";
+                case FreeEditGizmo.Mode.Scale: return "BOY (kupler)";
+                default: return "TASI (oklar + kareler)";
+            }
         }
 
         void DrawRow(string label, int i0)

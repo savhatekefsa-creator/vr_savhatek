@@ -7,10 +7,10 @@ using UnityEngine.InputSystem;
 namespace VRMultiplayer.Constructor
 {
     /// <summary>
-    /// PC'de fareyle surukleme kolu: uc tasima oku ve uc donus halkasi — Unity Editor'daki
-    /// gizmonun oyun ici karsiligi. <see cref="FreeEditController"/> secili SERBEST prop icin
-    /// acar; surukleme boyunca <see cref="ConstructorSession.TryMoveFree"/>'ye commit'siz
-    /// kareler, birakildiginda commit'li kesin deger gider (bkz. Faz B canli akis).
+    /// PC'de fareyle surukleme kolu: uc tasima oku, uc donus halkasi ve uc boy kupu — Unity
+    /// Editor'daki gizmonun oyun ici karsiligi. <see cref="FreeEditController"/> secili SERBEST
+    /// prop icin acar; surukleme boyunca <see cref="ConstructorSession.TryMoveFree"/>'ye
+    /// commit'siz kareler, birakildiginda commit'li kesin deger gider (bkz. Faz B canli akis).
     ///
     /// CARPISICI YOK, ISIN MATEMATIGI VAR. Kollari collider'la kurmak, mermilerin ve el
     /// tutmanin kacinmasi gereken yeni fizik nesneleri demekti — projedeki her nisan yolu
@@ -33,6 +33,8 @@ namespace VRMultiplayer.Constructor
             MoveX, MoveY, MoveZ,
             RotX, RotY, RotZ,
             PlaneX, PlaneY, PlaneZ,   // normali X/Y/Z olan duzlem
+            ScaleX, ScaleY, ScaleZ,   // tek eksende boy
+            ScaleAll,                 // merkez kup: uc eksen birden (esoranli)
         }
 
         [Tooltip("Kol uzunlugu — kameraya olan uzakligin orani (ekran-sabit boyut).")]
@@ -46,14 +48,19 @@ namespace VRMultiplayer.Constructor
         public float frontPad = 0.1f;
 
         /// <summary>
-        /// Hangi kol takimi gorunur: TASIMA (oklar + duzlem kareleri) ya da DONDURME (halkalar).
+        /// Hangi kol takimi gorunur: TASIMA (oklar + duzlem kareleri), DONDURME (halkalar) ya da
+        /// BOY (kup uclu kollar + merkez kupu).
         ///
-        /// Unity de ikisini ayirir (W/E) ve sebebi burada olculdu: uc ok, uc kare, uc halka ve
-        /// dis cember ayni anda ciziliyken hangi kolun nerede bittigi okunmuyor, ustelik tutma
-        /// testleri birbirinin uzerine tasiyor.
+        /// Unity de ucunu ayirir (W/E/R) ve sebebi burada olculdu: uc ok, uc kare, uc halka, dis
+        /// cember ve uc kup ayni anda ciziliyken hangi kolun nerede bittigi okunmuyor, ustelik
+        /// tutma testleri birbirinin uzerine tasiyor.
         /// </summary>
-        public enum Mode : byte { Move, Rotate }
+        public enum Mode : byte { Move, Rotate, Scale }
         public Mode EditMode { get; set; } = Mode.Move;
+
+        /// <summary>Sonraki takim — <b>N</b> tusu bunu cevirir (tasi -> dondur -> boy -> tasi).</summary>
+        public static Mode NextMode(Mode m) =>
+            m == Mode.Move ? Mode.Rotate : m == Mode.Rotate ? Mode.Scale : Mode.Move;
 
         [Tooltip("Tutma toleransi — kol uzunlugunun orani. Buyutmek kollari yakalamayi " +
                  "kolaylastirir ama komsu kola tasma riskini artirir.")]
@@ -64,6 +71,16 @@ namespace VRMultiplayer.Constructor
 
         [Tooltip("Ctrl basiliyken donus kademesi (derece).")]
         public float snapDegrees = 5f;
+
+        [Tooltip("Ctrl basiliyken olcek kademesi (kat). 0.05 = %5'lik basamaklar.")]
+        public float snapScale = 0.05f;
+
+        /// <summary>
+        /// Olcegin alt siniri. Sifira inmek propu GORUNMEZ ve tekrar TUTULAMAZ yapardi
+        /// (sinir kutusu durur, kollar buyur ama gövde yok); negatif olcek ise mesh'i ic ters
+        /// cevirip aydinlatmayi bozar. Kucuk ama sifirdan buyuk bir taban ikisini de keser.
+        /// </summary>
+        public const float MinScale = 0.02f;
 
         static readonly Color XColor = new Color(1f, 0.32f, 0.32f);
         static readonly Color YColor = new Color(0.45f, 1f, 0.45f);
@@ -82,6 +99,13 @@ namespace VRMultiplayer.Constructor
         const float PlaneInner = 0.22f;
         const float PlaneOuter = 0.5f;
 
+        /// <summary>Boy kolunun ucundaki kupun kenari (kol uzunlugunun orani).</summary>
+        const float BoxScale = 0.16f;
+
+        /// <summary>Merkezdeki esoranli kupun kenari. Uc kupten KUCUK: buyuk olsaydi
+        /// kollarin dibini yutar, tek eksen kolu neredeyse hic tutulamazdi.</summary>
+        const float CenterBoxScale = 0.13f;
+
         /// <summary>Suruklenen kol; None ise serbest.</summary>
         public Handle Dragging { get; private set; }
 
@@ -94,6 +118,13 @@ namespace VRMultiplayer.Constructor
         /// <summary>Surukleme sonucu: dunya konumu/donusu ve jestin bittigi (commit) bilgisi.</summary>
         public System.Action<Vector3, Quaternion, bool> Moved;
 
+        /// <summary>
+        /// Boy sonucu: propun YENI localScale'i ve jestin bittigi bilgisi. <see cref="Moved"/>'dan
+        /// AYRI, cunku olcek konum/donusten bagimsiz bir alan — tek geri cagriya sikistirmak
+        /// her tasima karesinde olcegi de geri yazmak demekti.
+        /// </summary>
+        public System.Action<Vector3, bool> Scaled;
+
         Camera _cam;
 
         // Gizmonun CIZILDIGI yer (propun gorsel merkezi) ile propun PIVOTU ayri tutulur.
@@ -104,6 +135,7 @@ namespace VRMultiplayer.Constructor
         Vector3 _targetPos;     // kollarin cizildigi yer (propun on yuzunun onu)
         Vector3 _pivotPos;      // propun transform.position'u
         Quaternion _targetRot;
+        Vector3 _scale;         // propun guncel localScale'i (boy kolunun baslangici)
         Bounds _bounds;         // propun gorsel sinir kutusu — dayanak noktasi bundan turer
         bool _visible;
 
@@ -112,9 +144,18 @@ namespace VRMultiplayer.Constructor
         Vector3 _startPos;
         Vector3 _startPivot;
         Quaternion _startRot;
+        Vector3 _startScale;
         float _startAxisT;
         float _startAngle;
         Vector3 _startPlanePoint;
+
+        // Kol uzunlugu jestin BASINDA dondurulur: carpanin paydasi bu. Her kare tazelense,
+        // suruklerken kamerayi azicik oynatmak olcegi kendiliginden kaydirirdi.
+        float _startSize;
+
+        // Esoranli kupun surukleme duzlemi ve ekran yonu — ikisi de jest boyunca sabit.
+        Vector3 _uniformNormal;
+        Vector3 _uniformDir;
 
         readonly LineRenderer[] _arms = new LineRenderer[3];
         readonly LineRenderer[] _rings = new LineRenderer[3];
@@ -124,6 +165,10 @@ namespace VRMultiplayer.Constructor
         readonly Material[] _tipMats = new Material[3];
         readonly Transform[] _planes = new Transform[3];
         readonly Material[] _planeMats = new Material[3];
+        readonly Transform[] _boxes = new Transform[3];
+        readonly Material[] _boxMats = new Material[3];
+        Transform _centerBox;      // esoranli boy kupu
+        Material _centerBoxMat;
         LineRenderer _outerRing;   // kameraya bakan dis cember (Unity'deki beyaz halka)
         static Mesh _coneMesh;
 
@@ -145,11 +190,13 @@ namespace VRMultiplayer.Constructor
         /// <paramref name="visualBounds"/> propun gorsel sinir kutusu — kollar bunun KAMERAYA
         /// BAKAN YUZUNUN ONUNDE cizilir (bkz. <see cref="AnchorFor"/>);
         /// <paramref name="pivotWorld"/> ise transformun kendi konumu, sonuc oradan verilir.
+        /// <paramref name="scale"/> propun guncel localScale'i — boy kolu buradan baslar.
         /// </summary>
-        public void Show(Vector3 pivotWorld, Quaternion worldRot, Bounds visualBounds)
+        public void Show(Vector3 pivotWorld, Quaternion worldRot, Bounds visualBounds, Vector3 scale)
         {
             _pivotPos = pivotWorld;
             _targetRot = worldRot;
+            _scale = scale;
             _bounds = visualBounds;
             if (!_visible)
             {
@@ -197,8 +244,10 @@ namespace VRMultiplayer.Constructor
                 if (_rings[i] != null) Destroy(_rings[i].gameObject);
                 if (_tips[i] != null) Destroy(_tips[i].gameObject);
                 if (_planes[i] != null) Destroy(_planes[i].gameObject);
+                if (_boxes[i] != null) Destroy(_boxes[i].gameObject);
             }
             if (_outerRing != null) Destroy(_outerRing.gameObject);
+            if (_centerBox != null) Destroy(_centerBox.gameObject);
         }
 
         // ------------------------------------------------------------- dongu
@@ -250,9 +299,26 @@ namespace VRMultiplayer.Constructor
             _startPos = _targetPos;
             _startPivot = _pivotPos;
             _startRot = _targetRot;
+            _startScale = _scale;
+            _startSize = size;
+
+            if (Dragging == Handle.ScaleAll)
+            {
+                // Merkez kupun tek bir ekseni yok: kameraya bakan duzlemde, ekranin sag-ust
+                // caprazi boyunca okunur (Unity'de de jest budur). Duzlem de yon de jest
+                // boyunca DONDURULUR; kamera oynadikca degisselerdi olcek kendiliginden kayardi.
+                var cam = ResolveCamera();
+                Vector3 n = cam != null ? cam.transform.position - _targetPos : Vector3.forward;
+                _uniformNormal = n.sqrMagnitude > 1e-6f ? n.normalized : Vector3.forward;
+                _uniformDir = cam != null
+                    ? (cam.transform.right + cam.transform.up).normalized
+                    : Vector3.right;
+                PlanePoint(ray, _targetPos, _uniformNormal, out _startPlanePoint);
+                return;
+            }
 
             int axis = AxisIndex(Dragging);
-            if (IsMove(Dragging))
+            if (IsMove(Dragging) || IsScale(Dragging))
                 ClosestPointOnAxis(ray, _targetPos, WorldAxis(axis), out _startAxisT);
             else if (IsPlane(Dragging))
                 PlanePoint(ray, _targetPos, WorldAxis(axis), out _startPlanePoint);
@@ -263,15 +329,45 @@ namespace VRMultiplayer.Constructor
         void EndDrag()
         {
             if (Dragging == Handle.None) return;
+            bool wasScale = IsScale(Dragging) || Dragging == Handle.ScaleAll;
             Dragging = Handle.None;
-            Moved?.Invoke(_pivotPos, _targetRot, true);   // jest bitti: kesin deger
+
+            // Jest bitti: kesin deger. Boy jesti olcegi, digerleri pozu commit'ler — karsi
+            // alani da yollamak, o alanda suren baska bir duzenlemeyi geri sardirirdi.
+            if (wasScale) Scaled?.Invoke(_scale, true);
+            else Moved?.Invoke(_pivotPos, _targetRot, true);
         }
 
         void DragTo(Ray ray, float size)
         {
+            bool snap = SnapHeld();
+
+            // BOY jesti ayri kapida: sonucu olcek alanina yaziyor, poza dokunmuyor.
+            if (Dragging == Handle.ScaleAll)
+            {
+                if (!PlanePoint(ray, _startPos, _uniformNormal, out Vector3 hitPoint)) return;
+                float uf = ScaleFactor(Vector3.Dot(hitPoint - _startPlanePoint, _uniformDir), _startSize);
+                float ustep = snap ? snapScale : 0f;
+                _scale = new Vector3(
+                    ApplyScale(_startScale.x, uf, ustep),
+                    ApplyScale(_startScale.y, uf, ustep),
+                    ApplyScale(_startScale.z, uf, ustep));
+                Scaled?.Invoke(_scale, false);
+                return;
+            }
+
             int axis = AxisIndex(Dragging);
             Vector3 a = WorldAxis(axis);
-            bool snap = SnapHeld();
+
+            if (IsScale(Dragging))
+            {
+                if (!ClosestPointOnAxis(ray, _startPos, a, out float st)) return;
+                float f = ScaleFactor(st - _startAxisT, _startSize);
+                _scale = _startScale;
+                _scale[axis] = ApplyScale(_startScale[axis], f, snap ? snapScale : 0f);
+                Scaled?.Invoke(_scale, false);
+                return;
+            }
 
             if (IsMove(Dragging))
             {
@@ -319,6 +415,26 @@ namespace VRMultiplayer.Constructor
         public static float SnapTo(float value, float step) =>
             step > 0.0001f ? Mathf.Round(value / step) * step : value;
 
+        /// <summary>
+        /// Boy carpani: kolu KENDI UZUNLUGU kadar disari cekmek iki katina, yarisi kadar iceri
+        /// itmek yariya indirir — yani "kol boyu = %100". Oran secildi cunku carpan boylece
+        /// mesafeden bagimsiz olur: kol ekranda sabit boyda ciziliyor (bkz. sizeRatio), ham
+        /// metre farki kullanilsaydi ayni el hareketi uzaktaki propu bambaska buyuturdu.
+        ///
+        /// Alt sinir 0.01: kolu merkezin OTESINE itmek carpani negatife gecirir, o da mesh'i
+        /// ic ters cevirirdi (bkz. MinScale). Saf aritmetik, oz-denetim (menu 29) kapsiyor.
+        /// </summary>
+        public static float ScaleFactor(float axisDelta, float armLength) =>
+            Mathf.Max(0.01f, 1f + axisDelta / Mathf.Max(0.001f, armLength));
+
+        /// <summary>
+        /// Bir eksende son olcek: baslangic * carpan, kademe (Ctrl) ve alt sinir uygulanmis.
+        /// Kademe CARPANA degil SONUCA vurulur — kullanicinin okudugu sayi paneldeki olcek,
+        /// yuvarlak duran da o olmali. Saf aritmetik, oz-denetim kapsiyor.
+        /// </summary>
+        public static float ApplyScale(float startScale, float factor, float snapStep) =>
+            Mathf.Max(MinScale, SnapTo(startScale * factor, snapStep));
+
         // ------------------------------------------------------------- secim (hit-test)
 
         Handle Pick(Ray ray, float size)
@@ -332,6 +448,23 @@ namespace VRMultiplayer.Constructor
                 for (int i = 0; i < 3; i++)
                     if (RingHit(ray, _targetPos, WorldAxis(i), size * RingScale, tol))
                         return (Handle)(4 + i);
+                return Handle.None;
+            }
+
+            if (EditMode == Mode.Scale)
+            {
+                // MERKEZ KUP EN ONCE: uc kolun da dibinde duruyor, sonra denenseydi eksen
+                // kollari onu her seferinde kapardi (eksen testi t=0'i da kabul ediyor).
+                if (DistanceToRay(ray, _targetPos) <= size * CenterBoxScale * 0.5f + tol)
+                    return Handle.ScaleAll;
+
+                for (int i = 0; i < 3; i++)
+                {
+                    if (!ClosestPointOnAxis(ray, _targetPos, WorldAxis(i), out float st)) continue;
+                    if (st < 0f || st > size) continue;
+                    if (DistanceToRay(ray, _targetPos + WorldAxis(i) * st) <= tol)
+                        return (Handle)(10 + i);
+                }
                 return Handle.None;
             }
 
@@ -454,11 +587,19 @@ namespace VRMultiplayer.Constructor
 
         static bool IsMove(Handle h) => h == Handle.MoveX || h == Handle.MoveY || h == Handle.MoveZ;
         static bool IsPlane(Handle h) => h == Handle.PlaneX || h == Handle.PlaneY || h == Handle.PlaneZ;
+        static bool IsScale(Handle h) => h == Handle.ScaleX || h == Handle.ScaleY || h == Handle.ScaleZ;
 
-        /// <summary>Kol -> eksen indeksi. Uc grup da (tasi/dondur/duzlem) ucerli oldugu icin
-        /// tek mod islemi yetiyor.</summary>
+        /// <summary>Kol -> eksen indeksi. Dort grup da (tasi/dondur/duzlem/boy) ucerli ve
+        /// pes pese oldugu icin tek mod islemi yetiyor; ScaleAll bu yola HIC girmez.</summary>
         static int AxisIndex(Handle h) => ((int)h - 1) % 3;
-        static Vector3 WorldAxis(int i) => AxisOf(i);
+
+        /// <summary>
+        /// Kolun dunyadaki yonu. BOY takimi propun KENDI eksenlerinde calisir, digerleri oda
+        /// eksenlerinde — ve bu tercih degil zorunluluk: localScale propun kendi uzayinda
+        /// tanimli, dondurulmus bir propu dunya X'inde germek tek bir Vector3 ile ifade
+        /// edilemez (kayma/shear isterdi). Unity de olcek kolunu hep Local tutar.
+        /// </summary>
+        Vector3 WorldAxis(int i) => EditMode == Mode.Scale ? _targetRot * AxisOf(i) : AxisOf(i);
 
         // ------------------------------------------------------------- cizim
 
@@ -496,10 +637,31 @@ namespace VRMultiplayer.Constructor
                 pmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 pmr.receiveShadows = false;
                 _planes[i] = pl.transform;
+
+                // KUP uc, koni degil: Unity'nin boy kolu boyle okunuyor ve tek bakista
+                // "bu tasimiyor, geriyor" diyor.
+                _boxMats[i] = UITheme.CreateOverlayMaterial(c, 3201);
+                _boxes[i] = MakeBox("~GizmoBox" + i, _boxMats[i]);
             }
 
             var outerMat = UITheme.CreateOverlayMaterial(OuterColor, 3199);
             _outerRing = MakeLine("~GizmoOuterRing", RingSegments + 1, outerMat, 0.006f);
+
+            _centerBoxMat = UITheme.CreateOverlayMaterial(OuterColor, 3202);
+            _centerBox = MakeBox("~GizmoCenterBox", _centerBoxMat);
+        }
+
+        /// <summary>Carpisicisiz kup — gizmonun hicbir parcasi fizige karismaz (bkz. sinif ozeti).</summary>
+        static Transform MakeBox(string name, Material mat)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+            Destroy(go.GetComponent<Collider>());
+            var mr = go.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = mat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            return go.transform;
         }
 
         /// <summary>
@@ -565,8 +727,10 @@ namespace VRMultiplayer.Constructor
                 if (_rings[i] != null) _rings[i].gameObject.SetActive(on);
                 if (_tips[i] != null) _tips[i].gameObject.SetActive(on);
                 if (_planes[i] != null) _planes[i].gameObject.SetActive(on);
+                if (_boxes[i] != null) _boxes[i].gameObject.SetActive(on);
             }
             if (_outerRing != null) _outerRing.gameObject.SetActive(on);
+            if (_centerBox != null) _centerBox.gameObject.SetActive(on);
         }
 
         void Draw(float size)
@@ -574,18 +738,24 @@ namespace VRMultiplayer.Constructor
             EnsureVisuals();
             float ringR = size * RingScale;
             float tipLen = size * 0.26f;
+            float boxLen = size * BoxScale;
             Handle hot = Dragging != Handle.None ? Dragging : Hover;
             bool move = EditMode == Mode.Move;
+            bool rotate = EditMode == Mode.Rotate;
+            bool scale = EditMode == Mode.Scale;
 
-            // Kapali takimi gizle — Unity'de W/E ile olan ayrim.
+            // Kapali takimi gizle — Unity'de W/E/R ile olan ayrim. Kol GOVDESI tasima ve boyda
+            // ortak, yalnizca ucu degisiyor (koni <-> kup).
             for (int i = 0; i < 3; i++)
             {
-                _arms[i].gameObject.SetActive(move);
+                _arms[i].gameObject.SetActive(move || scale);
                 _tips[i].gameObject.SetActive(move);
                 _planes[i].gameObject.SetActive(move);
-                _rings[i].gameObject.SetActive(!move);
+                _rings[i].gameObject.SetActive(rotate);
+                _boxes[i].gameObject.SetActive(scale);
             }
-            _outerRing.gameObject.SetActive(!move);
+            _outerRing.gameObject.SetActive(rotate);
+            _centerBox.gameObject.SetActive(scale);
 
             // Kalinliklar da MESAFEYLE olceklenir: sabit dunya genisligi uzakta sac teline,
             // yakinda boruya donuyordu.
@@ -594,7 +764,27 @@ namespace VRMultiplayer.Constructor
 
             for (int i = 0; i < 3; i++)
             {
-                Vector3 a = WorldAxis(i);
+                Vector3 a = WorldAxis(i);   // BOY takiminda propun kendi ekseni (bkz. WorldAxis)
+
+                if (scale)
+                {
+                    bool boxHot = hot == (Handle)(10 + i);
+                    Color bc = boxHot ? HotColor : ColorOf(i);
+
+                    // Govde kupun MERKEZINDE biter; kup yari yariya uzerine biner ve arada
+                    // bosluk kalmaz.
+                    _arms[i].startWidth = _arms[i].endWidth = armW;
+                    _arms[i].SetPosition(0, _targetPos);
+                    _arms[i].SetPosition(1, _targetPos + a * (size - boxLen * 0.5f));
+                    UITheme.SetMaterialColor(_armMats[i], bc);
+
+                    _boxes[i].position = _targetPos + a * (size - boxLen * 0.5f);
+                    _boxes[i].rotation = _targetRot;
+                    _boxes[i].localScale = Vector3.one * boxLen;
+                    UITheme.SetMaterialColor(_boxMats[i], bc);
+                    continue;
+                }
+
                 bool armHot = hot == (Handle)(1 + i);
                 bool ringHot = hot == (Handle)(4 + i);
 
@@ -633,7 +823,19 @@ namespace VRMultiplayer.Constructor
                     new Color(pc.r, pc.g, pc.b, planeHot ? 0.65f : 0.3f));
             }
 
-            if (!move) DrawOuterRing(ringR * 1.12f, ringW * 0.8f);
+            if (scale)
+            {
+                // Merkez kup BEYAZ, kollar renkli: "eksen degil, hepsi" mesaji rengin
+                // kendisinden okunuyor — dis cemberin beyazi da ayni isi goruyor.
+                _centerBox.position = _targetPos;
+                _centerBox.rotation = _targetRot;
+                _centerBox.localScale = Vector3.one * (size * CenterBoxScale);
+                UITheme.SetMaterialColor(_centerBoxMat,
+                    hot == Handle.ScaleAll ? HotColor : OuterColor);
+                return;
+            }
+
+            if (rotate) DrawOuterRing(ringR * 1.12f, ringW * 0.8f);
         }
 
         /// <summary>
