@@ -959,6 +959,27 @@ namespace VRMultiplayer
         Vector3 _learnedPos;
         float _learnedYaw;
 
+        /// <summary>
+        /// Yerlesime EN SON yazilan degerin sayilari, panelde okunacak bicimde.
+        ///
+        /// NEDEN PANELDE: yazilan konum simdiye kadar yalnizca teshis DOSYASINA ve Debug.Log'a
+        /// gidiyordu. Log bu build'de logcat'e hic akmiyor (bkz. WriteDiag notu), yani sayiyi
+        /// gormenin tek yolu gozlugu cikarip adb ile dosya cekmekti. Panelde durursa olcen kisi
+        /// dogrudan okuyup aktarabiliyor — olculen deger PC'deki prefaba ELLE islenmek zorunda
+        /// (TagLayoutStore cihazin diskine yaziyor, projeye degil).
+        ///
+        /// KALICI: bir sonraki yazmaya kadar silinmez. _learnNote gibi anlik olsaydi, kolunu
+        /// indirip paneli okuyana kadar kaybolabilirdi — dokunus zaten "en yakin yaklasma"
+        /// mantigiyla bunun icin kuruldu.
+        ///
+        /// 3 HANE = 1 mm. Tag'ler arasi tutarsizlik santimetre mertebesinde; daha az hane
+        /// olcumun kendisini yuvarlardi, daha cok hane okunmasi zor bir sayi uretirdi.
+        /// </summary>
+        string _lastWrite = "";
+
+        void NoteWrite(int id, Vector3 pos, float yaw) =>
+            _lastWrite = $"YAZ tag {id}  {pos.x:0.000} {pos.y:0.000} {pos.z:0.000}  yaw {yaw:0.0}";
+
         // ---- OLC -> UYGULA -> GOZLE DOGRULA -----------------------------------------------
         //
         // Eskiden olcum sonucu panelde SAYI olarak kalirdi; yerlesime gecirmek PC'de sahneyi
@@ -1673,6 +1694,7 @@ namespace VRMultiplayer
 
             bool saved = TagLayoutStore.Save(tagLayout);
             if (isNew) RebuildMarkers(); else SyncMarkerPoses();
+            NoteWrite(best, pos, entry.yawDegrees);
 
             _learnNote = (isNew ? $"tag {best} KUMANDADAN olusturuldu"
                                 : $"tag {best} KUMANDADAN yazildi ({(pos - before).magnitude * 100f:0} cm oynadi)")
@@ -1786,6 +1808,7 @@ namespace VRMultiplayer
 
             bool saved = TagLayoutStore.Save(tagLayout);
             RebuildMarkers();
+            NoteWrite(_learnId, entry.position, entry.yawDegrees);
 
             float moved = (entry.position - before).magnitude;
             float yawMoved = Mathf.Abs(Mathf.DeltaAngle(beforeYaw, entry.yawDegrees));
@@ -2111,6 +2134,9 @@ namespace VRMultiplayer
 
             // Son eylemin sonucu: dokunuldu / yazildi / reddedildi.
             if (!string.IsNullOrEmpty(_learnNote)) p.Append("> " + _learnNote + "\n");
+
+            // Yazilan SAYILAR — bir sonraki yazmaya kadar durur (bkz. _lastWrite).
+            if (!string.IsNullOrEmpty(_lastWrite)) p.Append(_lastWrite + "\n");
 
             if (learnMode)
                 p.Append("A=yaz  solGRIP+A=ac/kapat  solTETIK+A=kumandadan  solCUBUK=ince");
