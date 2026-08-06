@@ -5449,6 +5449,127 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 5887402247742784085, guid: 9e547ec77694fe0439123051255f148a, type: 3}
   m_PrefabInstance: {fileID: 294301544}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &301186678
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 301186682}
+  - component: {fileID: 301186681}
+  - component: {fileID: 301186680}
+  - component: {fileID: 301186679}
+  m_Layer: 0
+  m_Name: AprilTag
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &301186679
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 301186678}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e654c74ebcf3f5846974c231203b9717, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.AprilTagCalibration
+  tagSizeMeters: 0.14
+  tagLayout:
+  - id: 0
+    position: {x: 0, y: 1.5, z: 0}
+    yawDegrees: 180
+    useForCalibration: 1
+  - id: 2
+    position: {x: -2.511815, y: 1.499909, z: -0.504827}
+    yawDegrees: -88.18314
+    useForCalibration: 1
+  - id: 1
+    position: {x: -2.635028, y: 1.509223, z: -3.126694}
+    yawDegrees: -89.72339
+    useForCalibration: 0
+  detectionsPerSecond: 3
+  idleDetectionsPerSecond: 1
+  decimation: 3
+  learnMode: 0
+  learnTargetId: -1
+  learnMaxDistance: 1
+  learnSampleCount: 30
+  showTagMarkers: 0
+  showPassthrough: 0
+  offsetReferenceTagId: 0
+  autoCalibrate: 1
+  correctVertical: 1
+  calibrateSampleCount: 15
+  calibrateMaxDistance: 2
+  correctionDeadzoneMeters: 0.01
+  yawFromReferenceOnly: 1
+  yawCorrectionMaxDistance: 1.5
+  yawRecoveryDegrees: 10
+  maxHeadSpeed: 0.15
+  maxHeadAngularSpeed: 15
+  assumedFrameLatency: 0.05
+  motionErrorBudget: 0.02
+  useAnchorHold: 0
+  calibWindowMaxGap: 2
+  calibSwitchMargin: 0.3
+  calibStabilitySpread: 0.02
+  calibOutlierDistance: 0.15
+  correctionYawDeadzoneDegrees: 0.4
+  smallCorrectionRate: 0.25
+  snapThresholdMeters: 0.1
+  snapThresholdDegrees: 3
+  showPanel: 1
+--- !u!114 &301186680
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 301186678}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef9a7893e57c04c0db4114c70954b915, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PassthroughCameraSamples.WebCamTextureManager
+  Eye: 0
+  RequestedResolution: {x: 0, y: 0}
+  CameraPermissions: {fileID: 301186681}
+--- !u!114 &301186681
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 301186678}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f5e9631f3cd04da0acc02bc5b51f5d4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PassthroughCameraSamples.PassthroughCameraPermissions
+  PermissionRequestsOnStartup:
+  - com.oculus.permission.USE_SCENE
+--- !u!4 &301186682
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 301186678}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &303221684
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -9284,6 +9405,8 @@ MonoBehaviour:
   status: {fileID: 339188426}
   sharedOrigin: {x: 0, y: 0, z: 0}
   sharedForward: {x: 0, y: 0, z: 1}
+  useMeasuredPointAHeight: 0
+  pointAHeight: 1
 --- !u!114 &415858742
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -17481,6 +17604,7 @@ MonoBehaviour:
   announcePort: 47778
   gamePort: 7777
   appId: savhateks-vr
+  poolHasMaps: 0
 --- !u!114 &734246290
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -51880,3 +52004,4 @@ SceneRoots:
   - {fileID: 2137178719}
   - {fileID: 305932078}
   - {fileID: 1278331107}
+  - {fileID: 301186682}
