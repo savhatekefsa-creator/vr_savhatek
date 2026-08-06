@@ -249,7 +249,11 @@ namespace VRMultiplayer.EditorTools
         const string RigName = "~Yatiklik Duzeltme";
 
         [MenuItem("Tools/VR Multiplayer/47. Yatiklik Duzeltme Sahnesi Kur")]
-        public static void BuildRollRig()
+        public static void BuildRollRig() => BuildRollRig(true);
+
+        /// <summary>Diyalogsuz kurulum — otomasyon icin. Modal pencere MCP koprusunu
+        /// kilitliyor, o yuzden menuden gelmeyen cagrilarda kapali.</summary>
+        public static void BuildRollRig(bool showDialog)
         {
             var old = GameObject.Find(RigName);
             if (old != null) Object.DestroyImmediate(old);
@@ -281,8 +285,34 @@ namespace VRMultiplayer.EditorTools
                     toDisplay * Quaternion.Inverse(Quaternion.Euler(profile.gripLocalEuler)));
 
                 var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab, holder.transform);
-                inst.transform.localPosition = Vector3.zero;
                 inst.transform.localRotation = Quaternion.identity;
+
+                // NAMLU EKSENI TASIYICININ PIVOTUNDAN GECMELI.
+                //
+                // Silah prefabinin orijini keyfi bir yerde (kimi modelde kabza, kimide mesh'in
+                // kosesi). localPosition'i sifir birakmak silahi dikey referans direginin
+                // YANINA koyuyordu; daha kotusu, tasiyiciyi dunya Z'si etrafinda cevirmek
+                // silahi kendi ekseninde degil uzaktaki bir noktanin etrafinda SAVURUYORDU —
+                // yatikligi gozle ayarlamak imkansizdi.
+                //
+                // Cozum: namlu noktasinin eksene DIK bileseni kadar geri kaydir. Boylece bore
+                // hatti pivotun uzerine oturur ve mavi halka silahi yerinde dondurur.
+                Vector3 b = profile.barrelLocalDirection.normalized;
+                Vector3 onAxis = Vector3.zero;
+                var muzzle = inst.transform.Find("Muzzle");
+                if (muzzle != null) onAxis = muzzle.localPosition;
+                else
+                {
+                    // Muzzle yoksa gorsel merkez: hicbir sey yapmamaktan iyi.
+                    var rends = inst.GetComponentsInChildren<Renderer>(true);
+                    if (rends.Length > 0)
+                    {
+                        var bounds = rends[0].bounds;
+                        for (int r = 1; r < rends.Length; r++) bounds.Encapsulate(rends[r].bounds);
+                        onAxis = inst.transform.InverseTransformPoint(bounds.center);
+                    }
+                }
+                inst.transform.localPosition = -(onAxis - Vector3.Dot(onAxis, b) * b);
 
                 // Dikey referans: DONMEYEN ayri obje, yoksa silahla birlikte yatar ve
                 // karsilastirilacak bir sey kalmaz.
@@ -309,7 +339,8 @@ namespace VRMultiplayer.EditorTools
             Selection.activeGameObject = root;
             SceneView.lastActiveSceneView?.FrameSelected();
 
-            EditorUtility.DisplayDialog("Yatiklik duzeltme",
+            Debug.Log("[GripCalibration] " + placed + " silah dizildi (namlu ekseni direge oturtuldu).");
+            if (showDialog) EditorUtility.DisplayDialog("Yatiklik duzeltme",
                 placed + " silah dizildi. Hepsinin NAMLUSU ayni yone (+Z) bakiyor.\n\n" +
                 "Yan yatmis olanlari, TASIYICI bos objeyi (silah modelini degil) dunya Z ekseni " +
                 "etrafinda dondurerek duzelt — kabza asagi, ust ray yukari baksin.\n\n" +

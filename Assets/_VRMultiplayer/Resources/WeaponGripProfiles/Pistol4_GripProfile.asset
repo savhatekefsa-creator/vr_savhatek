@@ -15,7 +15,7 @@ MonoBehaviour:
   weaponNameEquals: Pistol 4
   weaponNameContains: Pistol 4
   gripLocalPosition: {x: -0.0493, y: 0.0967, z: 0.138}
-  gripLocalEuler: {x: 302.58334, y: 210.17746, z: 345.19156}
+  gripLocalEuler: {x: 300.24493, y: 202.44492, z: 354.2452}
   barrelLocalDirection: {x: -0, y: -0, z: -1}
   combat: {fileID: 11400000, guid: 9c0446b2d1034f7aa3386fc1672120d4, type: 2}
   mainHand:
