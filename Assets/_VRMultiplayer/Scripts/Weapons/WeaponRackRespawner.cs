@@ -41,10 +41,18 @@ namespace VRMultiplayer.Weapons
         /// Each one is a NetworkObject with a ClientNetworkTransform, and the constructor's whole
         /// design is the opposite of that — scenery syncs as layout data precisely so a room full
         /// of props costs nothing on the wire. Weapons are the deliberate exception, so the
-        /// exception gets a number. Sixteen is the full set this project ships, and still fewer
-        /// than the hand-placed weapons already standing in the scene.
+        /// exception gets a number.
+        ///
+        /// 16 -> 32 (2026-08-05). 16 "projenin gonderdigi tam takim" diye secilmisti, ama
+        /// Rack_Wall prefabinin TEK BASINA 16 yuvasi var: bir duvar rafi koyan oyuncu butceyi
+        /// bitiriyordu ve ikinci raf sessizce BOS geliyordu (mesh her peer'da harita verisinden
+        /// kuruluyor, silahlari yalnizca sunucu mintliyor). Disaridan "bozuk" gorunuyordu.
+        ///
+        /// OLCULMEDI: 32 silah = 32 ClientNetworkTransform. Quest'te baglanti ve kare suresine
+        /// etkisi cihazda olculmeli; kotu cikarsa cozum sayiyi geri dusurmek DEGIL, Rack_Wall'in
+        /// yuva sayisini azaltmak olmali — sinir haritanin tamamina ait, tek bir prefaba degil.
         /// </summary>
-        public const int MaxConstructorWeapons = 16;
+        public const int MaxConstructorWeapons = 32;
 
         /// <summary>Weapon slots currently claimed by build-mode racks.</summary>
         public static int ConstructorWeaponCount { get; private set; }

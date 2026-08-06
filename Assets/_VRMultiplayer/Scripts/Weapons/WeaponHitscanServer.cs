@@ -96,6 +96,63 @@ namespace VRMultiplayer.Weapons
             return hitboxesSeen;
         }
 
+        /// <summary>ISTEMCI-TARAFI FX ONGORUSU: <see cref="RaycastOne"/> ile AYNI geometri
+        /// yuruyusu — HASAR YOK, LOG YOK, sunucu durumu YOK. Sahibin izleri/alev/mermi izi
+        /// sunucu gidis-donusunu beklemesin diye var (bkz. NetworkWeapon.Fire: ses zaten
+        /// yerel caliyordu, gorseller RPC turundan geliyordu ve otomatikte "gecikmeli ates"
+        /// hissi veriyordu). Kurallari degistirirken RaycastOne ile SENKRON tut.</summary>
+        public static void PredictOne(Transform weaponRoot, Vector3 origin, Vector3 dir,
+            float range, ulong shooter, byte shooterTeam,
+            out Vector3 end, out Vector3 hitNormal, out bool hitFlesh)
+        {
+            end = origin + dir * range;
+            hitNormal = Vector3.zero;
+            hitFlesh = false;
+
+            Vector3 start = origin + dir * 0.03f;
+
+            // Dipcik mesafesi (namlu hitbox'in ICINDE): RaycastOne'daki kuralin hasarsiz esi.
+            int n = Physics.OverlapSphereNonAlloc(start, 0.02f, _overlap,
+                Physics.AllLayers, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < n; i++)
+            {
+                var c = _overlap[i];
+                if (c == null || c.transform.IsChildOf(weaponRoot)) continue;
+                var z = c.GetComponentInParent<HitZone>();
+                if (z == null || z.health == null) continue;
+                if ((c.ClosestPoint(start) - start).sqrMagnitude > 1e-6f) continue;
+                if (z.health.OwnerClientId == shooter) continue;
+                byte zt = z.health.TeamValue;
+                end = start;
+                hitFlesh = zt == 0 || zt != shooterTeam; // dost atesi: durur ama kan yok
+                return;
+            }
+
+            int hitCount = Physics.RaycastNonAlloc(start, dir, _rayHits, range,
+                Physics.AllLayers, QueryTriggerInteraction.Collide);
+            System.Array.Sort(_rayHits, 0, hitCount, _byDistance);
+
+            for (int hi = 0; hi < hitCount; hi++)
+            {
+                var h = _rayHits[hi];
+                if (h.collider.transform.IsChildOf(weaponRoot)) continue;
+
+                var zone = h.collider.GetComponentInParent<HitZone>();
+                if (zone != null && zone.health != null)
+                {
+                    if (zone.health.OwnerClientId == shooter) continue; // kendi govden gec
+                    byte t = zone.health.TeamValue;
+                    end = h.point;
+                    hitFlesh = t == 0 || t != shooterTeam;
+                    return;
+                }
+
+                end = h.point;
+                hitNormal = h.normal;
+                return;
+            }
+        }
+
         /// <summary>Isinin BASLANGICINI icine alan dusman hitbox'i var mi? Varsa hasari uygular
         /// ve gorulen hitbox sayisini doner; yoksa 0. hitFlesh = hasar gercekten uygulandi.</summary>
         // Raycast'in goremedigi tek durum budur: origin bir collider'in ICINDE. Kucuk bir kure

@@ -79,19 +79,6 @@ namespace VRMultiplayer.UI
             if (_title != null) _title.text = text;
         }
 
-        /// <summary>
-        /// Yalnizca HAVUZDAKI haritalari goster. Oyuncu modunda mac haritasi secilirken
-        /// kullaniliyor: havuz disi bir harita oynanabilir degil, listede durmasi yalnizca
-        /// "neden secemiyorum" sorusunu doguracakti.
-        /// </summary>
-        public void SetPoolOnly(bool on)
-        {
-            _poolOnly = on;
-            Rebuild();
-        }
-
-        bool _poolOnly;
-
         void Awake()
         {
             UITheme.MakeOutlined(transform, "Backdrop", Vector2.zero,
@@ -137,7 +124,7 @@ namespace VRMultiplayer.UI
         /// <summary>
         /// Yeniden kurulmayi ISTER — is bir sonraki LateUpdate'te, kare basina BIR kez yapilir.
         ///
-        /// NEDEN ERTELENIYOR: kurulus karesinde uc kez cagriliyor (Awake, OnEnable, SetPoolOnly)
+        /// NEDEN ERTELENIYOR: kurulus karesinde birden cok kez cagriliyor (Awake, OnEnable)
         /// ve Destroy Unity'de KARE SONUNA erteleniyor. Hepsi ayni karede kosunca eski satirlar
         /// henuz olmemis oluyor ve liste ucleniyordu. Kirli bayragi hepsini tek kuruluma
         /// indiriyor; arada gecen tek kare panelin bos gorunmesinden ibaret.
@@ -161,9 +148,7 @@ namespace VRMultiplayer.UI
             _hoverIdx = -1;
             if (_hover != null) _hover.gameObject.SetActive(false);
 
-            var all = new List<MapCatalog.Entry>();
-            foreach (var e in MapCatalog.All)
-                if (!_poolOnly || e.inPool) all.Add(e);
+            var all = new List<MapCatalog.Entry>(MapCatalog.All);
 
             int pages = Mathf.Max(1, (all.Count + RowsPerPage - 1) / RowsPerPage);
             _page = Mathf.Clamp(_page, 0, pages - 1);
@@ -171,8 +156,7 @@ namespace VRMultiplayer.UI
             if (all.Count == 0)
             {
                 Add(UITheme.MakeText(transform,
-                    _poolOnly ? "Havuzda oynanabilir harita yok."
-                              : "Kayıtlı harita yok.\nYENİ ile bir tane tasarla.",
+                    "Kayıtlı harita yok.\nYENİ ile bir tane tasarla.",
                     Muted, EmptySize, TextAnchor.MiddleCenter, QText).transform,
                     new Vector3(0f, 0f, ZText));
             }

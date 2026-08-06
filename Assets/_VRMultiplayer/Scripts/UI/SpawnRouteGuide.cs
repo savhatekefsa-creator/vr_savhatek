@@ -28,7 +28,8 @@ namespace VRMultiplayer.UI
     ///    iki oda birbirine bagli degil) oyuncunun onunde hedefi gosteren KISA bir ok. Yon
     ///    kus ucusudur; oyuncu duvari kendi dolasir. Ok bilerek KISA tutulur — uzun duz bir
     ///    cizgi "tam buradan yuru" der ve duvari deldiginde sacma durur, kisa ok ise yalnizca
-    ///    "o taraf" der.
+    ///    "o taraf" der. Ok AYAK DIBINE YAKIN durur ve bakisi takip eder; gorus hatti
+    ///    engelliyse engelin berisine cekilir (bkz. <see cref="DrawArrow"/>).
     ///
     /// Boylece ozellik bugun de calisir; sahne duzelince rota kendiliginden devreye girer.
     ///
@@ -59,13 +60,12 @@ namespace VRMultiplayer.UI
         public float fadeDistance = 1.6f;
 
         [Header("Yon oku (yol bulunamadiginda)")]
-        [Tooltip("Okun goz hizasina gore ASAGI acisi (derece). Mesafe bundan ve oyuncunun " +
-                 "boyundan hesaplanir; sabit mesafe verilirse uzun boylu oyuncuda ok " +
-                 "gorus alaninin altina duser.")]
-        [Range(15f, 45f)] public float arrowViewAngle = 25f;
-        [Tooltip("Guvenlik siniri: hesaplanan mesafe bu araliga kirpilir (metre).")]
-        public float arrowMinDistance = 1.2f;
-        public float arrowMaxDistance = 3.2f;
+        [Tooltip("Ok oyuncuya bu mesafeden yakin durmaz (metre). Asagi bakildiginda okun " +
+                 "gelecegi yer: ayaklarin biraz onu.")]
+        public float arrowNearDistance = 0.85f;
+        [Tooltip("Ok bu mesafeden uzaga GITMEZ (metre). Buyutme: uzak ok duvarin ardina " +
+                 "dusup tamamen kayboluyor — bkz. DrawArrow.")]
+        public float arrowFarDistance = 2.4f;
         [Tooltip("Okun boyu (metre).")]
         public float arrowSize = 0.8f;
         [Tooltip("Yanip sonme hizi (saniyedeki tam donus).")]
@@ -256,12 +256,23 @@ namespace VRMultiplayer.UI
         /// YONUNDE konumlandirilmasi denenirse hedef arkadayken ok da arkada kalir ve oyuncu
         /// hicbir sey gormez.
         ///
-        /// MESAFE SABIT DEGIL, ACIDAN hesaplanir. Sabit 1.1 m denendi ve KULLANILAMAZ cikti:
-        /// kafa zeminden ~1.5 m yukarida oldugu icin ok goz hizasinin 54 derece altina, yani
-        /// Quest 3'un dikey gorus alaninin (merkezden ~48 derece) DISINA dusuyordu — ayaklarinin
-        /// dibinde kalip hic gorunmuyordu. Simdi mesafe, oyuncunun O ANKI goz yuksekliginden
-        /// <see cref="arrowViewAngle"/> acisiyla cozuluyor: boy ne olursa olsun ok ayni rahat
-        /// acida durur.
+        /// MESAFE BAKISI TAKIP EDER — iki eski yaklasim da tek basina calismiyordu:
+        ///  - SABIT 1.1 m: kafa zeminden ~1.5 m yukarida oldugu icin ok goz hizasinin 54 derece
+        ///    altina, Quest 3'un dikey gorus alaninin (merkezden ~48 derece) DISINA dusuyordu.
+        ///  - SABIT ACI (25 derece): mesafeyi ~3.2 m'ye itiyordu ve ODA OLCEGINDE BU COK UZAK.
+        ///    Ok derinlik testli ciziliyor (bkz. sinif notu), yani duvarin ardina dusen ok
+        ///    kayboluyor — gosterge var ama gorunmuyor.
+        ///
+        /// Simdi ok, BAKISIN ZEMINE DUSTUGU NOKTAYA konuyor: oyuncu asagi baktikca ok
+        /// ayaklarinin onune gelir (<see cref="arrowNearDistance"/>), duz baktikca gorus
+        /// alaninin alt kenarina dogru acilir (<see cref="arrowFarDistance"/>). Sabit acinin
+        /// cozdugu sey (her boyda gorunur olmak) korunuyor, cunku bakis zaten goz yuksekligini
+        /// hesaba katiyor; kazanilan sey ise okun oyuncunun BAKTIGI yerde olmasi.
+        ///
+        /// GORUS HATTI GERCEKTEN OLCULUYOR: aday nokta ile goz arasi engelliyse ok engelin
+        /// BERISINE cekilir (bkz. <see cref="VisibleSpan"/>). Eski kod bunun yerine goz
+        /// hizasinda YATAY bir isin atiyordu — okun uzandigi cizgi o degil, dolayisiyla alcak
+        /// bir siper ya da kapi bosuklu bir duvar yanlis cevap veriyordu.
         /// </summary>
         void DrawArrow(TeamSpawnZone zone, Transform head, Color c, float alpha)
         {
@@ -275,17 +286,23 @@ namespace VRMultiplayer.UI
             fwd.Normalize();
 
             float floorY = zone.transform.position.y;
-            float eyeHeight = Mathf.Max(0.6f, head.position.y - floorY);
-            float dist = eyeHeight / Mathf.Tan(arrowViewAngle * Mathf.Deg2Rad);
-            dist = Mathf.Clamp(dist, arrowMinDistance, arrowMaxDistance);
+            float dist = GazeGroundDistance(head, floorY);
 
-            // Duvarin ARKASINA dusmesin: onde bir engel varsa ok berisine cekilir.
-            if (Physics.Raycast(head.position, fwd, out var hit, dist + 0.4f,
-                    Physics.AllLayers, QueryTriggerInteraction.Ignore))
-                dist = Mathf.Max(arrowMinDistance * 0.6f, hit.distance - 0.4f);
-
-            Vector3 target = head.position + fwd * dist;
+            Vector3 eye = head.position;
+            Vector3 target = eye + fwd * dist;
             target.y = floorY + groundOffset;
+
+            // Engel varsa okun tamamini berisine tasi. Oran korunuyor: aday nokta gozden
+            // duz bir cizgi uzerinde oldugu icin gorulebilen kismin orani, YATAY mesafenin
+            // de ayni orani demek.
+            float span = Vector3.Distance(eye, target);
+            float visible = VisibleSpan(eye, target, span);
+            if (visible < span && span > 0.01f)
+            {
+                dist = Mathf.Max(arrowNearDistance * 0.55f, dist * (visible / span));
+                target = eye + fwd * dist;
+                target.y = floorY + groundOffset;
+            }
 
             if (!_arrow.gameObject.activeSelf)
             {
@@ -300,14 +317,88 @@ namespace VRMultiplayer.UI
             // Yuzu YUKARI baksin (ileri = +Y), sonra ucu hedefe cevrilsin.
             _arrow.rotation = Quaternion.LookRotation(Vector3.up, toTarget) * Quaternion.Euler(0f, 0f, 90f);
 
-            // Uzaklikla birlikte buyut: 3 m'deki ok 1.2 m'dekiyle ayni boyda cizilirse
-            // gorunurde kucucuk kalir.
-            float s = arrowSize * Mathf.Clamp(dist / 2.0f, 0.7f, 1.6f);
+            // Uzaklikla birlikte buyut: uzaktaki ok yakindakiyle ayni DUNYA boyunda cizilirse
+            // gorunurde kucucuk kalir. Olcek GORUNEN buyuklugu sabit tutmaya calisiyor.
+            float s = arrowSize * Mathf.Clamp(dist / 2.0f, 0.55f, 1.6f);
             _arrow.localScale = new Vector3(s, s, 1f);
 
             // Belirgin YANIP SONME (istenen buydu): silik bir nabiz degil, acik/kapali salinim.
             float blink = 0.35f + 0.65f * (0.5f + 0.5f * Mathf.Sin(Time.time * blinkHz * Mathf.PI * 2f));
             UITheme.SetMaterialColor(_arrowMat, new Color(c.r, c.g, c.b, alpha * blink));
+        }
+
+        /// <summary>
+        /// Bakisin ZEMINE dustugu yatay mesafe, <see cref="arrowNearDistance"/> ..
+        /// <see cref="arrowFarDistance"/> arasina kirpilmis.
+        ///
+        /// Kafa duz ya da YUKARI bakiyorsa zeminle kesisim yoktur (ya da arkada kalir); o
+        /// durumda en uzak degere sabitlenir — ok gorus alaninin alt kenarinda bekler ve
+        /// oyuncu basini birazcik egdiginde onune gelir.
+        /// </summary>
+        float GazeGroundDistance(Transform head, float floorY)
+        {
+            Vector3 gaze = head.forward;                       // normalize (Transform.forward)
+            float drop = head.position.y - floorY;
+
+            // -0.05: neredeyse duz bakista bolme patlar ve mesafe firlar; o bant "duz bakiyor".
+            if (gaze.y > -0.05f || drop <= 0.05f) return arrowFarDistance;
+
+            float t = drop / -gaze.y;                          // isinin zemini deldigi parametre
+            float horizontal = new Vector2(gaze.x, gaze.z).magnitude * t;
+            return Mathf.Clamp(horizontal, arrowNearDistance, arrowFarDistance);
+        }
+
+        // Gorus hatti sorgusunun tamponu. RaycastAll her cagrida dizi ayirirdi; bu metot
+        // dogum bekleyen oyuncuda her kare kosuyor.
+        static readonly RaycastHit[] _losHits = new RaycastHit[16];
+
+        /// <summary>Zemine bu kadar kala isin kesilir — yoksa isin hedef noktada ZEMININ
+        /// KENDISINI vurur ve ok kendi durdugu yeri "engel" sanip surekli geri kacar.</summary>
+        const float FloorMargin = 0.25f;
+
+        /// <summary>Engelin oyuncuya bu kadar berisine cekilir. Okun KENDI boyu var (~0.8 m):
+        /// merkezi duvarin tam dibine oturursa uc kisim duvarin ayak izine girer ve orada
+        /// kirpilir. Tamamen kurtarmak icin okun yarisi kadar geri cekmek gerekirdi, o da
+        /// oyuncuyu gereksiz yere geriden yonlendirirdi — bu ara deger yeterli.</summary>
+        const float BlockerMargin = 0.30f;
+
+        /// <summary>
+        /// Gozden <paramref name="target"/> noktasina KAC METRE gorulebiliyor. Engel yoksa
+        /// <paramref name="span"/> aynen doner.
+        ///
+        /// OYUNCUNUN KENDI GOVDESI ENGEL SAYILMAZ: isin gozden cikiyor, yani oyuncunun kendi
+        /// vurus bolgelerinin (<see cref="HitZone"/>) TAM ICINDEN basliyor. Filtrelenmezse
+        /// her karede "hemen onumde duvar var" cevabi gelir ve ok ayaklarina yapisir.
+        /// (Ele alinmis silah oyuncu kokune bagliysa o da elenir; bagli degilse zaten kucuk
+        /// bir cisim ve isin ondan asagi dogru gidiyor.)
+        /// </summary>
+        static float VisibleSpan(Vector3 eye, Vector3 target, float span)
+        {
+            float probe = span - FloorMargin;
+            if (probe <= 0.05f) return span;
+
+            Vector3 dir = (target - eye) / span;
+            int n = Physics.RaycastNonAlloc(eye, dir, _losHits, probe,
+                                            Physics.AllLayers, QueryTriggerInteraction.Ignore);
+            if (n <= 0) return span;
+
+            Transform self = PlayerIdentity.Local != null ? PlayerIdentity.Local.transform : null;
+
+            // RaycastNonAlloc SIRALI DEGIL — en yakin engeli elle ariyoruz.
+            float nearest = -1f;
+            for (int i = 0; i < n; i++)
+            {
+                var col = _losHits[i].collider;
+                if (col == null) continue;
+                if (self != null && col.transform.IsChildOf(self)) continue;
+
+                float d = _losHits[i].distance;
+                if (d <= 0.01f) continue;                     // isinin ciktigi noktadaki carpisma
+                if (nearest < 0f || d < nearest) nearest = d;
+            }
+
+            if (nearest < 0f) return span;
+            return Mathf.Max(0.1f, nearest - BlockerMargin);
         }
 
         // ------------------------------------------------------------------ yol

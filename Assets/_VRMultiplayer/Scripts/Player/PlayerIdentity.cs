@@ -279,6 +279,11 @@ namespace VRMultiplayer
         /// cevaplar). Takim henuz secilmemisse Team 0 doner.</summary>
         public static PlayerIdentity Local => _local;
 
+        /// <summary>Su an sahnedeki TUM oyuncu kimlikleri (skorbord bunu tarar).
+        /// Kopya DEGIL, canli listenin salt-okunur gorunumu — her acilista dizi alloc'u
+        /// yapilmaz. Icinde null olabilir (despawn sirasi); okuyan taraf atlamalidir.</summary>
+        public static System.Collections.Generic.IReadOnlyList<PlayerIdentity> All => _all;
+
         /// <summary>Avatarin tum parcalarini saydam varyanta cevirir / geri alir. Yalnizca
         /// DURUM DEGISINCE calisir: Refresh() renk/isim/takim degisiminde de cagriliyor,
         /// her seferinde malzeme dizisi yazmak bosuna is olurdu.</summary>

@@ -56,7 +56,6 @@ namespace VRMultiplayer.Constructor
             _hookedReady = false;
             Spawned.Clear();
             MatchMapChosen = false;
-            MapChoiceRequested = false;
         }
 
         static ConstructorSession Session => ConstructorSession.Instance;
@@ -511,14 +510,7 @@ namespace VRMultiplayer.Constructor
         // ------------------------------------------------------- mac haritasi secimi (Serit 3)
 
         /// <summary>
-        /// Sunucu "haritayi sen sec" dedi. <see cref="UI.PlayerFlowUI"/> bunu gorup havuz
-        /// listesini acar. Statik + yoklamali: RPC istemcide rastgele bir karede duser, arayuz
-        /// ise kendi dongusunde yasar (PendingMessage ile ayni kalip).
-        /// </summary>
-        public static bool MapChoiceRequested { get; set; }
-
-        /// <summary>
-        /// SUNUCU: bu macin haritasini bir oyuncu SECTI mi?
+        /// SUNUCU: bu macin haritasi belirlendi mi?
         ///
         /// "Oturumda harita yuklu mu" ile AYNI SEY DEGIL, ve ikisini bir sanmak iki hataya yol
         /// acmisti:
@@ -534,45 +526,51 @@ namespace VRMultiplayer.Constructor
         /// </summary>
         public static bool MatchMapChosen { get; private set; }
 
-        [Rpc(SendTo.Owner)]
-        void ChooseMapOwnerRpc() => MapChoiceRequested = true;
-
-        /// <summary>Istemci: "mac bu haritada gecsin".</summary>
-        public static bool ClientPickMatchMap(string mapName)
+        /// <summary>
+        /// SUNUCU: bu macin haritasini havuzdan RASTGELE cekip kurar.
+        ///
+        /// OYUNCUYA SORULMUYOR. Once havuz listesi acilip "hangi harita?" deniyordu; artik
+        /// OYUNCU modunu secen kisi dogrudan bir haritaya dusuyor. Havuzdaki her harita esit
+        /// paya sahip (bkz. <see cref="MapCatalog.PoolInRandomOrder"/>).
+        ///
+        /// KURA SUNUCUDA CEKILIYOR, cunku mac TEK harita uzerinde gecmeli: her gozluk kendi
+        /// rastgelesini cekseydi ayni macin oyunculari farkli haritalara duserdi. Secilen
+        /// harita <see cref="SendLayout"/> ile herkese gidiyor.
+        ///
+        /// ILK OYUNCU CEKER, SONRAKILER DEVAM EDEN MACA GIRER — bkz. <see cref="MatchMapChosen"/>.
+        /// Bayrak son oyuncu cikinca dustugu icin her mac kendi kurasini cekiyor; ayni sunucuda
+        /// arka arkaya oynanan maclar ayni haritaya cakilip kalmiyor.
+        /// </summary>
+        static bool ServerPickMatchMap(out string sebep)
         {
-            var sync = LocalOwned();
-            if (sync == null) return false;
-            sync.PickMatchMapServerRpc(mapName);
-            return true;
-        }
+            sebep = null;
 
-        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        void PickMatchMapServerRpc(string mapName, RpcParams p = default)
-        {
-            if (p.Receive.SenderClientId != OwnerClientId) return;
-            if (Session == null) return;
-
-            // ILK SECEN KAZANIR. Iki oyuncu ayni anda sectiyse ikincisinin secimi YOK SAYILIR ve
-            // ona acik harita yollanir — mac tek harita uzerinde gecmeli, "sonradan gelen
-            // herkesi tasir" olsaydi devam eden mac ayaginin altindan kayardi.
-            if (MatchMapChosen) { StartCoroutine(SendLayout(false)); return; }
-
-            var e = MapCatalog.Find(mapName);
-            if (e == null || !e.inPool)
+            var kura = MapCatalog.PoolInRandomOrder();
+            if (kura.Count == 0)
             {
-                NoLayoutOwnerRpc($"'{mapName}' havuzda yok.");
-                return;
+                sebep = "Sunucunun havuzunda oynanabilir harita kalmamis.";
+                return false;
             }
 
-            if (!Session.OpenExisting(mapName))
+            // Bastaki kurayi kazandi. ACILAMAYANI ATLA: bir haritanin dosyasi bozulduysa
+            // dogru davranis maci hic baslatmamak degil, havuzdaki bir sonrakine gecmek.
+            for (int i = 0; i < kura.Count; i++)
             {
-                NoLayoutOwnerRpc(Session.NotStartedReason);
-                return;
+                if (!Session.OpenExisting(kura[i]))
+                {
+                    Debug.LogWarning($"[ConstructorSync] Kurada '{kura[i]}' cikti ama acilamadi " +
+                                     $"({Session.NotStartedReason}) — havuzdaki bir sonraki deneniyor.");
+                    continue;
+                }
+
+                MatchMapChosen = true;
+                Debug.Log($"[ConstructorSync] Mac haritasi havuzdan rastgele secildi: " +
+                          $"'{kura[i]}' ({kura.Count} harita arasindan, her biri %{100f / kura.Count:0.#}).");
+                return true;
             }
 
-            MatchMapChosen = true;
-            Debug.Log($"[ConstructorSync] Mac haritasi secildi: '{mapName}' (istemci {OwnerClientId}).");
-            StartCoroutine(SendLayout(true));   // secimi HERKESE yay
+            sebep = $"Havuzdaki {kura.Count} haritanin hicbiri acilamadi.";
+            return false;
         }
 
         // ------------------------------------------------------------- katalog (Serit 2)
@@ -838,16 +836,20 @@ namespace VRMultiplayer.Constructor
             yield return WaitUntilClientReady();
             if (!ReadyClients.Contains(OwnerClientId)) yield break;   // uyari iceride yazildi
 
-            // Bu macin haritasi secilmediyse SECTIR. Secildiyse hicbir sey sorulmaz: oyuncu
-            // devam eden maca girer (bkz. MatchMapChosen).
+            // Bu macin haritasi secilmediyse SUNUCU KURAYI CEKER. Secildiyse hicbir sey
+            // yapilmaz: oyuncu devam eden maca girer (bkz. MatchMapChosen).
             if (Session != null && !MatchMapChosen)
             {
-                if (MapCatalog.PoolIsEmpty)
+                if (!ServerPickMatchMap(out string sebep))
                 {
-                    NoLayoutOwnerRpc("Sunucunun havuzunda oynanabilir harita kalmamis.");
+                    NoLayoutOwnerRpc(sebep);
                     yield break;
                 }
-                ChooseMapOwnerRpc();
+
+                // HERKESE: kura yeni bir harita kurdu, baglilarin elindeki artik yanlis.
+                // (Uygulamada mac haritasi ilk oyuncu girerken seciliyor, yani genelde
+                // tek kisi var; "genelde" bir gonderme kurali icin yeterli degil.)
+                yield return SendLayout(true);
                 yield break;
             }
 
