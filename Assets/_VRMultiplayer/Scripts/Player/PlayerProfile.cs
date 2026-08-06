@@ -80,6 +80,16 @@ namespace VRMultiplayer
         /// <summary>Isim ve takim birlikte gecerli mi — "OYUNA BASLA" bununla aktiflesir.</summary>
         public static bool IsReady(string name, byte team) => IsValidName(name) && team != TeamNone;
 
+        /// <summary>
+        /// Onayi GERI AL — oyuncu maca girmekten vazgecip ana menuye donunce.
+        ///
+        /// ISIM VE TAKIM SILINMEZ, yalnizca bayrak duser: oyuncu tekrar OYUNCU modunu secince
+        /// giris ekrani DOLU geri gelir, bastan yazmasi gerekmez. Bayragi dusurmek SART, cunku
+        /// <see cref="UI.PlayerEntryUI"/> "onaylandiysa ben yokum" kuralina gore calisiyor —
+        /// onay asili kalirsa giris ekrani hic acilmaz ve oyuncu bos ekranda kalir.
+        /// </summary>
+        public static void Unconfirm() => Confirmed = false;
+
         /// <summary>Girisi kalicilastirir ve onayli isaretler. Eksik/gecersizse kabul edilmez.</summary>
         public static bool Confirm(string name, byte team)
         {
@@ -99,6 +109,64 @@ namespace VRMultiplayer
 
         public static bool IsValidName(string s) =>
             !string.IsNullOrEmpty(s) && s.Length >= MinLength && s.Length <= MaxLength;
+
+        // ------------------------------------------------------------- kullanimdaki isimler
+
+        // Sunucuda SU AN oynayan isimler. Bos liste "kimse yok" DEMEK DEGIL — bkz. TakenKnown.
+        static readonly List<string> _taken = new List<string>();
+
+        /// <summary>
+        /// Sunucudaki isim listesi ELIMIZDE mi?
+        ///
+        /// AYRIM SART, cunku giris ekrani BAGLANMADAN once aciliyor: liste bos olabilir
+        /// (sunucuda gercekten kimse yok) ya da hic gelmemis olabilir (sunucu bulunamadi,
+        /// eski surum, yayin dusmus). Ikisini bir sayarsak "gelmedi" durumunda her ismi
+        /// serbest sanardik — ya da tersini yapip her ismi reddederdik. Liste yoksa
+        /// ENGELLEME: karar sunucuya kalir (havuz ipucundaki ayni kural).
+        /// </summary>
+        public static bool TakenKnown { get; private set; }
+
+        /// <summary>
+        /// Sunucuda kullanilan isimleri kaydet. Kaynak kesif yayini
+        /// (bkz. <see cref="NetworkDiscovery"/>) — oyuncu daha baglanmadan once ogrenilen
+        /// tek sey bu kanaldan geliyor.
+        /// </summary>
+        public static void SetTakenNames(IReadOnlyList<string> names)
+        {
+            _taken.Clear();
+            if (names != null)
+                for (int i = 0; i < names.Count; i++)
+                    if (!string.IsNullOrEmpty(names[i])) _taken.Add(names[i]);
+
+            TakenKnown = names != null;
+        }
+
+        /// <summary>Liste hic gelmemis say (baglanti koptu / menuye donuldu).</summary>
+        public static void ForgetTakenNames()
+        {
+            _taken.Clear();
+            TakenKnown = false;
+        }
+
+        /// <summary>
+        /// Bu isim sunucuda KULLANILIYOR mu? Liste yoksa her zaman false — emin olmadan
+        /// oyuncuyu engellemeyiz.
+        ///
+        /// SON SOZ BURASI DEGIL: iki oyuncu ayni anda ayni ismi yazip ayni anda baglanabilir,
+        /// ya da elimizdeki liste bir saniye bayat olabilir. Sunucu spawn aninda tekillestirmeyi
+        /// yine yapiyor (bkz. <see cref="PlayerIdentity.MakeUnique"/>). Buradaki kontrol o
+        /// sessiz yeniden adlandirmayi oyuncunun BASINA GELMEDEN onlemek icin.
+        /// </summary>
+        public static bool IsNameTaken(string name)
+        {
+            if (!TakenKnown || string.IsNullOrEmpty(name)) return false;
+
+            string clean = Sanitize(name);
+            for (int i = 0; i < _taken.Count; i++)
+                if (string.Equals(_taken[i], clean, System.StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
 
         /// <summary>
         /// Ortak temizleme: kirp, izinsiz karakterleri at, ic bosluklari teke indir, karakter
@@ -144,8 +212,31 @@ namespace VRMultiplayer
         }
 
         /// <summary>Siradaki otomatik isim. Deste bitince yeniden karistirilir ve isimler
-        /// 2 haneli sonekle doner (IronWolf47) — sonsuza kadar taze his verir.</summary>
+        /// 2 haneli sonekle doner (IronWolf47) — sonsuza kadar taze his verir.
+        ///
+        /// SUNUCUDA KULLANILAN ISMI ONERMEZ (bkz. <see cref="IsNameTaken"/>): RASTGELE'ye basan
+        /// oyuncuya "bu isim kullaniliyor" uyarisi cikmasi sacma olurdu — tusun isi zaten
+        /// KULLANILABILIR bir isim bulmak. Deste boyunca dolu isimler ATLANIR; hepsi doluysa
+        /// sonekli tura gecilir ve orada bir bosluk kesin bulunur (14 isim x 90 sonek).</summary>
         public static string NextGeneratedName()
+        {
+            // Ust sinir: deste uzunlugu x 3 tur. Sonsuz dongu koruyucusu — liste bayatsa ve
+            // her sey dolu gorunuyorsa isim URETMEK, hic isim vermemekten iyidir.
+            int attempts = Mathf.Max(1, Callsigns.Length * 3);
+
+            string name = null;
+            for (int i = 0; i < attempts; i++)
+            {
+                name = DrawName();
+                if (!IsNameTaken(name)) break;
+            }
+
+            _lastGiven = name;
+            return name;
+        }
+
+        /// <summary>Desteden tek bir cekilis — dolu olup olmadigina BAKMADAN.</summary>
+        static string DrawName()
         {
             if (_deck.Count == 0 || _deckPos >= _deck.Count) Reshuffle();
 
@@ -156,7 +247,6 @@ namespace VRMultiplayer
             // Sinira takilirsa sonek atilir; kirpilmis yarim isim gostermektense duzu iyidir.
             if (name.Length > MaxLength) name = Callsigns[_deck[_deckPos - 1]];
 
-            _lastGiven = name;
             return name;
         }
 
@@ -194,6 +284,8 @@ namespace VRMultiplayer
             _deckPos = 0;
             _cycle = 0;
             _lastGiven = null;
+            _taken.Clear();
+            TakenKnown = false;
         }
     }
 }

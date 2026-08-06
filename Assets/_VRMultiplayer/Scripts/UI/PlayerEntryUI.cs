@@ -75,8 +75,13 @@ namespace VRMultiplayer.UI
 
             // Kayitli isim varsa dolu gelir (ikinci acilista tek tusla gecilir); yoksa hazir
             // bir cagri adi onerilir — oyuncu bos ekranla karsilasmaz.
+            //
+            // HATIRLANAN ISIM BU MACTA DOLUYSA onerilmez: oyuncuyu daha ekran acilir acilmaz
+            // bir cakisma uyarisiyla karsilamak, cozumu elimizdeyken kotu bir karsilama olur.
+            // Uretici zaten dolu isimleri atliyor (bkz. PlayerProfile.NextGeneratedName).
             string start = PlayerProfile.Name;
-            if (string.IsNullOrEmpty(start)) start = PlayerProfile.NextGeneratedName();
+            if (string.IsNullOrEmpty(start) || PlayerProfile.IsNameTaken(start))
+                start = PlayerProfile.NextGeneratedName();
             _guiName = start;
             _panel.SetText(start);
             _panel.SetTeam(PlayerProfile.Team);   // takim da hatirlanir
@@ -123,12 +128,21 @@ namespace VRMultiplayer.UI
         {
             string clean = PlayerProfile.Sanitize(rawName);
 
+            // SON KAPI: buton zaten pasif ama masaustu yedegi ve olasi bir yaris (isim tam
+            // basarken doldu) buraya dusebilir. Onaydan ONCE bakiliyor — dolu bir ismi
+            // PlayerPrefs'e yazip oyuncuyu bir dahaki acilista ayni cikmaza sokmayalim.
+            if (PlayerProfile.IsNameTaken(clean))
+            {
+                Message("Bu isim oyunda kullanılıyor. Başka bir isim seç.");
+                return;
+            }
+
             if (!PlayerProfile.Confirm(clean, team))
             {
                 // Reddi SEBEBIYLE birlikte soyle; sessiz reddedilen buton bozuk sanilir.
                 Message(!PlayerProfile.IsValidName(clean)
                     ? "En az " + PlayerProfile.MinLength + " harf gir."
-                    : "Bir takim sec.");
+                    : "Bir takım seç.");
                 return;
             }
 
@@ -150,16 +164,21 @@ namespace VRMultiplayer.UI
         }
 
         // Alt ipucu her zaman SIRADAKI eksigi soyler; hepsi tamamsa oyuna davet eder.
+        //
+        // ISIM CAKISMASI YAZARKEN GORUNUR, basildiginda degil: oyuncu adini bitirdigi anda
+        // ogrensin, "OYUNA BASLA"ya basip geri cevrilmesin.
         void RefreshHint()
         {
             if (_panel == null || Time.unscaledTime < _messageUntil) return;
 
             if (!PlayerProfile.IsValidName(PlayerProfile.Sanitize(_panel.Text)))
                 _panel.SetHint("En az " + PlayerProfile.MinLength + " harf gir.");
+            else if (_panel.NameTaken)
+                _panel.SetHint("Bu isim oyunda kullanılıyor — başka bir isim seç.", warning: true);
             else if (_panel.SelectedTeam == PlayerProfile.TeamNone)
-                _panel.SetHint("Bir takim sec.");
+                _panel.SetHint("Bir takım seç.");
             else
-                _panel.SetHint("Hazirsin — OYUNA BAŞLA'ya bas.");
+                _panel.SetHint("Hazırsın — OYUNA BAŞLA'ya bas.");
         }
 
         void Update()

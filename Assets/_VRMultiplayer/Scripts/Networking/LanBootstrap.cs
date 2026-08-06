@@ -44,6 +44,25 @@ namespace VRMultiplayer
         bool _clientStarted;
         bool _wasSessionActive;
 
+        // Kesif sonucu DISARIDAN verilmis olabilir (bkz. UseKnownHost).
+        string _knownIp;
+        ushort _knownPort;
+
+        /// <summary>
+        /// Son katilim denemesi neden basarisiz oldu — null ise sorun yok.
+        ///
+        /// ARAYUZ ICIN VAR: baglanti kurulamadiginda otomatik deneme sonsuza kadar surer ve
+        /// oyuncunun elinde tek bir cikis kapisi bile kalmaz — ekranda yalnizca bir durum
+        /// yazisi doner. <see cref="UI.PlayerFlowUI"/> bunu okuyup "ANA MENUYE DON" secenegi
+        /// aciyor. Statik: okuyan tarafin sahnede bilesen aramasina gerek kalmasin.
+        /// </summary>
+        public static string JoinFailure { get; private set; }
+
+        // Domain reload kapaliyken statikler oyunlar arasi tasinir: onceki oturumun hatasi
+        // ikinci Play'de daha ilk karede "baglanilamadi" paneli acardi.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => JoinFailure = null;
+
         // Otomatik yeniden baglanmanin zamanlayicisi (0 = bekleyen deneme yok).
         //
         // ESKIDEN B TUSUYDU: oyuncu dusunce "B = YENIDEN KATIL" yazip bekliyorduk. B artik
@@ -78,6 +97,9 @@ namespace VRMultiplayer
             }
             _wasSessionActive = sessionActive;
 
+            // Sunucu: kim oynuyor, yayina yaz (bkz. PushRosterToDiscovery).
+            if (nm != null && nm.IsServer) PushRosterToDiscovery();
+
             var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
 
             // Step 1 panel: only on a headset, only while not in a session.
@@ -94,7 +116,7 @@ namespace VRMultiplayer
             // Detect a failed/dropped connection attempt so the retry timer can fire.
             if (_clientStarted && nm != null)
             {
-                if (connected) _clientStarted = false;
+                if (connected) { _clientStarted = false; JoinFailure = null; }
                 else if (!nm.IsClient)
                 {
                     _clientStarted = false;
@@ -167,6 +189,10 @@ namespace VRMultiplayer
         /// tek atislik oldugu icin kullanici moddan cikip girene kadar kopuk kalirdi.</summary>
         void ScheduleRetry(string reason)
         {
+            // Adres eskidi: bir sonraki deneme kesfi bastan yapsin (bkz. UseKnownHost).
+            _knownIp = null;
+            JoinFailure = reason;
+
             bool canRetry = AppMode.IsCreative || (AppMode.IsPlayer && PlayerProfile.Confirmed);
             if (!canRetry)
             {
@@ -175,6 +201,44 @@ namespace VRMultiplayer
             }
             _retryAt = Time.unscaledTime + Mathf.Max(0.5f, retryDelay);
             SetStatus(reason + "\nYeniden baglaniliyor...");
+        }
+
+        /// <summary>
+        /// Kesfi ZATEN yapmis bir cagiran (bkz. <see cref="UI.PlayerFlowUI"/>) sunucunun
+        /// adresini buraya birakir; <see cref="JoinAsClient"/> ikinci bir arama yapmaz.
+        ///
+        /// NEDEN: oyuncu akisi maca girmeden once sunucuyu zaten buluyor. Adres atilinca
+        /// OYUNA BASLA'ya basan oyuncu ayni aramayi bir kez daha (bu kez 10 saniyeye kadar)
+        /// bekliyordu.
+        ///
+        /// TEK ATISLIK: adres ilk denemede tuketiliyor, basarisiz olursa <see cref="ScheduleRetry"/>
+        /// siliyor — sunucu bu arada kapanmis ya da adres degistirmis olabilir, eskimis bir
+        /// adrese sonsuza kadar vurmak aramaktan daha kotudur.
+        /// </summary>
+        public void UseKnownHost(string ip, ushort hostPort)
+        {
+            _knownIp = ip;
+            _knownPort = hostPort;
+        }
+
+        /// <summary>
+        /// Katilim denemesini BIRAK. Oyuncu maca girmekten vazgecip ana menuye donerken
+        /// cagriliyor: zamanlayici silinir, yarim kalan istemci kapatilir, durum yazisi
+        /// kaldirilir. Cagrilmazsa oyuncu menudeyken arka planda yeniden deneme surer ve
+        /// bir sonraki deneme tuttugunda kendini haberi olmadan macta bulur.
+        /// </summary>
+        public void CancelJoin()
+        {
+            _retryAt = 0f;
+            _knownIp = null;
+            JoinFailure = null;
+            _busy = false;
+            _clientStarted = false;
+
+            var nm = NetworkManager.Singleton;
+            if (nm != null && nm.IsClient && !nm.IsServer) nm.Shutdown();
+
+            if (statusLabel != null) { Destroy(statusLabel.gameObject); statusLabel = null; }
         }
 
         // Yaratici moddaki kendiliginden baglanma bir KEZ denenir; sonrasi oyuncunun elinde
@@ -189,6 +253,43 @@ namespace VRMultiplayer
         {
             if (discovery == null) return;
             discovery.poolHasMaps = !Constructor.MapCatalog.PoolIsEmpty;
+        }
+
+        // Kullanimdaki isimlerin yayina yazilma zamanlayicisi.
+        float _rosterPushAt;
+
+        /// <summary>
+        /// Oynayan oyuncularin isimlerini kesif yayinina yazar — gozluk, BAGLANMADAN once
+        /// hangi isimlerin dolu oldugunu baska hicbir yerden ogrenemiyor.
+        ///
+        /// SANIYEDE BIR, her kare degil: yayin dongusu zaten 1 Hz'de gonderiyor, daha sikina
+        /// gerek yok. Olayla beslenemiyor cunku isim spawn'dan SONRA bir RPC ile geliyor
+        /// (bkz. PlayerIdentity.SetNameServerRpc) ve NetworkVariable'a sunucuda abone olup
+        /// listeyi yeniden kurmak, bu boyuttaki bir dizi icin fazladan makine olurdu.
+        ///
+        /// ANA IS PARCACIGI: PlayerIdentity listesi Unity'nin, yayin dongusu Task'in — arada
+        /// yalnizca hazir bir string geciyor (bkz. NetworkDiscovery.takenNames).
+        /// </summary>
+        void PushRosterToDiscovery()
+        {
+            if (discovery == null) return;
+            if (Time.unscaledTime < _rosterPushAt) return;
+            _rosterPushAt = Time.unscaledTime + 1f;
+
+            var sb = new System.Text.StringBuilder();
+            var all = PlayerIdentity.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var p = all[i];
+                if (p == null) continue;
+
+                string name = p.NetName.Value.ToString();
+                if (string.IsNullOrEmpty(name)) continue;
+
+                if (sb.Length > 0) sb.Append('|');
+                sb.Append(name);
+            }
+            discovery.takenNames = sb.ToString();
         }
 
         void OnDestroy() => Constructor.MapCatalog.Changed -= PushPoolStateToDiscovery;
@@ -206,8 +307,11 @@ namespace VRMultiplayer
             if (AppMode.IsCreative) { EnsureCreativeJoinPanel(); return; }
             if (!AppMode.IsPlayer || !PlayerProfile.Confirmed) return;
             if (statusLabel != null) return;
+            // TEMBEL TAKIP: bu panel sunucu gelene kadar ekranda kalir, sunucu hic gelmezse
+            // sonsuza kadar. Her kare kafayla birlikte yuzen bir yazidan bakisini kacirmak
+            // mumkun olmaz ve goz yorulur — menu panellerinin kurali burada da gecerli.
             statusLabel = UI.HeadFollowPanel.Create("Join Panel",
-                "SUNUCUYA BAGLANILIYOR...", Color.white);
+                "SUNUCUYA BAĞLANILIYOR...", Color.white, lazy: true);
         }
 
         /// <summary>
@@ -381,7 +485,16 @@ namespace VRMultiplayer
 
             string ip = null;
             ushort hostPort = 0; // ADVERTISED game port (0 = unknown -> fall back to `port`)
-            if (discovery != null)
+
+            // Adres elimizde mi? (bkz. UseKnownHost) Tuketiliyor: bir daha kullanilmaz.
+            if (!string.IsNullOrEmpty(_knownIp))
+            {
+                ip = _knownIp;
+                hostPort = _knownPort;
+                _knownIp = null;
+                SetStatus("Sunucu bulundu, baglaniliyor...");
+            }
+            else if (discovery != null)
             {
                 discovery.StartClientDiscovery();
                 float t = discoveryTimeout;

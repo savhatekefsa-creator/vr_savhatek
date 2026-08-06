@@ -72,13 +72,53 @@ namespace VRMultiplayer
 
         PoolHint _foundHostPool = PoolHint.Unknown;
 
+        // ---------------- kullanimdaki isimler ----------------
+
+        /// <summary>
+        /// SUNUCU: yayina eklenecek, SU AN oynayan oyuncularin isimleri ('|' ile ayrilmis).
+        ///
+        /// NEDEN YAYINDA: oyuncu ismini BAGLANMADAN once seciyor, yani sunucuya soramiyor.
+        /// Havuz durumuyla ayni gerekce, ayni kanal (bkz. <see cref="poolHasMaps"/>).
+        ///
+        /// AYIRICI '|' GUVENLI: isimler <see cref="PlayerProfile.Sanitize"/>'dan geciyor ve o
+        /// yalnizca harf/rakam/'-'/'_'/tek bosluk birakiyor — ne ':' ne '|' bir isme giremez.
+        ///
+        /// DISARIDAN BESLENIR (bkz. LanBootstrap): yayin dongusu arka planda kosuyor,
+        /// PlayerIdentity listesi ise ana is parcacigina ait.
+        /// </summary>
+        public volatile string takenNames = "";
+
+        /// <summary>
+        /// ISTEMCI: bulunan sunucuda kullanilan isimler; sunucu bu alani yollamadiysa (eski
+        /// surum) null. null ile BOS DIZI ayri seyler — bkz. <see cref="PlayerProfile.TakenKnown"/>.
+        /// </summary>
+        public string[] FoundHostNames { get { lock (_lock) return _foundHostNames; } }
+
+        string[] _foundHostNames;
+
         // Havuz alani PORTUN ONUNE giriyor. Sira onemli: eski bir istemci portu
         // LastIndexOf(':') ile okuyor, yani son alan port kalmali — yoksa eski bir gozluk
         // build'i havuz bayragini port sanip baglanamaz. Bu sekilde eski istemci yeni sunucuya
         // sorunsuz baglanir, alani gormezden gelir.
+        //
+        // ISIM ALANI da ayni kurala uyuyor: havuz alaninin ONUNE giriyor, yani hem port SON
+        // hem havuz SONDAN IKINCI kaliyor ve iki eski ayristirici da bozulmadan calisiyor.
         const string PoolYes = "MAP1", PoolNo = "MAP0";
+        const string NamesTag = "WHO=";
 
-        string ReplyMessage => ReplyPrefix + ":" + (poolHasMaps ? PoolYes : PoolNo) + ":" + gamePort;
+        // Isim yoksa alan HIC YAZILMAZ: kimse bagli degilken mesaj eski surumle birebir ayni
+        // kalir ve "bos alan" ile "alan yok" karisikligi hic dogmaz.
+        string NamesField
+        {
+            get
+            {
+                string who = takenNames;
+                return string.IsNullOrEmpty(who) ? "" : NamesTag + who + ":";
+            }
+        }
+
+        string ReplyMessage =>
+            ReplyPrefix + ":" + NamesField + (poolHasMaps ? PoolYes : PoolNo) + ":" + gamePort;
 
         // ---------------- SERVER ----------------
         public void StartAdvertising()
@@ -136,7 +176,13 @@ namespace VRMultiplayer
         {
             StopDiscovery();
             AcquireMulticastLock();
-            lock (_lock) { _foundHostIp = null; _foundHostPort = 0; _foundHostPool = PoolHint.Unknown; }
+            lock (_lock)
+            {
+                _foundHostIp = null;
+                _foundHostPort = 0;
+                _foundHostPool = PoolHint.Unknown;
+                _foundHostNames = null;
+            }
             _cts = new CancellationTokenSource();
 
             _queryUdp = NewBroadcastClient(0); // ephemeral port
@@ -202,11 +248,28 @@ namespace VRMultiplayer
                             }
                         }
 
+                        // Kullanimdaki isimler. KONUMDAN BAGIMSIZ aranir (alan kendi etiketini
+                        // tasiyor): havuz ve port alanlari konuma bagli okundugu icin ileride
+                        // araya bir alan girerse orasi kirilgan — yenisini oyle yapmiyoruz.
+                        // Sunucu alani yollamadiysa null kalir; "kimse yok" ile "bilmiyorum"
+                        // AYRI SEYLER (bkz. PlayerProfile.TakenKnown).
+                        string[] names = null;
+                        foreach (string field in msg.Split(':'))
+                        {
+                            if (!field.StartsWith(NamesTag)) continue;
+                            string payload = field.Substring(NamesTag.Length);
+                            names = payload.Length == 0
+                                ? System.Array.Empty<string>()
+                                : payload.Split('|');
+                            break;
+                        }
+
                         lock (_lock)
                         {
                             _foundHostIp = res.RemoteEndPoint.Address.ToString();
                             _foundHostPort = advertised;
                             _foundHostPool = pool;
+                            _foundHostNames = names;
                         }
                         Debug.Log("[NetworkDiscovery] Found server at " + _foundHostIp + ":" + advertised +
                                   "  havuz=" + pool);

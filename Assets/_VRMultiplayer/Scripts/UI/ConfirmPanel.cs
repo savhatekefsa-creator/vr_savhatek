@@ -26,7 +26,12 @@ namespace VRMultiplayer.UI
         const float BtnW = 0.28f, BtnH = 0.070f, BtnR = 0.012f, BtnY = -0.098f, BtnX = 0.155f;
 
         const float TitleY = 0.108f, MsgY = 0.020f;
-        const float TitleSize = 0.040f, MsgSize = 0.021f, BtnSize = 0.026f;
+
+        // MsgSize 0.021 idi: 1.4 m'de 0.86 derece, yani VR'da rahat okuma esiginin (~1 derece,
+        // bkz. PlayerEntryPanel olcu notu) altinda. Bu panelin metni sussuz degil — oyuncuya
+        // NE YAPMASI gerektigini soyleyen tek cumle o ("harita tasarla", "sunucuyu ac").
+        // Baslik zaten dikkat cekiyor; asil okunmasi gereken govdeydi.
+        const float TitleSize = 0.040f, MsgSize = 0.026f, BtnSize = 0.026f;
 
         const int QBack = 3004, QBorder = 3012, QFill = 3016, QHover = 3020, QText = 3030;
         const float ZBack = 0.006f, ZBorder = 0.004f, ZFill = 0.003f, ZHover = 0.002f, ZText = 0f;

@@ -168,25 +168,10 @@ namespace VRMultiplayer.Constructor
             _saveAt = Time.unscaledTime + AutoSaveDelay;
         }
 
-        /// <summary>
-        /// NEDEN Start, Awake DEGIL: <see cref="Weapons.WeaponRackRespawner"/> de AfterSceneLoad'da
-        /// doguyor ve iki bootstrap arasindaki sira GARANTI DEGIL. Start hepsinden sonra kosar,
-        /// yani raf yuvalari henuz var olmayan bir respawner'a yazilmaz.
-        /// </summary>
-        /// <summary>
-        /// Mac icin harita hazir olsun: acik bir oturum varsa DOKUNMA, yoksa havuzdan sec ve kur.
-        ///
-        /// ACILISTA DEGIL, OYUNCU GIRERKEN. Once acilista seciliyordu; sema ise secimi isim +
-        /// takim ekranindan SONRAYA koyuyor. Fark pratik: sunucu saatlerce bos beklerken secilen
-        /// harita, oyuncu girene kadar tasarimcinin havuzda yaptigi her degisiklige kor kalirdi.
-        /// Simdi ilk oyuncu girdiginde seciliyor.
-        ///
-        /// ACIK OTURUMA DOKUNMAMAK MACIN AYNI HARITADA GECMESINI SAGLIYOR: sonradan katilan
-        /// oyuncu yeni bir secim tetiklemez, devam eden maca girer.
-        /// </summary>
-        // KALDIRILDI: "havuzdan rastgele sec". Haritayi artik oyuncu seciyor
-        // (ConstructorSync.PickMatchMapServerRpc). Olu kod artik var olmayan bir davranisi
-        // varmis gibi gosterir, o yuzden duruyor degil siliniyor.
+        // MAC HARITASI BURADA SECILMIYOR. Kurayi sunucu, ilk oyuncu maca girerken cekiyor
+        // (ConstructorSync.ServerPickMatchMap). Bir zamanlar acilista secilirdi ve sunucu
+        // saatlerce bos beklerken secilen harita, tasarimcinin havuzda yaptigi degisikliklere
+        // kor kalirdi.
 
         void Update()
         {

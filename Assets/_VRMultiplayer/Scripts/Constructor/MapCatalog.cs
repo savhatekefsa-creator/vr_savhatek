@@ -198,16 +198,35 @@ namespace VRMultiplayer.Constructor
         public static bool PoolIsEmpty => Pool().Count == 0;
 
         /// <summary>
-        /// Havuzdan rastgele bir harita adi, havuz bossa null.
+        /// Havuzdaki harita adlari RASTGELE SIRADA — mac haritasi buradan cekiliyor.
         ///
-        /// YALNIZCA SUNUCUDA CAGRILMALI: her istemci kendi rastgelesini cekerse herkes baska
-        /// haritaya duser. Secilen ad istemcilere yollanir, harita oradan kurulur.
+        /// ESIT PAY: Fisher-Yates her haritayi esit olasilikla basa koyar, yani N haritalik
+        /// havuzda her birinin sansi 1/N (5 harita -> %20). Havuza harita ekleyip cikarmak
+        /// paylari kendiliginden yeniden boler; elle ayarlanacak bir agirlik yok.
+        ///
+        /// NEDEN LISTE, TEK AD DEGIL: bastaki ad SECILEN harita, gerisi YEDEK. Secilen harita
+        /// acilamazsa (dosya bozulmus ya da disaridan silinmis) sirayla digerleri denenir —
+        /// tek bozuk dosya butun maci durdurmamali. Tek ad donseydi cagiran taraf ya pes
+        /// edecek ya da kendi kurasini yeniden cekecekti; ikincisi ayni bozuk haritayi
+        /// tekrar tekrar secebilirdi.
+        ///
+        /// YALNIZCA SUNUCUDA CAGRILMALI: her gozluk kendi rastgelesini cekerse ayni macin
+        /// oyunculari baska haritalara duser. Secilen harita istemcilere yollanir, oradan kurulur.
         /// </summary>
-        public static string PickRandomFromPool()
+        public static List<string> PoolInRandomOrder()
         {
             var pool = Pool();
-            if (pool.Count == 0) return null;
-            return pool[UnityEngine.Random.Range(0, pool.Count)].name;
+            var names = new List<string>(pool.Count);
+            foreach (var e in pool) names.Add(e.name);
+
+            for (int i = names.Count - 1; i > 0; i--)
+            {
+                int j = UnityEngine.Random.Range(0, i + 1);
+                string tmp = names[i];
+                names[i] = names[j];
+                names[j] = tmp;
+            }
+            return names;
         }
 
         /// <summary>
