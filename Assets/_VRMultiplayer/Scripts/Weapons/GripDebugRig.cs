@@ -112,6 +112,18 @@ namespace VRMultiplayer.Weapons
         ProceduralFingerPoser _poser;
         WeaponGripTuner _tuner;
 
+        // ─── El kaymasi olcumu ────────────────────────────────────────────────────────────
+        // "Oyundaki eller kumandanin solunda ve gerisinde duruyor" gozlemini SAYIYA cevirir:
+        // kumanda cipasi ile avatarin bilek kemigi arasindaki fark, oyuncunun kendi
+        // cercevesinde (sag / yukari / ileri).
+        //
+        // YALNIZCA ELLER BOSKEN ANLAMLI: silah tutulurken WeaponHandWeld bilegi zaten silaha
+        // mutlak yaziyor, yani olculen sey elin nerede DURDUGU degil weld'in nereye koydugu
+        // olur. Panel bunu ayrica soyluyor.
+        Animator _anim;
+        Transform _lWrist, _rWrist;
+        Transform _leftWristAxes, _rightWristAxes;
+
         /// <summary>Tuner acikken bu arac TUSLARI BIRAKIR ve panelini kapatir; yalnizca eksen
         /// cubuklari kalir. Ikisi de A+X akorunu dinliyor: birlikte aciklarken her kayitta
         /// test modu da degisir (el silahtan kopar) ve iki panel ust uste biner. Kullaniciya
@@ -156,6 +168,9 @@ namespace VRMultiplayer.Weapons
             Transform lA = _grabber.LeftAnchor, rA = _grabber.RightAnchor;
             PlaceTriad(_leftAxes, lA);
             PlaceTriad(_rightAxes, rA);
+            ResolveWrists();
+            PlaceTriad(_leftWristAxes, _lWrist);
+            PlaceTriad(_rightWristAxes, _rWrist);
             PlaceAimMarker();
 
             var held = FindHeldWeapon(out bool leftHand);
@@ -265,6 +280,44 @@ namespace VRMultiplayer.Weapons
                 : total < 6f ? new Color(1f, 0.85f, 0.1f)
                 : new Color(1f, 0.25f, 0.15f);
             UI.UITheme.SetMaterialColor(_barrelMat, c);
+        }
+
+        void ResolveWrists()
+        {
+            if (_anim == null) _anim = GetComponentInChildren<Animator>(true);
+            if (_anim == null || !_anim.isHuman) return;
+            if (_lWrist == null) _lWrist = _anim.GetBoneTransform(HumanBodyBones.LeftHand);
+            if (_rWrist == null) _rWrist = _anim.GetBoneTransform(HumanBodyBones.RightHand);
+        }
+
+        /// <summary>
+        /// Cipa -> bilek farkini OYUNCUNUN cercevesinde yazar. Dunya eksenlerinde vermek
+        /// ise yaramaz: "x -0.08" oyuncuya bir sey soylemez, "solda 8 cm" soyler. Cerceve
+        /// kafanin YATAY yonunden kurulur — basini yana egince sayilar donmesin.
+        /// </summary>
+        void AppendHandOffset(bool left)
+        {
+            Transform anchor = left ? _grabber.LeftAnchor : _grabber.RightAnchor;
+            Transform wrist = left ? _lWrist : _rWrist;
+            if (anchor == null || wrist == null) { _sb.Append(left ? "SOL" : "SAG").Append(" el: olculemedi\n"); return; }
+
+            var head = XRRigReference.HeadOrCamera;
+            Vector3 fwd = head != null ? head.forward : Vector3.forward;
+            fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
+            fwd.Normalize();
+            Vector3 right = Vector3.Cross(Vector3.up, fwd);
+
+            Vector3 d = wrist.position - anchor.position;
+            float sag = Vector3.Dot(d, right);
+            float yukari = d.y;
+            float ileri = Vector3.Dot(d, fwd);
+
+            _sb.Append(left ? "SOL" : "SAG").Append(" el  ")
+               .Append(sag >= 0 ? "sag " : "sol ").Append(Mathf.Abs(sag).ToString("F3")).Append("  ")
+               .Append(yukari >= 0 ? "ust " : "alt ").Append(Mathf.Abs(yukari).ToString("F3")).Append("  ")
+               .Append(ileri >= 0 ? "ileri " : "geri ").Append(Mathf.Abs(ileri).ToString("F3"))
+               .Append("   = ").Append(d.magnitude.ToString("F3")).Append(" m\n");
         }
 
         /// <summary>Silahin yatikligi: namluya dik duzlemde, referans "yukari" ile silahin
@@ -509,6 +562,13 @@ namespace VRMultiplayer.Weapons
             _sb.Clear();
             _sb.Append("GRIP DEBUG   mod: ").Append(ModeLabel(mode)).Append('\n');
 
+            // EL KAYMASI — kumanda cipasi ile bilek kemigi arasindaki fark.
+            _sb.Append(held == null ? "-- el kaymasi (eller bos: gecerli) --\n"
+                                    : "-- el kaymasi (SILAH TUTULUYOR: weld ezer, gecersiz) --\n");
+            AppendHandOffset(true);
+            AppendHandOffset(false);
+            _sb.Append('\n');
+
             if (held == null)
             {
                 _sb.Append("<silah tutulmuyor>\n");
@@ -588,6 +648,10 @@ namespace VRMultiplayer.Weapons
             }
             if (_leftAxes == null) _leftAxes = BuildTriad("Axes L");
             if (_rightAxes == null) _rightAxes = BuildTriad("Axes R");
+            // Bilek kemikleri: cipa ucluleriyle ust uste GELMELI. Gelmiyorsa aradaki bosluk
+            // aranan kayma — gozle de gorunsun, yalnizca sayida kalmasin.
+            if (_leftWristAxes == null) _leftWristAxes = BuildTriad("Axes Wrist L");
+            if (_rightWristAxes == null) _rightWristAxes = BuildTriad("Axes Wrist R");
             if (_weaponAxes == null) _weaponAxes = BuildTriad("Axes Weapon");
             if (_barrelRod == null)
             {
@@ -669,6 +733,8 @@ namespace VRMultiplayer.Weapons
             if (_panel != null) { Destroy(_panel.gameObject); _panel = null; }
             DestroyIf(ref _leftAxes);
             DestroyIf(ref _rightAxes);
+            DestroyIf(ref _leftWristAxes);
+            DestroyIf(ref _rightWristAxes);
             DestroyIf(ref _weaponAxes);
             DestroyIf(ref _barrelRod);
             DestroyIf(ref _aimMarker);
