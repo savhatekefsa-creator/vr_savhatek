@@ -167,8 +167,10 @@ namespace VRMultiplayer.UI
                             : muzzle;
             Vector3 from = emitter + dir * 0.02f; // silahin kendi govdesine carpmasin
 
-            bool blocked = Physics.Raycast(from, dir, out var hit, maxDistance,
-                                           Physics.AllLayers, QueryTriggerInteraction.Ignore);
+            // Merminin durdugu yerde durur: mermi geciren proplari (tel raf, merdiven) benek
+            // de gecer. Duz Physics.Raycast kullansaydik lazer rafta durur, mermi ise gecerdi
+            // — nisan alinan nokta ile isabet noktasi ayrisirdi.
+            bool blocked = BulletPassThrough.Raycast(from, dir, maxDistance, out var hit);
             Vector3 end = blocked ? hit.point : from + dir * maxDistance;
 
             _beam.SetPosition(0, from);
