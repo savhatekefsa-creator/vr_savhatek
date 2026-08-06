@@ -1556,7 +1556,7 @@ MonoBehaviour:
   rightGripPositionOffset: {x: 0, y: 0, z: 0}
   rightGripEulerOffset: {x: -7.99, y: 150, z: -50.6}
   palmOffset: 0
-  armReachRemap: 0
+  armReachRemap: 1
   driveElbowHints: 1
   elbowDown: 1
   elbowOut: 0.55
