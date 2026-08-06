@@ -1045,6 +1045,7 @@ MonoBehaviour:
   gamePort: 7777
   appId: savhateks-vr
   poolHasMaps: 0
+  takenNames: 
 --- !u!114 &734246290
 MonoBehaviour:
   m_ObjectHideFlags: 0
