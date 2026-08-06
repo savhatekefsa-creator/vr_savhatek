@@ -24,7 +24,8 @@ namespace VRMultiplayer.Constructor
         [Tooltip("Kat/yukseklik adimi — zeminden yukari MapLayout.levelHeight katlari.")]
         public byte level;
 
-        [Tooltip("Donus adimi: 0..23, her adim 15 derece.")]
+        [Tooltip("Donus adimi: 0..71, her adim 5 derece. v1 kayitlarda adim 15 dereceydi; " +
+                 "FromJson yuklerken x3 tasir (bkz. MapLayout.CurrentVersion).")]
         public byte rot;
 
         [Tooltip("GENISLIK yuzdesi (yalnizca yerel X). 100 = prefabin kendi boyu. KALINLIK " +
@@ -71,6 +72,44 @@ namespace VRMultiplayer.Constructor
     }
 
     /// <summary>
+    /// One FREELY transformed item — the fine-adjust layer on top of the grid.
+    ///
+    /// <see cref="PlacedProp"/> compresses to ~12 bytes by quantizing to cells and 5-degree
+    /// yaw steps; this one deliberately does the opposite and stores the FULL transform,
+    /// because its reason to exist is exactly what the grid cannot express: a wall tilted
+    /// 1.8 degrees, a crate sunk 6 mm into the ground, an angle typed as 91.53. It costs a
+    /// few dozen bytes and there are expected to be few of them per map.
+    ///
+    /// DELIBERATELY OUTSIDE THE GRID: free props occupy no cells — they neither block
+    /// building nor claim walkable space. Structure belongs on the grid; this layer is for
+    /// dressing and millimetre corrections, edited from the PC (gizmo/numeric input) while
+    /// the headset keeps building on cells.
+    /// </summary>
+    [Serializable]
+    public class FreePlacedProp
+    {
+        [Tooltip("PropLibrary kimligi (dizin degil — kutuphane sirasi degisince bozulmasin).")]
+        public string propId;
+
+        [Tooltip("ODA UZAYINDA konum (kalibre cerceve; kok objenin yerel uzayi). Y de " +
+                 "serbesttir: yari gomme ya da havada durus mumkun.")]
+        public Vector3 position;
+
+        [Tooltip("Euler aci (derece), UC EKSEN de serbest — yatirma/devirme dahil.")]
+        public Vector3 rotationEuler;
+
+        [Tooltip("MUTLAK localScale (prefabin kendi olcegi dahil) — izgaradaki gibi carpan " +
+                 "DEGIL. Boylece sahnede duran bir kopyanin transformu birebir kopyalanabilir.")]
+        public Vector3 scale = Vector3.one;
+
+        [Tooltip("Sunucunun verdigi benzersiz kimlik. Izgara proplariyla AYNI sayactan " +
+                 "(MapLayout.nextInstanceId): silme/tasima tek adres uzayinda konusur.")]
+        public uint instanceId;
+
+        public Quaternion Rotation => Quaternion.Euler(rotationEuler);
+    }
+
+    /// <summary>
     /// A player-built arena: the prop placements plus the scanned room they were built for.
     /// Serialized with JsonUtility exactly like <see cref="RoomPlan"/>, saved by the PC server
     /// (the room's authority) and shipped to late joiners in chunks.
@@ -82,13 +121,28 @@ namespace VRMultiplayer.Constructor
     [Serializable]
     public class MapLayout
     {
-        public const float RotationStepDegrees = 15f;
-        public const int RotationSteps = 24;          // 360 / 15
+        /// <summary>
+        /// Dosya surumu (<see cref="version"/>).
+        /// v2: donus adimi 5 derece (eskiden 15) — <see cref="FromJson"/> v1 kayitlardaki
+        /// rot'u x3 carparak ayni fiziksel aciya tasir.
+        /// v3: serbest prop katmani (<see cref="freeProps"/>) eklendi — eski kayitlarda alan
+        /// yok, bos listeyle acilir; tasinacak veri olmadigindan damga yeterli.
+        /// </summary>
+        public const int CurrentVersion = 3;
+
+        public const float RotationStepDegrees = 5f;
+        public const int RotationSteps = 72;          // 360 / 5
+
+        /// <summary>
+        /// Ceyrek tur, adim cinsinden. "90 derece" demek isteyen her yer BUNU kullanmali:
+        /// adim inceldiginde elle yazilmis bir 6, 90 yerine 30 derece anlamina gelirdi.
+        /// </summary>
+        public const int QuarterTurnSteps = RotationSteps / 4;
 
         /// <summary>Default for <see cref="levelHeight"/>; the grid needs it before a layout exists.</summary>
         public const float DefaultLevelHeight = 0.5f;
 
-        public int version = 1;
+        public int version = CurrentVersion;
         public string name = "";
         public string createdBy = "";
         public string savedAt = "";
@@ -123,8 +177,13 @@ namespace VRMultiplayer.Constructor
 
         public PlacedProp[] props = new PlacedProp[0];
 
+        [Tooltip("Serbest katman: tam transformla duran proplar (bkz. FreePlacedProp). " +
+                 "Izgara doluluguna girmezler; PC'den ince ayar icindir.")]
+        public FreePlacedProp[] freeProps = new FreePlacedProp[0];
+
         [Tooltip("Bir sonraki yerlestirmeye verilecek kimlik. Sunucu artirir; kayitta saklanir " +
-                 "ki harita yeniden yuklendiginde kimlikler cakismasin.")]
+                 "ki harita yeniden yuklendiginde kimlikler cakismasin. Izgara ve serbest " +
+                 "katman AYNI sayaci paylasir.")]
         public uint nextInstanceId = 1;
 
         // ------------------------------------------------------------- editing
@@ -184,6 +243,57 @@ namespace VRMultiplayer.Constructor
 
         public int Count => props != null ? props.Length : 0;
 
+        // ---- serbest katman ----
+        // Izgara metotlariyla BILEREK ayri: iki liste iki farkli sozlesme tasiyor (hucre vs
+        // tam transform). Kimlik uzayi ise ORTAK (ayni nextInstanceId sayaci) — silme/tasima
+        // tek adresle konusur ve iki katman ayni kimligi asla paylasamaz.
+
+        public FreePlacedProp FindFree(uint instanceId)
+        {
+            if (freeProps == null) return null;
+            for (int i = 0; i < freeProps.Length; i++)
+                if (freeProps[i] != null && freeProps[i].instanceId == instanceId) return freeProps[i];
+            return null;
+        }
+
+        /// <summary>Appends a free placement and assigns it the next instance id.</summary>
+        public FreePlacedProp AddFree(string propId, Vector3 position, Vector3 rotationEuler,
+            Vector3 scale) =>
+            AddFreeWithId(propId, position, rotationEuler, scale, nextInstanceId);
+
+        /// <summary>Free-layer twin of <see cref="AddWithId"/> — same id rules, same counter.</summary>
+        public FreePlacedProp AddFreeWithId(string propId, Vector3 position, Vector3 rotationEuler,
+            Vector3 scale, uint instanceId)
+        {
+            var f = new FreePlacedProp
+            {
+                propId = propId,
+                position = position,
+                rotationEuler = rotationEuler,
+                // Sifir olcek gorunmez prop demek — kotu veri sinirda duzeltilir.
+                scale = scale == Vector3.zero ? Vector3.one : scale,
+                instanceId = instanceId,
+            };
+
+            if (instanceId >= nextInstanceId) nextInstanceId = instanceId + 1;
+
+            var list = new List<FreePlacedProp>(freeProps ?? new FreePlacedProp[0]) { f };
+            freeProps = list.ToArray();
+            return f;
+        }
+
+        public bool RemoveFree(uint instanceId)
+        {
+            if (freeProps == null || freeProps.Length == 0) return false;
+            var list = new List<FreePlacedProp>(freeProps);
+            int removed = list.RemoveAll(f => f != null && f.instanceId == instanceId);
+            if (removed == 0) return false;
+            freeProps = list.ToArray();
+            return true;
+        }
+
+        public int FreeCount => freeProps != null ? freeProps.Length : 0;
+
         // ------------------------------------------------------------- json
 
         public string ToJson(bool pretty = true) => JsonUtility.ToJson(this, pretty);
@@ -199,12 +309,31 @@ namespace VRMultiplayer.Constructor
                 // JsonUtility eksik dizileri null birakir; tuketiciler her yerde null kontrolu
                 // yapmasin diye burada bir kez normalize ediyoruz.
                 if (m.props == null) m.props = new PlacedProp[0];
+                if (m.freeProps == null) m.freeProps = new FreePlacedProp[0];
+                foreach (var f in m.freeProps)
+                    if (f != null && f.scale == Vector3.zero) f.scale = Vector3.one;
                 if (m.builtForRoom == null) m.builtForRoom = new RoomPlan();
                 if (m.builtForRoom.floorPolygon == null) m.builtForRoom.floorPolygon = new Vector2[0];
                 if (m.builtForRoom.walls == null) m.builtForRoom.walls = new RoomWall[0];
                 if (m.builtForRoom.furniture == null) m.builtForRoom.furniture = new RoomBox[0];
                 if (m.cellSize <= 0f) m.cellSize = RoomGrid.DefaultCellSize;
                 if (m.buildMargin < 0f) m.buildMargin = 0f;
+
+                // v1 -> v2: donus adimi 15 dereceden 5'e indi (24 -> 72 adim). Eski rot 15'lik
+                // adim sayiyordu; x3 ayni fiziksel aciya tasir. Surum damgasi ikinci carpmayi
+                // onler: sunucu tasinmis haritayi yayinlayinca istemci ayni JSON'u bir kez
+                // daha yukluyor.
+                if (m.version < 2)
+                {
+                    foreach (var p in m.props)
+                        if (p != null) p.rot = (byte)(p.rot * 3 % RotationSteps);
+                    m.version = 2;
+                }
+
+                // v2 -> v3: serbest prop katmani eklendi. Tasinacak veri yok — eski kayitta
+                // alan bulunmadigindan liste bos acilir; damga "bu format taninip yazilacak"
+                // kaydidir (Save hep guncel surumu yazar).
+                if (m.version < 3) m.version = 3;
                 return m;
             }
             catch (Exception e)
@@ -256,7 +385,8 @@ namespace VRMultiplayer.Constructor
             {
                 System.IO.Directory.CreateDirectory(Directory);
                 File.WriteAllText(PathFor(name), ToJson());
-                Debug.Log($"[MapLayout] Kaydedildi: {PathFor(name)}  ({Count} prop)");
+                Debug.Log($"[MapLayout] Kaydedildi: {PathFor(name)}  " +
+                          $"({Count} izgara + {FreeCount} serbest prop)");
                 return true;
             }
             catch (Exception e)

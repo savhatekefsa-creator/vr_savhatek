@@ -38,6 +38,12 @@ namespace VRMultiplayer.Constructor
         [Range(0.4f, 0.95f)] public float stickPush = 0.7f;
         [Range(0.05f, 0.5f)] public float stickRelease = 0.3f;
 
+        [Tooltip("Ince donuste (freeRotation) stick basili tutulunca tekrarin baslama gecikmesi (sn).")]
+        public float rotateRepeatDelay = 0.4f;
+
+        [Tooltip("Basili tutma tekrar hizi (adim/sn). 12 adim/sn, 5 derecelik adimla 60 derece/sn eder.")]
+        public float rotateRepeatSteps = 12f;
+
         [Header("Nisan")]
         [Tooltip("Acik: isin GOZDEN ELE dogru gider (isaret parmagiyla gosterir gibi).\n" +
                  "Kapali: isin kumandanin kendi yonunden cikar, pointerLift ile duzeltilir.\n\n" +
@@ -190,6 +196,7 @@ namespace VRMultiplayer.Constructor
         // --- giris kenar takibi ---
         bool _prevTrigger, _prevDelete, _prevToggle, _prevUndo, _prevHeightToggle;
         bool _rotArmed, _cycleArmed, _levelArmed;
+        float _nextRotRepeatAt;   // ince donus tekrarinin siradaki adimi (bkz. HandleActions)
 
         TextMesh _panel;
         float _hidePanelAt = -1f;
@@ -247,6 +254,12 @@ namespace VRMultiplayer.Constructor
             pointerLiftDegrees = PlayerPrefs.GetFloat(LiftPrefKey, pointerLiftDegrees);
             eyeTrimDegrees = PlayerPrefs.GetFloat(EyeTrimPrefKey, eyeTrimDegrees);
             aimFromEye = PlayerPrefs.GetInt(EyeAimPrefKey, aimFromEye ? 1 : 0) != 0;
+
+            // PC ince-ayar editoru (bkz. FreeEditController): yalnizca fare/klavyeli makinede
+            // anlamli. Quest'te (Android) hic dogmaz. Sahne bileseni olarak elle eklenmesin
+            // diye buradan takiliyor — placer nerede dogarsa editor de orada.
+            if (!Application.isMobilePlatform && GetComponent<FreeEditController>() == null)
+                gameObject.AddComponent<FreeEditController>();
         }
 
         void Update()
@@ -304,6 +317,9 @@ namespace VRMultiplayer.Constructor
 
             EnsureGhost(def);
             UpdateCursor(def);
+            // Imlec HESABI kilitliyken de surer (silme ve durum paneli ona bakiyor) —
+            // gizlenen yalnizca gorselleri.
+            if (PlacementLocked && GridView != null) GridView.HideCursor();
             HandleActions(def);
             HandleLiftAdjust();
             AnimateGhost();
@@ -533,9 +549,9 @@ namespace VRMultiplayer.Constructor
             _rayHitWorld = ToWorld(wallPoint);
 
             // Yerel +Z duvarin normaline bakacak sekilde dondur, sonra propun kendi adimina
-            // yuvarla: ceyrek tur donebilen bir prop duvara 15 derecelik bir aciyla yaslanamaz.
+            // yuvarla: yalnizca ceyrek tur donebilen bir prop duvara ara bir aciyla yaslanamaz.
             float yaw = Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg;
-            int step = def != null && def.freeRotation ? 1 : 6;
+            int step = def != null && def.freeRotation ? 1 : MapLayout.QuarterTurnSteps;
             int rotSteps = Mathf.RoundToInt(yaw / MapLayout.RotationStepDegrees / step) * step;
             _placeRot = (byte)(((rotSteps % MapLayout.RotationSteps) + MapLayout.RotationSteps) % MapLayout.RotationSteps);
 
@@ -592,6 +608,16 @@ namespace VRMultiplayer.Constructor
             {
                 Rotate(def, stick.x > 0f ? 1 : -1);
                 _rotArmed = true;
+                _nextRotRepeatAt = Time.time + rotateRepeatDelay;
+            }
+            // BASILI TUTMAK ince adimi tekrarlar: 5 derecelik adimla 90 derece = 18 itis
+            // demekti, adimi inceltmek tekrarsiz kullanilabilirligi geriletirdi. Yalnizca
+            // freeRotation proplar — ceyrek turda 4 yon var, tekrar secimin ustunden ucar.
+            else if (_rotArmed && Mathf.Abs(stick.x) > stickPush && def != null &&
+                     def.freeRotation && Time.time >= _nextRotRepeatAt)
+            {
+                Rotate(def, stick.x > 0f ? 1 : -1);
+                _nextRotRepeatAt = Time.time + 1f / Mathf.Max(1f, rotateRepeatSteps);
             }
             if (Mathf.Abs(stick.x) < stickRelease) _rotArmed = false;
 
@@ -646,13 +672,14 @@ namespace VRMultiplayer.Constructor
             }
 
             bool del = Edge(DeleteHeld(), ref _prevDelete);
-            if (del && _hasCursor)
+            if (del)
             {
                 // Isaret edilen hucrenin sahibini sil — ayak izinin min kosesini degil, imlecin
                 // TAM ALTINDAKI hucreyi soruyoruz, yoksa buyuk bir propun kenarina bakarken
                 // yanindaki bos hucre sorulup hicbir sey silinmezdi.
-                uint id = Session.InstanceIdAt(CursorCell(), _placeLevel);
+                uint id = _hasCursor ? Session.InstanceIdAt(CursorCell(), _placeLevel) : 0u;
                 if (id != 0) Session.TryRemove(id);
+                else if (TryPickFreeProp(out uint freeId)) Session.TryRemoveFree(freeId);
             }
         }
 
@@ -665,6 +692,31 @@ namespace VRMultiplayer.Constructor
         /// next to it.
         /// </summary>
         Vector2Int CursorCell() => _pointedCell;
+
+        /// <summary>
+        /// Serbest katmandaki bir propu ISININ CARPTIGI yerden bulur.
+        ///
+        /// Serbest proplar hucre TUTMAZ (bkz. <see cref="FreePlacedProp"/>), yani
+        /// <see cref="ConstructorSession.InstanceIdAt"/> onlari goremez — PC'de serbeste
+        /// cevrilmis bir propu gozlukteki oyuncu silemez halde kalirdi, ve yanlislikla
+        /// cevrilen bir prop haritada kalici olurdu. Fiziksel isin YALNIZCA silme aninda ve
+        /// yalnizca hucre yolu bos donunce atilir; imlecin kendisi analitik kalir.
+        /// </summary>
+        bool TryPickFreeProp(out uint instanceId)
+        {
+            instanceId = 0;
+            if (Session == null || !Session.IsActive) return false;
+            if (!TryGetRay(out Ray worldRay)) return false;
+            if (!Physics.Raycast(worldRay, out var hit, 30f)) return false;
+
+            uint id = Session.InstanceIdOf(hit.collider != null ? hit.collider.transform : null);
+            // Yalnizca SERBEST prop: isinin carptigi izgara propunu silmek, imlecin gosterdigi
+            // hucreden baska bir seyi silmek olurdu.
+            if (id == 0 || Session.Layout.FindFree(id) == null) return false;
+
+            instanceId = id;
+            return true;
+        }
 
         void CycleProp(int delta)
         {
@@ -702,22 +754,25 @@ namespace VRMultiplayer.Constructor
             // ceyrek tur donebilen bir propa gecildiyse ara aci onun icin gecersiz: en yakin
             // 90 dereceye oturtuluyor, yoksa hayalet o propta bir daha hizalanmayan bir acida
             // takili kalirdi.
-            if (def != null && !def.freeRotation && _rot % 6 != 0)
-                _rot = (byte)(Mathf.RoundToInt(_rot / 6f) * 6 % MapLayout.RotationSteps);
+            if (def != null && !def.freeRotation && _rot % MapLayout.QuarterTurnSteps != 0)
+                _rot = (byte)(Mathf.RoundToInt((float)_rot / MapLayout.QuarterTurnSteps)
+                              * MapLayout.QuarterTurnSteps % MapLayout.RotationSteps);
         }
 
         /// <summary>
-        /// Turns the ghost by one step — a quarter turn normally, 15 degrees for a prop marked
-        /// <see cref="PropDef.freeRotation"/>.
+        /// Turns the ghost by one step — a quarter turn normally, 5 degrees for a prop marked
+        /// <see cref="PropDef.freeRotation"/>. Holding the stick REPEATS the fine step (see
+        /// <see cref="HandleActions"/>): without repeat, a quarter turn would cost 18 flicks.
         ///
         /// The fine step is what makes angled building reachable at all: every input path used
-        /// to move in 90-degree jumps, so the in-between angles existed in the data
-        /// (<see cref="MapLayout.RotationSteps"/> has always been 24) and in the footprint maths
-        /// without any way for a player to ask for one.
+        /// to move in 90-degree jumps, so the in-between angles existed in the data and in the
+        /// footprint maths without any way for a player to ask for one. The step narrowed from
+        /// 15 to 5 degrees with map file version 2; saved maps migrate on load
+        /// (<see cref="MapLayout.FromJson"/>).
         /// </summary>
         void Rotate(PropDef def, int direction)
         {
-            int step = def != null && def.freeRotation ? 1 : 6;
+            int step = def != null && def.freeRotation ? 1 : MapLayout.QuarterTurnSteps;
             int delta = direction > 0 ? step : MapLayout.RotationSteps - step;
             _rot = (byte)((_rot + delta) % MapLayout.RotationSteps);
         }
@@ -995,7 +1050,7 @@ namespace VRMultiplayer.Constructor
         {
             if (_ghost == null) return;
 
-            if (!_hasCursor) { _ghost.SetActive(false); return; }
+            if (!_hasCursor || PlacementLocked) { _ghost.SetActive(false); return; }
             _ghost.SetActive(true);
 
             if (_valid != _lastValid) ApplyGhostMaterial(_valid);
@@ -1104,7 +1159,7 @@ namespace VRMultiplayer.Constructor
         {
             if (_beam == null) return;
 
-            bool show = BuildMode && _hasCursor;
+            bool show = BuildMode && _hasCursor && !PlacementLocked;
             if (_beam.enabled != show) _beam.enabled = show;
             if (_beamDot != null && _beamDot.gameObject.activeSelf != show)
                 _beamDot.gameObject.SetActive(show);
@@ -1331,6 +1386,26 @@ namespace VRMultiplayer.Constructor
             return found;
         }
 
+        FreeEditController _freeEdit;
+
+        /// <summary>
+        /// PC'de koyma KILITLI mi (<b>P</b>). Kilitliyken hayalet, isin ve izgara imleci de
+        /// gizlenir: ince ayar yaparken elde koyulmayacak bir prop asili durmasi, "simdi
+        /// birakacagim" izlenimi verip ekrani da kapatiyordu.
+        ///
+        /// <see cref="FreeEditController.BlocksPlacement"/> DEGIL, sadece kilit okunur: o,
+        /// fare panelin uzerine gelince de true oluyor ve hayalet her fare hareketinde yanip
+        /// sonerdi.
+        /// </summary>
+        bool PlacementLocked
+        {
+            get
+            {
+                if (_freeEdit == null) _freeEdit = GetComponent<FreeEditController>();
+                return _freeEdit != null && !_freeEdit.PlaceEnabled;
+            }
+        }
+
         bool PlaceHeld()
         {
             var dev = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
@@ -1339,7 +1414,13 @@ namespace VRMultiplayer.Constructor
                 return true;
 #if ENABLE_INPUT_SYSTEM
             var mouse = Mouse.current;
-            return mouse != null && mouse.leftButton.isPressed;
+            if (mouse == null || !mouse.leftButton.isPressed) return false;
+
+            // PC'de koyma KILITLENEBILIR (P) ve panel uzerindeyken hep kapali — ince ayar
+            // yaparken sol tikin "koy" olmasi istenmeyen prop birakiyordu. Gozlugu
+            // ETKILEMEZ: tetik yukaridaki daldan doner.
+            if (_freeEdit == null) _freeEdit = GetComponent<FreeEditController>();
+            return _freeEdit == null || !_freeEdit.BlocksPlacement;
 #else
             return false;
 #endif
@@ -1558,6 +1639,8 @@ namespace VRMultiplayer.Constructor
             var def = SelectedProp();
             GUILayout.BeginArea(new Rect(Screen.width - 340f, 20f, 320f, 250f), GUI.skin.box);
             GUILayout.Label("CONSTRUCTOR — INSA MODU ACIK  [B kapatir]");
+            if (PlacementLocked)
+                GUILayout.Label("KOYMA KILITLI [P] — hayalet ve isin gizli");
             GUILayout.Label("Kategori: " + ConstructorPaletteUI.CategoryName(
                                 _palette != null ? _palette.ActiveCategory : PropCategory.Cover) +
                             "   [C basili tut + ok tuslari]" + (_palette != null && _palette.IsOpen ? "  <ACIK>" : ""));

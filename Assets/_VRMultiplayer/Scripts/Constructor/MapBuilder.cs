@@ -63,8 +63,14 @@ namespace VRMultiplayer.Constructor
                 var go = SpawnOne(p, ctx);
                 if (go != null) built[p.instanceId] = go;
             }
+            foreach (var f in ctx.layout.freeProps)
+            {
+                var go = SpawnOneFree(f, ctx);
+                if (go != null) built[f.instanceId] = go;
+            }
 
-            Debug.Log($"[MapBuilder] '{ctx.layout.name}' kuruldu: {built.Count}/{ctx.layout.Count} prop.");
+            Debug.Log($"[MapBuilder] '{ctx.layout.name}' kuruldu: " +
+                      $"{built.Count}/{ctx.layout.Count + ctx.layout.FreeCount} prop.");
             return built;
         }
 
@@ -100,9 +106,20 @@ namespace VRMultiplayer.Constructor
                     yield return null;
                 }
             }
+            foreach (var f in ctx.layout.freeProps)
+            {
+                var go = SpawnOneFree(f, ctx);
+                if (go != null) built[f.instanceId] = go;
+
+                if (++sinceYield >= propsPerFrame)
+                {
+                    sinceYield = 0;
+                    yield return null;
+                }
+            }
 
             Debug.Log($"[MapBuilder] '{ctx.layout.name}' kuruldu (kareye yayilmis): " +
-                      $"{built.Count}/{ctx.layout.Count} prop.");
+                      $"{built.Count}/{ctx.layout.Count + ctx.layout.FreeCount} prop.");
             onDone?.Invoke(built);
         }
 
@@ -132,6 +149,7 @@ namespace VRMultiplayer.Constructor
                 return null;
             }
             if (layout.props == null) layout.props = new PlacedProp[0];
+            if (layout.freeProps == null) layout.freeProps = new FreePlacedProp[0];
             if (library == null) library = PropLibrary.Instance;
             if (root == null) root = EnsureRoot();
 
@@ -197,6 +215,44 @@ namespace VRMultiplayer.Constructor
             // Kimlik isimde: sahnede gozle bulmak ve hata ayiklamak icin. Adres olarak
             // kullanma — sozlukteki instanceId tek dogru kaynak.
             go.name = $"{def.id}#{p.instanceId}";
+            return go;
+        }
+
+        static GameObject SpawnOneFree(FreePlacedProp f, Ctx ctx)
+        {
+            if (f == null) return null;
+
+            var def = ctx.library != null ? ctx.library.ById(f.propId) : null;
+            if (def == null)
+            {
+                Debug.LogWarning($"[MapBuilder] Kutuphanede yok, atlandi (serbest): '{f.propId}'.");
+                return null;
+            }
+            return SpawnFree(f, def, ctx.root);
+        }
+
+        /// <summary>
+        /// Instantiates ONE free placement. NO grid, NO pivot correction, NO fit — the stored
+        /// transform IS the truth and is applied verbatim. The fine-edit flow copies a built
+        /// object's local transform into the data and back again; any arithmetic added here
+        /// would break that round trip (the exact drift <see cref="Spawn"/>'s doc warns about,
+        /// avoided by having none).
+        ///
+        /// Local space on purpose, like <see cref="Spawn"/>: the root is room space, so the
+        /// dollhouse shrinks free props together with everything else.
+        /// </summary>
+        public static GameObject SpawnFree(FreePlacedProp f, PropDef def, Transform parent)
+        {
+            if (f == null || def == null) return null;
+
+            var prefab = def.Resolve();
+            if (prefab == null) return null;   // Resolve zaten uyardi
+
+            var go = UnityEngine.Object.Instantiate(prefab, parent);
+            go.transform.localPosition = f.position;
+            go.transform.localRotation = f.Rotation;
+            go.transform.localScale = f.scale;
+            go.name = $"{def.id}#{f.instanceId}~serbest";
             return go;
         }
 
