@@ -117,18 +117,32 @@ namespace VRMultiplayer.Weapons
             WeldSide(ref _right, false);
         }
 
-        void WeldSide(ref HandWeld w, bool left)
+        /// <summary>
+        /// Bilegin GIDECEGI poz. <see cref="WeldSide"/> bunu uygular; <see cref="AvatarIKController"/>
+        /// ise IK hedefini buna kurmak icin ONCEDEN sorar.
+        ///
+        /// NEDEN AYRI: eskiden kol IK'si kumandadan turetilen bir hedefe cozuluyor, weld ise
+        /// bilegi silaha MUTLAK yaziyordu. Iki sistem farkli yerleri isteyince ust kol/on kol
+        /// bir poza, bilek baska poza gidiyor ve arada kalan deri geriliyordu — silah tutunca
+        /// gorulen bozulma buydu. IK hedefi de buraya kurulunca kol zaten bilegin varacagi yere
+        /// cozuluyor, weld'in duzeltecek bir seyi kalmiyor.
+        /// </summary>
+        public bool TryGetWristTarget(bool left, out Vector3 pos, out Quaternion rot)
         {
-            if (!w.active) return;
-            if (w.weapon == null || w.profile == null || w.bone == null)
-            {
-                // Weapon despawned mid-hold/fade: nothing left to weld to.
-                w.active = false;
-                w.fadingOut = false;
-                if (!_left.active && !_right.active) enabled = false;
-                return;
-            }
+            pos = Vector3.zero; rot = Quaternion.identity;
+            ref HandWeld w = ref (left ? ref _left : ref _right);
 
+            // Sonmekte olan weld'e IK'yi baglamayiz: fade'in VARIS noktasi zaten kumandadan
+            // turetilen poz, oraya cekilmesi dogru.
+            if (!w.active || w.fadingOut) return false;
+            if (w.weapon == null || w.profile == null || w.bone == null) return false;
+
+            ComputeTarget(ref w, left, out pos, out rot);
+            return true;
+        }
+
+        void ComputeTarget(ref HandWeld w, bool left, out Vector3 targetPos, out Quaternion targetRot)
+        {
             Vector3 anchorLocal;
             Quaternion anchorLocalRot = w.gripLocalRot;
 
@@ -154,8 +168,23 @@ namespace VRMultiplayer.Weapons
             // independent of the weapon's scale).
             Vector3 anchorPos = w.weapon.TransformPoint(anchorLocal);
             Quaternion anchorRot = w.weapon.rotation * anchorLocalRot;
-            Vector3 targetPos = anchorPos + anchorRot * w.wristLocalPos;
-            Quaternion targetRot = anchorRot * w.wristLocalRot;
+            targetPos = anchorPos + anchorRot * w.wristLocalPos;
+            targetRot = anchorRot * w.wristLocalRot;
+        }
+
+        void WeldSide(ref HandWeld w, bool left)
+        {
+            if (!w.active) return;
+            if (w.weapon == null || w.profile == null || w.bone == null)
+            {
+                // Weapon despawned mid-hold/fade: nothing left to weld to.
+                w.active = false;
+                w.fadingOut = false;
+                if (!_left.active && !_right.active) enabled = false;
+                return;
+            }
+
+            ComputeTarget(ref w, left, out Vector3 targetPos, out Quaternion targetRot);
 
             // Engage/release weight. The bone's pose here is this frame's IK/animator result
             // (the weld runs after both), so a partial weight blends between that and the

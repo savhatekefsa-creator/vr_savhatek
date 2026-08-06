@@ -329,6 +329,31 @@ namespace VRMultiplayer
             return true;
         }
 
+        /// <summary>
+        /// Silah tutulurken bilegin gidecegi poz — <see cref="Weapons.WeaponHandWeld"/>'den.
+        ///
+        /// NEDEN: weld bilegi IK'dan SONRA silaha mutlak yaziyor. IK hedefi kumandadan
+        /// turetilirse ust kol/on kol bir yere, bilek baska yere gider ve arada kalan deri
+        /// gerilir — silah tutunca gorulen bozulma buydu. Ayni hedefe cozersek weld'in
+        /// duzeltecek bir seyi kalmaz.
+        ///
+        /// SIRA: bu bilesen order 0'da, weld 110'da. Yani okunan veri weld'in BU karede
+        /// uygulayacagi degerdir; kavrama/birakma anlarinda bir kare gecikir, o da weld'in
+        /// kendi blend rampasi icinde kaybolur.
+        /// </summary>
+        bool TryWeldedWrist(bool left, out Vector3 pos, out Quaternion rot)
+        {
+            pos = Vector3.zero; rot = Quaternion.identity;
+            if (_weld == null)
+            {
+                _weld = GetComponent<Weapons.WeaponHandWeld>();
+                if (_weld == null) return false;
+            }
+            return _weld.TryGetWristTarget(left, out pos, out rot);
+        }
+
+        Weapons.WeaponHandWeld _weld;
+
         // Where the WRIST (IK tip) should go: pull back from the controller along the finger
         // direction so the palm holds the grip, then remap the shoulder distance so a fully
         // extended real arm fully straightens the avatar's (longer/shorter) arm.
@@ -614,21 +639,27 @@ namespace VRMultiplayer
             // skeleton's own hand axes so the wrist follows the controller naturally.
             if (leftHandSource != null && ikLeftHandTarget != null)
             {
-                Vector3 wrist = HandTargetPos(leftHandSource, true, leftGripPositionOffset);
-                ikLeftHandTarget.SetPositionAndRotation(
-                    wrist,
-                    _leftRotOK ? HandRotation(leftHandSource, true, leftGripEulerOffset)
-                               : leftHandSource.rotation * Quaternion.Euler(leftGripEulerOffset));
+                Vector3 wrist; Quaternion rot;
+                if (!TryWeldedWrist(true, out wrist, out rot))
+                {
+                    wrist = HandTargetPos(leftHandSource, true, leftGripPositionOffset);
+                    rot = _leftRotOK ? HandRotation(leftHandSource, true, leftGripEulerOffset)
+                                     : leftHandSource.rotation * Quaternion.Euler(leftGripEulerOffset);
+                }
+                ikLeftHandTarget.SetPositionAndRotation(wrist, rot);
                 DriveElbowHint(true, wrist);
             }
 
             if (rightHandSource != null && ikRightHandTarget != null)
             {
-                Vector3 wrist = HandTargetPos(rightHandSource, false, rightGripPositionOffset);
-                ikRightHandTarget.SetPositionAndRotation(
-                    wrist,
-                    _rightRotOK ? HandRotation(rightHandSource, false, rightGripEulerOffset)
-                                : rightHandSource.rotation * Quaternion.Euler(rightGripEulerOffset));
+                Vector3 wrist; Quaternion rot;
+                if (!TryWeldedWrist(false, out wrist, out rot))
+                {
+                    wrist = HandTargetPos(rightHandSource, false, rightGripPositionOffset);
+                    rot = _rightRotOK ? HandRotation(rightHandSource, false, rightGripEulerOffset)
+                                      : rightHandSource.rotation * Quaternion.Euler(rightGripEulerOffset);
+                }
+                ikRightHandTarget.SetPositionAndRotation(wrist, rot);
                 DriveElbowHint(false, wrist);
             }
 
