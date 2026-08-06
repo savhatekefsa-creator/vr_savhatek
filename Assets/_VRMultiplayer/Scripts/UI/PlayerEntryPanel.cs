@@ -127,6 +127,7 @@ namespace VRMultiplayer.UI
             public string action;      // null ve ch=='\0' ve team==0 ise tiklanamaz
             public byte team;          // 0 = takim karti degil
             public TextMesh label;
+            public TextMesh sub;       // takim kartinin alt yazisi ("Takım" / "SEÇİLDİ")
             public Material fillMat, borderMat, glowMat;
         }
 
@@ -148,7 +149,15 @@ namespace VRMultiplayer.UI
 
         public string Text => _sb.ToString();
         public byte SelectedTeam => _team;
-        public bool Ready => PlayerProfile.IsReady(PlayerProfile.Sanitize(Text), _team);
+
+        /// <summary>Yazilan isim sunucuda ZATEN kullaniliyor mu (bkz. PlayerProfile.IsNameTaken).
+        /// Liste elimizde degilse her zaman false — emin olmadan kimseyi engellemeyiz.</summary>
+        public bool NameTaken => PlayerProfile.IsNameTaken(Text);
+
+        /// <summary>OYUNA BASLA aktif mi? Dolu isim de eksik isim gibi ENGEL: butonu aktif
+        /// birakip basildiginda reddetmek, oyuncuya once "hazirsin" deyip sonra caymak olurdu.
+        /// Sebebi alt ipucu yaziyor.</summary>
+        public bool Ready => PlayerProfile.IsReady(PlayerProfile.Sanitize(Text), _team) && !NameTaken;
 
         public void SetText(string s)
         {
@@ -313,9 +322,16 @@ namespace VRMultiplayer.UI
         {
             Vector2 c = Box(x0, y0, x1, y1), size = Dim(x0, y0, x1, y1);
 
-            // Secilince beliren yumusak hale (tasarimdaki isima).
+            // SECILINCE KARTIN ETRAFINI SARAN HALE. Once 10 px buyuktu ve alfasi 0.22'de
+            // kaliyordu: Editor'de goruluyor, cihazda goruldugu soylenemezdi. Iki degisiklik
+            // birden gerekti, cunku ikisi de tek basina yetmiyor —
+            //   GENISLIK: 10 -> 18 px, yani kartin her yaninda 9 px'lik bir cerce (onceden 5).
+            //   Ince bir isik kartin kendi kenarligiyla karisiyordu. USTE CIKILAMAZ: iki kart
+            //   arasinda 12 px var (KIZIL 285..387, MAVI 399..501), 9 px hale komsunun 3 px
+            //   beriye kadar geliyor. Buyutursen once o bosluga bak.
+            //   YARICAP: hale kartin kosesini takip etmeli, yoksa koseler kare goruntu verir.
             var glow = UITheme.MakeRounded(transform, title + " Glow", c,
-                size + Vector2.one * S(10f), S(16f),
+                size + Vector2.one * S(18f), S(19f),
                 new Color(edge.r, edge.g, edge.b, 0f), ZBorder + 0.001f, QGlow);
             var border = UITheme.MakeRounded(transform, title + " Border", c, size, S(10f),
                 edge, ZBorder, QBorder);
@@ -325,13 +341,17 @@ namespace VRMultiplayer.UI
             var tm = UITheme.MakeText(transform, title, text, 0.034f, TextAnchor.MiddleCenter, QText);
             tm.transform.localPosition = new Vector3(c.x, c.y + S(8f), ZText);
 
+            // Alt yazi secilince "SEÇİLDİ" olur. RENK TEK BASINA YETMEZ: kart zaten kirmizi ya
+            // da mavi, "secili kirmizi" ile "secili olmayan kirmizi" yalnizca tona bakarak
+            // ayirt edilir — renk korunde ve passthrough'un yikadigi parlak odada bu ayrim
+            // kaybolur. Yazi ikinci ve tartismasiz bir isaret.
             var sub = UITheme.MakeText(transform, "Takım",
                 new Color(text.r, text.g, text.b, 0.75f), 0.016f, TextAnchor.MiddleCenter, QText);
             sub.transform.localPosition = new Vector3(c.x, c.y - S(22f), ZText);
 
             var el = new El
             {
-                center = c, size = size, radius = S(10f), team = team, label = tm,
+                center = c, size = size, radius = S(10f), team = team, label = tm, sub = sub,
                 fillMat = body.GetComponent<MeshRenderer>().sharedMaterial,
                 borderMat = border.GetComponent<MeshRenderer>().sharedMaterial,
                 glowMat = glow.GetComponent<MeshRenderer>().sharedMaterial,
@@ -362,8 +382,12 @@ namespace VRMultiplayer.UI
 
             _els.Add(new El { center = c, size = size, radius = S(12f), action = ActionStart });
 
+            // AKISI YONETEN SATIR BU: "sirada ne var"i yalnizca burasi soyluyor. 0.018 m ile
+            // 1.4 m'de 0.74 dereceye dusuyordu — yani bu dosyanin en basinda yazili olan
+            // "rahat esik ~1 derece" kuralinin ALTINDA. Ekrandaki en onemli yonlendirme,
+            // ekrandaki en kucuk yazi olamaz.
             _hintText = UITheme.MakeText(transform, "En az " + PlayerProfile.MinLength + " harf gir.",
-                Hint, 0.018f, TextAnchor.MiddleCenter, QText);
+                Hint, 0.025f, TextAnchor.MiddleCenter, QText);
             _hintText.transform.localPosition = new Vector3(X(640f), Y(616f), ZText);
         }
 
@@ -404,6 +428,7 @@ namespace VRMultiplayer.UI
         public void Tick(VRPointer pointer)
         {
             RefreshCaret();
+            PulseTeamGlow();
             if (pointer == null) return;
 
             bool hit = pointer.Raycast(transform, out Vector2 local, out Vector3 world);
@@ -525,21 +550,61 @@ namespace VRMultiplayer.UI
 
         void RefreshTeamCards()
         {
-            Paint(_redCard, RedEdge, RedFill, _team == PlayerProfile.TeamRed);
-            Paint(_blueCard, BlueEdge, BlueFill, _team == PlayerProfile.TeamBlue);
+            bool anyChosen = _team != PlayerProfile.TeamNone;
+            Paint(_redCard, RedEdge, RedFill, RedText,
+                _team == PlayerProfile.TeamRed, anyChosen);
+            Paint(_blueCard, BlueEdge, BlueFill, BlueText,
+                _team == PlayerProfile.TeamBlue, anyChosen);
         }
 
-        // Secili kart: dolgusu acilir, kenari parlar, arkasinda hale belirir.
-        static void Paint(El card, Color edge, Color fill, bool selected)
+        /// <summary>
+        /// Takim karti gorunumu. SECILEN PARLAR, SECILMEYEN GERI CEKILIR — ikisi birlikte
+        /// yapilmali: kontrast GORECELI, yalnizca seciliyi parlatmak iki kartin da "acik"
+        /// gorunmesine yol aciyordu ve secim yapildigi anlasilmiyordu.
+        /// </summary>
+        /// <param name="anyChosen">Herhangi bir takim secildi mi? Hicbiri secilmemisken iki
+        /// kart da NOTR durur — ikisi de esit derecede davetkar olmali, "biri sonuk" degil.</param>
+        static void Paint(El card, Color edge, Color fill, Color text, bool selected, bool anyChosen)
         {
             if (card == null) return;
 
-            UITheme.SetMaterialColor(card.borderMat,
-                selected ? edge : new Color(edge.r, edge.g, edge.b, 0.55f));
+            float dim = !anyChosen ? 0.55f : selected ? 1f : 0.28f;
+
+            UITheme.SetMaterialColor(card.borderMat, new Color(edge.r, edge.g, edge.b, dim));
             UITheme.SetMaterialColor(card.fillMat,
-                selected ? Color.Lerp(fill, edge, 0.22f) : fill);
+                selected ? Color.Lerp(fill, edge, 0.38f) : fill);
+
+            // Hale yalnizca secilide; kapaliyken alfa 0, nabzi Tick suruyor.
             UITheme.SetMaterialColor(card.glowMat,
-                new Color(edge.r, edge.g, edge.b, selected ? 0.22f : 0f));
+                new Color(edge.r, edge.g, edge.b, selected ? GlowBase : 0f));
+
+            if (card.label != null)
+                card.label.color = new Color(text.r, text.g, text.b,
+                    !anyChosen ? 1f : selected ? 1f : 0.45f);
+
+            if (card.sub != null)
+            {
+                card.sub.text = selected ? "SEÇİLDİ" : "Takım";
+                card.sub.color = new Color(text.r, text.g, text.b,
+                    selected ? 1f : !anyChosen ? 0.75f : 0.35f);
+            }
+        }
+
+        // Halenin nabzi. YAVAS ve DAR bir salinim: amac dikkat cekmek, dikkat dagitmak degil —
+        // menude hizli yanip sonen bir yuzey VR'da yorucu. 0.7 Hz, 0.34..0.62 alfa.
+        const float GlowBase = 0.34f, GlowSwing = 0.28f, GlowHz = 0.7f;
+
+        /// <summary>Secili kartin halesini nefes aldirir. Her kare <see cref="Tick"/>'ten.</summary>
+        void PulseTeamGlow()
+        {
+            var card = _team == PlayerProfile.TeamRed ? _redCard
+                     : _team == PlayerProfile.TeamBlue ? _blueCard : null;
+            if (card == null || card.glowMat == null) return;
+
+            Color edge = _team == PlayerProfile.TeamRed ? RedEdge : BlueEdge;
+            float a = GlowBase + GlowSwing *
+                      (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * GlowHz * Mathf.PI * 2f));
+            UITheme.SetMaterialColor(card.glowMat, new Color(edge.r, edge.g, edge.b, a));
         }
 
         void RefreshStart()

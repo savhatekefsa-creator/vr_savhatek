@@ -168,25 +168,10 @@ namespace VRMultiplayer.Constructor
             _saveAt = Time.unscaledTime + AutoSaveDelay;
         }
 
-        /// <summary>
-        /// NEDEN Start, Awake DEGIL: <see cref="Weapons.WeaponRackRespawner"/> de AfterSceneLoad'da
-        /// doguyor ve iki bootstrap arasindaki sira GARANTI DEGIL. Start hepsinden sonra kosar,
-        /// yani raf yuvalari henuz var olmayan bir respawner'a yazilmaz.
-        /// </summary>
-        /// <summary>
-        /// Mac icin harita hazir olsun: acik bir oturum varsa DOKUNMA, yoksa havuzdan sec ve kur.
-        ///
-        /// ACILISTA DEGIL, OYUNCU GIRERKEN. Once acilista seciliyordu; sema ise secimi isim +
-        /// takim ekranindan SONRAYA koyuyor. Fark pratik: sunucu saatlerce bos beklerken secilen
-        /// harita, oyuncu girene kadar tasarimcinin havuzda yaptigi her degisiklige kor kalirdi.
-        /// Simdi ilk oyuncu girdiginde seciliyor.
-        ///
-        /// ACIK OTURUMA DOKUNMAMAK MACIN AYNI HARITADA GECMESINI SAGLIYOR: sonradan katilan
-        /// oyuncu yeni bir secim tetiklemez, devam eden maca girer.
-        /// </summary>
-        // KALDIRILDI: "havuzdan rastgele sec". Haritayi artik oyuncu seciyor
-        // (ConstructorSync.PickMatchMapServerRpc). Olu kod artik var olmayan bir davranisi
-        // varmis gibi gosterir, o yuzden duruyor degil siliniyor.
+        // MAC HARITASI BURADA SECILMIYOR. Kurayi sunucu, ilk oyuncu maca girerken cekiyor
+        // (ConstructorSync.ServerPickMatchMap). Bir zamanlar acilista secilirdi ve sunucu
+        // saatlerce bos beklerken secilen harita, tasarimcinin havuzda yaptigi degisikliklere
+        // kor kalirdi.
 
         void Update()
         {
@@ -299,26 +284,11 @@ namespace VRMultiplayer.Constructor
             var plan = RoomPlanIO.Load();
             var saved = MapLayout.Load(CurrentMapName);
 
-            // ADI TUTMAYAN HARITA VARSA HAVUZA SOR. <see cref="CurrentMapName"/> yalnizca
-            // bellekte yasiyor ve her aciliste <see cref="DefaultMapName"/>'e donuyor; oyuncu
-            // haritasini baska bir adla kaydettiyse (ki kaydetmesi normal) o ad bir daha hic
-            // aranmiyordu ve oturum BOS bir zeminle aciliyordu. "Kayitli haritam var ama bos
-            // odada dogdum" bunun belirtisi.
-            //
-            // SECIM YALNIZCA BURADA GUVENLI: istemci yukaridaki daldan zaten geri dondu, yani
-            // buraya sadece harita otoritesi geliyor. Her gozluk kendi rastgelesini cekseydi
-            // herkes baska haritaya duserdi — havuzdan secmenin tek dogru yeri sunucu.
-            if (saved == null)
-            {
-                string fromPool = MapCatalog.PickRandomFromPool();
-                if (!string.IsNullOrEmpty(fromPool))
-                {
-                    saved = MapLayout.Load(fromPool);
-                    // Ad da tasinmali: kaydetme yolu CurrentMapName'e yaziyor, guncellenmezse
-                    // oyuncunun duzenlemeleri actigi haritaya degil "Current"a giderdi.
-                    if (saved != null) CurrentMapName = fromPool;
-                }
-            }
+            // BURAYA HAVUZ YEDEGI KOYULMAMALI. Bu dalda bir sure "adi tutmayan harita varsa
+            // havuzdan sec" yedegi vardi; mac haritasini ConstructorSync.ServerPickMatchMap
+            // cekiyor ve kurayi MatchMapChosen ile MAC BASINA BIR KEZ kilitliyor. Buraya
+            // ikinci bir secici koymak o kilidi delerdi: sonradan acilan bir oturum kendi
+            // kurasini ceker, ayni macin oyunculari baska haritalara duserdi.
 
             // Kurulacak kayitli harita yoksa SESSIZCE cik: cagiran oynanis yoluysa sahnedeki
             // her sey oldugu gibi kalmali (bkz. BuildForPlay). NotStartedReason yazilmiyor

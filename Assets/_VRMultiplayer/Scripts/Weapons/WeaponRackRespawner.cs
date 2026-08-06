@@ -43,13 +43,14 @@ namespace VRMultiplayer.Weapons
         /// of props costs nothing on the wire. Weapons are the deliberate exception, so the
         /// exception gets a number.
         ///
-        /// 16 -> 32. Eski gerekce "sahnede elle konmus silahlardan az" idi; o silahlar SILINDI
-        /// (oda bosaltilip harita insa moduyla kuruluyor), yani bu sinir artik haritadaki TEK
-        /// silah kaynagi. Ve Rack_Wall'un tam 16 yuvasi var: tek bir duvar rafi butun butceyi
-        /// yiyordu, ikinci raf mesh olarak beliriyor ama tek silah almiyordu. Cihazda yasandi.
+        /// 16 -> 32 (2026-08-05). 16 "projenin gonderdigi tam takim" diye secilmisti, ama
+        /// Rack_Wall prefabinin TEK BASINA 16 yuvasi var: bir duvar rafi koyan oyuncu butceyi
+        /// bitiriyordu ve ikinci raf sessizce BOS geliyordu (mesh her peer'da harita verisinden
+        /// kuruluyor, silahlari yalnizca sunucu mintliyor). Disaridan "bozuk" gorunuyordu.
         ///
-        /// 32 iki duvar rafina yetiyor — iki takimin dogum bolgesine birer tane. Daha yukarisi
-        /// icin once ag maliyetini olcmek gerekir; bu sayi bir tahmin degil, iki rafin ihtiyaci.
+        /// OLCULMEDI: 32 silah = 32 ClientNetworkTransform. Quest'te baglanti ve kare suresine
+        /// etkisi cihazda olculmeli; kotu cikarsa cozum sayiyi geri dusurmek DEGIL, Rack_Wall'in
+        /// yuva sayisini azaltmak olmali — sinir haritanin tamamina ait, tek bir prefaba degil.
         /// </summary>
         public const int MaxConstructorWeapons = 32;
 

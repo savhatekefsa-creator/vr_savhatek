@@ -1,0 +1,123 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &7895371262657599177
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6016752883948568581}
+  - component: {fileID: 5732775213788823880}
+  - component: {fileID: 6825269881204954865}
+  - component: {fileID: 3861718393413617104}
+  m_Layer: 0
+  m_Name: AprilTagRig
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6016752883948568581
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7895371262657599177}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5732775213788823880
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7895371262657599177}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f5e9631f3cd04da0acc02bc5b51f5d4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PassthroughCameraSamples.PassthroughCameraPermissions
+  PermissionRequestsOnStartup:
+  - com.oculus.permission.USE_SCENE
+--- !u!114 &6825269881204954865
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7895371262657599177}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef9a7893e57c04c0db4114c70954b915, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PassthroughCameraSamples.WebCamTextureManager
+  Eye: 0
+  RequestedResolution: {x: 0, y: 0}
+  CameraPermissions: {fileID: 5732775213788823880}
+--- !u!114 &3861718393413617104
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7895371262657599177}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e654c74ebcf3f5846974c231203b9717, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.AprilTagCalibration
+  tagSizeMeters: 0.14
+  tagLayout:
+  - id: 0
+    position: {x: 0, y: 1.5, z: 0}
+    yawDegrees: 180
+    useForCalibration: 1
+  - id: 2
+    position: {x: -2.511815, y: 1.499909, z: -0.504827}
+    yawDegrees: -88.18314
+    useForCalibration: 1
+  - id: 1
+    position: {x: -2.635028, y: 1.509223, z: -3.126694}
+    yawDegrees: -89.72339
+    useForCalibration: 0
+  detectionsPerSecond: 3
+  idleDetectionsPerSecond: 1
+  decimation: 3
+  learnMode: 0
+  learnTargetId: -1
+  learnMaxDistance: 1
+  learnSampleCount: 30
+  showTagMarkers: 0
+  showPassthrough: 0
+  offsetReferenceTagId: 0
+  autoCalibrate: 1
+  correctVertical: 1
+  calibrateSampleCount: 15
+  calibrateMaxDistance: 2
+  correctionDeadzoneMeters: 0.01
+  yawFromReferenceOnly: 1
+  yawCorrectionMaxDistance: 1.5
+  yawRecoveryDegrees: 10
+  maxHeadSpeed: 0.15
+  maxHeadAngularSpeed: 15
+  assumedFrameLatency: 0.05
+  motionErrorBudget: 0.02
+  useAnchorHold: 0
+  calibWindowMaxGap: 2
+  calibSwitchMargin: 0.3
+  calibStabilitySpread: 0.02
+  calibOutlierDistance: 0.15
+  correctionYawDeadzoneDegrees: 0.4
+  smallCorrectionRate: 0.25
+  snapThresholdMeters: 0.1
+  snapThresholdDegrees: 3
+  showPanel: 1

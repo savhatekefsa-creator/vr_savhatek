@@ -144,7 +144,9 @@ namespace VRMultiplayer
             AttachRecoil();
             ComputeBarrel();
             _fx = gameObject.AddComponent<WeaponFx>();
-            _fx.Setup(_profile);
+            // Namlu ekseni de veriliyor: profilsiz silahta surgu/kovan yonu ComputeBarrel'in
+            // geometriden cikardigi eksenden gelsin (profil doluysa profil kazanir).
+            _fx.Setup(_profile, _barrelLocal);
         }
 
         /// <summary>Savas degerlerini kaynak zincirinden cozer:
