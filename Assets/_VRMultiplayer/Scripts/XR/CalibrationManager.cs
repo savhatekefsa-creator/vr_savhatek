@@ -29,6 +29,17 @@ namespace VRMultiplayer
         public TextMesh status;
 
         [Header("Shared virtual reference (MUST be the same on every headset)")]
+        [Tooltip("YALNIZCA TAG ile kalibre ol; A/B dokunma yolu tamamen kapali.\n\n" +
+                 "NEDEN: iki yontem IKI FARKLI FIZIKSEL NOKTAYI sifir kabul ediyor — A/B'de " +
+                 "yerdeki A isareti, tag'de duvardaki tag 0'in merkezi. Ikisi ayni yerde " +
+                 "olmadigi icin iki ayri dunya cikiyor ve ayni harita, hangi yontemle kalibre " +
+                 "olundguna gore metrelerce kayabiliyor.\n\n" +
+                 "Harita dosyasi hangi cercevede kuruldugunu KAYDETMIYOR, yani kayma dosyaya " +
+                 "bakarak da anlasilamaz. Tek cerceve = tek sifir.\n\n" +
+                 "Kapatirsan A/B geri gelir; o zaman A noktasinin tag 0'in ilan edilen " +
+                 "konumuyla ayni fiziksel yerde olmasi gerekir.")]
+        public bool tagOnly = true;
+
         public Vector3 sharedOrigin = Vector3.zero;
         public Vector3 sharedForward = Vector3.forward;
 
@@ -115,7 +126,9 @@ namespace VRMultiplayer
             // oyuncunun eli havadayken, menuye nisan alirken baslar.
             _prevTrigger = ReadRightTrigger();
 
-            SetStatus("KALIBRASYON\nSag kumandayi A noktasina koy,\nTETIGE bas.");
+            SetStatus(tagOnly
+                ? "KALIBRASYON\nDuvardaki TAG'e bak\nve 1-2 metre yaklas."
+                : "KALIBRASYON\nSag kumandayi A noktasina koy,\nTETIGE bas.");
         }
 
         /// <summary>Paneli hemen gizler (bekleyen otomatik gizlemeyi de iptal eder). Kalibrasyondan
@@ -146,15 +159,31 @@ namespace VRMultiplayer
 
             if (XRButtons.GameplayInputSuppressed) return;
 
-            // The trigger only captures points DURING calibration. Once done it is ignored, so
-            // an accidental trigger pull mid-game can never ruin the alignment.
-            if (triggerEdge && _step < 2) CapturePoint();
+            // TAG-ONLY: A/B yolu tamamen kapali. Tetik hicbir nokta yakalamaz.
+            //
+            // NEDEN KAPATILDI: iki yontem IKI FARKLI FIZIKSEL NOKTAYI sifir kabul ediyor —
+            // A/B'de yerdeki A isareti, tag'de duvardaki tag 0'in merkezi. Aralarindaki mesafe
+            // kadar iki ayri dunya cikiyor ve ayni harita hangi yontemle kalibre olduguna gore
+            // metrelerce kayabiliyor. Harita dosyasi hangi cercevede kuruldugunu KAYDETMIYOR,
+            // yani kayma dosyaya bakarak da anlasilamaz. Tek cerceve = tek sifir.
+            if (!tagOnly && triggerEdge && _step < 2) CapturePoint();
 
-            // Re-calibration is armed only by the LEFT controller's Y button.
+            // Yeniden kalibrasyon: SOL kumanda Y.
             if (yEdge && _step == 2)
             {
                 _step = 0;
-                SetStatus("YENIDEN KALIBRASYON\nSag kumandayi A noktasina koy,\nTETIGE bas.");
+                if (tagOnly)
+                {
+                    // Tag surekli duzeltiyor; "yeniden kalibre" burada yalnizca DURUM
+                    // bayragini birakmak demek, boylece tag bir sonraki tespitte cerceveyi
+                    // bastan kurar ve panel yeniden ilerleme gosterir.
+                    Calibrated = false;
+                    SetStatus("YENIDEN KALIBRASYON\nDuvardaki TAG'e bak\nve 1-2 metre yaklas.");
+                }
+                else
+                {
+                    SetStatus("YENIDEN KALIBRASYON\nSag kumandayi A noktasina koy,\nTETIGE bas.");
+                }
             }
         }
 

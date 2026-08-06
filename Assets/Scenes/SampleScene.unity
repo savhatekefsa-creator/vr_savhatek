@@ -9403,6 +9403,7 @@ MonoBehaviour:
   rig: {fileID: 415858740}
   pointer: {fileID: 1332046742}
   status: {fileID: 339188426}
+  tagOnly: 1
   sharedOrigin: {x: 0, y: 0, z: 0}
   sharedForward: {x: 0, y: 0, z: 1}
   useMeasuredPointAHeight: 0
