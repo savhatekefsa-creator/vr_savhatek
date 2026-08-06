@@ -88,8 +88,8 @@ MonoBehaviour:
   - id: 1
     position: {x: -2.53125, y: 1.5, z: -3.25}
     yawDegrees: -89.72339
-    useForCalibration: 0
-  layoutVersion: 2
+    useForCalibration: 1
+  layoutVersion: 3
   detectionsPerSecond: 3
   idleDetectionsPerSecond: 1
   decimation: 3
