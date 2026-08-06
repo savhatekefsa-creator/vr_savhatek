@@ -46,6 +46,33 @@ namespace VRMultiplayer.EditorTools
         /// </summary>
         const float MaxSegmentMeters = 2.40f;
 
+        /// <summary>
+        /// CERCEVE KAYMASI: sahnedeki arena ESKI sifir noktasina (fiziksel A noktasi) gore
+        /// cizildi, bu dalin sifiri ise TAG 0. Ayni sahne koordinati iki cercevede ayni yeri
+        /// gostermiyor, ve fark tam olarak tag 0'in A cercevesindeki konumu kadar.
+        ///
+        /// TURETME — iki bagimsiz kaynak ayni sayiyi veriyor:
+        ///
+        ///   1. Gecmis. Sahnedeki tag 0 girdisi 63ce0ff'te (1.3, 1.59, -0.07) yaw 180 idi;
+        ///      dfb2b17'de (0, 1.50, 0) yaw 180 oldu. YAW DEGISMEDI, yani saf oteleme —
+        ///      donme bileseni yok. Eski cercevede (1.3, -0.07) olan nokta yeni cercevede
+        ///      (0, 0) oluyor.
+        ///
+        ///   2. Arenanin kendi geometrisi. A cercevesinde (1.3, -0.07) noktasi
+        ///      Walls/"Duvar 4"un tam uzerinde: ana odanin guney duvari (z = -0.07, yaw 269,
+        ///      x ekseninde -0.07..4.75). Tag'in yaw'i 180, yani odanin ICINE bakiyor. Ona
+        ///      bakan biri ana odanin icindedir.
+        ///
+        /// Belirti buydu: tag 0'a bakan oyuncu ana odada olmasi gerekirken KORIDORDA
+        /// duruyordu — cunku kaydirilmamis haritada tag 0, arenanin (0, 0) noktasina, yani
+        /// koridor kapisina dusuyor.
+        ///
+        /// Y SIFIR: zemin iki cercevede de y = 0. Tag'in yuksekligi 1.59'dan 1.50'ye dustu ama
+        /// o cerceve degisikligi degil, tag'in FIZIKSEL yeri degisti (uc tag 150 cm'e yeniden
+        /// asildi). Haritayi dikey kaydirmak zemini yerin altina indirirdi.
+        /// </summary>
+        public static readonly Vector3 FrameOffset = new Vector3(-1.30f, 0f, 0.07f);
+
         /// <summary>Kutuphanede ADI TUTMAYAN parcalar. Sol taraf sahnedeki ad (kucuk harf).</summary>
         static readonly Dictionary<string, string> Aliases = new Dictionary<string, string>
         {
@@ -218,6 +245,10 @@ namespace VRMultiplayer.EditorTools
         static void Place(MapLayout layout, RoomGrid grid, PropDef def, Vector3 worldCenter,
             byte rot, byte scalePct, byte heightPct, byte level, Report rep, bool isWall)
         {
+            // Cerceve kaymasi TEK YERDE, hucreye cevrilmeden hemen once: duvar da prop da
+            // buradan geciyor, yani ikisinin ayni miktarda kaymadigi bir durum olusamaz.
+            worldCenter += FrameOffset;
+
             Vector2Int size = RoomGrid.FootprintCells(def, rot, grid.CellSize, scalePct);
             int cx = Mathf.RoundToInt((worldCenter.x - grid.Origin.x) / grid.CellSize - size.x * 0.5f);
             int cz = Mathf.RoundToInt((worldCenter.z - grid.Origin.y) / grid.CellSize - size.y * 0.5f);
@@ -394,8 +425,10 @@ namespace VRMultiplayer.EditorTools
                 sb.AppendLine("  aci yuvarlamasi: en fazla " + _prop.angleDeg.ToString("0.0") + " derece");
                 sb.AppendLine("  hucreye oturma : en fazla " + _prop.driftCm.ToString("0.0") + " cm");
                 sb.AppendLine();
+                sb.AppendLine("Cerceve kaymasi: " + FrameOffset.x.ToString("0.00") + ", " +
+                              FrameOffset.z.ToString("0.00") + " m  (A noktasi -> tag 0)");
                 sb.AppendLine("Kapladigi alan : x[" + _min.x.ToString("0.0") + ".." + _max.x.ToString("0.0") +
-                              "]  z[" + _min.z.ToString("0.0") + ".." + _max.z.ToString("0.0") + "]  m");
+                              "]  z[" + _min.z.ToString("0.0") + ".." + _max.z.ToString("0.0") + "]  m  (kaydirilmis)");
                 sb.AppendLine(roomNote);
 
                 if (_skipped.Count > 0)
