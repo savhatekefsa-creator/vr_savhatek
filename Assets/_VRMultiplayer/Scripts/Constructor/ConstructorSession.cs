@@ -299,6 +299,27 @@ namespace VRMultiplayer.Constructor
             var plan = RoomPlanIO.Load();
             var saved = MapLayout.Load(CurrentMapName);
 
+            // ADI TUTMAYAN HARITA VARSA HAVUZA SOR. <see cref="CurrentMapName"/> yalnizca
+            // bellekte yasiyor ve her aciliste <see cref="DefaultMapName"/>'e donuyor; oyuncu
+            // haritasini baska bir adla kaydettiyse (ki kaydetmesi normal) o ad bir daha hic
+            // aranmiyordu ve oturum BOS bir zeminle aciliyordu. "Kayitli haritam var ama bos
+            // odada dogdum" bunun belirtisi.
+            //
+            // SECIM YALNIZCA BURADA GUVENLI: istemci yukaridaki daldan zaten geri dondu, yani
+            // buraya sadece harita otoritesi geliyor. Her gozluk kendi rastgelesini cekseydi
+            // herkes baska haritaya duserdi — havuzdan secmenin tek dogru yeri sunucu.
+            if (saved == null)
+            {
+                string fromPool = MapCatalog.PickRandomFromPool();
+                if (!string.IsNullOrEmpty(fromPool))
+                {
+                    saved = MapLayout.Load(fromPool);
+                    // Ad da tasinmali: kaydetme yolu CurrentMapName'e yaziyor, guncellenmezse
+                    // oyuncunun duzenlemeleri actigi haritaya degil "Current"a giderdi.
+                    if (saved != null) CurrentMapName = fromPool;
+                }
+            }
+
             // Kurulacak kayitli harita yoksa SESSIZCE cik: cagiran oynanis yoluysa sahnedeki
             // her sey oldugu gibi kalmali (bkz. BuildForPlay). NotStartedReason yazilmiyor
             // — bu bir hata degil, "yapilacak is yok".
