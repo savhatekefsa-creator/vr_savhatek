@@ -22,15 +22,36 @@ namespace VRMultiplayer
     public static class TagLayoutStore
     {
         [Serializable]
-        class Wrapper { public AprilTagCalibration.TagEntry[] tags; }
+        class Wrapper
+        {
+            public AprilTagCalibration.TagEntry[] tags;
+
+            /// <summary>Bu dosyanin turedigi YAZARLI surum. Alani olmayan eski dosyalar 0 okur.</summary>
+            public int layoutVersion;
+        }
 
         public static string FilePath =>
             Path.Combine(Application.persistentDataPath, "TagLayout.json");
 
         public static bool Exists() => File.Exists(FilePath);
 
-        /// <summary>Diskteki yerlesim; dosya yoksa ya da bozuksa null (cagiran sahneyi kullanir).</summary>
-        public static AprilTagCalibration.TagEntry[] Load()
+        /// <summary>
+        /// Diskteki yerlesim; dosya yoksa, bozuksa ya da ESKI SURUMDENSE null (cagiran
+        /// prefabdaki yerlesimi kullanir).
+        ///
+        /// SURUM KAPISI NEDEN VAR. Dosya normalde prefabi EZER, cunku cihazda olculen deger
+        /// PC'de elle yazilandan guvenilirdir. Ama bu kural tek yonlu bir kapan uretiyordu:
+        /// prefabdaki yerlesimi degistirmenin, o dosyaya sahip bir gozlukte HICBIR etkisi
+        /// olmuyordu. Iki kez yasandi — once ikinci gozlukte tag 1 ve 2 "yerlesimde YOK"
+        /// cikti, sonra tag 1'in kalibrasyonunu prefabdan kapatmak cihaza hic ulasmadi.
+        /// Belirtisi her seferinde ayni: "degistirdim ama degismedi", ve sebebi hicbir yerde
+        /// yazmiyor.
+        ///
+        /// Kapi TEK YONLU acilir: yalnizca yazar surumu ARTIRDIGINDA dosya devre disi kalir.
+        /// Bu, "cihazda olculen kazanir" kuralini bozmuyor — olcum gunluk is, surum artirmak
+        /// bilincli bir karar.
+        /// </summary>
+        public static AprilTagCalibration.TagEntry[] Load(int authoredVersion = 0)
         {
             try
             {
@@ -38,6 +59,14 @@ namespace VRMultiplayer
 
                 var w = JsonUtility.FromJson<Wrapper>(File.ReadAllText(FilePath));
                 if (w == null || w.tags == null || w.tags.Length == 0) return null;
+
+                if (w.layoutVersion < authoredVersion)
+                {
+                    Debug.Log($"[TagLayoutStore] Diskteki yerlesim ESKI (surum {w.layoutVersion} < " +
+                              $"{authoredVersion}) — prefabdaki yerlesim kullanilacak ve dosya " +
+                              "ilk yazmada yenilenecek.");
+                    return null;
+                }
                 return w.tags;
             }
             catch (Exception e)
@@ -49,11 +78,12 @@ namespace VRMultiplayer
             }
         }
 
-        public static bool Save(AprilTagCalibration.TagEntry[] tags)
+        public static bool Save(AprilTagCalibration.TagEntry[] tags, int layoutVersion = 0)
         {
             try
             {
-                File.WriteAllText(FilePath, JsonUtility.ToJson(new Wrapper { tags = tags }, true));
+                File.WriteAllText(FilePath,
+                    JsonUtility.ToJson(new Wrapper { tags = tags, layoutVersion = layoutVersion }, true));
                 return true;
             }
             catch (Exception e)

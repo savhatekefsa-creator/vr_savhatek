@@ -54,6 +54,14 @@ namespace VRMultiplayer
         [Tooltip("Hangi tag nerede. Tek tag ile baslamak yeterli.")]
         public TagEntry[] tagLayout = { new TagEntry() };
 
+        [Tooltip("Buradaki yerlesimin SURUMU. Cihazdaki TagLayout.json normalde bunu ezer " +
+                 "(olculen deger elle yazilandan guvenilirdir); dosyanin surumu bundan KUCUKSE " +
+                 "ezmez ve buradaki yerlesim gecerli olur.\n\n" +
+                 "BU SAYIYI ARTIR: yerlesimi buradan degistirdigin ve degisikligin daha once " +
+                 "olcum yapmis gozluklere de ulasmasi gerektigi her seferde. Artirmazsan " +
+                 "degisiklik o gozluklerde HICBIR ETKI YAPMAZ ve sebebi hicbir yerde yazmaz.")]
+        public int layoutVersion = 1;
+
         [Header("Tespit")]
         [Tooltip("Duzeltme GEREKIRKEN saniyede kac tespit (tag gorunuyor ama hiza bozuk). " +
                  "Tespit pahalidir: her turda tam cozunurluklu GetPixels32 + tag arama.")]
@@ -294,7 +302,7 @@ namespace VRMultiplayer
         {
             // DISK SAHNEYI EZER: cihazda olculmus deger, PC'de elle yazilandan guvenilirdir.
             // Dosya yoksa sahnedeki yerlesim varsayilan olarak kalir.
-            var stored = TagLayoutStore.Load();
+            var stored = TagLayoutStore.Load(layoutVersion);
             if (stored != null)
             {
                 tagLayout = stored;
@@ -1068,7 +1076,7 @@ namespace VRMultiplayer
             }
 
             entry.useForCalibration = !entry.useForCalibration;
-            bool saved = TagLayoutStore.Save(tagLayout);
+            bool saved = TagLayoutStore.Save(tagLayout, layoutVersion);
             RebuildMarkers();
 
             _learnNote = $"tag {entry.id} kalibrasyon " +
@@ -1130,7 +1138,7 @@ namespace VRMultiplayer
                 // saniyede 12 dosya yazmasi demek olurdu.
                 if (_nudgeDirty)
                 {
-                    bool ok = TagLayoutStore.Save(tagLayout);
+                    bool ok = TagLayoutStore.Save(tagLayout, layoutVersion);
                     _nudgeDirty = false;
                     _learnNote = ok ? "ince ayar kaydedildi" : "ince ayar DISKE YAZILAMADI";
                 }
@@ -1692,7 +1700,7 @@ namespace VRMultiplayer
             bool yawFromCam = _seenTime.TryGetValue(best, out float st) && Time.time - st < 3f;
             if (yawFromCam) entry.yawDegrees = _seenYaw[best];
 
-            bool saved = TagLayoutStore.Save(tagLayout);
+            bool saved = TagLayoutStore.Save(tagLayout, layoutVersion);
             if (isNew) RebuildMarkers(); else SyncMarkerPoses();
             NoteWrite(best, pos, entry.yawDegrees);
 
@@ -1806,7 +1814,7 @@ namespace VRMultiplayer
             entry.yawDegrees = _learnedYaw;
             tagLayout = list.ToArray();
 
-            bool saved = TagLayoutStore.Save(tagLayout);
+            bool saved = TagLayoutStore.Save(tagLayout, layoutVersion);
             RebuildMarkers();
             NoteWrite(_learnId, entry.position, entry.yawDegrees);
 
