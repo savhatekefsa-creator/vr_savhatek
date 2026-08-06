@@ -5,13 +5,20 @@ using UnityEngine.XR;
 namespace VRMultiplayer
 {
     /// <summary>
-    /// After the LOCAL player joins, shows a floating panel in front of them asking which team
-    /// to join: A button (right controller) = Team A, B button = Team B. The choice is sent to
-    /// the server via <see cref="PlayerIdentity.JoinTeamServerRpc"/> and replicated to everyone.
+    /// YEDEK takim secimi + onboarding'in kalibrasyon adimini baslatan yer.
     ///
-    /// The buttons are free at this point: LanBootstrap only uses A/B before a session starts.
-    /// We still wait for both buttons to be RELEASED once before accepting input, so the press
-    /// that started the host/join can never leak into the team choice.
+    /// Takim artik OYUNA GIRMEDEN ONCE, giris ekraninda seciliyor (bkz. <see cref="UI.PlayerEntryUI"/>)
+    /// ve <see cref="PlayerIdentity"/> spawn aninda sunucuya bildiriyor. Yani normal akista bu
+    /// panel HIC ACILMAZ: asagida yerel secim varsa dogrudan kalibrasyona geciliyor.
+    ///
+    /// Panel yine de duruyor cunku bir sey ters giderse (profil okunamadi, oyuncu bir sekilde
+    /// takimsiz spawn oldu) oyuncunun takimsiz kalmasi KABUL EDILEMEZ: takimi 0 olan oyuncu
+    /// dogum bolgesi bulamaz (PlayerHealth.TickSpawn team==0'da bekler) ve dost atesi filtresi
+    /// disinda kalir. Bu yol o durumda A/B ile secim yaptirir.
+    ///
+    /// KALIBRASYONU BASLATAN YER BURASI: eskiden takim secimi bittiginde cagriliyordu, simdi
+    /// takim zaten secili geldigi icin spawn'da cagriliyor. Onboarding zinciri:
+    /// giris ekrani (isim + takim) -> baglan -> kalibrasyon -> dogum bolgesine yuru.
     /// </summary>
     public class TeamSelector : NetworkBehaviour
     {
@@ -30,13 +37,21 @@ namespace VRMultiplayer
                 return;
             }
 
-            if (_identity.Team.Value != 0) // already on a team (e.g. reconnect)
+            // Giris ekraninda takim secildiyse (normal akis) ya da yeniden baglanmada takim
+            // zaten atanmissa panel gerekmez — dogrudan siradaki adima, kalibrasyona gec.
+            //
+            // YEREL secime bakiliyor, ag degerine DEGIL: JoinTeamServerRpc spawn'da yeni
+            // gonderildi, Team.Value bu karede hala 0. Ag degerini beklemek paneli bir an
+            // yanip sonduren bir yaris yaratirdi.
+            if (PlayerProfile.Team != PlayerProfile.TeamNone || _identity.Team.Value != 0)
             {
                 _done = true;
+                BeginCalibration();
                 enabled = false;
                 return;
             }
 
+            Debug.LogWarning("[TeamSelector] Giris ekranindan takim gelmedi — yedek A/B secimi aciliyor.");
             CreatePanel();
         }
 
@@ -80,7 +95,12 @@ namespace VRMultiplayer
             if (_panel != null) Destroy(_panel.gameObject);
             enabled = false;
 
-            // Next onboarding step: calibrate the shared physical space.
+            BeginCalibration();
+        }
+
+        /// <summary>Siradaki onboarding adimi: ortak fiziksel alani kalibre et.</summary>
+        void BeginCalibration()
+        {
             var cal = Object.FindFirstObjectByType<CalibrationManager>();
             if (cal != null) cal.Begin();
         }

@@ -8,8 +8,11 @@ namespace VRMultiplayer
     /// Two-point manual colocation calibration. Everyone in the SAME physical room aligns to a
     /// shared physical reference, so real-world distance == in-game distance.
     ///
-    /// DORMANT until <see cref="Begin"/> is called (the team selector calls it after the player
-    /// picks a team), so the onboarding order is: join -> pick team -> calibrate -> play.
+    /// DORMANT until <see cref="Begin"/> is called, so each flow decides WHEN calibration is due:
+    ///   OYUNCU  : join -> pick team -> calibrate -> play   (<see cref="TeamSelector"/>)
+    ///   YARATICI: mod sec -> calibrate -> insa modu         (<see cref="Constructor.ConstructorPlacer"/>)
+    /// Yaratici tarafta bu bir kolaylik degil SART: harita kalibre cercevede orulur, hem de
+    /// insa modu tetigi zaten "prop koy" olarak kullanir.
     ///
     /// Flow (each player):
     ///   1) Put the RIGHT controller on physical point A (the shared origin) and pull the TRIGGER.
@@ -59,20 +62,20 @@ namespace VRMultiplayer
         bool _started;
         int _step;            // 0 = waiting for A, 1 = waiting for B, 2 = done
         Vector3 _a;
-        [Tooltip("Takim secildikten sonra ORTAK kalibrasyonun agdan gelmesi icin beklenecek sure " +
-                 "(saniye). Bu sure boyunca A/B istenmez. Gelmezse A/B'ye dusulur.")]
-        public float sharedWaitSeconds = 12f;
-
         bool _prevTrigger;
         bool _prevY;
-        bool _manualOverride;   // oyuncu Y ile bilerek yeniden kalibrasyon istedi
-        bool _waitingShared;    // ortak cerceve bekleniyor, A/B henuz istenmedi
-        float _sharedDeadline;
+        string _note = "";    // "neden simdi kalibre oluyorum" — panelin altina eklenir
 
         /// <summary>True once this player has completed A/B calibration at least once.
         /// The room-scan sender requires this, otherwise the scan would be recorded in
         /// device-local coordinates instead of the shared frame.</summary>
         public static bool Calibrated { get; private set; }
+
+        // Domain reload kapaliyken statikler oyunlar arasi tasinir. Calibrated true kalirsa
+        // ikinci Play'de hem oda gonderme hem insa modu kapisi "zaten kalibre" der — oysa rig
+        // hicbir ortak cerceveye oturmamistir. AppMode.ResetStatics ile ayni gerekce.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Calibrated = false;
 
         void Start()
         {
@@ -80,8 +83,12 @@ namespace VRMultiplayer
             if (status != null) status.gameObject.SetActive(false); // hidden until Begin()
         }
 
-        /// <summary>Starts the calibration step (called after the player picked a team).</summary>
-        public void Begin()
+        /// <summary>Starts the calibration step (the team selector calls it after the player
+        /// picked a team; the constructor calls it before it opens build mode).</summary>
+        /// <param name="note">Bu kalibrasyonun NEDEN istendigi. Panelin altina eklenir ve
+        /// kalibrasyon bitince dusulur. Cagiran taraf kendi paneliyle aciklamasin: iki panel de
+        /// kafanin 1.4 m onunde durur, ust uste binerler.</param>
+        public void Begin(string note = null)
         {
             if (_started) return;
             _started = true;
@@ -93,7 +100,6 @@ namespace VRMultiplayer
             if (Calibrated)
             {
                 _step = 2;
-                _waitingShared = false;
                 SetStatus("TAG ILE KALIBRE EDILDI!\nIyi oyunlar.\n(Yeniden kalibre: SOL kumanda Y tusu)");
                 StartCoroutine(HideAfter(6f));
                 Debug.Log("[Calibration] Katilimda zaten kalibreydi (tag) — A/B istenmedi.");
@@ -101,14 +107,23 @@ namespace VRMultiplayer
             }
 
             _step = 0;
+            _note = string.IsNullOrEmpty(note) ? "" : "\n\n" + note;
 
-            // FAZ 2: once ORTAK cerceveyi bekle. Sunucuda hazir bir kalibrasyon varken oyuncuyu
-            // bos yere A noktasina yollamak yanlisti — ustelik ortak cerceve sonradan gelince
-            // oyuncu iki kez kalibre etmis oluyordu.
-            _waitingShared = true;
-            _sharedDeadline = Time.time + sharedWaitSeconds;
-            SetStatus("ORTAK KALIBRASYON BEKLENIYOR...\n\nBirisi kalibre ettiyse otomatik gelecek.\n" +
-                      "Gelmezse A/B istenecek.");
+            // Tetik BASILI halde giriyor olabiliriz: mod paneli de takim karti da tetikle
+            // tiklaniyor. Kenari simdiki fiziksel duruma esitlemeden baslarsak, henuz
+            // birakilmamis o tetik bir sonraki karede "A alindi" diye okunur ve kalibrasyon
+            // oyuncunun eli havadayken, menuye nisan alirken baslar.
+            _prevTrigger = ReadRightTrigger();
+
+            SetStatus("KALIBRASYON\nSag kumandayi A noktasina koy,\nTETIGE bas.");
+        }
+
+        /// <summary>Paneli hemen gizler (bekleyen otomatik gizlemeyi de iptal eder). Kalibrasyondan
+        /// SONRA baska bir panel acacak akislar icin sart — ikisi de kafanin onunde durur.</summary>
+        public void HideStatus()
+        {
+            StopAllCoroutines();
+            if (status != null) status.gameObject.SetActive(false);
         }
 
         void Update()
@@ -117,47 +132,30 @@ namespace VRMultiplayer
 
             FollowHead();
 
-            // FAZ 2 (karar K2): ortak cerceve agdan geldiyse A/B'ye HIC BASMA. Anchor zaten rig'i
-            // suruyorsa kalibrasyon tamamdir; oyuncuyu bos yere A noktasina yollamanin anlami yok.
-            // _manualOverride: oyuncu Y ile BILEREK yeniden kalibrasyon istediyse geri snap etme.
-            // ServerConfirmed sart: onaylanmamis (ag yok) bir cerceveyle A/B atlanirsa oyuncu
-            // "ortak kalibrasyon geldi" sanip aslinda yalniz kalir.
-            bool sharedReady = CalibrationAnchor.Driving &&
-                               CalibrationShareSync.HasSharedCalibration &&
-                               CalibrationShareSync.ServerConfirmed;
+            // KENARLAR HER KARE OKUNUR, kapi SONRA uygulanir. Insa modu ayni tuslari yeniden
+            // anlamlandiriyor (tetik orada "prop koy"), o yuzden asagida susturuluyorlar — ama
+            // okumayi da atlasaydik, mod kapanirken basili duran bir tus hayalet bir basis
+            // uretirdi. (ConstructorPlacer'in mod kapisindaki ayni ders.)
+            bool trigger = ReadRightTrigger();
+            bool triggerEdge = trigger && !_prevTrigger;
+            _prevTrigger = trigger;
 
-            if (_step < 2 && !_manualOverride && sharedReady)
-            {
-                _waitingShared = false;
-                AdoptShared();
-                return;
-            }
+            bool y = ReadLeftY();
+            bool yEdge = y && !_prevY;
+            _prevY = y;
 
-            // Bekleme penceresi: bu sure boyunca TETIK DINLENMEZ, oyuncudan A/B istenmez.
-            if (_waitingShared)
-            {
-                if (Time.time < _sharedDeadline) return;
-                _waitingShared = false;
-                SetStatus("ORTAK KALIBRASYON GELMEDI\n\nSag kumandayi A noktasina koy,\nTETIGE bas.");
-                Debug.Log("[Calibration] Ortak cerceve gelmedi — A/B yedegine dusuldu.");
-            }
+            if (XRButtons.GameplayInputSuppressed) return;
 
             // The trigger only captures points DURING calibration. Once done it is ignored, so
             // an accidental trigger pull mid-game can never ruin the alignment.
-            bool trigger = ReadRightTrigger();
-            if (trigger && !_prevTrigger && _step < 2)   // rising edge
-                CapturePoint();
-            _prevTrigger = trigger;
+            if (triggerEdge && _step < 2) CapturePoint();
 
             // Re-calibration is armed only by the LEFT controller's Y button.
-            bool y = ReadLeftY();
-            if (y && !_prevY && _step == 2)
+            if (yEdge && _step == 2)
             {
                 _step = 0;
-                _manualOverride = true;   // agdan gelen cerceve bu istegi ezmesin
                 SetStatus("YENIDEN KALIBRASYON\nSag kumandayi A noktasina koy,\nTETIGE bas.");
             }
-            _prevY = y;
         }
 
         // Panel takibi HeadFollowPanel bileseninde (obje inaktifken calismaz — eski
@@ -235,25 +233,11 @@ namespace VRMultiplayer
             // while kneeling) corrects itself without a restart.
             AvatarIKController.RecalibrateAll();
 
+            // Not "neden kalibre oluyoruz" diyordu; is bitti, artik yaniltici olur. Sirayi
+            // bekleyen akis (or. insa modu) kendi panelini bundan sonra acar.
+            _note = "";
             SetStatus("KALIBRE EDILDI!\nIyi oyunlar.\n(Yeniden kalibre: SOL kumanda Y tusu)");
             StartCoroutine(HideAfter(6f));
-        }
-
-        /// <summary>
-        /// FAZ 2 / karar K2 — ortak cerceve agdan geldi, A/B atlanir.
-        ///
-        /// A/B yolundan farkli olarak <c>AvatarIKController.RecalibrateAll()</c> BILEREK
-        /// cagrilmaz: orada oyuncunun B noktasini alirken dik durdugu bilinir, burada ne yaptigi
-        /// bilinmez. Rastgele bir pozdan boy olcumu yapmak yanlis avatar yuksekligi uretirdi.
-        /// </summary>
-        void AdoptShared()
-        {
-            _step = 2;
-            Calibrated = true;
-            StopAllCoroutines();
-            SetStatus("KALIBRASYON AGDAN GELDI\nA/B'ye gerek yok.\n(Yeniden kalibre: SOL kumanda Y tusu)");
-            StartCoroutine(HideAfter(6f));
-            Debug.Log("[Calibration] Ortak cerceve agdan alindi — A/B atlandi.");
         }
 
         /// <summary>
@@ -269,17 +253,15 @@ namespace VRMultiplayer
         /// <see cref="CalibrationAnchor.Bind"/> BILEREK cagrilmaz — kaldirilma gerekcesi hala
         /// gecerli. Tag'in KENDISI surekli referans; anchor omurgasi uyandirilmaz.
         ///
-        /// <c>AvatarIKController.RecalibrateAll()</c> de cagrilmaz, <see cref="AdoptShared"/>
-        /// ile ayni gerekce: A/B'de oyuncunun B noktasini alirken dik durdugu BILINIR, tag'e
-        /// bakarken ne yaptigi (egilmis, uzanmis) bilinmez. Rastgele pozdan boy olcmek yanlis
-        /// avatar yuksekligi uretirdi.
+        /// <c>AvatarIKController.RecalibrateAll()</c> de cagrilmaz: A/B'de oyuncunun B noktasini
+        /// alirken dik durdugu BILINIR, tag'e bakarken ne yaptigi (egilmis, uzanmis) bilinmez.
+        /// Rastgele pozdan boy olcmek yanlis avatar yuksekligi uretirdi.
         /// </summary>
         public void CompleteFromTag()
         {
-            if (Calibrated) return;   // zaten kalibre (A/B ya da agdan) — tag duzeltmeye devam eder
+            if (Calibrated) return;   // zaten kalibre — tag duzeltmeye devam eder
             _step = 2;
             Calibrated = true;
-            _waitingShared = false;
             if (_started)
             {
                 StopAllCoroutines();
@@ -304,12 +286,15 @@ namespace VRMultiplayer
             // Panel sahnede ATANMAMISSA runtime'da olustur. Aksi halde kalibrasyon mesajlari
             // yalnizca log'a giderdi; gozlukte Console olmadigi icin oyuncu HICBIR SEY gormez
             // ve "kalibre olmus gibi" sanip yanlis cerceveyle oynardi (yasanmis).
+            //
+            // "~" oneki: ConstructorPassthrough.HideVirtualWorld cizen kok objeleri gizliyor;
+            // bu panel kalibrasyon durumunu ve "yeniden kalibre: SOL Y" talimatini tasidigi
+            // icin passthrough acikken de gorunmeli.
             if (status == null)
-                // "~": kalibrasyon durumunu ve "yeniden kalibre: SOL Y" talimatini tasiyor.
                 status = UI.HeadFollowPanel.Create("~Calibration Panel", "", Color.white);
 
             status.gameObject.SetActive(true);
-            status.text = s;
+            status.text = s + _note;
             Debug.Log("[Calibration] " + s);
         }
     }

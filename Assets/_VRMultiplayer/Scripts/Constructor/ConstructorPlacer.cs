@@ -19,9 +19,12 @@ namespace VRMultiplayer.Constructor
     /// happen to be standing, which is why this is the primary interaction and the dollhouse
     /// view (step 10) is only a convenience on top.
     ///
-    /// GECICI TUS DUZENI: insa modu SOL thumbstick TIKI ile aciliyor — projedeki tek bos
-    /// baglanti o. Adim 9'da kol saati menusune tasinacak; o zamana kadar kazara basilabilir,
-    /// bu yuzden silah girisleri insa modunda sessize alinmiyor (henuz mod sistemi yok).
+    /// KAPI: insa modu YALNIZCA yaratici modda acilir (bkz. <see cref="OnModeChosen"/>). Modu
+    /// secmek editoru kendiliginden acar; ayrica SOL thumbstick TIKI ile kapatilip acilabilir —
+    /// projedeki tek bos baglanti o. Adim 9'da kol saati menusune tasinacak.
+    ///
+    /// OYUNCU modunda o tus OLUDUR: mac ortasinda kazara basilip duvar orulmesin diye. (Bu not
+    /// once "henuz mod sistemi yok" diyordu; mod sistemi geldi, kapi da takildi.)
     /// </summary>
     public class ConstructorPlacer : MonoBehaviour
     {
@@ -191,6 +194,10 @@ namespace VRMultiplayer.Constructor
         TextMesh _panel;
         float _hidePanelAt = -1f;
 
+        // --- kalibrasyon kapisi (bkz. RequireCalibration) ---
+        CalibrationManager _calibration;
+        bool _waitingForCalibration;
+
         ConstructorSession Session => ConstructorSession.Instance;
         ConstructorPaletteUI _palette;
 
@@ -247,6 +254,18 @@ namespace VRMultiplayer.Constructor
             if (_hidePanelAt > 0f && Time.time > _hidePanelAt) HidePanel();
 
             if (TogglePressed()) SetBuildMode(!(BuildMode || _wantBuildMode));
+
+            // Kalibrasyon bitti mi? Insa modunun ILK kapisi buydu; acilis dizisi bastan isler
+            // (sirada oturum var). Olay yerine yoklama: tek bool karsilastirmasi, ve statik bir
+            // olaya abone olup birakmayi unutma riski yok.
+            if (_waitingForCalibration && CalibrationManager.Calibrated)
+            {
+                _waitingForCalibration = false;
+                // "KALIBRE EDILDI" paneli 6 sn daha duracakti; insa modu panelini tam onun
+                // ustune acardik.
+                if (_calibration != null) _calibration.HideStatus();
+                if (_wantBuildMode) SetBuildMode(true);
+            }
 
             // Sunucudan harita gelmis olabilir: bekleyen istek varsa simdi ac.
             if (_wantBuildMode && !BuildMode && Session != null && Session.IsActive)
@@ -807,6 +826,9 @@ namespace VRMultiplayer.Constructor
                 _wantBuildMode = true;
                 if (BuildMode) return;
 
+                // Kapilar sirayla: ONCE kalibrasyon, sonra oturum. Ikisi de istegi acik birakir.
+                if (!RequireCalibration()) return;   // kalibre olunca Update yeniden dener
+
                 if (Session == null || !Session.EnsureStarted())
                 {
                     Show("INSA MODU HAZIRLANIYOR\n\n" +
@@ -818,9 +840,57 @@ namespace VRMultiplayer.Constructor
             }
 
             _wantBuildMode = false;
+            _waitingForCalibration = false;
             if (!BuildMode) { HidePanel(); return; }
-            SaveNow();   // moddan cikarken kaydet: bir oturumluk emek, cikisi unutunca ucmasin
+            // Moddan cikarken kaydet: bir oturumluk emek, cikisi unutunca ucmasin.
+            //
+            // YARATICI AKISTA DEGIL. Orada kaydetme karari cikista SORULUYOR ("Kaydet?" ->
+            // isimlendirme | degisiklikleri at, bkz. UI.CreativeFlowUI) ve burada sessizce
+            // yazmak "at" secenegini anlamsiz kilardi: atilacak sey coktan diske yazilmis
+            // olurdu. Askiyi o akis koyup kaldiriyor.
+            if (!ConstructorSession.AutoSaveSuspended) SaveNow();
+
             Activate(false);
+        }
+
+        /// <summary>
+        /// Insa modunun ILK kapisi: ortak fiziksel cerceve (<see cref="CalibrationManager"/>).
+        ///
+        /// NEDEN INSADAN ONCE, sonra degil:
+        ///  - Harita kalibre cercevede orulur. Kalibre olmadan konan bir duvar, kalibre olan
+        ///    herkeste BASKA bir yere duser — ve hata haritayi acan kisiye hic gorunmez.
+        ///  - Kalibrasyon rig'i dondurup kaydiriyor. Insa modu acikken yapilsaydi zemin
+        ///    oyuncunun altinda kayardi; ustelik ayni tetik hem "A noktasi" hem "prop koy" olurdu.
+        ///
+        /// Kapi iki durumda ACIK birakilir, ikisi de bilincli:
+        ///  - Kulaklik bagli degil (masaustu testi): A/B noktasini alacak kumanda yok. Constructor
+        ///    bilerek PC'de de calisiyor — ulasilamayan bir adima kilitlemek onu oldururdu.
+        ///  - Sahnede kalibrasyon bileseni yok ya da kapali (PC sunucusu boyle: LanBootstrap
+        ///    kapatir, cunku sunucunun fiziksel oyun alani yok).
+        /// </summary>
+        /// <returns>Kapi gecildiyse true. False donerse kalibrasyon BASLATILMISTIR ve bitince
+        /// <see cref="Update"/> modu kendi acar — oyuncunun tekrar tusa basmasi gerekmez.</returns>
+        bool RequireCalibration()
+        {
+            if (CalibrationManager.Calibrated) return true;
+            if (!UnityEngine.XR.XRSettings.isDeviceActive) return true;
+
+            if (_calibration == null) _calibration = FindFirstObjectByType<CalibrationManager>();
+            if (_calibration == null || !_calibration.enabled) return true;
+
+            _calibration.Begin("Kalibrasyon biter bitmez INSA MODU kendiliginden acilir.");
+            _waitingForCalibration = true;
+
+            // Sebep normalde KALIBRASYON PANELINDE yazar, burada degil: iki panel de kafanin
+            // 1.4 m onunde durur, ikisini birden acmak ust uste iki yazi demek. Ama o panel
+            // sahnede atanmamissa sebebi BIZ yazmaliyiz — yoksa oyuncu YARATICI'yi secer ve
+            // hicbir sey olmamis gibi gorunur.
+            if (_calibration.status != null) HidePanel();
+            else Show("INSA MODU: ONCE KALIBRASYON\n\n" +
+                      "Sag kumandayi A noktasina koy, TETIGE bas;\n" +
+                      "sonra B noktasina koy, tekrar bas.\n" +
+                      "Bitince insa modu kendiliginden acilir.", 12f);
+            return false;
         }
 
         void Activate(bool on)
@@ -1094,13 +1164,48 @@ namespace VRMultiplayer.Constructor
             _beamDot = null;
         }
 
+        void OnEnable()
+        {
+            AppMode.Chosen += OnModeChosen;
+            // Bootstrap sahne yuklenirken dogar, mod ise SONRA secilir — normalde olayi
+            // yakalariz. Yine de zaten secilmis olma ihtimaline karsi (bilesen sonradan
+            // eklenirse) durumu bir kez okuyoruz.
+            OnModeChosen(AppMode.Current);
+        }
+
         void OnDisable()
         {
+            AppMode.Chosen -= OnModeChosen;
             DestroyGhost();
             DestroyStatusPanel();
             DestroyPointerVisual();
             // Kapiyi MUTLAKA birak: burada kalirsa oyuncu silahsiz ve elleri tutmaz halde kalir.
             XRButtons.GameplayInputSuppressed = false;
+        }
+
+        /// <summary>
+        /// Yaratici mod editörun kapisi (bkz. <see cref="AppMode"/> — o dosyanin tarif ettigi
+        /// TEK baglanti noktasi burasi).
+        ///
+        /// YARATICI: once KALIBRASYON (bkz. <see cref="RequireCalibration"/>), sonra insa modu
+        /// KENDILIGINDEN acilir; kullanici ne hangi tusun editoru actigini ne de kalibrasyonu
+        /// ayrica baslatmayi bilmek zorunda kalsin — modu secmek zaten "harita tasarlayacagim"
+        /// demek. Kalibrasyon ya da oturum hazir degilse <see cref="SetBuildMode"/> sebebi
+        /// gosterip istegi acik tutar, hazir olunca <see cref="Update"/> modu kendi acar.
+        ///
+        /// OYUNCU / ANA MENU: acik kalmis insa modu kapatilir (kaydederek). Girisin kendisi
+        /// <see cref="TogglePressed"/> icinde ayrica kilitli — yani maci yarida birakip
+        /// yanlislikla duvar oren kimse olmaz.
+        /// </summary>
+        void OnModeChosen(AppMode.Mode m)
+        {
+            // YARATICI ARTIK DOGRUDAN EDITORE ATMAZ: once kalibrasyon, sonra HARITA MENUSU
+            // (bkz. UI.CreativeFlowUI). Editor oradaki "yeni harita" / "mevcut harita" ile
+            // aciliyor — yoksa hangi harita uzerinde calisildigi hic sorulmadan tek bir
+            // haritaya girilirdi ve menunun var olma sebebi ortadan kalkardi.
+            if (m == AppMode.Mode.Creative) return;
+
+            if (BuildMode || _wantBuildMode) SetBuildMode(false);
         }
 
         // ------------------------------------------------------------- input
@@ -1324,7 +1429,18 @@ namespace VRMultiplayer.Constructor
 #endif
         }
 
-        bool TogglePressed() => Edge(ToggleHeld(), ref _prevToggle);
+        bool TogglePressed()
+        {
+            // Kenari HER KARE oku, mod ne olursa olsun: yalnizca yaratici modda okusaydik,
+            // OYUNCU modunda basili tutulan stick "_prevToggle = false" olarak donar ve moda
+            // gecer gecmez HAYALET bir basis uretirdi.
+            bool edge = Edge(ToggleHeld(), ref _prevToggle);
+
+            // OYUNCU modunda insa moduna giris YOK. Sinif basindaki "gecici tus duzeni" notu
+            // tam bunu bekliyordu: sol stick tiki mac ortasinda kazara basilabilecek bir tustu
+            // ve mod sistemi henuz yoktu. Artik var — kapi yalnizca YARATICI modda aciliyor.
+            return edge && AppMode.IsCreative;
+        }
 
         /// <summary>
         /// Right thumbstick click. The LEFT one already toggles build mode, so this was the only
@@ -1464,7 +1580,8 @@ namespace VRMultiplayer.Constructor
                 bool waiting = _wantBuildMode;
                 GUILayout.BeginArea(new Rect(Screen.width - 300f, 20f, 280f, waiting ? 70f : 26f), GUI.skin.box);
                 GUILayout.Label("[B] Constructor" + (waiting ? "  — BEKLIYOR" : ""));
-                if (waiting && Session != null) GUILayout.Label(Session.NotStartedReason);
+                if (waiting && _waitingForCalibration) GUILayout.Label("KALIBRASYON bekleniyor (A/B + tetik)");
+                else if (waiting && Session != null) GUILayout.Label(Session.NotStartedReason);
                 GUILayout.EndArea();
                 return;
             }

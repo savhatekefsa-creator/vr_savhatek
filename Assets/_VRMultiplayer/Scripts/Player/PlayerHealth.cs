@@ -1,8 +1,26 @@
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
 namespace VRMultiplayer
 {
+    /// <summary>Kill panelinin bir satiri. YEREL tasiyici — ag uzerinde
+    /// <see cref="PlayerHealth.KillFeedRpc"/> alanlari olarak gider.</summary>
+    public struct KillInfo
+    {
+        public string Killer;
+        public string Victim;
+        public byte KillerTeam;
+        public byte VictimTeam;
+        public ulong KillerId;
+        public ulong VictimId;
+        /// <summary>0 = normal, 1 = kendini oldurdu, 2 = katil bilinmiyor.</summary>
+        public byte Kind;
+
+        public bool SelfKill => Kind == 1;
+        public bool UnknownKiller => Kind == 2;
+    }
+
     /// <summary>
     /// Server-authoritative health for a player. Weapons call <see cref="ServerApplyDamage"/> on
     /// the server when a shot hits this player's hitbox; friendly fire is filtered by the weapon.
@@ -52,6 +70,11 @@ namespace VRMultiplayer
         float _holdTimer;           // cemberde kesintisiz gecen sure
         float _noZoneTimer;         // bolge yokken isleyen guvenlik agi sayaci
 
+        /// <summary>"Katil bilinmiyor" isareti — kaynagi olmayan bir olum bildirmek isteyen
+        /// gelecekteki hasar kaynaklari (dusme, harita disi) bunu gecirir. Gercek bir istemci
+        /// kimligi asla bu degeri almaz.</summary>
+        public const ulong NoAttacker = ulong.MaxValue;
+
         public bool IsDead => Dead.Value;
         public byte TeamValue => _identity != null ? _identity.Team.Value : (byte)0;
 
@@ -94,8 +117,18 @@ namespace VRMultiplayer
         /// olceklemek icin tasinir: siyrik ile tam isabet ayni kirmizilikta gorunmemeli.</summary>
         public static event System.Action<Vector3, int> LocalDamageFrom;
 
+        /// <summary>Herhangi bir oyuncu oldugunde HER istemcide tetiklenir — kill panelinin
+        /// besleyicisi (bkz. <see cref="UI.KillFeedUI"/>). Statik olmasi bilincli: olay
+        /// KURBANIN NetworkBehaviour'undan yayinlaniyor ama dinleyen YEREL oyuncunun HUD'u;
+        /// aralarinda referans kurmak icin sahneyi taramak gerekirdi.</summary>
+        public static event System.Action<KillInfo> KillReported;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => LocalDamageFrom = null;
+        static void ResetStatics()
+        {
+            LocalDamageFrom = null;
+            KillReported = null;
+        }
 
         /// <summary>Server-only. Reduce health; handle death. Yeniden dogus zamanla DEGIL,
         /// dogum cemberinde beklenerek olur (bkz. <see cref="TickSpawn"/>).</summary>
@@ -107,6 +140,13 @@ namespace VRMultiplayer
         public void ServerApplyDamage(int amount, ulong attacker, Vector3 sourcePos)
         {
             if (!IsServer || Dead.Value || amount <= 0) return;
+
+            // MAC KAPISI: hasar YALNIZCA "Playing" fazinda gecer. Isinmada ve mac sonu ekraninda
+            // herkes dolasip ates edebilir (ses, geri tepme, mermi, namlu alevi calisir) ama
+            // kimse hasar almaz. Mac katmani hic yoksa MatchManager.DamageAllowed true doner —
+            // yani MatchManager'siz oyun eskisi gibi calisir.
+            if (!Match.MatchManager.DamageAllowed) return;
+
             if (Time.time < _invulnUntil) return; // just revived — brief grace
 
             Health.Value = Mathf.Max(0, Health.Value - amount);
@@ -117,7 +157,7 @@ namespace VRMultiplayer
                 DamageSourceOwnerRpc(sourcePos, amount, RpcTarget.Single(OwnerClientId, RpcTargetUse.Temp));
 
             if (Health.Value <= 0)
-                Die();
+                Die(attacker);
         }
 
         [Rpc(SendTo.SpecifiedInParams)]
@@ -126,7 +166,7 @@ namespace VRMultiplayer
             if (IsOwner) LocalDamageFrom?.Invoke(sourcePos, amount);
         }
 
-        void Die()
+        void Die(ulong attacker)
         {
             Dead.Value = true;
             SpawnProgress.Value = 0f;
@@ -134,10 +174,82 @@ namespace VRMultiplayer
             _holdTimer = 0f;
             _noZoneTimer = 0f;
 
+            ReportKill(attacker);
+
             // Elinde ne varsa YOK OLUR (ekip karari). Eskiden yalnizca BIRAKILIYORDU
             // (ServerReleaseAllHeldBy); birakilan silah kinematik govde olarak sahnede kalir ve
             // havada asili donabiliyordu. Dirilen oyuncu carktan kendi silahini secer.
             DeathDisarm.DisarmHolder(OwnerClientId);
+        }
+
+        /// <summary>Server-only. Skoru isler ve olumu HERKESE duyurur.
+        ///
+        /// Bu bilgi daha once VARDI ama atiliyordu: <see cref="ServerApplyDamage"/> katilin
+        /// kimligini aliyor, <c>Die()</c> hic kullanmiyordu.</summary>
+        void ReportKill(ulong attacker)
+        {
+            byte victimTeam = TeamValue;
+            string victimName = _identity != null
+                ? _identity.NetName.Value.ToString()
+                : "Oyuncu " + OwnerClientId;
+
+            byte kind = attacker == NoAttacker ? (byte)2
+                      : attacker == OwnerClientId ? (byte)1
+                      : (byte)0;
+
+            PlayerIdentity killer = kind == 0 ? PlayerIdentity.For(attacker) : null;
+
+            // Katil olumden once oyundan cikmis olabilir: ismini cozemedigimiz bir satiri
+            // bos isimle yazmaktansa "oldu" durumuna dusuruyoruz.
+            if (kind == 0 && killer == null) kind = 2;
+
+            if (_identity != null)
+                _identity.Deaths.Value = (ushort)(_identity.Deaths.Value + 1);
+
+            // Kill YALNIZCA gercek bir katilde sayilir: intihar ve kaynagi bilinmeyen olum
+            // kimseye puan yazmaz.
+            if (kind == 0 && killer != null)
+            {
+                killer.Kills.Value = (ushort)(killer.Kills.Value + 1);
+
+                // TAKIM skoru MatchManager'da KALICI olarak yasar. Kisisel Kills burada kaliyor
+                // (skorbordun satirlari onu gosteriyor); ama takim toplami oyuncu ciktiginda
+                // dusmemeli — kazanan ona bakiyor.
+                Match.MatchManager.ServerAddScore(killer.Team.Value);
+            }
+
+            string killerName = killer != null ? killer.NetName.Value.ToString() : string.Empty;
+            byte killerTeam = killer != null ? killer.Team.Value : (byte)0;
+
+            KillFeedRpc(
+                new FixedString32Bytes(killerName), killerTeam, attacker,
+                new FixedString32Bytes(victimName), victimTeam, OwnerClientId,
+                kind);
+        }
+
+        /// <summary>
+        /// Olumu her istemciye duyurur. Yayin KURBANIN kendi NetworkBehaviour'undan cikiyor:
+        /// her oyuncu zaten spawn'li bir NetworkObject, yani bu ozellik icin yeni sahne objesi,
+        /// yeni prefab ya da sihirbaz adimi GEREKMIYOR.
+        ///
+        /// Isimler kimlik degil METIN olarak tasiniyor: katil oyundan ciktiginda istemci ID'den
+        /// isim cozemez, satir bos kalirdi.
+        /// </summary>
+        [Rpc(SendTo.Everyone)]
+        void KillFeedRpc(FixedString32Bytes killer, byte killerTeam, ulong killerId,
+                         FixedString32Bytes victim, byte victimTeam, ulong victimId,
+                         byte kind)
+        {
+            KillReported?.Invoke(new KillInfo
+            {
+                Killer = killer.ToString(),
+                KillerTeam = killerTeam,
+                KillerId = killerId,
+                Victim = victim.ToString(),
+                VictimTeam = victimTeam,
+                VictimId = victimId,
+                Kind = kind,
+            });
         }
 
         void Update()
@@ -153,6 +265,16 @@ namespace VRMultiplayer
 
         void TickSpawn()
         {
+            // DOGUM KAPISI HASAR KAPISINDAN AYRIDIR. Oyuncu OLU KATILIR (bkz. OnNetworkSpawn:
+            // "ILK DOGUS da cember mekanizmasindan gecer") — yani dogum isinmada da islemeli,
+            // yoksa mac baslamadan kimse oyuna giremez ve silah alamaz. Yalnizca mac SONU
+            // ekraninda kapali: olen ayakta dirilmez, sonucu olu izler (ekip karari).
+            if (!Match.MatchManager.RespawnAllowed)
+            {
+                ResetSpawnCounters();
+                return;
+            }
+
             byte team = TeamValue;
 
             // Takim henuz secilmedi (TeamSelector paneli acik / kalibrasyon suruyor). Bu asamada
@@ -200,6 +322,16 @@ namespace VRMultiplayer
             _invulnUntil = Time.time + reviveInvuln;
             _lastDamageTime = Time.time;
             _regenAccumulator = 0f;
+        }
+
+        /// <summary>Server-only. Oyuncuyu mac basi/isinma icin temiz duruma alir: tam can, ayakta,
+        /// sayaclar sifir. Dogum cemberinde beklemeyi ATLAR — mac baslarken ya da isinmaya
+        /// donerken herkesin ayakta olmasi gerekiyor, 5 saniye beklemesi degil.
+        /// Cagiran: <see cref="Match.MatchManager"/>.</summary>
+        public void ServerResetForMatch()
+        {
+            if (!IsServer) return;
+            Revive();
         }
 
         void ResetSpawnCounters()

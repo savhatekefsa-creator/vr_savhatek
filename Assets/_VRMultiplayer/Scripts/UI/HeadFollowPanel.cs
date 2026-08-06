@@ -53,6 +53,10 @@ namespace VRMultiplayer.UI
             var go = new GameObject(name);
             go.transform.localScale = Vector3.one * 0.16f;
             var tm = go.AddComponent<TextMesh>();
+            // FONT SART: Unity 6'da varsayilan TextMesh fontu yok. Bu satir olmadan bu
+            // fabrikanin urettigi HER panel (katilim, takim secme, kalibrasyon, oda tarama,
+            // avatar fit) editorde gorunur ama Quest build'inde bombos cikar.
+            UITheme.ApplyFont(tm);
             tm.text = text;
             tm.characterSize = 0.1f;
             tm.fontSize = 60;

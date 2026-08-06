@@ -190,10 +190,21 @@ namespace VRMultiplayer
                 if (_right != null && _right.held == current) h = _right;
                 else if (_left != null && _left.held == current) h = _left;
             }
+            // GECICI SOL EL KURALI: buyuk silah SOL ele dogmaz. Sol eldeki (tabanca/bomba)
+            // buyukle takas ediliyorsa yenisi bos SAG ele yonlenir; sag da doluysa secim
+            // sessizce yok sayilir — asagidaki yerel birakma blogundan ONCE cikmak sart,
+            // yoksa eldeki silah despawn edilip yerine hicbir sey gelmezdi.
+            bool leftBanned = LeftPrimaryBannedPrefab(prefab);
+            if (leftBanned && h == _left) h = null;
             if (h == null && _right != null && _right.held == null) h = _right;
-            if (h == null && _left != null && _left.held == null) h = _left;
-            if (h == null) h = _right ?? _left;
+            if (h == null && !leftBanned && _left != null && _left.held == null) h = _left;
+            if (h == null) h = _right != null ? _right : (leftBanned ? null : _left);
             if (h == null) return;
+            if (leftBanned && h == _right && _right.held != null && _right.held != current)
+            {
+                RejectBuzz(_left);
+                return;
+            }
 
             // Let go LOCALLY first: Reconcile releases anything we hold that is in neither hand,
             // and the swap round trip takes ~1 RTT. Dropping the reference also stops UpdateHand
@@ -262,6 +273,14 @@ namespace VRMultiplayer
             if (!IsOwner) return;
             if (!r.TryGet(out var no) || no == null) return;
             var g = no.GetComponent<GrabbableObject>();
+
+            // GECICI SOL EL KURALI: el secimi yukarida zaten filtrelendi; bu, yaris/bayat
+            // istek ihtimaline karsi ikinci kapi. Iade et ki silah sahipsiz kalmasin.
+            if (g != null && hand == 0 && LeftPrimaryBanned(g))
+            {
+                CancelEquipServerRpc(r);
+                return;
+            }
 
             var h = hand == 1 ? _right : _left;
             if (g == null || h == null || h.held != null)
@@ -552,6 +571,50 @@ namespace VRMultiplayer
             }
         }
 
+        // ─── GECICI SOL EL KURALI (2026-08-05) ────────────────────────────────────────
+        // Buyuk silahlarda (tabanca ve bomba DISI, profilli silahlar) SOL el ANA el olamaz —
+        // yalnizca DESTEK eli. Sebep: gercek sol-el ana tutus pozlari henuz yazilmadi ve
+        // aynalanmis tutus cihazda bozuk duruyor. KALICI COZUM sol-el tutus yakalamalari
+        // geldiginde bu bolge TUMDEN silinir (uc kapi: TryGrab yakinlik, RequestWeaponSwap
+        // el secimi, EquipSpawnedRpc yaris korumasi).
+
+        static bool IsPistolName(string s) =>
+            !string.IsNullOrEmpty(s) && s.ToLowerInvariant().Contains("pistol");
+
+        /// <summary>Bu obje SOL elle ANA tutusa kapali mi? Profilsiz nesneler (tas, prop) ve
+        /// bombalar serbest — onlar tek/sol elle dogal kullaniliyor.</summary>
+        static bool LeftPrimaryBanned(GrabbableObject g)
+        {
+            if (g == null) return false;
+            if (g.GetComponent<GrenadeController>() != null) return false;
+            var grip = g.GetComponent<WeaponGrip>();
+            var p = grip != null ? grip.Profile : null;
+            if (p == null) return false;
+            return !(IsPistolName(p.weaponNameEquals) || IsPistolName(p.weaponNameContains)
+                     || IsPistolName(g.name));
+        }
+
+        /// <summary>Ayni kural, galeriden secilen PREFAB icin (ortada instance yokken).</summary>
+        static bool LeftPrimaryBannedPrefab(GameObject prefab)
+        {
+            if (prefab == null) return false;
+            if (prefab.GetComponent<GrenadeController>() != null) return false;
+            if (prefab.GetComponent<NetworkWeapon>() == null) return false;
+            var p = WeaponGripBinder.FindProfile(prefab.name);
+            return !(IsPistolName(p != null ? p.weaponNameEquals : null)
+                     || IsPistolName(p != null ? p.weaponNameContains : null)
+                     || IsPistolName(prefab.name));
+        }
+
+        /// <summary>Sol el yasaga carpti: kisa-zayif "olmaz" titresimi. Sessiz kalsa oyuncu
+        /// kapmayi bozuk sanirdi; farkli desen (kisa+zayif) bunu kural olarak okutur.</summary>
+        void RejectBuzz(HandState h)
+        {
+            if (h == null) return;
+            var dev = InputDevices.GetDeviceAtXRNode(h.node);
+            if (dev.isValid) dev.SendHapticImpulse(0, 0.3f, 0.04f);
+        }
+
         void TryGrab(HandState h)
         {
             if (h.held != null || h.supporting != null || h.pinFrom != null) return;
@@ -600,6 +663,7 @@ namespace VRMultiplayer
 
             GrabbableObject best = null;
             float bestDist = float.MaxValue;
+            bool leftBannedNearby = false;
             // AllLayers: the default mask skips the "Ignore Raycast" layer, which would make
             // objects on that layer silently ungrabbable.
             foreach (var col in Physics.OverlapSphere(h.anchor.position, grabRadius,
@@ -607,10 +671,18 @@ namespace VRMultiplayer
             {
                 var g = col.GetComponentInParent<GrabbableObject>();
                 if (g == null || g.IsHeld) continue;
+                // GECICI SOL EL KURALI: buyuk silah sol ele ANA olarak giremez (destek dali
+                // yukarida zaten calisti). Aday listesinden cikar — yanindaki tas/tabanca
+                // yine kapilabilsin.
+                if (h.index == 0 && LeftPrimaryBanned(g)) { leftBannedNearby = true; continue; }
                 float d = Vector3.Distance(h.anchor.position, col.ClosestPoint(h.anchor.position));
                 if (d < bestDist) { bestDist = d; best = g; }
             }
-            if (best == null) return;
+            if (best == null)
+            {
+                if (leftBannedNearby) RejectBuzz(h); // "olmaz" geri bildirimi, sessiz kalmasin
+                return;
+            }
             Adopt(h, best);
         }
 

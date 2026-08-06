@@ -31,6 +31,10 @@ namespace VRMultiplayer
         DamageDirectionFlash _dirFlash; // hasarin geldigi yonde kenar parlamasi
         LowHealthVignette _vignette;    // dusuk canda kenar kizarmasi
         RespawnGuide _respawnGuide;     // olu/bekleyen ekrani: gri perde + bolge yonlendirmesi
+        KillFeedUI _killFeed;           // sol ust: kim kimi oldurdu
+        ScoreboardUI _scoreboard;       // B ile acilan mac tablosu
+        MatchStatusUI _matchStatus;     // surekli gorunen faz gostergesi + geri sayim + ses: skorlar + sure + kendi bilgin
+        SpawnRouteGuide _route;         // zeminde dogum bolgesine giden rota
         int _lastHealth = PlayerHealth.MaxHealth;
         float _targetRatio = 1f;
         float _displayedRatio = -1f;   // -1: ilk deger henuz uygulanmadi (animasyonsuz atanir)
@@ -68,6 +72,10 @@ namespace VRMultiplayer
             if (_respawnGuide != null) Destroy(_respawnGuide.gameObject);
             if (_dirFlash != null) Destroy(_dirFlash.gameObject);
             if (_vignette != null) Destroy(_vignette.gameObject);
+            if (_killFeed != null) Destroy(_killFeed.gameObject);
+            if (_scoreboard != null) Destroy(_scoreboard.gameObject);
+            if (_matchStatus != null) Destroy(_matchStatus.gameObject);
+            if (_route != null) Destroy(_route.gameObject);
         }
 
         void OnHealthChanged(int prev, int now)
@@ -107,14 +115,17 @@ namespace VRMultiplayer
 
             // Olu / henuz oyuna girmemis oyuncunun ekrani. Mesafe ve geri sayim her kare
             // degistigi icin durum olay bazli degil, surekli beslenir.
-            if (_respawnGuide != null && _health != null)
+            if (_health != null)
             {
-                _respawnGuide.SetState(
-                    _health.Dead.Value,
-                    _identity != null ? _identity.Team.Value : (byte)0,
-                    _health.InSpawnZone.Value,
-                    _health.SpawnProgress.Value,
-                    _health.spawnHoldSeconds);
+                bool dead = _health.Dead.Value;
+                byte team = _identity != null ? _identity.Team.Value : (byte)0;
+                bool inZone = _health.InSpawnZone.Value;
+
+                if (_respawnGuide != null)
+                    _respawnGuide.SetState(dead, team, inZone,
+                        _health.SpawnProgress.Value, _health.spawnHoldSeconds);
+
+                if (_route != null) _route.SetState(dead, team, inZone);
             }
 
             // VR rig yoksa (Editor'de Game penceresinden test) ana kamera kafa yerine gecer.
@@ -238,6 +249,26 @@ namespace VRMultiplayer
             // Olu / dogum bekleyen ekrani: gri perde + takim bolgesine yonlendirme + geri sayim.
             _respawnGuide = new GameObject("Respawn Guide").AddComponent<RespawnGuide>();
             _respawnGuide.SetFont(countdownFont);
+
+            // Kill paneli: _root'un ALTINDA DEGIL. _root can degisimine gore kuculup kayboluyor
+            // ve olurken gizleniyor; panel ise olu oyuncuya da gorunmeli (kim kimi olduruyor,
+            // dogum bolgesine yururken de takip edilir).
+            _killFeed = new GameObject("Kill Feed").AddComponent<KillFeedUI>();
+
+            // Skorbord: B ile acilan mac tablosu (skorlar + sure + kendi bilgin). Kill paneliyle
+            // AYNI sebeple _root'un disinda — oldugun an skoru en cok merak ettigin andir.
+            // Once surekli gorunen bir ust bar denenmisti; nisani kapatmamak icin lens kenarina
+            // yakin durmak zorunda kaliyordu. Istege bagli acilan panel MERKEZE konabiliyor.
+            _scoreboard = new GameObject("Scoreboard").AddComponent<ScoreboardUI>();
+
+            // Mac durumu SURGUN gorunur: skorbord istege bagli (B), bu degil. Faz bilgisi
+            // istege bagli olsaydi oyuncu isinmada ates edip "kimse olmuyor, oyun bozuk"
+            // sanardi. Kill paneli gibi _root'un DISINDA — olu oyuncu da gormeli.
+            _matchStatus = new GameObject("Match Status").AddComponent<MatchStatusUI>();
+
+            // Dogum bolgesine giden zemin rotasi. RespawnGuide "bolgene git + x.x m" YAZAR,
+            // bu ise YOLU gosterir — ikisi birbirini tamamlar, ayni durumla beslenirler.
+            _route = new GameObject("Spawn Route").AddComponent<SpawnRouteGuide>();
             Debug.Log("[PlayerHUD] BuildHud tamamlandi.");
         }
     }

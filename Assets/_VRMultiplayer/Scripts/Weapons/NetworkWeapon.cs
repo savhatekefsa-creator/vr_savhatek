@@ -447,6 +447,25 @@ namespace VRMultiplayer
             WeaponAudioPlayer.PlayAt(_cv.fireClip, origin, _cv.fireVolume,
                 _cv.firePitchMin, _cv.firePitchMax, _cv.soundMaxDistance);
 
+            // GORSELLER de OWNER'da ANINDA: ses yerel, izler/alev/mermi izi RPC turundan
+            // gelince otomatikte ates "gecikmeli/kasik" hissediliyordu (cihazda olculdu).
+            // Yerel ongoru sunucuyla ayni geometri yuruyusunu kullanir (PredictOne, hasarsiz);
+            // FireFxClientRpc sahibi atlar, cift cizim olmaz. Sunucu atisi reddederse (jitter
+            // sonrasi kadans, sarjor desync'i) sadece bosa bir alev gorunur — ses icin zaten
+            // verilmis olan odun, gorselde de bilinclidir.
+            var pEnds = FromPool(_endsPool, pellets);
+            var pNormals = FromPool(_normalsPool, pellets);
+            int predMask = 0;
+            byte myTeam = LocalTeam();
+            for (int i = 0; i < pellets; i++)
+            {
+                WeaponHitscanServer.PredictOne(transform, origin, dirs[i], _cv.range,
+                    NetworkManager.LocalClientId, myTeam,
+                    out pEnds[i], out pNormals[i], out bool flesh);
+                if (flesh) predMask |= 1 << i;
+            }
+            if (_fx != null) _fx.ShowVolley(origin, pEnds, pNormals, predMask);
+
             // Yon YUKARIDA okundu: bu atis mevcut (onceki karenin tepmis) pozunu kullanir,
             // yeni kick bir sonraki atisi kaldirir.
             if (_recoil != null) _recoil.AddKick();
@@ -617,6 +636,17 @@ namespace VRMultiplayer
             }
         }
 
+        /// <summary>YEREL oyuncunun takimi (istemcide guvenle okunabilen tek takim bilgisi).
+        /// FX ongorusu dost/dusman ayrimini bununla yapar; TeamOf sunucuya ozeldir
+        /// (ConnectedClients istemcide okunamaz).</summary>
+        byte LocalTeam()
+        {
+            var lc = NetworkManager != null ? NetworkManager.LocalClient : null;
+            var po = lc != null ? lc.PlayerObject : null;
+            var id = po != null ? po.GetComponent<PlayerIdentity>() : null;
+            return id != null ? id.Team.Value : (byte)0;
+        }
+
         byte TeamOf(ulong clientId)
         {
             if (NetworkManager != null &&
@@ -669,7 +699,9 @@ namespace VRMultiplayer
                 WeaponAudioPlayer.PlayAt(_cv.fireClip, origin, _cv.fireVolume,
                     _cv.firePitchMin, _cv.firePitchMax, _cv.soundMaxDistance);
 
-            if (_fx != null) _fx.ShowVolley(origin, ends, normals, fleshMask);
+            // Gorseller de ses kuralina uyar: tutan oyuncu KENDI atisini Fire()'daki ongoruyle
+            // coktan gordu — burada bir daha cizersek RTT kadar gec ikinci bir alev/iz olur.
+            if (!localHolderHere && _fx != null) _fx.ShowVolley(origin, ends, normals, fleshMask);
         }
 
         // ------------------------------------------------------------- sarjor

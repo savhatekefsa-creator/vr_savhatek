@@ -1284,6 +1284,34 @@ namespace VRMultiplayer.EditorTools
                 }
             }
 
+            // --- katalog: havuza girme sarti (diske dokunmadan) ---
+            //
+            // Bu kural oyunu bozabilecek turden: dogum bolgesi olmayan bir harita havuza
+            // girerse mac baslar ama oyuncunun yuruyecegi takim alani olmaz — ve hata haritayi
+            // yapana degil, o haritaya denk gelen oyuncuya cikar.
+            string engel;
+            Check(!MapCatalog.CanEnterPool(new MapLayout(), out engel),
+                  "CanEnterPool: BOS harita havuza girmemeli");
+            Check(!string.IsNullOrEmpty(engel),
+                  "CanEnterPool: reddederken sebep yazmali (oyuncuya gosterilecek)");
+
+            var tekTakim = new MapLayout();
+            tekTakim.Add("spawn_a", 10, 10, 0, 0, 100, 100);
+            Check(!MapCatalog.CanEnterPool(tekTakim, out _),
+                  "CanEnterPool: TEK takimin dogum bolgesi yetmemeli");
+
+            var ikiTakim = new MapLayout();
+            ikiTakim.Add("spawn_a", 10, 10, 0, 0, 100, 100);
+            ikiTakim.Add("spawn_b", 20, 20, 0, 0, 100, 100);
+            Check(MapCatalog.CanEnterPool(ikiTakim, out _),
+                  "CanEnterPool: iki takimin dogum bolgesi varsa GIREBILMELI");
+
+            // Ad = dosya adi, ve Sanitize bosluklari '_' yapiyor: "A B" ile "A_B" AYNI dosyaya
+            // duser. Katalogun cakisma kontrolu bu gercege dayaniyor — degisirse orasi sessizce
+            // yanlis calisir, bu yuzden varsayim burada kilitli.
+            Check(MapLayout.Sanitize("A B") == MapLayout.Sanitize("A_B"),
+                  "Sanitize: 'A B' ile 'A_B' ayni dosya adina dusmeli (katalog cakisma kontrolu buna dayaniyor)");
+
             string result = fails.Count == 0
                 ? $"TUM DENETIMLER GECTI  ({checks} kontrol)"
                 : $"{fails.Count}/{checks} DENETIM BASARISIZ:\n\n - " + string.Join("\n - ", fails);

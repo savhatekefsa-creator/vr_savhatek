@@ -108,6 +108,10 @@ namespace VRMultiplayer.Constructor
                  "hucre koordinatlari uyusmaz.")]
         public float buildMargin = RoomGrid.DefaultOutsideMargin;
 
+        [Tooltip("Harita oyuncu rotasyonunda mi? Havuz, kayitli haritalarin alt kumesidir " +
+                 "(bkz. MapCatalog): oyuncu modunda yalnizca bu isaretli olanlar cikar.")]
+        public bool inPool;
+
         public RoomPlan builtForRoom = new RoomPlan();
 
         /// <summary>

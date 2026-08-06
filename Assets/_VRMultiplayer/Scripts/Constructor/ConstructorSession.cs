@@ -15,8 +15,48 @@ namespace VRMultiplayer.Constructor
     /// </summary>
     public class ConstructorSession : MonoBehaviour
     {
-        /// <summary>Uzerinde calisilan haritanin dosya adi (menu 27'nin urettigi "Test" degil).</summary>
-        public const string WorkingMapName = "Current";
+        /// <summary>
+        /// Hicbir isim verilmemisken kullanilan harita adi. Menuler gelene kadar (Serit 1) tek
+        /// harita buydu; artik yalnizca BASLANGIC degeri.
+        /// </summary>
+        public const string DefaultMapName = "Current";
+
+        /// <summary>
+        /// Uzerinde calisilan haritanin adi — ayni zamanda dosya adi.
+        ///
+        /// SABIT DEGIL, DEGISKEN: eskiden tek bir "Current" haritasi vardi ve kaydetme de yukleme
+        /// de onu kastediyordu. Serit 1/2 akisi (yeni harita, mevcut harita, yeniden adlandir)
+        /// ayni anda TEK haritayi acik tutar ama hangisinin acik oldugu degisir.
+        ///
+        /// BOS OLABILIR: "yeni harita" isimsiz baslar, ismi ilk kayitta sorulur. Isimsizken
+        /// <see cref="Save"/> yazmayi reddeder — otomatik kayit adsiz bir dosya uretmesin.
+        /// </summary>
+        public string CurrentMapName { get; private set; } = DefaultMapName;
+
+        /// <summary>
+        /// Son kayittan bu yana degisiklik var mi? "Kaydet?" karari bunu sorar.
+        ///
+        /// OTORITEDEN BAGIMSIZ, <see cref="_dirty"/>'den ayri: soru GOZLUKTE soruluyor ama
+        /// dosyayi PC yaziyor. Otomatik kaydi baglayan bayrak istemcide hic set edilmedigi icin
+        /// (bkz. <see cref="MarkDirty"/>) ona bakilsaydi gozlukte "kaydedilecek bir sey yok"
+        /// denip butun oturum sessizce atilirdi.
+        /// </summary>
+        public bool HasUnsavedChanges => _touched;
+
+        bool _touched;
+
+        /// <summary>
+        /// Otomatik kayit askida mi?
+        ///
+        /// Yaratici akista kaydetme KARARI oyuncunun (Serit 1: "Kaydet?"), ve "degisiklikleri
+        /// at" secenegi ancak hicbir sey yazilmamissa bir anlam tasir — otomatik kayit acik
+        /// kalsaydi "at" demek daima gec kalmis olurdu. Bedeli acik: editordeyken cokme olursa
+        /// o oturumun emegi gider. Karsiliginda "at" gercekten atiyor.
+        /// </summary>
+        public static bool AutoSaveSuspended { get; set; }
+
+        /// <summary>Kaydedildi say — istemcide sunucunun onayi gelince cagriliyor.</summary>
+        public void ClearUnsaved() => _touched = false;
 
         public static ConstructorSession Instance { get; private set; }
 
@@ -83,13 +123,28 @@ namespace VRMultiplayer.Constructor
         /// The map belongs to the server: a client writing its own copy leaves a file nobody
         /// reads and that the next sync invalidates. Offline — no NetworkManager, or one that
         /// has not started — the local peer is the only peer, so it owns it.
+        ///
+        /// GOZLUK BU KURALIN DISINDA: haritalar PC'de yasiyor, gozlukte hicbir zaman degil.
+        /// "Baglanti yoksa sahip benim" kurali gozlukte SESSIZ VERI KAYBI uretiyordu: ekranda
+        /// sunucudan gelmis liste duruyor, ama baglanti dustugu anda silme/kaydetme gozlugun
+        /// kendi bos klasorune uygulaniyor. Silinen harita PC'de oldugu gibi kaliyor (sonraki
+        /// acilista "geri gelmis" gorunuyor), yeni yapilan harita ise hicbir yere ulasmiyor.
+        /// Sahiplik yerine islem BASARISIZ olmali — cagiran taraf sebebi soyleyebilsin.
+        ///
+        /// Editor bu kuralin disinda tutuldu: PC'de sunucu baslatmadan harita duzenlemek
+        /// gelistirmenin normal yolu.
         /// </summary>
         public static bool IsMapAuthority
         {
             get
             {
                 var net = Unity.Netcode.NetworkManager.Singleton;
-                return net == null || !net.IsClient || net.IsServer;
+                if (net != null && net.IsServer) return true;
+#if UNITY_ANDROID && !UNITY_EDITOR
+                return false;
+#else
+                return net == null || !net.IsClient;
+#endif
             }
         }
 
@@ -104,16 +159,75 @@ namespace VRMultiplayer.Constructor
         /// </summary>
         void MarkDirty()
         {
+            // Degisiklik HER peer'da isaretlenir (bkz. HasUnsavedChanges); otorite kontrolu
+            // yalnizca OTOMATIK kaydi baglar.
+            _touched = true;
+
             if (!IsMapAuthority) return;
             _dirty = true;
             _saveAt = Time.unscaledTime + AutoSaveDelay;
         }
 
+        /// <summary>
+        /// NEDEN Start, Awake DEGIL: <see cref="Weapons.WeaponRackRespawner"/> de AfterSceneLoad'da
+        /// doguyor ve iki bootstrap arasindaki sira GARANTI DEGIL. Start hepsinden sonra kosar,
+        /// yani raf yuvalari henuz var olmayan bir respawner'a yazilmaz.
+        /// </summary>
+        /// <summary>
+        /// Mac icin harita hazir olsun: acik bir oturum varsa DOKUNMA, yoksa havuzdan sec ve kur.
+        ///
+        /// ACILISTA DEGIL, OYUNCU GIRERKEN. Once acilista seciliyordu; sema ise secimi isim +
+        /// takim ekranindan SONRAYA koyuyor. Fark pratik: sunucu saatlerce bos beklerken secilen
+        /// harita, oyuncu girene kadar tasarimcinin havuzda yaptigi her degisiklige kor kalirdi.
+        /// Simdi ilk oyuncu girdiginde seciliyor.
+        ///
+        /// ACIK OTURUMA DOKUNMAMAK MACIN AYNI HARITADA GECMESINI SAGLIYOR: sonradan katilan
+        /// oyuncu yeni bir secim tetiklemez, devam eden maca girer.
+        /// </summary>
+        // KALDIRILDI: "havuzdan rastgele sec". Haritayi artik oyuncu seciyor
+        // (ConstructorSync.PickMatchMapServerRpc). Olu kod artik var olmayan bir davranisi
+        // varmis gibi gosterir, o yuzden duruyor degil siliniyor.
+
         void Update()
         {
             HookServerStopped();
-            if (!_dirty || Time.unscaledTime < _saveAt) return;
+            if (!_dirty || AutoSaveSuspended || Time.unscaledTime < _saveAt) return;
             FlushPendingSave();
+        }
+
+        /// <summary>
+        /// Haritayi OYNANIS icin kurar — insa modu acilmadan, oyuncudan bagimsiz.
+        ///
+        /// HARITA DEKOR, INSA MODU EDITOR. Bunlar ayrilana kadar kayitli harita yalnizca biri
+        /// insa moduna girince sahneye geliyordu; OYUNCU modunda duvarlar da raflar da hic
+        /// dogmuyordu, cunku oturumu acan tek yol editordu. Silahlar bunun en gorunur yuzuydu:
+        /// raf yuvalarini <see cref="Weapons.WeaponRackRespawner.RegisterConstructorRack"/>
+        /// yalnizca <see cref="Adopt"/> sirasinda kaydeder.
+        ///
+        /// KAYIT YOKSA HICBIR SEY YAPMAZ, ve bu bilincli: <see cref="Clear"/> harita kokunun
+        /// altini siliyor, yani bos bir oturum acmak sahneye KAYDEDILMIS bir harita kopyasini
+        /// yok ederdi. Kaydi olmayan makinede (Maps/ surumlenmiyor) duvarlar boylece kaybolurdu.
+        /// Serbest alan yedegi insa modu icindir; oynanista kurulacak bir sey yoksa dogru
+        /// davranis sahneye dokunmamaktir.
+        ///
+        /// ISTEMCI KENDI DISKINDEN KURMAZ: sunucu baglanti aninda haritayi zaten yolluyor
+        /// (<see cref="ConstructorSync"/>). <see cref="IsMapAuthority"/> baglanmadan ONCE de
+        /// true oldugu icin agsiz oynayan kendi haritasini kurar; sonradan bir sunucuya
+        /// baglanirsa gelen harita <see cref="AdoptJson"/> ile bunun yerine gecer.
+        ///
+        /// SECIM DEGIL, KURULUM. Hangi haritanin oynanacagina bu metot karar VERMEZ; adini
+        /// disaridan alir. Serit 3'te secimi havuz yapacak (rastgele, ve YALNIZCA sunucuda —
+        /// her gozluk kendi rastgelesini cekerse herkes baska haritaya duser). Ikisi burada
+        /// birlesseydi o adimda sokulmesi gerekirdi.
+        /// </summary>
+        public bool BuildForPlay(string mapName)
+        {
+            if (IsActive) return true;
+            if (!IsMapAuthority) return false;
+            if (string.IsNullOrEmpty(mapName)) return false;
+
+            CurrentMapName = mapName;
+            return EnsureStarted(requireSavedMap: true);
         }
 
         /// <summary>Writes now if a save is pending. Safe to call at any time.</summary>
@@ -163,7 +277,11 @@ namespace VRMultiplayer.Constructor
         /// <see cref="RoomPlan.FreeSpace"/> floor instead of refusing: the grid needs a polygon,
         /// not a TRUE one. A saved map beats both — it carries the room it was authored in.
         /// </summary>
-        public bool EnsureStarted()
+        /// <param name="requireSavedMap">
+        /// True ise KAYITLI harita yoksa oturum acilmaz (tarama ya da serbest alan yedegine
+        /// dusulmez). Oynanis yolu bunu kullanir — bkz. <see cref="BuildForPlay"/>.
+        /// </param>
+        public bool EnsureStarted(bool requireSavedMap = false)
         {
             if (IsActive) return true;
 
@@ -179,7 +297,12 @@ namespace VRMultiplayer.Constructor
             }
 
             var plan = RoomPlanIO.Load();
-            var saved = MapLayout.Load(WorkingMapName);
+            var saved = MapLayout.Load(CurrentMapName);
+
+            // Kurulacak kayitli harita yoksa SESSIZCE cik: cagiran oynanis yoluysa sahnedeki
+            // her sey oldugu gibi kalmali (bkz. BuildForPlay). NotStartedReason yazilmiyor
+            // — bu bir hata degil, "yapilacak is yok".
+            if (requireSavedMap && saved == null) return false;
 
             if (plan == null)
             {
@@ -209,6 +332,89 @@ namespace VRMultiplayer.Constructor
         /// <summary>Why <see cref="EnsureStarted"/> last returned false (shown to the player).</summary>
         public string NotStartedReason { get; private set; } = "";
 
+        // --------------------------------------------- harita acma / kaydetme (Serit 1 akisi)
+
+        /// <summary>
+        /// Bos bir harita acar — "yeni harita" akisinin giris noktasi.
+        ///
+        /// ZEMIN HEP SERBEST ALAN, oda taramasi degil. Sifirdan tasarim fiziksel odadan bagimsiz
+        /// demek; taramaya baglamak haritayi TARAYANIN odasina baglardi ve harita baska bir
+        /// gozlukte acilinca izgara kokeni kayardi. Serbest alanin poligonu her yerde ayni.
+        ///
+        /// ISIM ZORUNLU DEGIL: isimsiz acilan harita ilk kayitta isimlendirilir.
+        /// </summary>
+        public bool OpenNew(string mapName = null)
+        {
+            // Once acik haritanin bekleyen kaydini yaz: harita degistirmek onceki emegi
+            // silmenin yolu olmamali.
+            FlushPendingSave();
+
+            CurrentMapName = mapName;
+            bool ok = StartNew(RoomPlan.FreeSpace());
+            _dirty = false;   // yeni ve bos — yazilacak bir sey yok
+            _touched = false;
+            return ok;
+        }
+
+        /// <summary>
+        /// Kayitli bir haritayi acar — "mevcut harita" akisi.
+        ///
+        /// HARITANIN KENDI ODASI kullanilir, guncel tarama DEGIL: harita hangi poligon uzerine
+        /// oruldiyse hucre koordinatlari ona gore anlamli. Baska bir odayla yeniden izgaralamak
+        /// kokeni kaydirir ve butun yerlestirmeler yanlis yere duser.
+        /// </summary>
+        public bool OpenExisting(string mapName)
+        {
+            var saved = MapLayout.Load(mapName);
+            if (saved == null)
+            {
+                NotStartedReason = $"'{mapName}' bulunamadi.";
+                return false;
+            }
+
+            FlushPendingSave();
+            CurrentMapName = mapName;
+
+            // Odasi olmayan kayit (elle bozulmus ya da cok eski) bos zemine oturur —
+            // yerlestirmeleri toptan reddetmektense zeminini tamamlamak daha az kayipli.
+            bool ok = Adopt(saved, saved.HasRoom ? null : RoomPlan.FreeSpace());
+            if (ok) { _dirty = false; _touched = false; }
+            else NotStartedReason = $"'{mapName}' acilamadi: izgara kurulamadi.";
+            return ok;
+        }
+
+        /// <summary>
+        /// Haritayi VERILEN ISIMLE kaydeder ve bundan sonra o isim uzerinde calisir. Isimsiz
+        /// haritanin ilk kaydi da "farkli kaydet" de ayni kapidan gecer.
+        /// </summary>
+        public bool SaveAs(string mapName, bool allowEmpty = false)
+        {
+            if (string.IsNullOrEmpty(mapName)) return false;
+            if (!Save(mapName, allowEmpty)) return false;
+
+            CurrentMapName = mapName;
+            _dirty = false;
+            return true;
+        }
+
+        /// <summary>
+        /// Acik haritanin ADI degisti (katalogdan yeniden adlandirma). Icerik ayni kalir;
+        /// degisen tek sey bundan sonraki kayitlarin hangi dosyaya gidecegi.
+        /// </summary>
+        public void NoteRenamed(string newMapName)
+        {
+            if (string.IsNullOrEmpty(newMapName)) return;
+            CurrentMapName = newMapName;
+            if (Layout != null) Layout.name = newMapName;
+        }
+
+        /// <summary>
+        /// Acik harita SILINDI. Adi dusuruluyor: yoksa bir sonraki otomatik kayit dosyayi geri
+        /// diriltir ve "sildim ama duruyor" olur. Sahnedeki yapi duruyor — silinen dosya, yasayan
+        /// oturum degil.
+        /// </summary>
+        public void NoteDeleted() => CurrentMapName = null;
+
         /// <summary>Begins an empty map on the given room.</summary>
         public bool StartNew(RoomPlan plan)
         {
@@ -217,7 +423,7 @@ namespace VRMultiplayer.Constructor
 
             var layout = new MapLayout
             {
-                name = WorkingMapName,
+                name = CurrentMapName,
                 createdBy = SystemInfo.deviceName,
                 libraryVersion = Library.contentVersion,
                 cellSize = grid.CellSize,
@@ -685,9 +891,20 @@ namespace VRMultiplayer.Constructor
         /// a room's worth of walls. Pass <paramref name="allowEmpty"/> when clearing is what the
         /// player actually asked for.
         /// </summary>
-        public bool Save(string mapName = WorkingMapName, bool allowEmpty = false)
+        public bool Save(string mapName = null, bool allowEmpty = false)
         {
             if (!IsActive) return false;
+
+            if (string.IsNullOrEmpty(mapName)) mapName = CurrentMapName;
+
+            // ISIMSIZ HARITA YAZILMAZ. "Yeni harita" isimsiz baslar ve ismi ilk kayitta sorulur
+            // (Serit 1). Buraya isimsiz dusmek, otomatik kaydin arkada "Map.json" gibi kimsenin
+            // istemedigi bir dosya uretmesi demek olurdu.
+            if (string.IsNullOrEmpty(mapName))
+            {
+                Debug.LogWarning("[Constructor] Harita adsiz — kaydedilmedi. Once isim verilmeli.");
+                return false;
+            }
 
             if (!allowEmpty && Layout.Count == 0)
             {
@@ -702,7 +919,9 @@ namespace VRMultiplayer.Constructor
             }
 
             Layout.libraryVersion = Library.contentVersion;
-            return Layout.Save(mapName);
+            bool yazildi = Layout.Save(mapName);
+            if (yazildi) _touched = false;
+            return yazildi;
         }
 
         /// <summary>The current layout as JSON — what the server ships to a late joiner.</summary>
@@ -722,6 +941,12 @@ namespace VRMultiplayer.Constructor
                 return false;
             }
             Debug.Log($"[Constructor] Sunucudan harita alindi: {layout.Count} prop.");
+
+            // HANGI HARITANIN ACIK OLDUGU DA SUNUCUDAN GELIR. Istemci dosyalari gormuyor;
+            // "uzerine mi yazayim, farkli mi kaydedeyim" sorusu bu ada dayaniyor ve eski ad
+            // kalirsa gozluk yanlis dosyayi hedefler. Isimsiz harita bos ad tasir — dogru.
+            CurrentMapName = layout.name;
+
             return Adopt(layout);
         }
 
