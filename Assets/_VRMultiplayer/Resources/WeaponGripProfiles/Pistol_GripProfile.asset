@@ -15,7 +15,7 @@ MonoBehaviour:
   weaponNameEquals: Weapon_Pistol
   weaponNameContains: Weapon_Pistol
   gripLocalPosition: {x: -0.0278, y: 0.0844, z: -0.0059}
-  gripLocalEuler: {x: 300.6761, y: 232.6344, z: 333.0594}
+  gripLocalEuler: {x: 303.94705, y: 213.52289, z: 341.1913}
   barrelLocalDirection: {x: 0, y: 0, z: -1}
   combat: {fileID: 11400000, guid: 10c211c23042464f9496e18ba53634d5, type: 2}
   mainHand:

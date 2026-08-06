@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   weaponNameEquals: 
   weaponNameContains: Rifle_HK416
-  gripLocalPosition: {x: 0.0348, y: -0.0067, z: 0.0241}
-  gripLocalEuler: {x: 323.00253, y: 327.71655, z: 325.48068}
+  gripLocalPosition: {x: 0.02483529, y: 0.01505761, z: 0.01884263}
+  gripLocalEuler: {x: 296.5371, y: 287.9833, z: 1.873233}
   barrelLocalDirection: {x: -1, y: 0, z: 0}
   combat: {fileID: 11400000, guid: e0376765f69e4d478596a0b49d0dbc90, type: 2}
   mainHand:
