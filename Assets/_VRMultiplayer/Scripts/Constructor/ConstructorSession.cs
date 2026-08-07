@@ -315,7 +315,17 @@ namespace VRMultiplayer.Constructor
                                  "Hicbir hucre mobilyaya kapali degil; gercek odanin duvarlari bilinmiyor.");
             }
 
-            bool ok = saved != null ? Adopt(saved, plan) : StartNew(plan);
+            // KAYITLI HARITANIN ODASI KENDI ICINDE. Tarama VARSA bile onu ezmemeli: izgaranin
+            // kokeni oda poligonundan turuyor, baska bir poligon koymak kokeni kaydirir ve
+            // haritadaki BUTUN yerlestirmeler yanlis yere duser.
+            //
+            // Bu kural yukaridaki "tarama yok" dalinda zaten yaziliydi ve OpenExisting de ayni
+            // sekilde davraniyordu; eksik olan tek yol buydu. Tam da mekan degistirirken
+            // isirirdi: yeni odada eski odanin taramasi diskte durur, kayitli bir harita
+            // acilir ve proplar sessizce kayardi.
+            bool ok = saved != null
+                ? Adopt(saved, saved.HasRoom ? null : plan)
+                : StartNew(plan);
             if (!ok) NotStartedReason = "Oda plani gecersiz: izgara kurulamadi.";
             return ok;
         }
