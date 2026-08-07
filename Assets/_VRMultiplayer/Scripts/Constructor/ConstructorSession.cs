@@ -472,7 +472,17 @@ namespace VRMultiplayer.Constructor
                 }
             }
 
+            // HARITANIN KENDI TAG YERLESIMI. Tek gecis noktasi burasi: OpenExisting (yaratici
+            // modda harita acma) da AdoptJson (sunucudan gelen harita) da Adopt'a dusuyor,
+            // yani "harita degisti -> tag'ler de degisti" tek yerde bagli.
+            //
+            // Bos birakan haritalar bozulmuyor: ApplyMapLayout bos gelince onyukleme
+            // yerlesimine donuyor.
+            if (AprilTagCalibration.Instance != null)
+                AprilTagCalibration.Instance.ApplyMapLayout(Layout.tags);
+
             Debug.Log($"[Constructor] Oturum acildi: '{Layout.name}' — {applied} yerlestirme, " +
+                      $"{(Layout.tags != null ? Layout.tags.Length : 0)} tag, " +
                       $"izgara {Grid.Cols}x{Grid.Rows}, {Grid.Report().free} oda-ici bos hucre " +
                       $"(+{Grid.OutsideMargin:0.0} m oda disi pay).");
 

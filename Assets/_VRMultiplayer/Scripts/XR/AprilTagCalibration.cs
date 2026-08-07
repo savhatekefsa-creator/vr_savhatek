@@ -298,6 +298,57 @@ namespace VRMultiplayer
 
         TextMesh _panel;
 
+        /// <summary>
+        /// Sahnede tek bir kalibrasyon var; harita yuklendiginde ona kendi tag yerlesimini
+        /// gecirebilmek icin erisilebilir olmali. FindFirstObjectByType yerine bu: harita her
+        /// acilista degil, HER acilista degisebiliyor ve arama VR karesi icinde yapiliyor.
+        /// </summary>
+        public static AprilTagCalibration Instance { get; private set; }
+
+        void Awake()
+        {
+            if (Instance != null && Instance != this) { Destroy(this); return; }
+            Instance = this;
+        }
+
+        // Harita gelmeden onceki yerlesim (prefab ya da cihaz dosyasi). Harita bosaltilinca
+        // buna donulur — yoksa bir haritayi kapatmak oyuncuyu yerlesimsiz birakirdi.
+        TagEntry[] _bootLayout;
+        bool _fromMap;
+
+        /// <summary>
+        /// Haritanin KENDI tag yerlesimini devreye alir. Bos/null gelirse onyukleme yerlesimine
+        /// donulur.
+        ///
+        /// ONCELIK: harita &gt; cihaz dosyasi &gt; prefab. Harita en ozgul olan — tag'ler fiziksel
+        /// mekana cakili ve harita o mekanin kaydi. Cihaz dosyasi olcum defteri; prefab ise
+        /// hicbir harita acik degilken cerceve kurabilmek icin duran onyukleme.
+        /// </summary>
+        public void ApplyMapLayout(TagEntry[] fromMap)
+        {
+            if (_bootLayout == null) _bootLayout = tagLayout;
+
+            bool haritadan = fromMap != null && fromMap.Length > 0;
+            if (!haritadan && !_fromMap) return;            // zaten onyuklemedeyiz
+
+            tagLayout = haritadan ? fromMap : _bootLayout;
+            _fromMap = haritadan;
+
+            // Yerlesim degisti: gorulen tag'lerin eski cerceveye gore biriktirdigi ornekler
+            // artik baska bir dunyaya ait. Temizlenmezse ilk duzeltme iki cercevenin
+            // ortalamasini uygular ve nereden geldigi anlasilmaz.
+            _recentByTag.Clear();
+            _calibPos.Clear();
+            _calibYaw.Clear();
+            _calibId = -1;
+            _lastTagTime = -1f;
+
+            RebuildMarkers();
+            Debug.Log(haritadan
+                ? $"[AprilTagCalib] Tag yerlesimi HARITADAN alindi ({fromMap.Length} tag)."
+                : "[AprilTagCalib] Harita yerlesimi kalkti — onyukleme yerlesimine donuldu.");
+        }
+
         void Start()
         {
             // DISK SAHNEYI EZER: cihazda olculmus deger, PC'de elle yazilandan guvenilirdir.
@@ -321,6 +372,15 @@ namespace VRMultiplayer
                           $"{cnt} ornek (referans tag {rt}).");
             }
 
+            _bootLayout = tagLayout;
+
+            // Kalibrasyon, haritayi kuran oturumdan SONRA da uyanabilir (bilesen sirasi
+            // garanti degil). Harita zaten acilmissa yerlesimini simdi al — yoksa bu oturum
+            // boyunca onyukleme yerlesimiyle, yani baska bir mekanin tag'leriyle calisirdi.
+            var sess = Constructor.ConstructorSession.Instance;
+            if (sess != null && sess.Layout != null && sess.Layout.tags != null && sess.Layout.tags.Length > 0)
+                ApplyMapLayout(sess.Layout.tags);
+
             RebuildMarkers();
         }
 
@@ -339,6 +399,7 @@ namespace VRMultiplayer
 
         void OnDestroy()
         {
+            if (Instance == this) Instance = null;
             _detector?.Dispose();
             _detector = null;
             if (_panel != null) Destroy(_panel.gameObject);
