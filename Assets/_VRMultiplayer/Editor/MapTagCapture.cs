@@ -94,19 +94,29 @@ namespace VRMultiplayer.EditorTools
                 var eski = FindTag(layout.tags, id) ?? FindTag(SceneLayout(), id);
                 float yaw = eski != null ? eski.yawDegrees : p.Yaw;
 
+                // YENI tag KAPALI dogar: kagit henuz plakanin uzerinde olmayabilir, ve
+                // dogrulanmadan kalibrasyona giren bir tag dogru olanlarin kurdugu cerceveyi
+                // de bozar.
+                //
+                // VAR OLAN tag'in durumu KORUNUR. Bu arac zincirleme calistiriliyor — buyuk
+                // mekanda tag'ler tek tek ekleniyor, cunku her yeni tag bir oncekinin
+                // capasiyla, yani suruklenmemis bir cercevede konmali. Hepsini kapatsaydi
+                // ikinci tur, calisan tag'leri sessizce dusurur ve oyuncu 48'i unuttugunda
+                // kalibrasyon sebepsiz bozulurdu.
+                bool acik = eski != null && eski.useForCalibration;
+
                 tags.Add(new AprilTagCalibration.TagEntry
                 {
                     id = id,
                     position = world,
                     yawDegrees = yaw,
-                    // KAPALI DOGAR: kagit henuz plakanin uzerinde olmayabilir. Dogrulanmadan
-                    // kalibrasyona giren bir tag, dogru olanlarin kurdugu cerceveyi de bozar.
-                    useForCalibration = false,
+                    useForCalibration = acik,
                 });
 
                 sb.AppendLine($"  tag {id}   instanceId {p.instanceId,-4}  " +
                               $"{world.x:0.000} {world.y:0.000} {world.z:0.000}  yaw {yaw:0.0}" +
-                              (eski != null ? "  (yaw korundu)" : "  (yaw plakadan, 15 derece adim)"));
+                              (eski != null ? "  (yaw korundu)" : "  (yaw plakadan, 15 derece adim)") +
+                              (acik ? "  ACIK kaldi" : "  KAPALI"));
                 id++;
             }
 
@@ -115,8 +125,8 @@ namespace VRMultiplayer.EditorTools
             AssetDatabase.Refresh();
 
             sb.AppendLine();
-            sb.AppendLine("Hepsi KAPALI kaydedildi. Kagitlari plakalarin uzerine yapistirdiktan");
-            sb.AppendLine("sonra menu 48 ile acilir.");
+            sb.AppendLine("Yeni tag'ler KAPALI kaydedildi; kagitlari plakalarin uzerine");
+            sb.AppendLine("yapistirdiktan sonra menu 48 ile acilir. Zaten acik olanlar acik kaldi.");
             sb.AppendLine();
             sb.AppendLine("Bir plakayi silip yeniden koyarsan sona duser ve ID'si degisir —");
             sb.AppendLine("yukaridaki tablo bunun icin basiliyor.");
