@@ -604,7 +604,7 @@ namespace VRMultiplayer.EditorTools
                     if (grid.State(cx, cz) != CellState.Free) continue;
 
                     var def = usable[rng.Next(usable.Count)];
-                    byte rot = (byte)(rng.Next(4) * 6);   // 0/90/180/270
+                    byte rot = (byte)(rng.Next(4) * MapLayout.QuarterTurnSteps);   // 0/90/180/270
                     var size = grid.FootprintSize(def, rot);
                     var min = RoomGrid.CenterToMin(new Vector2Int(cx, cz), size);
 
@@ -698,19 +698,19 @@ namespace VRMultiplayer.EditorTools
             const float cell1m = 1f;
             var wide = new PropDef { id = "test", sizeMeters = new Vector2(3f, 1f) };
             Check(RoomGrid.FootprintCells(wide, 0, cell1m) == new Vector2Int(3, 1), "FootprintCells: 0 derece degismemeli");
-            Check(RoomGrid.FootprintCells(wide, 6, cell1m) == new Vector2Int(1, 3), "FootprintCells: 90 derece takla atmali");
-            Check(RoomGrid.FootprintCells(wide, 12, cell1m) == new Vector2Int(3, 1), "FootprintCells: 180 derece degismemeli");
-            Check(RoomGrid.FootprintCells(wide, 18, cell1m) == new Vector2Int(1, 3), "FootprintCells: 270 derece takla atmali");
+            Check(RoomGrid.FootprintCells(wide, 18, cell1m) == new Vector2Int(1, 3), "FootprintCells: 90 derece takla atmali");
+            Check(RoomGrid.FootprintCells(wide, 36, cell1m) == new Vector2Int(3, 1), "FootprintCells: 180 derece degismemeli");
+            Check(RoomGrid.FootprintCells(wide, 54, cell1m) == new Vector2Int(1, 3), "FootprintCells: 270 derece takla atmali");
             // Ara acilarda sinir kutusu donmus dikdortgenin GERCEK kutusu. 45 derecede 3x1'in
             // kosegen acikligi 2.83 m, yani 3 hucre — eski "kare sinir kutusu" kisayoluyla ayni
             // sayi, ama artik tesadufen degil hesaptan geliyor.
-            Check(RoomGrid.FootprintCells(wide, 3, cell1m) == new Vector2Int(3, 3), "FootprintCells: 45 derecede 3x1 -> 3x3");
-            Check(RoomGrid.FootprintCells(wide, 1, cell1m) == new Vector2Int(4, 2), "FootprintCells: 15 derecede 3x1 -> 4x2 (kare DEGIL)");
+            Check(RoomGrid.FootprintCells(wide, 9, cell1m) == new Vector2Int(3, 3), "FootprintCells: 45 derecede 3x1 -> 3x3");
+            Check(RoomGrid.FootprintCells(wide, 3, cell1m) == new Vector2Int(4, 2), "FootprintCells: 15 derecede 3x1 -> 4x2 (kare DEGIL)");
             var sq = new PropDef { id = "sq", sizeMeters = new Vector2(2f, 2f) };
             // Eskiden kare ayak izi ara acida hic buyumezdi. Geometrik olarak yanlisti: 2x2 m
             // 45 derece donunce 2.83 m'ye yayilir. Kutu artik dogruyu soyluyor, kaplamayi ise
             // Covers belirledigi icin kutunun buyumesi komsuya yer kaybettirmiyor.
-            Check(RoomGrid.FootprintCells(sq, 3, cell1m) == new Vector2Int(3, 3), "FootprintCells: 45 derecede 2x2 -> 3x3");
+            Check(RoomGrid.FootprintCells(sq, 9, cell1m) == new Vector2Int(3, 3), "FootprintCells: 45 derecede 2x2 -> 3x3");
             Check(RoomGrid.FootprintCells(sq, 0, cell1m) == new Vector2Int(2, 2), "FootprintCells: kare ceyrek turda buyumemeli");
 
             // --- boyut ayak izini etkilemeli, AMA yalnizca genislik ekseninde ---
@@ -723,7 +723,7 @@ namespace VRMultiplayer.EditorTools
             // olcekli propu bir hucre sisirip yanina konani uzaklastiriyordu.
             Check(RoomGrid.FootprintCells(sq, 0, cell1m, 130) == new Vector2Int(3, 2), "Kesirli boyut en yakina yuvarlanmali (2.6 -> 3)");
             Check(RoomGrid.FootprintCells(sq, 0, cell1m, 120) == new Vector2Int(2, 2), "Kesirli boyut en yakina yuvarlanmali (2.4 -> 2)");
-            Check(RoomGrid.FootprintCells(wide, 6, cell1m, 200) == new Vector2Int(1, 6), "Boyut ve donus birlikte calismali");
+            Check(RoomGrid.FootprintCells(wide, 18, cell1m, 200) == new Vector2Int(1, 6), "Boyut ve donus birlikte calismali");
 
             // --- olcek TAM HUCRE adimlarindan uretiliyor ---
             // Oyuncunun bastigi sey hucre, yuzde yalnizca depolama birimi. Gidis-donus kayipsiz
@@ -827,6 +827,200 @@ namespace VRMultiplayer.EditorTools
             Check(oldProp != null && Mathf.Abs(oldProp.props[0].ScaleVector.y - 1f) < 0.001f,
                   "Eski harita (alan yok/0) 1.0 olcek saymali");
 
+            // --- v1 -> v2 donus tasima: adim 15 dereceden 5'e indi, eski rot x3 tasinmali ---
+            var v1Map = new MapLayout { version = 1 };
+            v1Map.Add("p", 0, 0, 0, 6);   // v1'de 6 adim = 90 derece
+            var v2Map = MapLayout.FromJson(v1Map.ToJson());
+            Check(v2Map != null && v2Map.Count == 1 && v2Map.props[0].rot == 18,
+                "Surum tasima: v1 rot=6 (90 derece) yuklenince 18 adim olmali");
+            Check(v2Map != null && v2Map.Count == 1 && Mathf.Abs(v2Map.props[0].Yaw - 90f) < 0.001f,
+                "Surum tasima: fiziksel aci degismemeli (90 derece kalmali)");
+            Check(v2Map != null && v2Map.version == MapLayout.CurrentVersion,
+                "Surum tasima: yuklenen harita guncel surume damgalanmali");
+            var v2Again = v2Map != null ? MapLayout.FromJson(v2Map.ToJson()) : null;
+            Check(v2Again != null && v2Again.Count == 1 && v2Again.props[0].rot == 18,
+                "Surum tasima: v2 harita ikinci yuklemede bir daha carpilmamali");
+
+            // --- v3 serbest katman: gidis-donus, kimlik uzayi, eski surumlerin acilisi ---
+            var freeMap = new MapLayout();
+            var freeOne = freeMap.AddFree("p", new Vector3(1.234f, 0.056f, -2.789f),
+                new Vector3(1.82f, 91.529f, 5.09f), new Vector3(1.125f, 1f, 1f));
+            var gridTwin = freeMap.Add("p", 3, 4, 0, 18);
+            Check(freeOne.instanceId != gridTwin.instanceId,
+                "Serbest katman: izgara ve serbest prop ayni kimlik sayacini paylasmali (cakisma yok)");
+            var freeBack = MapLayout.FromJson(freeMap.ToJson());
+            Check(freeBack != null && freeBack.FreeCount == 1 && freeBack.Count == 1,
+                "Serbest katman: JSON gidis-donusunde iki katman da korunmali");
+            Check(freeBack != null &&
+                  (freeBack.freeProps[0].position - new Vector3(1.234f, 0.056f, -2.789f)).magnitude < 0.0005f,
+                "Serbest katman: konum kayipsiz gidip donmeli (Y dahil)");
+            Check(freeBack != null &&
+                  (freeBack.freeProps[0].rotationEuler - new Vector3(1.82f, 91.529f, 5.09f)).magnitude < 0.0005f,
+                "Serbest katman: uc eksenli aci kayipsiz gidip donmeli");
+            Check(freeBack != null && freeBack.version == MapLayout.CurrentVersion,
+                "Serbest katman: yeni harita guncel surumu (v3) tasimali");
+            Check(freeBack != null && freeBack.FindFree(freeOne.instanceId) != null &&
+                  freeBack.RemoveFree(freeOne.instanceId) && freeBack.FreeCount == 0,
+                "Serbest katman: FindFree/RemoveFree kimlikle calismali");
+
+            // Gercek v2 kaydin taklidi: freeProps ALANI HIC YOK. Bos listeyle acilmali,
+            // izgara proplari aynen kalmali, rot bir daha carpilmamali.
+            var v2Raw = MapLayout.FromJson(
+                "{\"version\":2,\"props\":[{\"propId\":\"p\",\"rot\":18,\"scalePct\":100,\"heightPct\":100}]}");
+            Check(v2Raw != null && v2Raw.freeProps != null && v2Raw.FreeCount == 0 &&
+                  v2Raw.Count == 1 && v2Raw.props[0].rot == 18 &&
+                  v2Raw.version == MapLayout.CurrentVersion,
+                "Surum tasima: alansiz (gercek v2) JSON bos serbest listeyle acilmali, rot degismemeli");
+
+            // Sifir olcek = gorunmez prop tuzagi; yukleme sinirda 1'e duzeltmeli.
+            var zeroScale = MapLayout.FromJson(
+                "{\"version\":3,\"freeProps\":[{\"propId\":\"p\",\"scale\":{\"x\":0,\"y\":0,\"z\":0}}]}");
+            Check(zeroScale != null && zeroScale.FreeCount == 1 &&
+                  zeroScale.freeProps[0].scale == Vector3.one,
+                "Serbest katman: sifir olcek yuklemede 1'e duzeltilmeli");
+
+            // --- serbest katman: aci yuvarlama (izgaraya geri oturtma) ---
+            Check(FreeEditController.NearestRotStep(91.53f) == 18,
+                "NearestRotStep: 91.53 derece ceyrek tura (18 adim) yuvarlanmali");
+            Check(FreeEditController.NearestRotStep(93f) == 19,
+                "NearestRotStep: 93 derece 95'e (19 adim) yuvarlanmali");
+            Check(FreeEditController.NearestRotStep(0f) == 0,
+                "NearestRotStep: 0 derece 0 adim olmali");
+            Check(FreeEditController.NearestRotStep(-5f) == MapLayout.RotationSteps - 1,
+                "NearestRotStep: negatif aci mod ile sarilmali");
+            Check(FreeEditController.NearestRotStep(359f) == 0,
+                "NearestRotStep: 359 derece basa (0) sarilmali");
+
+            // --- surukleme kolu (gizmo) matematigi: isin-eksen ve isin-halka ---
+            // Isin (0,1,5)'ten -Z'ye bakiyor; eksen X ekseni, kokeni orijinde.
+            // En yakin nokta x=0 olmali (isin YZ duzleminde ilerliyor).
+            var axisRay = new Ray(new Vector3(0f, 1f, 5f), Vector3.back);
+            Check(FreeEditGizmo.ClosestPointOnAxis(axisRay, Vector3.zero, Vector3.right, out float ax) &&
+                  Mathf.Abs(ax) < 0.001f,
+                "ClosestPointOnAxis: dik bakista eksen parametresi 0 olmali");
+
+            // Isin x=2'den geciyorsa en yakin nokta x=2'de olmali.
+            var axisRay2 = new Ray(new Vector3(2f, 1f, 5f), Vector3.back);
+            Check(FreeEditGizmo.ClosestPointOnAxis(axisRay2, Vector3.zero, Vector3.right, out float ax2) &&
+                  Mathf.Abs(ax2 - 2f) < 0.001f,
+                "ClosestPointOnAxis: kaydirilmis isin ayni kadar kaymis parametre vermeli");
+
+            // Eksene PARALEL isin: en yakin nokta tanimsiz, false donmeli.
+            Check(!FreeEditGizmo.ClosestPointOnAxis(new Ray(Vector3.up, Vector3.right),
+                    Vector3.zero, Vector3.right, out _),
+                "ClosestPointOnAxis: eksene paralel isin false donmeli");
+
+            // Halka: Y normalli duzlem (yatay). Isin yukaridan +X yonundeki bir noktaya insin.
+            var ringRay = new Ray(new Vector3(1f, 5f, 0f), Vector3.down);
+            Check(FreeEditGizmo.RingAngle(ringRay, Vector3.zero, Vector3.up, out float rAng),
+                "RingAngle: yatay duzleme inen isin kesismeli");
+            // Ayni yonden gelen ikinci bir isin AYNI aciyi vermeli (kararlilik).
+            var ringRay2 = new Ray(new Vector3(2f, 9f, 0f), Vector3.down);
+            Check(FreeEditGizmo.RingAngle(ringRay2, Vector3.zero, Vector3.up, out float rAng2) &&
+                  Mathf.Abs(Mathf.DeltaAngle(rAng, rAng2)) < 0.001f,
+                "RingAngle: ayni yondeki iki isin ayni aciyi vermeli");
+            // 90 derece donmus yon 90 derece fark uretmeli.
+            var ringRay3 = new Ray(new Vector3(0f, 5f, 1f), Vector3.down);
+            Check(FreeEditGizmo.RingAngle(ringRay3, Vector3.zero, Vector3.up, out float rAng3) &&
+                  Mathf.Abs(Mathf.Abs(Mathf.DeltaAngle(rAng, rAng3)) - 90f) < 0.001f,
+                "RingAngle: dik iki yon arasinda 90 derece olmali");
+            // Duzleme PARALEL isin kesismez.
+            Check(!FreeEditGizmo.RingAngle(new Ray(new Vector3(0f, 1f, 0f), Vector3.right),
+                    Vector3.zero, Vector3.up, out _),
+                "RingAngle: duzleme paralel isin false donmeli");
+
+            // Kademe yuvarlama (Ctrl)
+            Check(Mathf.Abs(FreeEditGizmo.SnapTo(0.037f, 0.01f) - 0.04f) < 0.0001f,
+                "SnapTo: 3.7 cm, 1 cm kademede 4 cm'e yuvarlanmali");
+            Check(Mathf.Abs(FreeEditGizmo.SnapTo(37f, 5f) - 35f) < 0.0001f,
+                "SnapTo: 37 derece, 5 derece kademede 35'e yuvarlanmali");
+            Check(Mathf.Abs(FreeEditGizmo.SnapTo(0.037f, 0f) - 0.037f) < 0.0001f,
+                "SnapTo: kademe 0 iken deger degismemeli");
+
+            // --- boy kollari: carpan ve alt sinir ---
+            // Kolu KENDI UZUNLUGU kadar disari cekmek iki kat, yerinde durmak aynen birakmali.
+            Check(Mathf.Abs(FreeEditGizmo.ScaleFactor(0f, 0.5f) - 1f) < 0.0001f,
+                "ScaleFactor: kol oynamadiysa carpan 1 olmali");
+            Check(Mathf.Abs(FreeEditGizmo.ScaleFactor(0.5f, 0.5f) - 2f) < 0.0001f,
+                "ScaleFactor: kol boyu kadar disari cekmek iki katina cikarmali");
+            Check(Mathf.Abs(FreeEditGizmo.ScaleFactor(-0.25f, 0.5f) - 0.5f) < 0.0001f,
+                "ScaleFactor: kol boyunun yarisi kadar iceri itmek yariya indirmeli");
+            // Mesafeden BAGIMSIZ: uzaktaki prop icin kol uzar, ayni oran ayni carpani vermeli.
+            Check(Mathf.Abs(FreeEditGizmo.ScaleFactor(4f, 4f) -
+                            FreeEditGizmo.ScaleFactor(0.5f, 0.5f)) < 0.0001f,
+                "ScaleFactor: carpan kol uzunluguna degil ORANA bagli olmali");
+            // Kolu sonuna kadar iceri itmek bile olcegi ters cevirmemeli.
+            Check(FreeEditGizmo.ScaleFactor(-10f, 0.5f) > 0f,
+                "ScaleFactor: asiri iceri itmede bile carpan pozitif kalmali");
+
+            Check(Mathf.Abs(FreeEditGizmo.ApplyScale(2f, 1.5f, 0f) - 3f) < 0.0001f,
+                "ApplyScale: kademe yokken olcek carpanla dogrudan carpilmali");
+            Check(Mathf.Abs(FreeEditGizmo.ApplyScale(1f, 1.13f, 0.05f) - 1.15f) < 0.0001f,
+                "ApplyScale: Ctrl kademesi SONUCU yuvarlamali (1.13 -> 1.15)");
+            Check(FreeEditGizmo.ApplyScale(1f, 0.0001f, 0f) >= FreeEditGizmo.MinScale,
+                "ApplyScale: olcek MinScale altina inmemeli");
+            Check(FreeEditGizmo.ApplyScale(1f, -3f, 0f) >= FreeEditGizmo.MinScale,
+                "ApplyScale: olcek NEGATIFE dusmemeli (mesh ic ters donerdi)");
+            // Kademe, alt siniri deler gibi gorunse de sinir en son sozu soylemeli.
+            Check(FreeEditGizmo.ApplyScale(0.01f, 0.1f, 0.05f) >= FreeEditGizmo.MinScale,
+                "ApplyScale: kademe sifira yuvarlasa da alt sinir korunmali");
+
+            // N tusu: uc takim da sirayla gelmeli ve basa donmeli.
+            Check(FreeEditGizmo.NextMode(FreeEditGizmo.Mode.Move) == FreeEditGizmo.Mode.Rotate &&
+                  FreeEditGizmo.NextMode(FreeEditGizmo.Mode.Rotate) == FreeEditGizmo.Mode.Scale &&
+                  FreeEditGizmo.NextMode(FreeEditGizmo.Mode.Scale) == FreeEditGizmo.Mode.Move,
+                "NextMode: N tusu tasi -> dondur -> boy -> tasi dongusunu kurmali");
+
+            // --- duzlem kollari: kesisim ve eksen esleme ---
+            // Y normalli (yatay) duzleme yukaridan inen isin, tam indigi noktada kesmeli.
+            Check(FreeEditGizmo.PlanePoint(new Ray(new Vector3(1.5f, 4f, -2f), Vector3.down),
+                    Vector3.zero, Vector3.up, out Vector3 ph) &&
+                  Mathf.Abs(ph.x - 1.5f) < 0.001f && Mathf.Abs(ph.y) < 0.001f &&
+                  Mathf.Abs(ph.z + 2f) < 0.001f,
+                "PlanePoint: yatay duzleme inen isin dogru noktada kesmeli");
+            Check(!FreeEditGizmo.PlanePoint(new Ray(new Vector3(0f, 1f, 0f), Vector3.right),
+                    Vector3.zero, Vector3.up, out _),
+                "PlanePoint: duzleme paralel isin false donmeli");
+            Check(!FreeEditGizmo.PlanePoint(new Ray(new Vector3(0f, 4f, 0f), Vector3.up),
+                    Vector3.zero, Vector3.up, out _),
+                "PlanePoint: duzlem ARKADA kaliyorsa false donmeli");
+
+            // Duzlem eksenleri izgarayla ayni X/Y/Z olmali (kademeli kaydirma onlarda anlamli).
+            FreeEditGizmo.PlaneAxesFor(1, out Vector3 u1, out Vector3 w1);   // normal Y -> Z ve X
+            Check(u1 == Vector3.forward && w1 == Vector3.right,
+                "PlaneAxesFor: Y normalli duzlem Z ve X eksenlerinde kaymali");
+            FreeEditGizmo.PlaneAxesFor(0, out Vector3 u0, out Vector3 w0);   // normal X -> Y ve Z
+            Check(u0 == Vector3.up && w0 == Vector3.forward,
+                "PlaneAxesFor: X normalli duzlem Y ve Z eksenlerinde kaymali");
+            // --- gizmo dayanagi: kollar propun ON YUZUNUN ONUNDE durmali, ICINDE degil ---
+            var box = new Bounds(new Vector3(5f, 1.1f, 2f), new Vector3(2f, 2.2f, 0.25f));
+            var camAt = new Vector3(5f, 1.1f, 10f);   // +Z tarafindan bakiyor
+            var gizmoAnchor = FreeEditGizmo.AnchorFor(box, camAt, 0.1f);
+            Check(gizmoAnchor.z > box.max.z,
+                $"AnchorFor: dayanak kutunun ON yuzunun DISINDA olmali (z={gizmoAnchor.z:0.000} > {box.max.z:0.000})");
+            Check(Mathf.Abs(gizmoAnchor.z - (box.max.z + 0.1f)) < 0.001f,
+                "AnchorFor: dayanak on yuzden tam 'pad' kadar onde olmali");
+            Check(!box.Contains(gizmoAnchor), "AnchorFor: dayanak kutunun ICINDE kalmamali");
+
+            // Kamera ters taraftaysa dayanak da ters tarafa gecmeli.
+            var anchorBack = FreeEditGizmo.AnchorFor(box, new Vector3(5f, 1.1f, -10f), 0.1f);
+            Check(anchorBack.z < box.min.z,
+                "AnchorFor: kamera arkadayken dayanak arka yuzun disina gecmeli");
+
+            // Yukaridan bakista da kutunun disinda (ustunde) kalmali.
+            var anchorTop = FreeEditGizmo.AnchorFor(box, new Vector3(5f, 20f, 2f), 0.1f);
+            Check(anchorTop.y > box.max.y && !box.Contains(anchorTop),
+                "AnchorFor: yukaridan bakista dayanak ust yuzun uzerinde olmali");
+
+            // Duzlem eksenleri normale DIK olmali — aksi halde kaydirma duzlemden cikardi.
+            for (int i = 0; i < 3; i++)
+            {
+                FreeEditGizmo.PlaneAxesFor(i, out Vector3 pu, out Vector3 pw);
+                Vector3 n = i == 0 ? Vector3.right : i == 1 ? Vector3.up : Vector3.forward;
+                Check(Mathf.Abs(Vector3.Dot(pu, n)) < 0.0001f && Mathf.Abs(Vector3.Dot(pw, n)) < 0.0001f,
+                    $"PlaneAxesFor: eksen {i} icin duzlem eksenleri normale dik olmali");
+            }
+
             // --- merkezleme ---
             Check(RoomGrid.CenterToMin(new Vector2Int(10, 10), Vector2Int.one) == new Vector2Int(10, 10),
                 "CenterToMin: 1x1 ayni hucrede kalmali");
@@ -890,7 +1084,8 @@ namespace VRMultiplayer.EditorTools
             // konamiyordu; artik kutu 16x7 ve o kutunun icinde bile yalnizca duvarin gercekten
             // bastigi seritteki hucreler dolu.
             var wallDef = new PropDef { id = "duvar", sizeMeters = new Vector2(2f, 0.25f), freeRotation = true };
-            var angledBox = RoomGrid.FootprintCells(wallDef, 1, 0.125f);
+            const byte deg15 = 3;   // 15 derece — 5 derecelik adimla 3 adim
+            var angledBox = RoomGrid.FootprintCells(wallDef, deg15, 0.125f);
             Check(angledBox.y < angledBox.x,
                 $"Ara acili ince duvarin kutusu kare olmamali ({angledBox.x}x{angledBox.y})");
 
@@ -898,7 +1093,6 @@ namespace VRMultiplayer.EditorTools
             Check(wide2 != null, "Ara aci testi icin izgara kurulamadi");
             if (wide2 != null)
             {
-                const byte deg15 = 1;
                 var mid = new Vector2Int(wide2.Cols / 2, wide2.Rows / 2);
                 var wallMin = RoomGrid.CenterToMin(mid, angledBox);
 
@@ -984,7 +1178,7 @@ namespace VRMultiplayer.EditorTools
                     // giderilmezse model rezervenin icinde kayar ve dik eklem yine acilir.
                     // Duzeltme her aciyi ayni sekilde toparlamali, o yuzden dort ceyrek turda
                     // da mesh merkezi rect merkezine oturmali.
-                    for (byte q = 0; q < 24; q += 6)
+                    for (byte q = 0; q < MapLayout.RotationSteps; q += MapLayout.QuarterTurnSteps)
                     {
                         float yaw = q * MapLayout.RotationStepDegrees;
                         Vector3 placed = -MapBuilder.PivotOffset(p, scale, yaw)
@@ -1203,11 +1397,34 @@ namespace VRMultiplayer.EditorTools
                 var st = outer.Report();
                 Check(st.roomArea > 0f && st.buildableArea > st.roomArea,
                     "Insa alani oda alanindan buyuk olmali");
+
+                // --- serbest katman sinir koruması: harita hacmi disina kacan prop kaybolmasin ---
+                Vector3 inside = outer.CellCenter(16, 16);
+                Check((outer.ClampToBounds(inside) - inside).magnitude < 0.0001f,
+                    "ClampToBounds: harita icindeki nokta DEGISMEMELI");
+
+                var far = outer.ClampToBounds(new Vector3(9999f, 0f, -9999f));
+                Check(far.x < 9999f && far.z > -9999f,
+                    "ClampToBounds: uzaga yazilan konum haritaya cekilmeli");
+                Check(far.x <= outer.Origin.x + outer.Cols * outer.CellSize + 1f &&
+                      far.z >= outer.Origin.y - 1f,
+                    "ClampToBounds: kirpma izgara sinirlarinda kalmali");
+
+                Check(Mathf.Abs(outer.ClampToBounds(new Vector3(0f, 500f, 0f)).y -
+                                (outer.FloorY + RoomGrid.FreeHeightAboveFloor)) < 0.0001f,
+                    "ClampToBounds: yukari tavan uygulanmali");
+                Check(Mathf.Abs(outer.ClampToBounds(new Vector3(0f, -500f, 0f)).y -
+                                (outer.FloorY - RoomGrid.FreeDepthBelowFloor)) < 0.0001f,
+                    "ClampToBounds: asagi taban uygulanmali");
+                // Yari gomme bu katmanin VAROLUS sebebi — birkac mm asla kirpilmamali.
+                float sunk = outer.FloorY - 0.006f;
+                Check(Mathf.Abs(outer.ClampToBounds(new Vector3(0f, sunk, 0f)).y - sunk) < 0.0001f,
+                    "ClampToBounds: 6 mm gomulu prop kirpilmamali");
             }
 
             // --- JSON gidis donus ---
             var layout = new MapLayout { name = "SelfCheck", cellSize = 0.25f, builtForRoom = plan };
-            layout.Add("prop_a", 3, 4, 1, 6);
+            layout.Add("prop_a", 3, 4, 1, 18);   // ceyrek tur (18 adim x 5 derece = 90)
             layout.Add("prop_b", 7, 8, 0, 0);
             var round = MapLayout.FromJson(layout.ToJson());
             Check(round != null, "MapLayout JSON: geri okunamadi");
@@ -1215,9 +1432,9 @@ namespace VRMultiplayer.EditorTools
             {
                 Check(round.Count == 2, "MapLayout JSON: prop sayisi korunmali");
                 Check(round.props[0].propId == "prop_a" && round.props[0].cellX == 3 &&
-                      round.props[0].cellZ == 4 && round.props[0].level == 1 && round.props[0].rot == 6,
+                      round.props[0].cellZ == 4 && round.props[0].level == 1 && round.props[0].rot == 18,
                       "MapLayout JSON: yerlestirme alanlari korunmali");
-                Check(Mathf.Abs(round.props[0].Yaw - 90f) < 0.001f, "PlacedProp.Yaw: 6 adim = 90 derece olmali");
+                Check(Mathf.Abs(round.props[0].Yaw - 90f) < 0.001f, "PlacedProp.Yaw: 18 adim = 90 derece olmali");
                 Check(round.props[1].instanceId != round.props[0].instanceId,
                     "instanceId: her yerlestirme benzersiz olmali");
                 Check(round.builtForRoom.floorPolygon.Length == 4, "MapLayout JSON: gomulu oda plani korunmali");

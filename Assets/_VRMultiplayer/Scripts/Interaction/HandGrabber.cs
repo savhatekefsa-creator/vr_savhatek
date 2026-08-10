@@ -53,6 +53,48 @@ namespace VRMultiplayer
 
         HandState Other(HandState h) => h == _left ? _right : _left;
 
+        // ---- KALIBRASYON TELAFISI ---------------------------------------------------------
+        // AprilTag kalibrasyonu (CalibrationAnchor) XR rig'ini oyun SIRASINDA surekli oynatir.
+        // Rig, el tasiyicilarinin ebeveyni: rig D kadar dondugunde iki elin de dunya konumu
+        // doner, dolayisiyla raw (= destek_eli - ana_el) da D kadar doner. Ama h.aimDir DUNYA
+        // uzayinda saklanip kareler arasi tasiniyor — o donmez, bayat kalir. FilterAim aradaki
+        // farki oyuncunun el hareketi sanip kovalar; duzeltme aimDeadzoneDegrees'in (0.75)
+        // altindaysa hic gormez ve sapma kalici olarak birikir. Belirti: destek eli "olu"
+        // hisseder, silah elin gosterdigi yone gitmez. Kalibrasyonsuz sahnelerde goruldmez —
+        // sorunun neden yalnizca AprilTag dalinda ciktigi da bu.
+        //
+        // Rig'in kendi donusunu aimDir'e de uygulayarak sahte hatayi sifirliyoruz. Rig
+        // oynamiyorsa delta birim quaternion olur ve bu blok HICBIR SEY yapmaz: kalibrasyonsuz
+        // sahnelerde (main) davranis birebir korunur.
+        //
+        // Yalnizca DONUS telafi edilir. Saf oteleme iki eli de esit kaydirdigi icin aralarindaki
+        // FARK vektorunu degistirmez, yani nisani zaten etkilemez.
+        Transform _rig;
+        Quaternion _rigRotPrev;
+        bool _rigRotValid;
+
+        void CompensateRigRotation()
+        {
+            if (_rig == null)
+            {
+                var rigRef = XRRigReference.Instance;
+                if (rigRef == null) { _rigRotValid = false; return; }
+                _rig = rigRef.transform;
+            }
+
+            Quaternion now = _rig.rotation;
+            if (_rigRotValid && Quaternion.Angle(now, _rigRotPrev) > 1e-4f)
+            {
+                Quaternion delta = now * Quaternion.Inverse(_rigRotPrev);
+                if (_left != null && _left.aimDir.sqrMagnitude > 1e-6f)
+                    _left.aimDir = delta * _left.aimDir;
+                if (_right != null && _right.aimDir.sqrMagnitude > 1e-6f)
+                    _right.aimDir = delta * _right.aimDir;
+            }
+            _rigRotPrev = now;
+            _rigRotValid = true;
+        }
+
         // Compound-collider weapons (GunPhysicsSetup builds one box per region) need the NEAREST
         // part, not GetComponentInChildren's first hit — that could be the magazine or stock while
         // the support hand reaches for the handguard, making two-handed hold impossible on some
@@ -273,6 +315,16 @@ namespace VRMultiplayer
 
         void LateUpdate()
         {
+            // El tasiyicilari bu karede zaten yazildi (NetworkVRPlayer, order -100), yani rig'in
+            // GUNCEL donusu okunuyor. Telafi, aimDir raw ile karsilastirilmadan ONCE yapilmali.
+            //
+            // INSA MODU GUARD'INDAN ONCE cagriliyor, bilerek: telafi _rigRotPrev'i her karede
+            // tazeler. Guard'in arkasinda kalsaydi insa modu boyunca guncellenmez, moddan
+            // cikildiginda birikmis kocaman bir delta tek seferde aimDir'e uygulanirdi.
+            // Insa modunda aimDir zaten sifir oldugu icin telafinin kendisi is yapmaz — sadece
+            // referansi guncel tutar. Maliyeti bir quaternion karsilastirmasi.
+            CompensateRigRotation();
+
             // Insa modu: grip "palet" demek. Bu blogu atlamak, gripin DUSEN kenarinda
             // Release(h) calisip elindeki silahi yere dusurmesini engeller — el neyi
             // tutuyorsa tutmaya devam eder, moddan cikinca normal davranis geri gelir.
