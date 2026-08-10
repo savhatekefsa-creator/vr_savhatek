@@ -2984,7 +2984,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a61438c7a1f8c8c40a06359427dddcdd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.GripDebugRig
-  showOverlay: 1
+  showOverlay: 0
   axisLength: 0.1
   axisThickness: 0.004
   aimMarkerDistance: 3
