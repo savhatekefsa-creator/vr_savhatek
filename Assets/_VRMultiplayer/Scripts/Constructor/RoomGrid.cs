@@ -339,10 +339,10 @@ namespace VRMultiplayer.Constructor
             if (scalePct != 100 && scalePct > 0)
                 f.x = Mathf.Max(1, Mathf.RoundToInt(f.x * (scalePct * 0.01f)));
 
-            // 15 derecelik adimlarda 6 adim = 90 derece. Ceyrek turlarda ayak izi ya aynen
-            // kalir ya takla atar — kesir yok, yani kayitli haritalar bu daldan hic etkilenmez.
-            if (rot % 6 == 0)
-                return (rot / 6) % 2 == 1 ? new Vector2Int(f.y, f.x) : f;
+            // Ceyrek turlarda ayak izi ya aynen kalir ya takla atar — kesir yok, yani kayitli
+            // haritalar bu daldan hic etkilenmez.
+            if (rot % MapLayout.QuarterTurnSteps == 0)
+                return (rot / MapLayout.QuarterTurnSteps) % 2 == 1 ? new Vector2Int(f.y, f.x) : f;
 
             // Ara acilar: donmus dikdortgenin gercek sinir kutusu.
             //
@@ -441,7 +441,7 @@ namespace VRMultiplayer.Constructor
             var s = new Shape
             {
                 rect = rect,
-                axisAligned = rot % 6 == 0,
+                axisAligned = rot % MapLayout.QuarterTurnSteps == 0,
                 center = new Vector2(c.x, c.z),
             };
             if (s.axisAligned) return s;
@@ -700,6 +700,33 @@ namespace VRMultiplayer.Constructor
             // Hucre ancak SON kati da bosalinca zemine doner; yoksa ustteki rafi silmek
             // altindaki masayi izgaradan silerdi.
             if (_levels[i] == 0 && _cells[i] == CellState.Occupied) _cells[i] = _base[i];
+        }
+
+        /// <summary>Serbest katmanin zemin altina inebilecegi en fazla derinlik (m).</summary>
+        public const float FreeDepthBelowFloor = 2f;
+
+        /// <summary>Serbest katmanin zemin ustunde cikabilecegi en fazla yukseklik (m).</summary>
+        public const float FreeHeightAboveFloor = 20f;
+
+        /// <summary>
+        /// Pulls a free-layer point back into the map's own volume.
+        ///
+        /// The grid clamps itself by construction — a cell index either exists or it does not.
+        /// The free layer has no such floor under it: a typed "9999" or a slipped drag sends a
+        /// prop somewhere nobody will ever find it, and it stays in the file forever. Clamping
+        /// rather than refusing keeps the edit legible — the prop stops at the edge where you
+        /// can see it and correct it, instead of silently ignoring what you asked for.
+        ///
+        /// Vertically it is deliberately generous (2 m under, 20 m over): sinking a crate a
+        /// few millimetres and hanging scenery high up are both things this layer is FOR.
+        /// </summary>
+        public Vector3 ClampToBounds(Vector3 roomPoint, float padMeters = 0.5f)
+        {
+            float pad = Mathf.Max(0f, padMeters);
+            return new Vector3(
+                Mathf.Clamp(roomPoint.x, Origin.x - pad, Origin.x + Cols * CellSize + pad),
+                Mathf.Clamp(roomPoint.y, FloorY - FreeDepthBelowFloor, FloorY + FreeHeightAboveFloor),
+                Mathf.Clamp(roomPoint.z, Origin.y - pad, Origin.y + Rows * CellSize + pad));
         }
 
         /// <summary>

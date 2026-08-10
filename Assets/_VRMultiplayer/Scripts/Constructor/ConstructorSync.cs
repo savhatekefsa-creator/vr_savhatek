@@ -179,12 +179,18 @@ namespace VRMultiplayer.Constructor
             return null;
         }
 
-        public static bool ClientRequestPlace(PropDef def, Vector2Int cell, byte level, byte rot, byte scalePct, byte heightPct)
+        /// <param name="preferredId">
+        /// Geri alma yolunda propun ESKI kimligi; 0 = yeni kimlik ver. Sunucu bunu dogrular
+        /// (bkz. <see cref="ConstructorSession.ResolveInstanceId"/>) — bayat bir istek yasayan
+        /// bir propun kimligini calamaz.
+        /// </param>
+        public static bool ClientRequestPlace(PropDef def, Vector2Int cell, byte level, byte rot,
+            byte scalePct, byte heightPct, uint preferredId = 0)
         {
             var sync = LocalOwned();
             int index = PropLibrary.Instance.IndexOf(def != null ? def.id : null);
             if (sync == null || index < 0) return false;
-            sync.PlaceServerRpc((ushort)index, cell.x, cell.y, level, rot, scalePct, heightPct);
+            sync.PlaceServerRpc((ushort)index, cell.x, cell.y, level, rot, scalePct, heightPct, preferredId);
             return true;
         }
 
@@ -243,11 +249,72 @@ namespace VRMultiplayer.Constructor
             return true;
         }
 
+        // ---- serbest katman (tam transform) — izgara ciftlerinin birebir ikizleri ----
+
+        public static bool ClientRequestPlaceFree(PropDef def, Vector3 pos, Vector3 euler,
+            Vector3 scale, uint preferredId = 0)
+        {
+            var sync = LocalOwned();
+            int index = PropLibrary.Instance.IndexOf(def != null ? def.id : null);
+            if (sync == null || index < 0) return false;
+            sync.PlaceFreeServerRpc((ushort)index, pos, euler, scale, preferredId);
+            return true;
+        }
+
+        public static bool ClientRequestRemoveFree(uint instanceId)
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.RemoveFreeServerRpc(instanceId);
+            return true;
+        }
+
+        public static bool ClientRequestMoveFree(uint instanceId, Vector3 pos, Vector3 euler,
+            Vector3 scale, bool commit)
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.MoveFreeServerRpc(instanceId, pos, euler, scale, commit);
+            return true;
+        }
+
+        public static bool ServerBroadcastPlaceFree(PropDef def, Vector3 pos, Vector3 euler,
+            Vector3 scale, uint instanceId)
+        {
+            int index = PropLibrary.Instance.IndexOf(def != null ? def.id : null);
+            if (index < 0) return false;
+
+            var sync = AnySpawned();
+            if (sync == null)
+                return Session != null &&
+                       Session.ApplyPlaceFree(def.id, pos, euler, scale, instanceId) != null;
+            sync.ApplyPlaceFreeRpc(index, pos, euler, scale, instanceId);
+            return true;
+        }
+
+        public static bool ServerBroadcastRemoveFree(uint instanceId)
+        {
+            var sync = AnySpawned();
+            if (sync == null) return Session != null && Session.ApplyRemoveFree(instanceId);
+            sync.ApplyRemoveFreeRpc(instanceId);
+            return true;
+        }
+
+        public static bool ServerBroadcastMoveFree(uint instanceId, Vector3 pos, Vector3 euler,
+            Vector3 scale, bool commit)
+        {
+            var sync = AnySpawned();
+            if (sync == null)
+                return Session != null && Session.ApplyMoveFree(instanceId, pos, euler, scale, commit);
+            sync.ApplyMoveFreeRpc(instanceId, pos, euler, scale, commit);
+            return true;
+        }
+
         // ------------------------------------------------------------- requests (client -> server)
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         void PlaceServerRpc(ushort propIndex, int cellX, int cellZ, byte level, byte rot,
-            byte scalePct, byte heightPct, RpcParams p = default)
+            byte scalePct, byte heightPct, uint preferredId, RpcParams p = default)
         {
             // Yalnizca bu oyuncu objesinin SAHIBI kendi objesinden istek yollayabilir —
             // RoomScanSync'teki ayni koruma. Yoksa bir istemci baskasinin objesi uzerinden
@@ -263,7 +330,8 @@ namespace VRMultiplayer.Constructor
             // sanirken sunucu zemine bakip ya reddeder ya da yanlis yeri isgal ederdi.
             if (!Session.CanPlace(def, cell, rot, scalePct, level, heightPct)) return;
 
-            ApplyPlaceRpc(propIndex, cellX, cellZ, level, rot, Session.MintInstanceId(), scalePct, heightPct);
+            ApplyPlaceRpc(propIndex, cellX, cellZ, level, rot, Session.ResolveInstanceId(preferredId),
+                scalePct, heightPct);
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -274,6 +342,41 @@ namespace VRMultiplayer.Constructor
             if (Session.Layout.Find(instanceId) == null) return;
 
             ApplyRemoveRpc(instanceId);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void PlaceFreeServerRpc(ushort propIndex, Vector3 pos, Vector3 euler, Vector3 scale,
+            uint preferredId, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null || !Session.IsActive) return;
+
+            var def = PropLibrary.Instance.ByIndex(propIndex);
+            if (def == null) return;
+
+            // CanPlace YOK: serbest katman hucre dolulugunun disinda (bilincli tasarim).
+            ApplyPlaceFreeRpc(propIndex, pos, euler, scale, Session.ResolveInstanceId(preferredId));
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void RemoveFreeServerRpc(uint instanceId, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null || !Session.IsActive) return;
+            if (Session.Layout.FindFree(instanceId) == null) return;
+
+            ApplyRemoveFreeRpc(instanceId);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void MoveFreeServerRpc(uint instanceId, Vector3 pos, Vector3 euler, Vector3 scale,
+            bool commit, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null || !Session.IsActive) return;
+            if (Session.Layout.FindFree(instanceId) == null) return;
+
+            ApplyMoveFreeRpc(instanceId, pos, euler, scale, commit);
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -651,6 +754,38 @@ namespace VRMultiplayer.Constructor
         {
             if (Session == null || !Session.IsActive) return;
             Session.ApplyRemove(instanceId);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        void ApplyPlaceFreeRpc(int propIndex, Vector3 pos, Vector3 euler, Vector3 scale,
+            uint instanceId)
+        {
+            if (Session == null || !Session.IsActive) return;
+            var def = PropLibrary.Instance.ByIndex(propIndex);
+            if (def == null)
+            {
+                Debug.LogWarning($"[ConstructorSync] Bilinmeyen prop indeksi {propIndex} (serbest) — " +
+                                 "kutuphane surumleri farkli olabilir (menu 25).");
+                return;
+            }
+            Session.ApplyPlaceFree(def.id, pos, euler, scale, instanceId);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        void ApplyRemoveFreeRpc(uint instanceId)
+        {
+            if (Session == null || !Session.IsActive) return;
+            Session.ApplyRemoveFree(instanceId);
+        }
+
+        // Surukleme kareleri de guvenilir-sirali kanaldan gider: 15 Hz'lik kucuk paketlerde
+        // kayip telafisi kurmaya degmez, siralilik ise sart — son paket son konum olmali.
+        [Rpc(SendTo.Everyone)]
+        void ApplyMoveFreeRpc(uint instanceId, Vector3 pos, Vector3 euler, Vector3 scale,
+            bool commit)
+        {
+            if (Session == null || !Session.IsActive) return;
+            Session.ApplyMoveFree(instanceId, pos, euler, scale, commit);
         }
 
         // ------------------------------------------------------------- late join

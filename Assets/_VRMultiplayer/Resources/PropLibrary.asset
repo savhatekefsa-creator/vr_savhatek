@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 836b73326beb1724c8de15b779af465e, type: 3}
   m_Name: PropLibrary
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Constructor.PropLibrary
-  contentVersion: 8
+  contentVersion: 7
   schemaVersion: 1
   sourceFolders:
   - Assets/P A I N T B A L L S E R I ES MK/Content/Prefabs
@@ -27,7 +27,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1.4327731, y: 0.08406655}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 0
     networked: 0
     height: 2.4080095
@@ -39,7 +39,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1.8462825, y: 1.8461902}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 1.8389467
@@ -51,7 +51,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1.8462825, y: 1.8461902}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 1.8389467
@@ -63,7 +63,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1.4845272, y: 2.5255322}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 1.3034182
@@ -75,7 +75,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1.4845272, y: 2.5255322}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 1.3034182
@@ -87,7 +87,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 0.88541996, y: 0.8894341}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.4981851
@@ -99,7 +99,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1.8877549, y: 1.9522303}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 1.1579773
@@ -111,7 +111,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1.0981086, y: 0.9546576}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 1.0482327
@@ -123,7 +123,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 0.31575826, y: 0.300304}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.3172927
@@ -135,7 +135,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 0.31575826, y: 0.300304}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.3180203
@@ -147,7 +147,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 0.64717627, y: 0.6147176}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.59116405
@@ -159,7 +159,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1.0578552, y: 0.78770065}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 1.0563245
@@ -171,7 +171,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 0.7025515, y: 0.8526645}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.38075826
@@ -279,7 +279,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 0.4817936, y: 0.55632734}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.41227984
@@ -291,7 +291,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 9.255671, y: 0.08948606}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 0
     networked: 0
     height: 2.6198404
@@ -351,7 +351,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 0.4563681, y: 0.46272025}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.22642289
@@ -363,7 +363,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 0.53968376, y: 0.5471956}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.35175338
@@ -375,7 +375,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 0.527699, y: 0.5100711}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.29288626
@@ -387,7 +387,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1.723003, y: 1.8476598}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 0.32005703
@@ -399,7 +399,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 2.022897, y: 2.1042209}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 2.198786
@@ -435,7 +435,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 1, y: 0.5}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 0
     networked: 0
     height: 0.75
@@ -459,7 +459,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 2.913879, y: 0.9799859}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 4.300281
@@ -471,7 +471,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 5.307242, y: 1.9599718}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 8.300786
@@ -483,7 +483,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 3.6407208, y: 1.5844247}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 6.0955873
@@ -495,7 +495,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 4.572718, y: 3.3903995}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 4.2427473
@@ -507,7 +507,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 7.2904167, y: 5.072098}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 8.233517
@@ -519,7 +519,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 6.503826, y: 4.3509665}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 6.2554793
@@ -531,7 +531,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 3.2295403, y: 3.2295403}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 4.1563478
@@ -543,7 +543,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 3.6730254, y: 3.6730254}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 8.119053
@@ -555,7 +555,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 3.2318006, y: 3.0575488}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 6.316282
@@ -567,7 +567,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 2.678074, y: 3.172244}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 2.042295
@@ -579,7 +579,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 2.678074, y: 3.172244}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 4.0241737
@@ -591,7 +591,7 @@ MonoBehaviour:
     resourcePath: 
     sizeMeters: {x: 5.757163, y: 3.172244}
     fitToFootprint: 1
-    freeRotation: 1
+    freeRotation: 0
     hiddenInPalette: 1
     networked: 0
     height: 4.0393896

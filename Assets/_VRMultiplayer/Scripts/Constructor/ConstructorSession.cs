@@ -67,6 +67,7 @@ namespace VRMultiplayer.Constructor
 
         public bool IsActive => Layout != null && Grid != null;
         public int PlacedCount => Layout != null ? Layout.Count : 0;
+        public int FreePlacedCount => Layout != null ? Layout.FreeCount : 0;
 
         /// <summary>
         /// True when the grid stands on an invented floor (<see cref="RoomPlan.FreeSpace"/>)
@@ -482,6 +483,21 @@ namespace VRMultiplayer.Constructor
                 }
             }
 
+            // Serbest katman: izgara dolulugu YOK (bilincli, bkz. FreePlacedProp) — yalnizca
+            // sahne kurulumu + kimlik kaydi. Raf kaydi izgara yoluyla ayni: serbest konmus
+            // bir raf da silah dogurmali.
+            foreach (var fp in Layout.freeProps)
+            {
+                var def = Library.ById(fp.propId);
+                if (def == null) continue;
+                var go = MapBuilder.SpawnFree(fp, def, Root);
+                if (go != null)
+                {
+                    _instances[fp.instanceId] = go;
+                    Weapons.WeaponRackRespawner.RegisterConstructorRack(fp.instanceId, go);
+                }
+            }
+
             // HARITANIN KENDI TAG YERLESIMI. Tek gecis noktasi burasi: OpenExisting (yaratici
             // modda harita acma) da AdoptJson (sunucudan gelen harita) da Adopt'a dusuyor,
             // yani "harita degisti -> tag'ler de degisti" tek yerde bagli.
@@ -491,7 +507,8 @@ namespace VRMultiplayer.Constructor
             if (AprilTagCalibration.Instance != null)
                 AprilTagCalibration.Instance.ApplyMapLayout(Layout.tags);
 
-            Debug.Log($"[Constructor] Oturum acildi: '{Layout.name}' — {applied} yerlestirme, " +
+            Debug.Log($"[Constructor] Oturum acildi: '{Layout.name}' — {applied} yerlestirme + " +
+                      $"{Layout.FreeCount} serbest, " +
                       $"{(Layout.tags != null ? Layout.tags.Length : 0)} tag, " +
                       $"izgara {Grid.Cols}x{Grid.Rows}, {Grid.Report().free} oda-ici bos hucre " +
                       $"(+{Grid.OutsideMargin:0.0} m oda disi pay).");
@@ -560,7 +577,7 @@ namespace VRMultiplayer.Constructor
         /// never came from was the player.
         /// </summary>
         bool TryPlace(PropDef def, Vector2Int minCell, byte level, byte rot, byte scalePct,
-            byte heightPct, bool fromUndo)
+            byte heightPct, bool fromUndo, uint preferredId = 0)
         {
             if (!CanPlace(def, minCell, rot, scalePct, level, heightPct)) return false;
 
@@ -583,7 +600,7 @@ namespace VRMultiplayer.Constructor
 
             if (!online)
             {
-                ApplyPlace(def.id, minCell, level, rot, MintInstanceId(), scalePct, heightPct);
+                ApplyPlace(def.id, minCell, level, rot, ResolveInstanceId(preferredId), scalePct, heightPct);
                 return true;
             }
 
@@ -592,10 +609,11 @@ namespace VRMultiplayer.Constructor
                 // Sunucu kendi karari: kimligi uret ve HERKESE yayinla. Uygulama tek yoldan,
                 // RPC alicisindan gecer (sunucu da alicilardan biri) — iki ayri uygulama yolu
                 // olsaydi sunucu ile istemciler zamanla ayrisirdi.
-                return ConstructorSync.ServerBroadcastPlace(def, minCell, level, rot, MintInstanceId(), scalePct, heightPct);
+                return ConstructorSync.ServerBroadcastPlace(def, minCell, level, rot,
+                    ResolveInstanceId(preferredId), scalePct, heightPct);
             }
 
-            return ConstructorSync.ClientRequestPlace(def, minCell, level, rot, scalePct, heightPct);
+            return ConstructorSync.ClientRequestPlace(def, minCell, level, rot, scalePct, heightPct, preferredId);
         }
 
         /// <summary>
@@ -659,6 +677,45 @@ namespace VRMultiplayer.Constructor
         /// </summary>
         public uint MintInstanceId() => IsActive ? Layout.nextInstanceId++ : 0u;
 
+        /// <summary>
+        /// Uses a REQUESTED id when it is still free, otherwise mints a new one.
+        ///
+        /// This is what lets undo put a prop back with the SAME identity it had. Without it the
+        /// resurrected prop got a fresh id, and every older undo entry naming the old one
+        /// (especially free-layer moves) was silently skipped as "someone else deleted it" — so
+        /// undoing a convert-then-nudge sequence stopped part-way through and the chain could
+        /// never reach the beginning.
+        ///
+        /// Still checked rather than trusted: ids arrive from clients, and a stale request must
+        /// never be able to collide with a live prop. Both layers share the id space, so both
+        /// are consulted.
+        /// </summary>
+        public uint ResolveInstanceId(uint preferred)
+        {
+            if (!IsActive) return 0;
+            if (preferred != 0 && Layout.Find(preferred) == null && Layout.FindFree(preferred) == null)
+                return preferred;
+            return MintInstanceId();
+        }
+
+        /// <summary>
+        /// Sahnedeki bir objeden yerlesim kimligine geri gider — collider cocuk objede
+        /// olabilecegi icin koke dogru tirmanir. PC ince-ayar editorunun tiklama secimi icin;
+        /// tiklama sikliginda calisir, sozluk taramasinin maliyeti dert degil.
+        /// </summary>
+        public uint InstanceIdOf(Transform t)
+        {
+            if (!IsActive || t == null) return 0;
+            while (t != null && t != Root)
+            {
+                foreach (var kv in _instances)
+                    if (kv.Value != null && kv.Value.transform == t) return kv.Key;
+                t = t.parent;
+            }
+            return 0;
+        }
+
+
         // ------------------------------------------------------------- authoritative apply
 
         /// <summary>
@@ -694,14 +751,14 @@ namespace VRMultiplayer.Constructor
 
             // Bu yerlestirme BIZIM istegimiz miydi? Oyleyse geri-al yigitina yaz. Baska bir
             // oyuncunun koydugu propu bizim "geri al" tusumuz kaldirmamali.
-            int i = _pending.FindIndex(x => x.place && x.prop.propId == propId &&
+            int i = _pending.FindIndex(x => x.place && x.free == null && x.prop.propId == propId &&
                                             x.prop.cellX == minCell.x && x.prop.cellZ == minCell.y &&
                                             x.prop.rot == rot && x.prop.scalePct == scalePct && x.prop.heightPct == heightPct);
             if (i >= 0)
             {
                 bool fromUndo = _pending[i].fromUndo;
                 _pending.RemoveAt(i);
-                if (!fromUndo) PushUndo(new UndoEntry { wasPlace = true, instanceId = instanceId });
+                if (!fromUndo) PushUndo(new UndoEntry { kind = UndoKind.Place, instanceId = instanceId });
             }
 
             MarkDirty();
@@ -735,7 +792,7 @@ namespace VRMultiplayer.Constructor
 
             Layout.Remove(instanceId);
 
-            int i = _pending.FindIndex(x => !x.place && x.prop.instanceId == instanceId);
+            int i = _pending.FindIndex(x => !x.place && x.free == null && x.prop.instanceId == instanceId);
             if (i >= 0)
             {
                 var p = _pending[i];
@@ -743,7 +800,10 @@ namespace VRMultiplayer.Constructor
                 if (!p.fromUndo)
                     PushUndo(new UndoEntry
                     {
-                        wasPlace = false,
+                        kind = UndoKind.Remove,
+                        // Kimlik de saklanir: geri alinca prop AYNI kimlikle geri gelmeli,
+                        // yoksa ondan onceki kayitlar sahipsiz kalip atlanir.
+                        instanceId = instanceId,
                         propId = p.prop.propId,
                         cellX = p.prop.cellX,
                         cellZ = p.prop.cellZ,
@@ -759,25 +819,319 @@ namespace VRMultiplayer.Constructor
             return true;
         }
 
+        // ------------------------------------------------- serbest katman (tam transform)
+
+        // Surukleme yasam dongusu. Fotograf ilk dokunusta cekilir, commit'te geri-al yigitina
+        // yazilir. Yankilar (kendi RPC'mizin bize donusu) surukleme bitene kadar yoksayilir —
+        // yoksa agin 15 Hz'lik eski konumlari taze yerel konumun ustune biner, prop elde
+        // titrerdi. Ayni propu iki kisinin ayni anda suruklemesi catisir; son commit kazanir.
+        FreePlacedProp _dragSnapshot;
+        bool _echoMuted;
+        uint _echoMutedId;
+        float _nextFreeMoveNetAt;
+
+        /// <summary>Suruklerken agin gordugu gonderim tavani (adet/sn). Yerel gorunum her kare.</summary>
+        public const float FreeMoveSendHz = 15f;
+
+        /// <summary>
+        /// Serbest yerlestirme istegi — <see cref="TryPlace"/>'in ikizi, ayni yol ayrimi:
+        /// offline hemen, sunucuda yayin, istemcide istek. CanPlace YOK: serbest katman hucre
+        /// dolulugunun disinda (bkz. <see cref="FreePlacedProp"/>).
+        /// </summary>
+        public bool TryPlaceFree(PropDef def, Vector3 position, Vector3 rotationEuler, Vector3 scale) =>
+            TryPlaceFree(def, position, rotationEuler, scale, false);
+
+        bool TryPlaceFree(PropDef def, Vector3 position, Vector3 rotationEuler, Vector3 scale,
+            bool fromUndo, uint preferredId = 0)
+        {
+            if (!IsActive || def == null || def.Resolve() == null) return false;
+
+            // Harita hacminin disina kacan prop bulunamaz ve dosyada oyle kalir (bkz.
+            // RoomGrid.ClampToBounds). Sinirlama ISTEK yolunda: apply'a hep kirpilmis deger
+            // gelir, yani her este ayni sayi uygulanir.
+            position = Grid.ClampToBounds(position);
+
+            AddPending(new Pending
+            {
+                place = true,
+                fromUndo = fromUndo,
+                free = new FreePlacedProp
+                {
+                    propId = def.id, position = position, rotationEuler = rotationEuler, scale = scale,
+                },
+            });
+
+            var net = Unity.Netcode.NetworkManager.Singleton;
+            bool online = net != null && (net.IsServer || net.IsConnectedClient);
+
+            if (!online)
+                return ApplyPlaceFree(def.id, position, rotationEuler, scale,
+                    ResolveInstanceId(preferredId)) != null;
+            if (net.IsServer)
+                return ConstructorSync.ServerBroadcastPlaceFree(def, position, rotationEuler, scale,
+                    ResolveInstanceId(preferredId));
+            return ConstructorSync.ClientRequestPlaceFree(def, position, rotationEuler, scale, preferredId);
+        }
+
+        public bool TryRemoveFree(uint instanceId) => TryRemoveFree(instanceId, false);
+
+        bool TryRemoveFree(uint instanceId, bool fromUndo)
+        {
+            if (!IsActive || instanceId == 0) return false;
+
+            var doomed = Layout.FindFree(instanceId);
+            if (doomed == null) return false;
+
+            // Silinmeden ONCE fotografla — geri almak transformun tamamini ister.
+            AddPending(new Pending
+            {
+                place = false,
+                fromUndo = fromUndo,
+                free = new FreePlacedProp
+                {
+                    propId = doomed.propId,
+                    position = doomed.position,
+                    rotationEuler = doomed.rotationEuler,
+                    scale = doomed.scale,
+                    instanceId = instanceId,
+                },
+            });
+
+            var net = Unity.Netcode.NetworkManager.Singleton;
+            bool online = net != null && (net.IsServer || net.IsConnectedClient);
+
+            if (!online) return ApplyRemoveFree(instanceId);
+            if (net.IsServer) return ConstructorSync.ServerBroadcastRemoveFree(instanceId);
+            return ConstructorSync.ClientRequestRemoveFree(instanceId);
+        }
+
+        /// <summary>
+        /// Serbest propu tasir/dondurur/olcekler. <paramref name="commit"/> false iken SURUKLEME
+        /// karesi: yerel gorunum aninda guncellenir, ag <see cref="FreeMoveSendHz"/>'e kirpilir,
+        /// geri-al yigitina yazilmaz. true iken jest biter: kesin deger HER ZAMAN gider ve ilk
+        /// dokunustaki fotograf geri-al yigitina yazilir.
+        ///
+        /// YEREL TAHMIN BILEREK VAR (yerlestirmedeki "tahmin yok" kuralinin tersi): surukleyen
+        /// el kendi karesini ag gecikmesiyle izleseydi ince ayar imkansizlasirdi. Sunucunun
+        /// reddedebilecegi tek sey "boyle bir prop yok" — o da yerelde zaten denetleniyor.
+        /// </summary>
+        public bool TryMoveFree(uint instanceId, Vector3 position, Vector3 rotationEuler,
+            Vector3 scale, bool commit) =>
+            TryMoveFree(instanceId, position, rotationEuler, scale, commit, false);
+
+        bool TryMoveFree(uint instanceId, Vector3 position, Vector3 rotationEuler, Vector3 scale,
+            bool commit, bool fromUndo)
+        {
+            if (!IsActive || instanceId == 0) return false;
+
+            var f = Layout.FindFree(instanceId);
+            if (f == null) return false;
+
+            position = Grid.ClampToBounds(position);
+
+            if (!fromUndo)
+            {
+                // Baska propa gecis onceki jesti kendiliginden bitirir — yigit yarim kalmasin.
+                if (_dragSnapshot != null && _dragSnapshot.instanceId != instanceId)
+                    CommitDragSnapshot();
+                if (_dragSnapshot == null)
+                    _dragSnapshot = new FreePlacedProp
+                    {
+                        propId = f.propId, position = f.position,
+                        rotationEuler = f.rotationEuler, scale = f.scale, instanceId = instanceId,
+                    };
+                _echoMuted = true;
+                _echoMutedId = instanceId;
+            }
+
+            ApplyFreeTransform(f, position, rotationEuler, scale);
+
+            if (commit)
+            {
+                if (!fromUndo) CommitDragSnapshot();
+                MarkDirty();
+                Changed?.Invoke();
+            }
+
+            var net = Unity.Netcode.NetworkManager.Singleton;
+            bool online = net != null && (net.IsServer || net.IsConnectedClient);
+            if (!online)
+            {
+                _echoMuted = false;   // yanki gelmeyecek; bayrak asili kalmasin
+                return true;
+            }
+
+            // Ag kirpma: surukleme kareleri tavana tabi, commit her zaman gider.
+            if (!commit && Time.time < _nextFreeMoveNetAt) return true;
+            _nextFreeMoveNetAt = Time.time + 1f / FreeMoveSendHz;
+
+            if (net.IsServer)
+                return ConstructorSync.ServerBroadcastMoveFree(instanceId, position, rotationEuler,
+                    f.scale, commit);
+            return ConstructorSync.ClientRequestMoveFree(instanceId, position, rotationEuler,
+                f.scale, commit);
+        }
+
+        void CommitDragSnapshot()
+        {
+            if (_dragSnapshot == null) return;
+            PushUndo(new UndoEntry
+            {
+                kind = UndoKind.FreeMove,
+                instanceId = _dragSnapshot.instanceId,
+                free = _dragSnapshot,
+            });
+            _dragSnapshot = null;
+        }
+
+        /// <summary>Veri + sahne tek elden — ikisi ayri guncellenseydi zamanla ayrisirdi.</summary>
+        void ApplyFreeTransform(FreePlacedProp f, Vector3 position, Vector3 rotationEuler, Vector3 scale)
+        {
+            f.position = position;
+            f.rotationEuler = rotationEuler;
+            f.scale = scale == Vector3.zero ? Vector3.one : scale;
+
+            if (_instances.TryGetValue(f.instanceId, out var go) && go != null)
+            {
+                go.transform.localPosition = f.position;
+                go.transform.localRotation = f.Rotation;
+                go.transform.localScale = f.scale;
+            }
+        }
+
+        // ---- serbest apply: bu esin durumu TEK yoldan degisir (izgara ikizleriyle ayni kural) ----
+
+        public FreePlacedProp ApplyPlaceFree(string propId, Vector3 position, Vector3 rotationEuler,
+            Vector3 scale, uint instanceId)
+        {
+            if (!IsActive) return null;
+
+            var def = Library.ById(propId);
+            if (def == null)
+            {
+                Debug.LogWarning($"[Constructor] Kutuphanede olmayan serbest prop uygulanamadi: '{propId}'.");
+                return null;
+            }
+            if (Layout.FindFree(instanceId) != null) return null;   // yinelenen yayin
+
+            var placed = Layout.AddFreeWithId(def.id, position, rotationEuler, scale, instanceId);
+
+            var go = MapBuilder.SpawnFree(placed, def, Root);
+            if (go != null)
+            {
+                _instances[placed.instanceId] = go;
+                Weapons.WeaponRackRespawner.RegisterConstructorRack(placed.instanceId, go);
+            }
+
+            // Bizim istegimiz miydi? Kimligi sunucu verdigi icin eslesme icerikle yapilir;
+            // degerler agdan bit-bit ayni doner, epsilon guvenlik payi.
+            int i = _pending.FindIndex(x => x.place && x.free != null && x.free.propId == propId &&
+                                            (x.free.position - position).sqrMagnitude < 1e-6f);
+            if (i >= 0)
+            {
+                bool fromUndo = _pending[i].fromUndo;
+                _pending.RemoveAt(i);
+                if (!fromUndo)
+                    PushUndo(new UndoEntry { kind = UndoKind.FreePlace, instanceId = instanceId });
+            }
+
+            MarkDirty();
+            Changed?.Invoke();
+            return placed;
+        }
+
+        public bool ApplyRemoveFree(uint instanceId)
+        {
+            if (!IsActive || instanceId == 0) return false;
+
+            var doomed = Layout.FindFree(instanceId);
+            if (doomed == null) return false;
+
+            Weapons.WeaponRackRespawner.UnregisterConstructorRack(instanceId);
+
+            if (_instances.TryGetValue(instanceId, out var go))
+            {
+                if (go != null) Destroy(go);
+                _instances.Remove(instanceId);
+            }
+
+            Layout.RemoveFree(instanceId);
+
+            int i = _pending.FindIndex(x => !x.place && x.free != null && x.free.instanceId == instanceId);
+            if (i >= 0)
+            {
+                var p = _pending[i];
+                _pending.RemoveAt(i);
+                if (!p.fromUndo)
+                    PushUndo(new UndoEntry
+                    {
+                        kind = UndoKind.FreeRemove,
+                        instanceId = instanceId,
+                        free = p.free,
+                    });
+            }
+
+            MarkDirty();
+            Changed?.Invoke();
+            return true;
+        }
+
+        public bool ApplyMoveFree(uint instanceId, Vector3 position, Vector3 rotationEuler,
+            Vector3 scale, bool commit)
+        {
+            if (!IsActive || instanceId == 0) return false;
+
+            // Kendi suruklememizin yankisi: eski surukleme kareleri yoksayilir (yerel daha
+            // guncel), commit yankisi susturmayi kapatir — deger zaten esit, uygulamak zararsiz.
+            if (_echoMuted && _echoMutedId == instanceId)
+            {
+                if (!commit) return true;
+                _echoMuted = false;
+            }
+
+            var f = Layout.FindFree(instanceId);
+            if (f == null) return false;
+
+            ApplyFreeTransform(f, position, rotationEuler, scale);
+
+            if (commit)
+            {
+                MarkDirty();
+                Changed?.Invoke();
+            }
+            return true;
+        }
+
         // ------------------------------------------------------------- undo
+
+        enum UndoKind : byte
+        {
+            Place,       // izgara: biz koyduk -> geri al = sil
+            Remove,      // izgara: biz sildik -> geri al = tekrar koy
+            FreePlace,   // serbest: koyduk -> geri al = sil
+            FreeRemove,  // serbest: sildik -> geri al = tekrar koy (fotograftan)
+            FreeMove,    // serbest: tasidik -> geri al = eski transforma don (fotograftan)
+        }
 
         struct UndoEntry
         {
-            public bool wasPlace;     // true: biz koyduk -> geri al = sil
-            public uint instanceId;   // wasPlace icin
-            public string propId;     // !wasPlace icin -> geri al = tekrar koy
+            public UndoKind kind;
+            public uint instanceId;       // Place / FreePlace / FreeMove icin
+            public string propId;         // Remove icin -> geri al = tekrar koy
             public int cellX, cellZ;
             public byte level;
             public byte rot;
             public byte scalePct;
             public byte heightPct;
+            public FreePlacedProp free;   // FreeRemove/FreeMove: geri donulecek anin fotografi
         }
 
         struct Pending
         {
             public bool place;
             public bool fromUndo;
-            public PlacedProp prop;
+            public PlacedProp prop;       // izgara istekleri
+            public FreePlacedProp free;   // null degilse SERBEST istek (place alani koy/sil ayrimi)
         }
 
         readonly List<Pending> _pending = new List<Pending>();
@@ -825,19 +1179,40 @@ namespace VRMultiplayer.Constructor
                 var e = _undo[_undo.Count - 1];
                 _undo.RemoveAt(_undo.Count - 1);
 
-                if (e.wasPlace)
+                switch (e.kind)
                 {
-                    if (Layout.Find(e.instanceId) == null) continue;   // baskasi zaten silmis
-                    return TryRemove(e.instanceId, true);
-                }
+                    case UndoKind.Place:
+                        if (Layout.Find(e.instanceId) == null) continue;   // baskasi zaten silmis
+                        return TryRemove(e.instanceId, true);
 
-                var def = Library.ById(e.propId);
-                if (def == null) continue;
-                var cell = new Vector2Int(e.cellX, e.cellZ);
-                byte sc = e.scalePct == 0 ? (byte)100 : e.scalePct;
-                byte hp = e.heightPct == 0 ? (byte)100 : e.heightPct;
-                if (!CanPlace(def, cell, e.rot, sc, e.level, hp)) continue;   // yeri baskasi kapmis
-                return TryPlace(def, cell, e.level, e.rot, sc, hp, true);
+                    case UndoKind.FreePlace:
+                        if (Layout.FindFree(e.instanceId) == null) continue;
+                        return TryRemoveFree(e.instanceId, true);
+
+                    case UndoKind.FreeRemove:
+                    {
+                        var fdef = e.free != null ? Library.ById(e.free.propId) : null;
+                        if (fdef == null) continue;
+                        return TryPlaceFree(fdef, e.free.position, e.free.rotationEuler,
+                            e.free.scale, true, e.free.instanceId);
+                    }
+
+                    case UndoKind.FreeMove:
+                        if (e.free == null || Layout.FindFree(e.instanceId) == null) continue;
+                        return TryMoveFree(e.instanceId, e.free.position, e.free.rotationEuler,
+                            e.free.scale, true, true);
+
+                    default:   // UndoKind.Remove: geri al = tekrar koy
+                    {
+                        var def = Library.ById(e.propId);
+                        if (def == null) continue;
+                        var cell = new Vector2Int(e.cellX, e.cellZ);
+                        byte sc = e.scalePct == 0 ? (byte)100 : e.scalePct;
+                        byte hp = e.heightPct == 0 ? (byte)100 : e.heightPct;
+                        if (!CanPlace(def, cell, e.rot, sc, e.level, hp)) continue;   // yeri kapilmis
+                        return TryPlace(def, cell, e.level, e.rot, sc, hp, true, e.instanceId);
+                    }
+                }
             }
             return false;
         }
@@ -917,10 +1292,10 @@ namespace VRMultiplayer.Constructor
                 return false;
             }
 
-            if (!allowEmpty && Layout.Count == 0)
+            if (!allowEmpty && Layout.Count == 0 && Layout.FreeCount == 0)
             {
                 var onDisk = MapLayout.Load(mapName);
-                if (onDisk != null && onDisk.Count > 0)
+                if (onDisk != null && (onDisk.Count > 0 || onDisk.FreeCount > 0))
                 {
                     Debug.LogWarning($"[Constructor] BOS harita kaydedilmedi: '{mapName}' diskte " +
                                      $"{onDisk.Count} prop tutuyor. Oturum bos basladiysa dosya " +

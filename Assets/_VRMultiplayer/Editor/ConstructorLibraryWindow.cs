@@ -239,7 +239,7 @@ namespace VRMultiplayer.EditorTools
 
                     EditorGUILayout.LabelField(FootprintText(p), GUILayout.Width(150f));
 
-                    bool free = GUILayout.Toggle(p.freeRotation, "15°", "Button", GUILayout.Width(40f));
+                    bool free = GUILayout.Toggle(p.freeRotation, "5°", "Button", GUILayout.Width(40f));
                     if (free != p.freeRotation) { p.freeRotation = free; Save(); }
 
                     bool fit = GUILayout.Toggle(p.fitToFootprint, "fit", "Button", GUILayout.Width(40f));
