@@ -42,19 +42,36 @@ namespace VRMultiplayer.UI
             { WeaponCategory.Heavy, WeaponCategory.Pistol, WeaponCategory.Grenade };
         static readonly string[] SlotLabel = { "HEAVY", "PISTOL", "GRENADE" };
 
+        // ESIK ACISI ILE beltOffset BIRBIRINE BAGLI — birini degistiren otekini de kontrol
+        // etmeli. Kemerin OTURDUGU aci offset'ten cikar: atan(|y| / z).
+        //
+        //   varsayilan (-0.44, 0.21) -> atan(0.44/0.21) ≈ 64 derece, kafadan 0.49 m
+        //
+        // Esik 58 secildi: kemer acildigi anda bakisin ~6 derece altinda belirir (ust kenari
+        // zaten bakis hizasinda), birkac derece daha egilince tam ortaya oturur. Aradaki fark
+        // BILEREK kucuk — 30 derecelik esikle kemer 54 derecede duruyordu, yani aciliyor ama
+        // gorusun cok altinda kaliyordu; kullanicinin bildirdigi iki sikayet de buydu.
+        //
+        // GEOMETRI INATCIDIR: "govdeye yakin" (kucuk z) + "bel hizasi" (buyuk |y|) zorunlu
+        // olarak DIK bir aci verir. z'yi buyutmeden esigi 40'lara cekmek ise yaramaz, menu
+        // yine gorusun altinda kalir.
         [Header("Acilma — kafa egme")]
-        [Tooltip("Kafa bu aciDAN fazla asagi egilince kemer acilir (derece, 0 = duz ileri).")]
-        public float openPitchDegrees = 30f;
-        [Tooltip("Kafa bu acinin ustune cikinca kapanir. openPitch'ten KUCUK olmali (histerezis).")]
-        public float closePitchDegrees = 20f;
+        [Tooltip("Kafa bu aciDAN fazla asagi egilince kemer acilir (derece, 0 = duz ileri). " +
+                 "58 = 'gercekten asagi bakmak'; kaza ile acilmaz. Degistirirsen beltOffset'in " +
+                 "acisini (atan(|y|/z)) da yakin tut, yoksa menu goruse girmez.")]
+        public float openPitchDegrees = 58f;
+        [Tooltip("Kafa bu acinin ustune cikinca kapanir. openPitch'ten KUCUK olmali (histerezis). " +
+                 "16 derecelik bant: uzanip kavrarken kafa biraz oynasa da kemer kacmaz.")]
+        public float closePitchDegrees = 42f;
 
         // Konum / aralik / yazi Play'de CANLI degisir (her kare uygulanir). Halkanin yaricapi
         // ve kalinligi mesh'e islendigi icin ilk acilista okunur — onlari degistirdikten sonra
         // Play'i yeniden baslatmak gerekir.
         [Header("Yerlesim (Play'de canli ayarlanir)")]
         [Tooltip("Kemerin KAFAYA gore konumu (metre): x=saga, y=asagi/yukari, z=ileri. " +
-                 "Varsayilan bel hizasi: goruse girmez, el rahat uzanir.")]
-        public Vector3 beltOffset = new Vector3(0f, -0.52f, 0.38f);
+                 "Varsayilan gogus-bel arasi, GOVDEYE YAKIN: elin dogal olarak durdugu yer. " +
+                 "z'yi kucultmek kemeri govdeye yapistirir, buyutmek havaya iter.")]
+        public Vector3 beltOffset = new Vector3(0f, -0.44f, 0.21f);
         [Tooltip("Halka merkezleri arasi mesafe (metre).")]
         public float slotSpacing = 0.17f;
         [Tooltip("Halkanin dis yaricapi (metre).")]
