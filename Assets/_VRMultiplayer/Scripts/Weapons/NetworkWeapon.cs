@@ -143,7 +143,12 @@ namespace VRMultiplayer
         {
             _grab = GetComponent<GrabbableObject>();
             _damageFor = DamageFor;
+            // Namlu kilidi WeaponFx ile AYNI desende: prefabda yoksa calisma aninda eklenir,
+            // yani her silah (sonradan eklenenler dahil) kapali dogar ve tek tek prefab
+            // duzenlemek gerekmez. Prefabda ELLE eklenmisse ona dokunulmaz — uzun namlulu
+            // silahin ayarlanmis barrelBackDistance'i korunsun.
             _muzzleBlock = GetComponent<MuzzleWallBlock>();
+            if (_muzzleBlock == null) _muzzleBlock = gameObject.AddComponent<MuzzleWallBlock>();
             if (muzzle == null) muzzle = transform.Find("Muzzle");
             ApplyProfile();
             ResolveCombat();
