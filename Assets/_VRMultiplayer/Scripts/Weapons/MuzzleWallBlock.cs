@@ -42,9 +42,22 @@ namespace VRMultiplayer.Weapons
         [Tooltip("Namlunun onunde olmasi gereken en az bosluk (m). 0 = 'duvara dayali' olcumu kapali.")]
         public float minClearance = 0.05f;
 
-        [Tooltip("Kilit devreye girdigi AN kisa bir titresim. Oyuncu silahin bozuldugunu " +
-                 "sanmasin, 'buradan atamiyorum'u hissetsin.")]
+        [Tooltip("Kilit devreye girdigi AN kisa bir titresim (namlu duvara girer girmez, tetige " +
+                 "basmadan). Tetik cekilince verilen AYRI ve daha guclu titresim icin bkz. " +
+                 "NetworkWeapon.BlockedFire.")]
         public bool hapticOnBlock = true;
+
+        [Tooltip("Namlunun duvara girdigi noktada kirmizi uyari halkasi. Duvarin OYUNCU " +
+                 "tarafindaki yuzune konur ve geometrinin ustune cizilir, yani namlu tamamen " +
+                 "icerideyken bile gorunur.")]
+        public bool showBlockMarker = true;
+
+        [Tooltip("Kilitliyken lazer nisani sonsun. Kilitli silahin hala nisan gostermesi " +
+                 "'ates edebilirim' yanilgisi veriyor.")]
+        public bool suppressLaser = true;
+
+        [Tooltip("Uyari halkasinin capi (m).")]
+        public float markerSize = 0.05f;
 
         [Tooltip("Kac karede bir olculur. 1 = her kare. Silah sayisi arttikca 2 yapilabilir; " +
                  "20 ms'lik gecikme tarama hilesine yetmez.")]
@@ -52,6 +65,13 @@ namespace VRMultiplayer.Weapons
 
         /// <summary>Su an ates KILITLI mi? NetworkWeapon her karede bunu okur.</summary>
         public bool IsBlocked { get; private set; }
+
+        /// <summary>Namlunun duvara girdigi nokta (duvarin oyuncu tarafindaki yuzu).
+        /// Yalnizca <see cref="IsBlocked"/> true iken anlamli.</summary>
+        public Vector3 BlockPoint { get; private set; }
+
+        /// <summary>Uyari halkasinin rengi — klasik "yasak" kirmizisi.</summary>
+        static readonly Color MarkerColor = new Color(1f, 0.15f, 0.12f, 0.85f);
 
         /// <summary>Ayni anda degerlendirilen collider tavani (namlu ucu kuresi cok kucuk).</summary>
         const int MaxOverlap = 8;
@@ -61,6 +81,8 @@ namespace VRMultiplayer.Weapons
 
         NetworkWeapon _weapon;
         GrabbableObject _grab;
+        UI.LaserSight _laser;
+        Transform _marker;
         bool _prevBlocked;
         int _frame;
 
@@ -72,15 +94,27 @@ namespace VRMultiplayer.Weapons
 
         void Update()
         {
-            // Yerde duran silah icin olcmeye gerek yok.
+            // Yerde duran silah icin olcmeye gerek yok. Ama geri bildirimleri KAPATMAK gerekir:
+            // namlusu duvardayken birakilan silahin halkasi sahnede asili kalir, lazeri de
+            // sonuk dogar.
             if (_grab == null || !_grab.IsHeld)
             {
                 IsBlocked = false;
                 _prevBlocked = false;
+                ApplyLaser(false);
+                ApplyMarker(false);
                 return;
             }
 
-            if (checkEveryNthFrame > 1 && (++_frame % checkEveryNthFrame) != 0) return;
+            // Olcum throttle'lanabilir; halka ve lazer HER kare guncellenir, yoksa isaret
+            // silahin arkasindan seke seke gelir.
+            if (checkEveryNthFrame > 1 && (++_frame % checkEveryNthFrame) != 0)
+            {
+                bool held = HoldingLocally();
+                ApplyLaser(IsBlocked && held);
+                ApplyMarker(IsBlocked && held);
+                return;
+            }
 
             // DIKKAT: bu HER kopyada calisir, yalnizca tutan istemcide degil. Sunucudaki kopya
             // da olcsun diye boyle: FireServerRpc otoriteyi buradan okur ve sunucunun KENDI
@@ -89,11 +123,67 @@ namespace VRMultiplayer.Weapons
             _weapon.GetAimRay(out Vector3 origin, out Vector3 dir);
             IsBlocked = Evaluate(origin, dir);
 
-            // Titresim SADECE silahi fiilen tutan oyuncuya. Bu kontrol olmasaydi host, karsi
-            // takimdan biri namlusunu duvara soktugunda kendi kumandasini titretirdi.
-            if (IsBlocked && !_prevBlocked && hapticOnBlock && HoldingLocally())
+            // Geri bildirimlerin TAMAMI sadece silahi fiilen tutan oyuncuya. Bu kontrol
+            // olmasaydi host, karsi takimdan biri namlusunu duvara soktugunda kendi kumandasini
+            // titretir ve kendi ekraninda halka gorurdu.
+            bool mine = HoldingLocally();
+
+            if (IsBlocked && !_prevBlocked && hapticOnBlock && mine)
                 BuzzHolder();
+
+            ApplyLaser(IsBlocked && mine);
+            ApplyMarker(IsBlocked && mine);
+
             _prevBlocked = IsBlocked;
+        }
+
+        void ApplyLaser(bool blocked)
+        {
+            if (!suppressLaser) return;
+            if (_laser == null) _laser = GetComponent<UI.LaserSight>();
+            // Lazer spawn'da WeaponLaserBinder tarafindan ekleniyor; ilk karelerde henuz
+            // olmayabilir, o yuzden her seferinde arayip null'a tahammul ediyoruz.
+            if (_laser != null) _laser.Suppressed = blocked;
+        }
+
+        void ApplyMarker(bool blocked)
+        {
+            if (!showBlockMarker)
+            {
+                if (_marker != null) _marker.gameObject.SetActive(false);
+                return;
+            }
+
+            if (!blocked)
+            {
+                if (_marker != null && _marker.gameObject.activeSelf)
+                    _marker.gameObject.SetActive(false);
+                return;
+            }
+
+            if (_marker == null) BuildMarker();
+            if (!_marker.gameObject.activeSelf) _marker.gameObject.SetActive(true);
+
+            // Kameraya donuk dursun: halka egik bir duvarda elips gibi gorunmesin, her acidan
+            // ayni okunsun. Duvarin normaline dikmek daha "fiziksel" olurdu ama tam tepeden
+            // bakildiginda cizgiye donerdi.
+            var cam = Camera.main;
+            _marker.position = BlockPoint;
+            if (cam != null)
+                _marker.rotation = Quaternion.LookRotation(BlockPoint - cam.transform.position, Vector3.up);
+        }
+
+        void BuildMarker()
+        {
+            var go = new GameObject("~NamluKilitIsareti");
+            _marker = go.transform;
+
+            // ArcMesh + overlay materyal: ikisi de UITheme'de hazir. Overlay renderQueue'su
+            // halkanin duvarin ICINDEN de gorunmesini saglar — namlu tamamen gomuluyken
+            // isaret duvarin arkasinda kalsaydi hicbir ise yaramazdi.
+            var mesh = UI.UITheme.ArcMesh(0.34f, 0.5f, 0f, 360f, 24);
+            var ring = UI.UITheme.MakeShape(_marker, "Halka", mesh, MarkerColor, 4000);
+            ring.localScale = Vector3.one * markerSize;
         }
 
         bool HoldingLocally()
@@ -102,39 +192,60 @@ namespace VRMultiplayer.Weapons
             return nm != null && _grab.HolderClientId == nm.LocalClientId;
         }
 
-        /// <summary>Verilen namlu ucu + yon icin kilit gerekli mi? Sunucu da AYNI metodu
-        /// cagirir — istemci ile sunucu farkli geometri kullansaydi mesru atislar yenirdi.</summary>
+        /// <summary>Verilen namlu ucu + yon icin kilit gerekli mi? Yan urun olarak
+        /// <see cref="BlockPoint"/>'i de doldurur (uyari halkasinin duracagi yer).
+        /// Sunucudaki kopya da bunu Update'ten cagirir ve FireServerRpc sonucu oradan okur —
+        /// istemci ile sunucu farkli geometri kullansaydi mesru atislar yenirdi.</summary>
         public bool Evaluate(Vector3 origin, Vector3 dir)
         {
-            // 1) Namlu ucu bir duvarin ICINDE mi?
+            // 1) Namlu ucu bir duvarin ICINDE mi? Isaret namlu ucunun kendisi.
             int n = Physics.OverlapSphereNonAlloc(origin, muzzleRadius, _overlap, solidMask,
                 QueryTriggerInteraction.Ignore);
             for (int i = 0; i < n; i++)
-                if (WorldSolids.IsSolid(_overlap[i], transform)) return true;
+                if (WorldSolids.IsSolid(_overlap[i], transform)) { BlockPoint = origin; return true; }
 
             // 2) Namlu ucu ile silah govdesi arasinda duvar var mi? (asil hile)
-            // Isini GERIYE degil, geriden ILERI atiyoruz: RaycastNonAlloc sirali dondurmez,
-            // ama tek bir kati temas bile yeter — yon secimi sadece okunurluk icin.
+            // Isini GERIYE degil, geriden ILERI atiyoruz: boylece bulunan EN YAKIN temas
+            // duvarin OYUNCU TARAFINDAKI yuzu olur — uyari halkasi da orada durmali, yoksa
+            // duvarin arkasinda kalir ve oyuncu hicbir sey gormez.
             if (barrelBackDistance > 0f)
             {
                 Vector3 back = origin - dir * barrelBackDistance;
-                if (AnySolidAlong(back, dir, barrelBackDistance)) return true;
+                if (NearestSolidAlong(back, dir, barrelBackDistance, out Vector3 hit))
+                { BlockPoint = hit; return true; }
             }
 
             // 3) Namlu duvara DAYALI mi? (onunde nefes alacak kadar bosluk yok)
-            if (minClearance > 0f && AnySolidAlong(origin, dir, minClearance)) return true;
+            if (minClearance > 0f && NearestSolidAlong(origin, dir, minClearance, out Vector3 ahead))
+            { BlockPoint = ahead; return true; }
 
             return false;
         }
 
-        /// <summary>Verilen isin parcasi uzerinde KATI geometri var mi?</summary>
-        bool AnySolidAlong(Vector3 from, Vector3 dir, float distance)
+        /// <summary>Isin parcasi uzerindeki EN YAKIN kati temas. RaycastNonAlloc mesafeye gore
+        /// SIRALAMAZ, o yuzden en yakini elle ariyoruz (SpawnRouteGuide'da ayni desen).</summary>
+        bool NearestSolidAlong(Vector3 from, Vector3 dir, float distance, out Vector3 point)
         {
             int n = Physics.RaycastNonAlloc(from, dir, _rayHits, distance, solidMask,
                 QueryTriggerInteraction.Ignore);
+
+            float best = float.PositiveInfinity;
+            point = from;
             for (int i = 0; i < n; i++)
-                if (WorldSolids.IsSolid(_rayHits[i].collider, transform)) return true;
-            return false;
+            {
+                if (!WorldSolids.IsSolid(_rayHits[i].collider, transform)) continue;
+                if (_rayHits[i].distance >= best) continue;
+                best = _rayHits[i].distance;
+                point = _rayHits[i].point;
+            }
+            return !float.IsPositiveInfinity(best);
+        }
+
+        void OnDestroy()
+        {
+            // Halka silahin ALTINDA degil, sahne kokunde duruyor (duvara yapissin diye) —
+            // silah yok edilince onu kimse toplamaz.
+            if (_marker != null) Destroy(_marker.gameObject);
         }
 
         void BuzzHolder()

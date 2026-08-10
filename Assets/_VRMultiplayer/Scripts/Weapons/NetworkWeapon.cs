@@ -93,6 +93,7 @@ namespace VRMultiplayer
         readonly WeaponReloadGesture _reloadGesture = new WeaponReloadGesture();
         float _nextReloadRequest;
         bool _dryFired;
+        bool _blockedFired;   // namlu-duvarda geri bildirimi bu tetik cekisinde verildi mi
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         /// <summary>Dev harness kancasi (yalnizca editor/development build). PC'de hicbir XR
@@ -354,12 +355,19 @@ namespace VRMultiplayer
 
             // Namlu duvarin icinde/arkasinda: tetik OLU. Kuyruktaki burst da kesilir — namluyu
             // duvara sokunca patlayan mermilerin gerisi ic taraftan cikmasin. Buradaki kontrol
-            // HIS icindir (tetik cekilir, hicbir sey olmaz); otorite FireServerRpc'de.
+            // HIS icindir; otorite FireServerRpc'de.
             if (_muzzleBlock != null && _muzzleBlock.IsBlocked)
             {
+                // Tetige BASILDIGI anda geri bildirim sart: kilit tamamen sessiz kalirsa
+                // playtester silahin BOZULDUGUNU sanar (ilk surumde tam da oyleydi — bu blok
+                // wantsFire'i kuru tetik dalindan ONCE oldurdugu icin klik sesi bile cikmiyordu).
+                // Tetik basina BIR kez: auto'da parmak basili dururken kumanda surekli titremesin
+                // (kuru tetikteki _dryFired ile ayni desen).
+                if (wantsFire && !_blockedFired) { BlockedFire(firedDev); _blockedFired = true; }
                 wantsFire = false;
                 _burstRemaining = 0;
             }
+            if (!trig) _blockedFired = false;
 
             // Bos sarjor / dolum sirasinda tetik. Buradaki kontrol YALNIZCA his icindir —
             // otorite FireServerRpc'de. Kuru tetik titresimi tetigin her cekilisinde bir kez
@@ -814,6 +822,19 @@ namespace VRMultiplayer
         void DryFire(InputDevice dev)
         {
             if (dev.isValid) dev.SendHapticImpulse(0, 0.25f, 0.03f);
+            Vector3 pos = muzzle != null ? muzzle.position : transform.position;
+            WeaponAudioPlayer.PlayAt(_cv.dryFireClip, pos, _cv.dryFireVolume,
+                1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance));
+        }
+
+        /// <summary>Namlu duvardayken tetige basildi. SES kuru tetikle AYNI klik — oyuncu icin
+        /// ikisi de "cektim, cikmadi" ve yeni bir ses varligi gerektirmez. TITRESIM ise belirgin
+        /// olarak daha guclu/uzun: iki durumu ayirt eden tek kanal bu, cunku bos sarjorde de
+        /// ayni klik duyuluyor. Kisa cift-vurus yerine tek uzun vurus — SendHapticImpulse
+        /// tek darbe alir, cift vurus icin coroutine gerekirdi ve VR'da fark edilmezdi.</summary>
+        void BlockedFire(InputDevice dev)
+        {
+            if (dev.isValid) dev.SendHapticImpulse(0, 0.6f, 0.12f);
             Vector3 pos = muzzle != null ? muzzle.position : transform.position;
             WeaponAudioPlayer.PlayAt(_cv.dryFireClip, pos, _cv.dryFireVolume,
                 1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance));
