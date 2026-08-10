@@ -16,8 +16,8 @@ namespace VRMultiplayer
         /// kaldirir: proje neredeyse tum tuslari kullandigi icin insa modu ayni tuslari yeniden
         /// anlamlandirmak ZORUNDA — tetik hem ates hem "koy", grip hem tutma hem palet olamaz.
         ///
-        /// Okuyan taraflar: NetworkWeapon (tetik), HandGrabber (el girisleri), WeaponSelectorUI
-        /// (silah carki). Yeni bir oyun girisi eklendiginde burayi da kontrol etmeli.
+        /// Okuyan taraflar: NetworkWeapon (tetik), HandGrabber (el girisleri), WeaponBeltUI
+        /// (kemer HUD'u). Yeni bir oyun girisi eklendiginde burayi da kontrol etmeli.
         /// </summary>
         public static bool GameplayInputSuppressed { get; set; }
 

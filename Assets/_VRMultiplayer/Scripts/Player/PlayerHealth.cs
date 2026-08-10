@@ -178,7 +178,7 @@ namespace VRMultiplayer
 
             // Elinde ne varsa YOK OLUR (ekip karari). Eskiden yalnizca BIRAKILIYORDU
             // (ServerReleaseAllHeldBy); birakilan silah kinematik govde olarak sahnede kalir ve
-            // havada asili donabiliyordu. Dirilen oyuncu carktan kendi silahini secer.
+            // havada asili donabiliyordu. Dirilen oyuncu kemerden kendi silahini secer.
             DeathDisarm.DisarmHolder(OwnerClientId);
         }
 

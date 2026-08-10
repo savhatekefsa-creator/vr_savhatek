@@ -39,6 +39,8 @@ namespace VRMultiplayer
             public float supportSince;         // time the support grip engaged (grace before auto-release)
             public float requestedAt;       // when the grab RPC was sent
             public bool confirmed;          // server confirmed WE hold it
+            public bool pendingNeedsGrip;   // yoldaki equip KEMERDEN geldi: silah gelene kadar
+                                            // (~1 RTT) grip basili kalmali, yoksa iptal
             public Vector3 posOffset;       // grab-moment offset, hand-local
             public Quaternion rotOffset;
             public float blendUntil;        // pose-blend window end (0 = not blending)
@@ -141,9 +143,35 @@ namespace VRMultiplayer
         public Transform LeftAnchor => leftHand;
         public Transform RightAnchor => rightHand;
 
-        // ─── Silah secici kancasi (VRMultiplayer.UI.WeaponSelectorUI) ────────────────────
-        // Galeriden secilen silah ele BURADAN girer. Yakinlik ile kapma yolu (TryGrab) hic
-        // degismedi — iki yol da ayni Adopt() govdesini kullanir.
+        // ─── Kemer HUD kancasi (VRMultiplayer.UI.WeaponBeltUI) ───────────────────────────
+        // Kemerdeki yuvadan kavranan silah ele BURADAN girer. Yakinlik ile kapma yolu
+        // (TryGrab) hic degismedi — iki yol da ayni Adopt() govdesini kullanir.
+
+        /// <summary>Kemer HUD'u: BU EL yuvadaki silahi kavradi — silah dogrudan bu ele dogar.
+        ///
+        /// <see cref="RequestWeaponSwap"/>'tan ayri duruyor cunku o eli KENDI seciyor ("elinde
+        /// olan hangisiyse o, yoksa sag") — kemerde el zaten belli: hangisi uzandiysa o. Sag-el
+        /// varsayilani, sol eliyle tabancaya uzanan oyuncunun silahini sag ele dogururdu.
+        ///
+        /// Silah ~1 RTT sonra gelir; o ana kadar grip BIRAKILIRSA equip iptal edilir
+        /// (<see cref="pendingNeedsGrip"/>) — "tutarsan elinde kalir" kurali, yuvaya dokunup
+        /// tusu hemen birakan oyuncuya silah vermemeli. Sessiz false: el dolu / kalip kayitsiz /
+        /// sol el yasagi.</summary>
+        public bool EquipIntoHand(byte handIndex, GameObject prefab, int ammo, int spares)
+        {
+            if (!IsOwner || prefab == null) return false;
+            if (WeaponPrefabRegistrar.FindByName(prefab.name) != prefab) return false;
+
+            var h = handIndex == 1 ? _right : _left;
+            if (h == null || h.held != null || h.supporting != null || h.pinFrom != null) return false;
+
+            // GECICI SOL EL KURALI: buyuk silah SOL ele ANA olarak giremez (bkz. asagidaki bolge).
+            if (handIndex == 0 && LeftPrimaryBannedPrefab(prefab)) { RejectBuzz(h); return false; }
+
+            h.pendingNeedsGrip = true;
+            SwapWeaponServerRpc(default, prefab.name, handIndex, ammo, spares);
+            return true;
+        }
 
         /// <summary>Owner-side: trade <paramref name="current"/> (may be null) for a fresh instance
         /// of <paramref name="prefab"/>. The old one is DESPAWNED — that is the "goes into the bag"
@@ -160,7 +188,7 @@ namespace VRMultiplayer
         {
             if (!IsOwner) return;
 
-            // Pimi cekilmis bomba cantaya GERI KONAMAZ. Bu blok olmasa silah carkindan baska bir
+            // Pimi cekilmis bomba cantaya GERI KONAMAZ. Bu blok olmasa kemerden baska bir
             // sey secmek canli bombayi despawn edip "sondururdu" — pim sisteminin butun anlamini
             // bosa cikaran kacamak. Once firlatmak zorundasin.
             if (current != null)
@@ -181,7 +209,7 @@ namespace VRMultiplayer
 
             // Yenisi ESKISINI TUTAN ele gitmeli. Onceden kosulsuz "_right ?? _left" secildigi
             // icin sol eldeki silah takasta sag ele isiniyordu; sag el ayrica doluysa equip
-            // atlanip oyuncu iki silahsiz kaliyordu. current yoksa (bos elle galeri secimi)
+            // atlanip oyuncu iki silahsiz kaliyordu. current yoksa (bos elle kemer secimi)
             // BOS bir el tercih edilir. Secim, asagidaki lokal birakma blogundan ONCE yapilmali
             // (blok held referanslarini temizler).
             HandState h = null;
@@ -230,7 +258,7 @@ namespace VRMultiplayer
         {
             ulong sender = p.Receive.SenderClientId;
 
-            // OLU OYUNCU CARKTAN DA SILAH ALAMAZ. Grab RPC'sine engel koymustuk ama cark secici
+            // OLU OYUNCU KEMERDEN DE SILAH ALAMAZ. Grab RPC'sine engel koymustuk ama kemer HUD'u
             // AYRI yoldan (bu RPC) silah URETIYOR — o kapiyi da kapatiyoruz. Dirilene kadar hicbir
             // silah edinemez; tek yapabildigi dogum bolgesine yurumek.
             if (DeathDisarm.IsClientDead(sender)) return;
@@ -259,7 +287,7 @@ namespace VRMultiplayer
 
             // Silah cantaya kac mermiyle girdiyse o kadarla ciksin. Spawn'dan SONRA yaziyoruz:
             // NetworkWeapon.OnNetworkSpawn sarjoru doldurur, biz onun uzerine gercek degeri
-            // koyariz. Yoksa galeriyi acip kapamak bedava sarjor olurdu.
+            // koyariz. Yoksa kemerden alip birakmak bedava sarjor olurdu.
             var nw = go.GetComponent<NetworkWeapon>();
             if (nw != null) nw.SetAmmoStateServer(ammo, spares);
 
@@ -283,6 +311,18 @@ namespace VRMultiplayer
             }
 
             var h = hand == 1 ? _right : _left;
+
+            // KEMERDEN kavrama: silah yola cikarken grip basiliydi, ama cevap ~1 RTT sonra
+            // geliyor. Bu arada tus birakildiysa oyuncu o silahi ISTEMEDI — iade et. Bayrak
+            // her cevapta temizlenir (yolda kaybolan istek eli kilitli birakmasin).
+            bool needsGrip = h != null && h.pendingNeedsGrip;
+            if (h != null) h.pendingNeedsGrip = false;
+            if (needsGrip && !h.prevGrip)
+            {
+                CancelEquipServerRpc(r);
+                return;
+            }
+
             if (g == null || h == null || h.held != null)
             {
                 // El bu arada dolmus (ya da hedef kullanilamaz) -> sunucunun spawn'ladigi silah
@@ -594,7 +634,7 @@ namespace VRMultiplayer
                      || IsPistolName(g.name));
         }
 
-        /// <summary>Ayni kural, galeriden secilen PREFAB icin (ortada instance yokken).</summary>
+        /// <summary>Ayni kural, kemerden secilen PREFAB icin (ortada instance yokken).</summary>
         static bool LeftPrimaryBannedPrefab(GameObject prefab)
         {
             if (prefab == null) return false;
@@ -639,6 +679,16 @@ namespace VRMultiplayer
                     return;
                 }
             }
+
+            // KEMER HUD'u: kafa asagi egikken bir yuvanin uzerine uzanip grip'e basmak, o
+            // yuvadaki silahi dogrudan bu ele verir — yerden alir gibi.
+            //
+            // SIRA ONEMLI. Pim cekmeden SONRA (canli bomba her seyin onunde), destek elinden
+            // ONCE bakilir: destek dali grabRadius*1.5 (~45 cm) ile calisiyor ve bel hizasindaki
+            // kemere uzanan eli sik sik "destek eli" sanardi. Kemer ise dar bir yaricapla
+            // (WeaponBeltUI.hoverRadius, ~11 cm) yalnizca gercekten halkanin icine giren eli
+            // sahiplenir; bos yuvaya uzanmak eli SAHIPLENMEZ, normal kapma islemeye devam eder.
+            if (UI.WeaponBeltUI.TryGrabFromBelt(this, h.index, h.anchor.position)) return;
 
             // If my OTHER hand already holds a snap-style weapon and this hand squeezes near
             // it, this hand becomes the SUPPORT hand (two-handed ready stance) instead of
@@ -694,6 +744,7 @@ namespace VRMultiplayer
             h.held = g;
             h.requestedAt = Time.time;
             h.confirmed = false;
+            h.pendingNeedsGrip = false;
             // Grab-moment lookup only (the binder attached WeaponGrip at spawn); a weapon
             // without a profile keeps the legacy pivot-snap path bit-for-bit.
             h.grip = g.GetComponent<WeaponGrip>();

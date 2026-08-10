@@ -18,7 +18,7 @@ namespace VRMultiplayer.UI
     ///    oncesi LanBootstrap yalnizca B kullanir, tetik bostadir — imlece verilebilir.
     ///
     /// Sahneye/prefaba DOKUNMAZ: kendini <see cref="RuntimeInitializeOnLoadMethod"/> ile kurar
-    /// (ayni desen: <see cref="WeaponSelectorUI"/>, <see cref="SingleAudioListener"/>).
+    /// (ayni desen: <see cref="WeaponBeltUI"/>, <see cref="SingleAudioListener"/>).
     ///
     /// PANEL DUNYAYA SABIT, kafaya kilitli DEGIL — lazerle nisan alinan bir yuzey her kare
     /// kafayla birlikte kayarsa tusa basmak imkansiz olur. Bunun yerine TEMBEL TAKIP: panel

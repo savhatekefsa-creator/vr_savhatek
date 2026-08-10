@@ -10,7 +10,7 @@ namespace VRMultiplayer
     ///
     /// NEDEN DESPAWN, NEDEN "BIRAK" DEGIL: birakilan silah sahnede kinematik govde olarak kalir
     /// ve HAVADA ASILI donabiliyordu (kullanicinin bildirdigi bug). Ayrica ekip karari: "oldugum
-    /// anda elimdeki silah yok olacak" — olu oyuncu dirilince carktan kendi secer.
+    /// anda elimdeki silah yok olacak" — olu oyuncu dirilince kemerden kendi secer.
     ///
     /// NEDEN SUNUCU: istemci-yerel bir cozumde (eski DeathWeaponHandler) olum ani ile el-silah
     /// baginin kopmasi yarisiyordu; kaybedince silah "birakilmis ama firlatilmamis" halde
@@ -18,7 +18,7 @@ namespace VRMultiplayer
     ///
     /// Bu, "olunce hicbir eylem yapamazsin" kuralinin bir ayagi: silah yoksa ates de yok.
     /// Diger ayaklar: ates (NetworkWeapon.HolderIsDead), kapma (GrabbableObject grab RPC) ve
-    /// cark secici (HandGrabber swap RPC) — ikisi de <see cref="IsClientDead"/> sorar.
+    /// kemer HUD'u (HandGrabber swap RPC) — ikisi de <see cref="IsClientDead"/> sorar.
     /// Fiziksel hareket serbest: olu oyuncu dogum bolgesine yuruyebilir.
     /// </summary>
     public static class DeathDisarm
