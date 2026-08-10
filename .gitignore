@@ -93,8 +93,13 @@ unused_textures_report.csv
 # Kayitli haritalar da ayni sekilde yerel calisma verisi: Current.json canli uzerinde
 # calisilan harita, Test.json ise menu 27 ile her an yeniden uretilebilir. Ustelik ikisi de
 # yazildigi odanin planini ICINDE tasir, yani baskasinin odasina ait veriyi taşırlar.
-[Aa]ssets/_VRMultiplayer/Maps/
-[Aa]ssets/_VRMultiplayer/Maps.meta
+# Haritalar varsayilan olarak YEREL: her insa oturumu dosyayi yeniden yaziyor ve
+# deneme haritalari kimseyi ilgilendirmiyor. Ama PAYLASILAN bir fiziksel mekanin
+# haritasi takim varligidir — tag yerlesimini de icinde tasidigi icin (MapLayout.tags)
+# onu ceken herkes ayni odada ayni cerceveyle acilir. Oyle olanlar tek tek muaf tutulur.
+[Aa]ssets/_VRMultiplayer/Maps/*
+![Aa]ssets/_VRMultiplayer/Maps/HARITA2.json
+![Aa]ssets/_VRMultiplayer/Maps/HARITA2.json.meta
 
 # Sahne/plan yedekleri: bir seyi silmeden once alinan geri donus noktalari. Assets'in
 # DISINDA duruyorlar ki Unity onlari ikinci bir sahne diye ice aktarmasin, ve surumleme
