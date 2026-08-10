@@ -138,6 +138,14 @@ namespace VRMultiplayer.UI
         Material _lensMat;
         bool _active;
 
+        // Duvar emniyeti (bkz. ClampForwardOffset/SetBlocked)
+        bool _blockedNow;
+        int _savedMask;
+        CameraClearFlags _savedClear;
+        Color _savedBg;
+        static readonly RaycastHit[] _rayHits = new RaycastHit[8];
+        static readonly Collider[] _touchHits = new Collider[4];
+
         public void Init(GrabbableObject g, string[] glassNames, string matHint, string anchorName, float fov)
         {
             _grab = g;
@@ -282,13 +290,19 @@ namespace VRMultiplayer.UI
                 if (_weapon != null)
                 {
                     _weapon.GetAimRay(out camPos, out camDir);   // Fire() ile ayni is
-                    camPos += camDir * camForwardOffset;
                 }
                 else
                 {
-                    camPos = (_camAnchor != null ? _camAnchor.position : lensWorld) + barrelWorld * camForwardOffset;
+                    camPos = _camAnchor != null ? _camAnchor.position : lensWorld;
                     camDir = barrelWorld;
                 }
+                // DUVAR EMNIYETI: kamera namlunun ONUNDE durdugu icin silah duvara dayaninca
+                // kamera duvarin icine/otesine dusuyor, yakin duvar da near clip'e takilip hic
+                // cizilmiyordu — durbun duvarin ARKASINI gosteriyordu. Ileri kayma onundeki
+                // engele gore kisitlanir; near clip payina bile yer yoksa mercek KARARIR
+                // (gercekte de duvara dayali durbunden bir sey gorunmez).
+                camPos += camDir * ClampForwardOffset(camPos, camDir, out bool blocked);
+                SetBlocked(blocked);
                 _cam.transform.SetPositionAndRotation(camPos, Quaternion.LookRotation(camDir, up));
             }
 
@@ -319,6 +333,57 @@ namespace VRMultiplayer.UI
         /// MERKEZDE durur — merkez zaten merminin gidecegi yer. (Onceden isabet noktasi hesaplanip
         /// isaret oraya kaydiriliyordu; kamera mercekte oldugu icin o nokta mesafeyle oynuyor ve
         /// isaret surekli titriyordu.)</summary>
+        /// <summary>Kameranin namlu ucundan ileri kaymasini onundeki engele gore kisitlar.
+        /// blocked = kameraya near clip payi kadar bile yer yok (mercek karartilmali).
+        /// Namlu ucu bir kolayderin ICINDEyse ileri isin engeli goremez (Unity icten vurusu
+        /// raporlamaz) — o durum ufak kure temasiyla yakalanir.</summary>
+        float ClampForwardOffset(Vector3 origin, Vector3 dir, out bool blocked)
+        {
+            blocked = false;
+            float near = _cam.nearClipPlane;
+            float offset = Mathf.Max(0f, camForwardOffset);
+
+            int t = Physics.OverlapSphereNonAlloc(origin, 0.01f, _touchHits,
+                                                  Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < t; i++)
+                if (!_touchHits[i].transform.IsChildOf(_grab.transform)) { blocked = true; return 0f; }
+
+            int n = Physics.RaycastNonAlloc(origin, dir, _rayHits, offset + near + 0.01f,
+                                            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+            {
+                var h = _rayHits[i];
+                if (h.collider.transform.IsChildOf(_grab.transform)) continue; // silahin kendi parcasi
+                float allow = h.distance - near - 0.005f;
+                if (allow < offset)
+                {
+                    offset = Mathf.Max(0f, allow);
+                    if (allow < 0f) blocked = true;
+                }
+            }
+            return offset;
+        }
+
+        /// <summary>Mercek karartma: duvara dayali durbun hicbir sey gormez. Kamera kapatilmaz
+        /// (RT'de bayat goruntu kalirdi) — bos maske + duz siyah zeminle SIYAH basilir.</summary>
+        void SetBlocked(bool b)
+        {
+            if (b == _blockedNow || _cam == null) return;
+            _blockedNow = b;
+            if (b)
+            {
+                _cam.cullingMask = 0;
+                _cam.clearFlags = CameraClearFlags.SolidColor;
+                _cam.backgroundColor = Color.black;
+            }
+            else
+            {
+                _cam.cullingMask = _savedMask;
+                _cam.clearFlags = _savedClear;
+                _cam.backgroundColor = _savedBg;
+            }
+        }
+
         void UpdateReticle()
         {
             if (_reticle == null) return;
@@ -344,8 +409,10 @@ namespace VRMultiplayer.UI
 
         void Activate()
         {
+            // Derinlik 24 bit: near clip duvar emniyeti icin 0.05'e indi; 16 bitte
+            // near/far orani bu kadar acilinca uzak nesnelerde z-catismasi baslardi.
             if (_rt == null)
-                _rt = new RenderTexture(rtSize, rtSize, 16) { name = "ScopeRT_" + _grab.name };
+                _rt = new RenderTexture(rtSize, rtSize, 24) { name = "ScopeRT_" + _grab.name };
 
             if (_cam == null)
             {
@@ -353,8 +420,13 @@ namespace VRMultiplayer.UI
                 go.transform.SetParent(transform, false);
                 _cam = go.AddComponent<Camera>();
                 _cam.targetTexture = _rt;
-                _cam.nearClipPlane = 0.3f;
+                // 0.05: dibine kadar yanasilan duvar bile cizilsin (0.3 iken 36 cm'den yakin
+                // duvarlar goruntuden dusuyor, durbun duvar arkasini gosteriyordu).
+                _cam.nearClipPlane = 0.05f;
                 _cam.farClipPlane = 200f;
+                _savedMask = _cam.cullingMask;
+                _savedClear = _cam.clearFlags;
+                _savedBg = _cam.backgroundColor;
                 var urp = _cam.GetUniversalAdditionalCameraData();
                 if (urp != null)
                 {

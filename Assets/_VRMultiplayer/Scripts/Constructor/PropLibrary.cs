@@ -69,7 +69,8 @@ namespace VRMultiplayer.Constructor
                  "kalir (ayak izi kasten mesh'ten kucuk olan agac/dogus halkasi gibi proplar icin).")]
         public bool fitToFootprint = true;
 
-        [Tooltip("Acik: 15 derece adimlarla doner. Kapali: yalnizca 90 derece.\n\n" +
+        [Tooltip("Acik: 5 derece adimlarla doner (stick basili tutulunca tekrar eder). " +
+                 "Kapali: yalnizca 90 derece.\n\n" +
                  "Doluluk her iki durumda da TAM: ara acida izgara, donmus dikdortgenin " +
                  "gercekten bastigi hucreleri kapatir (sinir kutusunun kosesi bos kalir), " +
                  "yani acili parcalarin yanina da insa edilebilir.")]
