@@ -24,8 +24,15 @@ namespace VRMultiplayer.UI
         /// <summary>Ikonun kenar uzunlugu (m). Degistirmek icin <see cref="SetSize"/>.</summary>
         public float size = 0.04f;
 
-        static readonly Color BodyColor  = new Color(1f, 0.72f, 0.05f, 1f);   // kehribar
-        static readonly Color GlyphColor = new Color(0.10f, 0.07f, 0.01f, 1f); // neredeyse siyah
+        // Kirmizi = "yasak", kehribar = "dikkat". Silah kilidi bir uyari degil bir ENGEL,
+        // rengi de onu soylemeli.
+        static readonly Color BodyColor = new Color(0.92f, 0.11f, 0.09f, 1f);
+
+        // Cerceve ve unlem BEYAZ. Kehribar govdede koyu simge dogru tercihti (kehribarin
+        // parlakligi yuksek, kontrast koyudan gelir) ama kirmizinin parlakligi dusuk: uc
+        // varyant yan yana basilip bakildi, kirmizi + koyu simge KOYU duvarda cerceveyi
+        // tamamen yutuyordu. Beyaz cerceve ikonu hem acik hem koyu zeminden ayiriyor.
+        static readonly Color GlyphColor = new Color(0.97f, 0.95f, 0.93f, 1f);
 
         /// <summary>Doku cozunurlugu. 128 bu olcekte (3-5 cm, ~0.5-1 m mesafe) fazlasiyla
         /// yeterli; kenar yumusatma dokuya islendigi icin MSAA'ya bagimli degiliz.</summary>
