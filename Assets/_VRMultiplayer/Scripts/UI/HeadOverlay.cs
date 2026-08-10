@@ -28,12 +28,13 @@ namespace VRMultiplayer.UI
         const float LayerGap = 0.01f;
 
         /// <summary>Katman sirasi — kucuk mesafe = goze yakin = daha ONDE:
-        /// <see cref="Veil"/> 0, <see cref="Blind"/> 1, <see cref="DamageFlash"/> 2,
-        /// <see cref="Vignette"/> 3.</summary>
-        public const int Veil = 0;        // olum/bekleme perdesi: hepsinin onunde
-        public const int Blind = 1;       // flash korlugu
-        public const int DamageFlash = 2; // hasar yonu flasi
-        public const int Vignette = 3;    // dusuk can vinyeti
+        /// <see cref="WallFade"/> 0, <see cref="Veil"/> 1, <see cref="Blind"/> 2,
+        /// <see cref="DamageFlash"/> 3, <see cref="Vignette"/> 4.</summary>
+        public const int WallFade = 0;    // duvar kararmasi: hile kapisi, hepsinin onunde
+        public const int Veil = 1;        // olum/bekleme perdesi
+        public const int Blind = 2;       // flash korlugu
+        public const int DamageFlash = 3; // hasar yonu flasi
+        public const int Vignette = 4;    // dusuk can vinyeti
 
         public static float Distance(int layer)
         {

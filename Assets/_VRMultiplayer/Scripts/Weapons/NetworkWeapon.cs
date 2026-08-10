@@ -29,6 +29,11 @@ namespace VRMultiplayer
         GrabbableObject _grab;
         WeaponGripProfile _profile;
         WeaponRecoil _recoil;
+
+        // Namlu duvarin icindeyken tetigi kilitleyen bilesen. Silahta YOKSA null kalir ve
+        // hicbir maliyeti olmaz (eski davranis birebir); varsa hem burada (his) hem
+        // FireServerRpc'de (otorite) sorulur.
+        MuzzleWallBlock _muzzleBlock;
         Vector3 _muzzleLocal;
         Vector3 _barrelLocal = Vector3.forward;
         float _nextFire;
@@ -88,6 +93,7 @@ namespace VRMultiplayer
         readonly WeaponReloadGesture _reloadGesture = new WeaponReloadGesture();
         float _nextReloadRequest;
         bool _dryFired;
+        bool _blockedFired;   // namlu-duvarda geri bildirimi bu tetik cekisinde verildi mi
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         /// <summary>Dev harness kancasi (yalnizca editor/development build). PC'de hicbir XR
@@ -138,6 +144,12 @@ namespace VRMultiplayer
         {
             _grab = GetComponent<GrabbableObject>();
             _damageFor = DamageFor;
+            // Namlu kilidi WeaponFx ile AYNI desende: prefabda yoksa calisma aninda eklenir,
+            // yani her silah (sonradan eklenenler dahil) kapali dogar ve tek tek prefab
+            // duzenlemek gerekmez. Prefabda ELLE eklenmisse ona dokunulmaz — uzun namlulu
+            // silahin ayarlanmis barrelBackDistance'i korunsun.
+            _muzzleBlock = GetComponent<MuzzleWallBlock>();
+            if (_muzzleBlock == null) _muzzleBlock = gameObject.AddComponent<MuzzleWallBlock>();
             if (muzzle == null) muzzle = transform.Find("Muzzle");
             ApplyProfile();
             ResolveCombat();
@@ -341,6 +353,22 @@ namespace VRMultiplayer
             // sessizce olu kalir, kuru tetik sesi bile cikmaz); otorite FireServerRpc'de.
             if (HolderIsDead()) { wantsFire = false; _burstRemaining = 0; }
 
+            // Namlu duvarin icinde/arkasinda: tetik OLU. Kuyruktaki burst da kesilir — namluyu
+            // duvara sokunca patlayan mermilerin gerisi ic taraftan cikmasin. Buradaki kontrol
+            // HIS icindir; otorite FireServerRpc'de.
+            if (_muzzleBlock != null && _muzzleBlock.IsBlocked)
+            {
+                // Tetige BASILDIGI anda geri bildirim sart: kilit tamamen sessiz kalirsa
+                // playtester silahin BOZULDUGUNU sanar (ilk surumde tam da oyleydi — bu blok
+                // wantsFire'i kuru tetik dalindan ONCE oldurdugu icin klik sesi bile cikmiyordu).
+                // Tetik basina BIR kez: auto'da parmak basili dururken kumanda surekli titremesin
+                // (kuru tetikteki _dryFired ile ayni desen).
+                if (wantsFire && !_blockedFired) { BlockedFire(firedDev); _blockedFired = true; }
+                wantsFire = false;
+                _burstRemaining = 0;
+            }
+            if (!trig) _blockedFired = false;
+
             // Bos sarjor / dolum sirasinda tetik. Buradaki kontrol YALNIZCA his icindir —
             // otorite FireServerRpc'de. Kuru tetik titresimi tetigin her cekilisinde bir kez
             // verilir; auto'da parmak basili dururken kumandayi surekli titretmemek icin.
@@ -530,6 +558,13 @@ namespace VRMultiplayer
             // cagirsin, bos sarjorle ya da dolum ortasinda atis cikmaz. Istemcideki ayni
             // kontrol sadece hisdir, guvenlik degil.
             if (UsesAmmo && (_ammo.Value <= 0 || IsReloading)) { LogReject("bos sarjor/dolum"); return; }
+
+            // NAMLU-DUVARDA OTORITESI. Istemcideki kilit yalnizca his: degistirilmis bir istemci
+            // IsBlocked'i gormezden gelip FireServerRpc'yi cagirabilir. Sunucu KENDI kopyasindan
+            // olcer (MuzzleWallBlock.Update sunucuda da calisir ve sunucunun replike transformunu
+            // okur), yani istemcinin gonderdigi origin'e hic guvenilmez. Kadans kovasindan ONCE:
+            // mesru bir sinir durumu yenirse oyuncu token da mermi de kaybetmesin.
+            if (_muzzleBlock != null && _muzzleBlock.IsBlocked) { LogReject("namlu duvarda"); return; }
 
             // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
             // FireServerRpc'yi her karede cagirsa da uzun-vadeli atis hizi config'in uzerine
@@ -787,6 +822,19 @@ namespace VRMultiplayer
         void DryFire(InputDevice dev)
         {
             if (dev.isValid) dev.SendHapticImpulse(0, 0.25f, 0.03f);
+            Vector3 pos = muzzle != null ? muzzle.position : transform.position;
+            WeaponAudioPlayer.PlayAt(_cv.dryFireClip, pos, _cv.dryFireVolume,
+                1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance));
+        }
+
+        /// <summary>Namlu duvardayken tetige basildi. SES kuru tetikle AYNI klik — oyuncu icin
+        /// ikisi de "cektim, cikmadi" ve yeni bir ses varligi gerektirmez. TITRESIM ise belirgin
+        /// olarak daha guclu/uzun: iki durumu ayirt eden tek kanal bu, cunku bos sarjorde de
+        /// ayni klik duyuluyor. Kisa cift-vurus yerine tek uzun vurus — SendHapticImpulse
+        /// tek darbe alir, cift vurus icin coroutine gerekirdi ve VR'da fark edilmezdi.</summary>
+        void BlockedFire(InputDevice dev)
+        {
+            if (dev.isValid) dev.SendHapticImpulse(0, 0.6f, 0.12f);
             Vector3 pos = muzzle != null ? muzzle.position : transform.position;
             WeaponAudioPlayer.PlayAt(_cv.dryFireClip, pos, _cv.dryFireVolume,
                 1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance));
