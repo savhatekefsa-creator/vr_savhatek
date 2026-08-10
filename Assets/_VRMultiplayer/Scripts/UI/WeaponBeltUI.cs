@@ -45,25 +45,27 @@ namespace VRMultiplayer.UI
         // ESIK ACISI ILE beltOffset BIRBIRINE BAGLI — birini degistiren otekini de kontrol
         // etmeli. Kemerin OTURDUGU aci offset'ten cikar: atan(|y| / z).
         //
-        //   varsayilan (-0.37, 0.20) -> atan(0.37/0.20) ≈ 62 derece, kafadan 0.42 m
+        //   varsayilan (-0.34, 0.26) -> atan(0.34/0.26) ≈ 53 derece, kafadan 0.43 m
         //
-        // Esik 52: kemer acildigi anda ust kenari neredeyse bakis hizasinda belirir, birkac
-        // derece daha egilince tam ortaya oturur. Aradaki fark BILEREK kucuk tutuluyor —
-        // ilk surumdeki 30 derecelik esikte kemer 54 derecede duruyordu: hem kaza ile
-        // aciliyor hem de acildiginda gorusun cok altinda kaliyordu.
+        // BOYUN YORGUNLUGU DERSI: esigi indirmek TEK BASINA ise yaramaz. 58 -> 52 gecisinde
+        // yalnizca esik indi, kemer 62 derecede kaldi; menu daha erken aciliyordu ama
+        // halkalara RAHAT BAKMAK icin yine 62 dereceye egilmek gerekiyordu — kullanicinin
+        // "hala cok egiyorum" demesinin sebebi buydu. Boynu yoran sey esik degil, KEMERIN
+        // OTURDUGU ACI. Bu yuzden ikisi birlikte indi (esik 44, kemer 53).
         //
-        // GEOMETRI INATCIDIR: "govdeye yakin" (kucuk z) + "bel hizasi" (buyuk |y|) zorunlu
-        // olarak DIK bir aci verir. Esigi indirmek TEK BASINA ise yaramaz — |y| de kismen
-        // azaltilmali, yoksa menu acilir ama gorusun altinda kalir. 58 -> 52 gecisinde
-        // y de -0.44'ten -0.37'ye alindi, tam da bu yuzden.
+        // GEOMETRI INATCIDIR: kemerin acisini dusurmek demek onu YUKARI (|y| kucuk) ve
+        // ILERI (z buyuk) almak demektir. "Govdeye yapisik bel hizasi" ile "az egilerek bak"
+        // ayni anda saglanamaz; bu ayarda kemer bel yerine GOGUS hizasinda duruyor.
+        // Toplam mesafe (0.43 m) bilerek korundu, yani daha uzak GORUNMEZ.
         [Header("Acilma — kafa egme")]
         [Tooltip("Kafa bu aciDAN fazla asagi egilince kemer acilir (derece, 0 = duz ileri). " +
-                 "52 = belirgin bir 'asagi bak' hareketi ama boyun zorlamaz. Degistirirsen " +
+                 "44 = kasitli bir 'asagi bak' hareketi, ama boyun zorlamaz. Degistirirsen " +
                  "beltOffset'in acisini (atan(|y|/z)) da yakin tut, yoksa menu goruse girmez.")]
-        public float openPitchDegrees = 52f;
+        public float openPitchDegrees = 44f;
         [Tooltip("Kafa bu acinin ustune cikinca kapanir. openPitch'ten KUCUK olmali (histerezis). " +
-                 "14 derecelik bant: uzanip kavrarken kafa biraz oynasa da kemer kacmaz.")]
-        public float closePitchDegrees = 38f;
+                 "10 derecelik bant: uzanip kavrarken kafa biraz oynasa da kemer kacmaz. " +
+                 "Daha da dusurmek, yerdeki hedefe nisan alirken kemerin acik kalmasina yol acar.")]
+        public float closePitchDegrees = 34f;
 
         // Konum / aralik / yazi Play'de CANLI degisir (her kare uygulanir). Halkanin yaricapi
         // ve kalinligi mesh'e islendigi icin ilk acilista okunur — onlari degistirdikten sonra
@@ -76,9 +78,9 @@ namespace VRMultiplayer.UI
         // ayni oranda olceklemeli.
         [Header("Yerlesim (Play'de canli ayarlanir)")]
         [Tooltip("Kemerin KAFAYA gore konumu (metre): x=saga, y=asagi/yukari, z=ileri. " +
-                 "Varsayilan gogus-bel arasi, GOVDEYE YAKIN: elin dogal olarak durdugu yer. " +
-                 "z'yi kucultmek kemeri govdeye yapistirir, buyutmek havaya iter.")]
-        public Vector3 beltOffset = new Vector3(0f, -0.37f, 0.20f);
+                 "Varsayilan GOGUS hizasi, el mesafesinde. |y|'yi kucultmek + z'yi buyutmek " +
+                 "kemeri yukari alir (daha az egilirsin); tersi bele indirir (daha cok egilirsin).")]
+        public Vector3 beltOffset = new Vector3(0f, -0.34f, 0.26f);
         [Tooltip("Halka merkezleri arasi mesafe (metre).")]
         public float slotSpacing = 0.146f;
         [Tooltip("Halkanin dis yaricapi (metre).")]
