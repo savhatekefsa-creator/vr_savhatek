@@ -270,9 +270,9 @@ namespace VRMultiplayer
                     1f, 1f, Mathf.Min(_cv.soundMaxDistance, HandlingSoundMaxDistance), priority: true);
         }
 
-        /// <summary>Sunucu: silahin mermi durumunu belirli bir degere kur. Silah secici bunu
+        /// <summary>Sunucu: silahin mermi durumunu belirli bir degere kur. Kemer HUD'u bunu
         /// cantadan geri cagirirken kullanir — silah cantaya kac mermiyle girdiyse o kadarla
-        /// cikmali. Yoksa galeriyi acip kapamak BEDAVA SARJOR olurdu ve savurarak dolum
+        /// cikmali. Yoksa kemerden alip birakmak BEDAVA SARJOR olurdu ve savurarak dolum
         /// mekanigini kimse kullanmazdi (yedekler de sifirlanacagi icin cephane sinirsiz olurdu).
         /// Negatif deger = dokunma (spawn'daki dolu hali kalir).</summary>
         public void SetAmmoStateServer(int ammo, int spares)

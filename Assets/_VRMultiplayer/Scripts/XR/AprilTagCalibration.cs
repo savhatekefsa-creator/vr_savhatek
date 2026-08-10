@@ -1161,7 +1161,7 @@ namespace VRMultiplayer
         // gercek tag'in ustune oturtmak bagimsiz bir olcumdur: gozun yakindan hizalamasi
         // kameranin poz kestirim hatasini PAYLASMAZ.
         //
-        // SOL cubuk: sag cubuk silah carkina ve insa paletine bagli, solun ekseni bostadir
+        // SOL cubuk: sag cubuk insa paletine bagli, solun ekseni bostadir
         // (yalnizca tiklamasi insa moduna geciriyor).
         //
         //   sol cubuk saga/sola      -> tag duzleminde yatay (duvar boyunca)

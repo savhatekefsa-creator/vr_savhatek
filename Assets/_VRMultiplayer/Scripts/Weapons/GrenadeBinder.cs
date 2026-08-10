@@ -34,7 +34,7 @@ namespace VRMultiplayer.Weapons
 
         /// <summary>Obje adina uyan config: birebir eslesme oncelikli; yoksa obje adi config
         /// adini ICEREN kayit ("Weapon_Grenade 1" gibi onekli spawner prefablari icin —
-        /// silah secici cantasi bombalari bu adla dogurur). Uymayan icin null.</summary>
+        /// kemer cantasi bombalari bu adla dogurur). Uymayan icin null.</summary>
         public static GrenadeConfig FindConfig(string objectName)
         {
             objectName = WeaponGripBinder.CleanName(objectName);
