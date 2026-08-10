@@ -47,17 +47,24 @@ namespace VRMultiplayer.Weapons
                  "NetworkWeapon.BlockedFire.")]
         public bool hapticOnBlock = true;
 
-        [Tooltip("Namlunun duvara girdigi noktada kirmizi uyari halkasi. Duvarin OYUNCU " +
-                 "tarafindaki yuzune konur ve geometrinin ustune cizilir, yani namlu tamamen " +
-                 "icerideyken bile gorunur.")]
+        [Tooltip("Namlunun duvara girdigi noktada uyari ucgeni. Duvarin OYUNCU tarafindaki " +
+                 "yuzune konur ve geometrinin ustune cizilir, yani namlu tamamen icerideyken " +
+                 "bile gorunur.")]
         public bool showBlockMarker = true;
 
         [Tooltip("Kilitliyken lazer nisani sonsun. Kilitli silahin hala nisan gostermesi " +
                  "'ates edebilirim' yanilgisi veriyor.")]
         public bool suppressLaser = true;
 
-        [Tooltip("Uyari halkasinin capi (m).")]
-        public float markerSize = 0.05f;
+        [Tooltip("Uyari ucgeninin kenar uzunlugu (m). 0.03-0.05 arasi zarif durur.")]
+        public float markerSize = 0.04f;
+
+        [Tooltip("Yanip sonme hizi (Hz). 0 = sabit dursun, yanip sonmesin.")]
+        public float markerPulseHz = 2f;
+
+        [Tooltip("Yanip sonerken inilen en dusuk opaklik. 0 yaparsan tamamen kaybolup gelir; " +
+                 "0.35 civari 'nabiz gibi atiyor' hissi verir, ikon hic kaybolmaz.")]
+        [Range(0f, 1f)] public float markerMinAlpha = 0.35f;
 
         [Tooltip("Kac karede bir olculur. 1 = her kare. Silah sayisi arttikca 2 yapilabilir; " +
                  "20 ms'lik gecikme tarama hilesine yetmez.")]
@@ -70,9 +77,6 @@ namespace VRMultiplayer.Weapons
         /// Yalnizca <see cref="IsBlocked"/> true iken anlamli.</summary>
         public Vector3 BlockPoint { get; private set; }
 
-        /// <summary>Uyari halkasinin rengi — klasik "yasak" kirmizisi.</summary>
-        static readonly Color MarkerColor = new Color(1f, 0.15f, 0.12f, 0.85f);
-
         /// <summary>Ayni anda degerlendirilen collider tavani (namlu ucu kuresi cok kucuk).</summary>
         const int MaxOverlap = 8;
 
@@ -83,6 +87,7 @@ namespace VRMultiplayer.Weapons
         GrabbableObject _grab;
         UI.LaserSight _laser;
         Transform _marker;
+        UI.WarningIcon _icon;
         bool _prevBlocked;
         int _frame;
 
@@ -164,26 +169,32 @@ namespace VRMultiplayer.Weapons
             if (_marker == null) BuildMarker();
             if (!_marker.gameObject.activeSelf) _marker.gameObject.SetActive(true);
 
-            // Kameraya donuk dursun: halka egik bir duvarda elips gibi gorunmesin, her acidan
-            // ayni okunsun. Duvarin normaline dikmek daha "fiziksel" olurdu ama tam tepeden
-            // bakildiginda cizgiye donerdi.
+            // BILLBOARD: ikon her zaman kameraya doner. Duvarin normaline dikmek daha
+            // "fiziksel" olurdu ama duvara yandan yanasinca ucgen cizgiye dusup okunmaz olurdu
+            // — namluyu duvara sokmanin en sik hali de tam olarak o.
             var cam = Camera.main;
             _marker.position = BlockPoint;
             if (cam != null)
                 _marker.rotation = Quaternion.LookRotation(BlockPoint - cam.transform.position, Vector3.up);
+
+            // NABIZ: opaklik ve olcek birlikte atar. Yalnizca opaklik degisseydi parlak bir
+            // duvarda sonuk faz kaybolurdu; olcek de attigi icin hareket her zeminde fark
+            // edilir. markerMinAlpha tabani ikonun tamamen yok olmasini engeller.
+            float pulse = markerPulseHz > 0f
+                ? 0.5f + 0.5f * Mathf.Sin(Time.time * markerPulseHz * 2f * Mathf.PI)
+                : 1f;
+            _icon.SetAlpha(Mathf.Lerp(markerMinAlpha, 1f, pulse));
+            _marker.localScale = Vector3.one * Mathf.Lerp(0.9f, 1.1f, pulse);
         }
 
         void BuildMarker()
         {
+            // Isaret sahne KOKUNDE durur, silahin altinda degil: duvara yapismasi gerekiyor,
+            // silahla birlikte savrulmamasi. Karsiligi OnDestroy'da elle toplanmasi.
             var go = new GameObject("~NamluKilitIsareti");
             _marker = go.transform;
-
-            // ArcMesh + overlay materyal: ikisi de UITheme'de hazir. Overlay renderQueue'su
-            // halkanin duvarin ICINDEN de gorunmesini saglar — namlu tamamen gomuluyken
-            // isaret duvarin arkasinda kalsaydi hicbir ise yaramazdi.
-            var mesh = UI.UITheme.ArcMesh(0.34f, 0.5f, 0f, 360f, 24);
-            var ring = UI.UITheme.MakeShape(_marker, "Halka", mesh, MarkerColor, 4000);
-            ring.localScale = Vector3.one * markerSize;
+            _icon = go.AddComponent<UI.WarningIcon>();
+            _icon.SetSize(markerSize);
         }
 
         bool HoldingLocally()
