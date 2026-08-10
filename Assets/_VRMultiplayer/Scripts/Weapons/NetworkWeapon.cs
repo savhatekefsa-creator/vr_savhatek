@@ -29,6 +29,11 @@ namespace VRMultiplayer
         GrabbableObject _grab;
         WeaponGripProfile _profile;
         WeaponRecoil _recoil;
+
+        // Namlu duvarin icindeyken tetigi kilitleyen bilesen. Silahta YOKSA null kalir ve
+        // hicbir maliyeti olmaz (eski davranis birebir); varsa hem burada (his) hem
+        // FireServerRpc'de (otorite) sorulur.
+        MuzzleWallBlock _muzzleBlock;
         Vector3 _muzzleLocal;
         Vector3 _barrelLocal = Vector3.forward;
         float _nextFire;
@@ -138,6 +143,7 @@ namespace VRMultiplayer
         {
             _grab = GetComponent<GrabbableObject>();
             _damageFor = DamageFor;
+            _muzzleBlock = GetComponent<MuzzleWallBlock>();
             if (muzzle == null) muzzle = transform.Find("Muzzle");
             ApplyProfile();
             ResolveCombat();
@@ -341,6 +347,15 @@ namespace VRMultiplayer
             // sessizce olu kalir, kuru tetik sesi bile cikmaz); otorite FireServerRpc'de.
             if (HolderIsDead()) { wantsFire = false; _burstRemaining = 0; }
 
+            // Namlu duvarin icinde/arkasinda: tetik OLU. Kuyruktaki burst da kesilir — namluyu
+            // duvara sokunca patlayan mermilerin gerisi ic taraftan cikmasin. Buradaki kontrol
+            // HIS icindir (tetik cekilir, hicbir sey olmaz); otorite FireServerRpc'de.
+            if (_muzzleBlock != null && _muzzleBlock.IsBlocked)
+            {
+                wantsFire = false;
+                _burstRemaining = 0;
+            }
+
             // Bos sarjor / dolum sirasinda tetik. Buradaki kontrol YALNIZCA his icindir —
             // otorite FireServerRpc'de. Kuru tetik titresimi tetigin her cekilisinde bir kez
             // verilir; auto'da parmak basili dururken kumandayi surekli titretmemek icin.
@@ -530,6 +545,13 @@ namespace VRMultiplayer
             // cagirsin, bos sarjorle ya da dolum ortasinda atis cikmaz. Istemcideki ayni
             // kontrol sadece hisdir, guvenlik degil.
             if (UsesAmmo && (_ammo.Value <= 0 || IsReloading)) { LogReject("bos sarjor/dolum"); return; }
+
+            // NAMLU-DUVARDA OTORITESI. Istemcideki kilit yalnizca his: degistirilmis bir istemci
+            // IsBlocked'i gormezden gelip FireServerRpc'yi cagirabilir. Sunucu KENDI kopyasindan
+            // olcer (MuzzleWallBlock.Update sunucuda da calisir ve sunucunun replike transformunu
+            // okur), yani istemcinin gonderdigi origin'e hic guvenilmez. Kadans kovasindan ONCE:
+            // mesru bir sinir durumu yenirse oyuncu token da mermi de kaybetmesin.
+            if (_muzzleBlock != null && _muzzleBlock.IsBlocked) { LogReject("namlu duvarda"); return; }
 
             // Kadansi istemciye guvenmeden sunucu zorlar: ele gecirilmis bir istemci
             // FireServerRpc'yi her karede cagirsa da uzun-vadeli atis hizi config'in uzerine
