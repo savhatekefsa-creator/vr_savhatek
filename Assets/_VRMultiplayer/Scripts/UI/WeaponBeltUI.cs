@@ -45,48 +45,56 @@ namespace VRMultiplayer.UI
         // ESIK ACISI ILE beltOffset BIRBIRINE BAGLI — birini degistiren otekini de kontrol
         // etmeli. Kemerin OTURDUGU aci offset'ten cikar: atan(|y| / z).
         //
-        //   varsayilan (-0.44, 0.21) -> atan(0.44/0.21) ≈ 64 derece, kafadan 0.49 m
+        //   varsayilan (-0.37, 0.20) -> atan(0.37/0.20) ≈ 62 derece, kafadan 0.42 m
         //
-        // Esik 58 secildi: kemer acildigi anda bakisin ~6 derece altinda belirir (ust kenari
-        // zaten bakis hizasinda), birkac derece daha egilince tam ortaya oturur. Aradaki fark
-        // BILEREK kucuk — 30 derecelik esikle kemer 54 derecede duruyordu, yani aciliyor ama
-        // gorusun cok altinda kaliyordu; kullanicinin bildirdigi iki sikayet de buydu.
+        // Esik 52: kemer acildigi anda ust kenari neredeyse bakis hizasinda belirir, birkac
+        // derece daha egilince tam ortaya oturur. Aradaki fark BILEREK kucuk tutuluyor —
+        // ilk surumdeki 30 derecelik esikte kemer 54 derecede duruyordu: hem kaza ile
+        // aciliyor hem de acildiginda gorusun cok altinda kaliyordu.
         //
         // GEOMETRI INATCIDIR: "govdeye yakin" (kucuk z) + "bel hizasi" (buyuk |y|) zorunlu
-        // olarak DIK bir aci verir. z'yi buyutmeden esigi 40'lara cekmek ise yaramaz, menu
-        // yine gorusun altinda kalir.
+        // olarak DIK bir aci verir. Esigi indirmek TEK BASINA ise yaramaz — |y| de kismen
+        // azaltilmali, yoksa menu acilir ama gorusun altinda kalir. 58 -> 52 gecisinde
+        // y de -0.44'ten -0.37'ye alindi, tam da bu yuzden.
         [Header("Acilma — kafa egme")]
         [Tooltip("Kafa bu aciDAN fazla asagi egilince kemer acilir (derece, 0 = duz ileri). " +
-                 "58 = 'gercekten asagi bakmak'; kaza ile acilmaz. Degistirirsen beltOffset'in " +
-                 "acisini (atan(|y|/z)) da yakin tut, yoksa menu goruse girmez.")]
-        public float openPitchDegrees = 58f;
+                 "52 = belirgin bir 'asagi bak' hareketi ama boyun zorlamaz. Degistirirsen " +
+                 "beltOffset'in acisini (atan(|y|/z)) da yakin tut, yoksa menu goruse girmez.")]
+        public float openPitchDegrees = 52f;
         [Tooltip("Kafa bu acinin ustune cikinca kapanir. openPitch'ten KUCUK olmali (histerezis). " +
-                 "16 derecelik bant: uzanip kavrarken kafa biraz oynasa da kemer kacmaz.")]
-        public float closePitchDegrees = 42f;
+                 "14 derecelik bant: uzanip kavrarken kafa biraz oynasa da kemer kacmaz.")]
+        public float closePitchDegrees = 38f;
 
         // Konum / aralik / yazi Play'de CANLI degisir (her kare uygulanir). Halkanin yaricapi
         // ve kalinligi mesh'e islendigi icin ilk acilista okunur — onlari degistirdikten sonra
         // Play'i yeniden baslatmak gerekir.
+        // OLCEKLER MESAFEYE BAGLI. Kemer 0.49 m'den 0.42 m'ye cekilince asagidaki uzunluklarin
+        // hepsi ayni carpanla (0.86) kucultuldu. Sebep: VR'da bir arayuzu YAKINLASTIRIP
+        // olculerini sabit tutmak onu buyutur — uc halka gorus alanina yayilir, dis halkalar
+        // lensin bulanik kenarina kacar. Ayni carpanla kuculunce GORUNUM birebir korunur,
+        // yalnizca daha yakin ve el icin daha kolay olur. Mesafeyi degistiren bu blogu da
+        // ayni oranda olceklemeli.
         [Header("Yerlesim (Play'de canli ayarlanir)")]
         [Tooltip("Kemerin KAFAYA gore konumu (metre): x=saga, y=asagi/yukari, z=ileri. " +
                  "Varsayilan gogus-bel arasi, GOVDEYE YAKIN: elin dogal olarak durdugu yer. " +
                  "z'yi kucultmek kemeri govdeye yapistirir, buyutmek havaya iter.")]
-        public Vector3 beltOffset = new Vector3(0f, -0.44f, 0.21f);
+        public Vector3 beltOffset = new Vector3(0f, -0.37f, 0.20f);
         [Tooltip("Halka merkezleri arasi mesafe (metre).")]
-        public float slotSpacing = 0.17f;
+        public float slotSpacing = 0.146f;
         [Tooltip("Halkanin dis yaricapi (metre).")]
-        public float ringRadius = 0.068f;
+        public float ringRadius = 0.058f;
         [Tooltip("Halka cizgi kalinligi (metre).")]
-        public float ringThickness = 0.006f;
+        public float ringThickness = 0.005f;
         [Tooltip("Silah adinin halka merkezinin ne kadar altinda duracagi (metre).")]
-        public float labelDrop = 0.098f;
+        public float labelDrop = 0.084f;
         [Tooltip("Yazi satir yuksekligi (metre) — VR'da okunabilirligi punto degil aci belirler.")]
-        public float labelHeight = 0.020f;
+        public float labelHeight = 0.017f;
 
         [Header("Kavrama")]
         [Tooltip("El halkanin merkezine bu kadar yaklasinca yuva 'elin altinda' sayilir (metre). " +
-                 "DAR tutuldu: destek eli / yakindaki esya kapmasi kemere kazara kapilmasin.")]
-        public float hoverRadius = 0.11f;
+                 "Halka yaricapinin ~1.6 kati: isabetsizlige pay birakir ama komsu yuvayi " +
+                 "calmaz. Kemer yakinlastiginda bu da ayni oranda kuculdu.")]
+        public float hoverRadius = 0.094f;
 
         [Header("Kafa takibi")]
         [Tooltip("Kemer kafa YONUNU takip eder ama pitch'i takip ETMEZ — bakisin degil bedenin " +
@@ -269,11 +277,25 @@ namespace VRMultiplayer.UI
             Quaternion yawRot = Quaternion.Euler(0f, _yaw, 0f);
             Vector3 pos = head.position + yawRot * beltOffset;
 
-            // Halkalarin yuzu (+Z) KAFAYA baksin. Yukari vektor olarak yatay ileriyi vermek,
-            // yerel X'i oyuncunun SAGINA oturtur — yani yuvalar yan yana dizilir.
-            Vector3 toHead = head.position - pos;
-            if (toHead.sqrMagnitude < 1e-6f) toHead = yawRot * Vector3.back;
-            _belt.SetPositionAndRotation(pos, Quaternion.LookRotation(toHead.normalized, yawRot * Vector3.forward));
+            // YAZI TERSLIGI DERSI (kullanicinin bildirdigi ayna hatasi). Ilk surumde buraya
+            // "kemer kafaya BAKSIN" diye LookRotation(kafa - kemer) yazilmisti. Sezgisel duruyor
+            // ama YANLIS: Unity'de bir yuzeyin okunur tarafi +Z'nin ARKASIDIR — kamera +Z
+            // yonune BAKARAK gorur. +Z'yi kafaya cevirmek paneli arkaya dondurur; yazi ayna
+            // gorunur ve yerel +X oyuncunun SOLUNA duser (yuva sirasi da ters donerdi).
+            //
+            // Dogrusu, eski carkin kullandigi yon: +Z BAKIS YONUYLE AYNI tarafa, yani kafadan
+            // kemere dogru. O zaman +X = oyuncunun SAGI, +Y = yukari-ileri; yazi duz okunur,
+            // HEAVY solda baslar, -labelDrop yaziyi halkanin altina koyar.
+            Vector3 viewDir = pos - head.position;          // kafadan kemere
+            if (viewDir.sqrMagnitude < 1e-6f) viewDir = yawRot * Vector3.forward;
+            viewDir.Normalize();
+
+            // Yukari ipucu: yatay ileri. viewDir ile neredeyse ayni yone bakiyorsa (kemer
+            // duz ILERIDE, hic asagida degil) LookRotation tekillesir — o durumda dunya
+            // yukarisi ayni X eksenini verir.
+            Vector3 upHint = yawRot * Vector3.forward;
+            if (Mathf.Abs(Vector3.Dot(viewDir, upHint)) > 0.999f) upHint = Vector3.up;
+            _belt.SetPositionAndRotation(pos, Quaternion.LookRotation(viewDir, upHint));
 
             // Aralik ve yazi konumu her kare yazilir ki Play'de canli ayarlanabilsin. Elin
             // hangi halkanin uzerinde oldugu BUNDAN SONRA olculur — yoksa aralik degistirilen
@@ -282,7 +304,8 @@ namespace VRMultiplayer.UI
             for (int i = 0; i < _rings.Length; i++)
             {
                 _rings[i].root.localPosition = new Vector3((i - span) * slotSpacing, 0f, 0f);
-                _rings[i].label.transform.localPosition = new Vector3(0f, -labelDrop, 0.004f);
+                // -Z = oyuncuya dogru (bkz. yukaridaki yon dersi): yazi diskin onunde kalsin.
+                _rings[i].label.transform.localPosition = new Vector3(0f, -labelDrop, -0.004f);
             }
 
             // El hangi yuvanin uzerinde? Iki el de bakilir; en yakin olan kazanir.
@@ -346,7 +369,9 @@ namespace VRMultiplayer.UI
             float scale = r.previewFit * (hot ? 1.15f : 1f);
             // Mesh'in KENDI merkezi halkanin merkezine gelsin: onizlemenin kok pivotu silahin
             // orta noktasi degil (namlu dibi, sarjor vb.) — cikarilmazsa silah yuvadan kacar.
-            Vector3 center = r.root.position + _belt.rotation * new Vector3(0f, 0f, 0.022f);
+            // -Z = oyuncuya dogru. Onizleme diskin ONUNDE durmali: disk derinlik sinamali
+            // cizilir, opak onizleme derinlik yazar ve diski kendi arkasinda gizler.
+            Vector3 center = r.root.position + _belt.rotation * new Vector3(0f, 0f, -0.022f);
             t.SetPositionAndRotation(center - rot * (r.previewCenter * scale), rot);
             t.localScale = Vector3.one * scale;
         }
@@ -479,7 +504,7 @@ namespace VRMultiplayer.UI
                 var disc = MakeMesh(slot, "Disc", discMesh,
                     UITheme.CreateTransparentMaterial(discIdle), QueueDisc, 0f);
                 var ring = MakeMesh(slot, "Ring", ringMesh,
-                    UITheme.CreateOverlayMaterial(ringIdle), QueueRing, 0.004f);
+                    UITheme.CreateOverlayMaterial(ringIdle), QueueRing, -0.004f);
 
                 var label = UITheme.MakeText(slot, SlotLabel[i], labelIdle, labelHeight,
                     TextAnchor.UpperCenter, QueueLabel);
