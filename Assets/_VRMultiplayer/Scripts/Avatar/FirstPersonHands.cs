@@ -26,6 +26,15 @@ namespace VRMultiplayer
         // orijinal mesh aynen kalir.
         const string ReweightedGlovePath = "FPHands/Glove_FP_Reweighted";
 
+        // Eldivenin kendisi de degisti: Meta XR Core SDK'nin el mesh'i bizim iskelete
+        // eklem eklem oturtuldu (uretimi: GripOlcum/blender_meta_hand_retarget.py).
+        // Eski eldiven 59 ayri ada oldugu icin hicbir agirlik semasi yumrukta duzgun
+        // kapanmiyordu; bu mesh tek parca ve agirliklari Meta'nin kendi sanatcilarindan
+        // geliyor. Meta'nin UV'si bizim eldiven dokusuna uymaz - kendi malzemesiyle
+        // gelir. Asset yoksa yukaridaki eski eldivene duser.
+        const string MetaHandMeshPath = "FPHands/Glove_FP_MetaHand";
+        const string MetaHandMaterialPath = "FPHands/M_FP_MetaHand";
+
         /// <summary>
         /// Instantiates FP_Hands under <paramref name="avatarRoot"/> and retargets its
         /// renderers onto the avatar's skeleton. Returns the instance, or null on any
@@ -50,14 +59,29 @@ namespace VRMultiplayer
             var instance = Object.Instantiate(prefab, avatarRoot.transform, false);
             instance.name = "FP_Hands";
 
+            var metaHand = Resources.Load<Mesh>(MetaHandMeshPath);
+            var metaHandMaterial = Resources.Load<Material>(MetaHandMaterialPath);
             var reweighted = Resources.Load<Mesh>(ReweightedGlovePath);
 
             foreach (var smr in instance.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 // Bindpose'lar kopyada birebir ayni oldugu icin kemik yeniden baglamadan
                 // once/sonra atamak farksiz — burada, dongunun en basinda yapiliyor.
-                if (reweighted != null && smr.name == "Glove_FP")
-                    smr.sharedMesh = reweighted;
+                if (smr.name == "Glove_FP")
+                {
+                    if (metaHand != null)
+                    {
+                        smr.sharedMesh = metaHand;
+                        // Tek alt-mesh: malzeme dizisi de tek olmali, yoksa ikinci
+                        // malzeme (FP_GloveCap) bosa asili kalir.
+                        if (metaHandMaterial != null)
+                            smr.sharedMaterials = new[] { metaHandMaterial };
+                    }
+                    else if (reweighted != null)
+                    {
+                        smr.sharedMesh = reweighted;
+                    }
+                }
 
                 var src = smr.bones;
                 var dst = new Transform[src.Length];
