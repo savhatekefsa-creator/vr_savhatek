@@ -1552,6 +1552,16 @@ namespace VRMultiplayer.Constructor
 
         // ------------------------------------------------------------- panel / hud
 
+        /// <summary>
+        /// Insa modunun kendi panelinde bir ipucu goster. Disaridan (akis ekranlarindan)
+        /// cagrilabilen tek yol.
+        ///
+        /// NEDEN GEREKLI: insa modu acikken CreativeFlowUI butun panellerini kapatiyor
+        /// (ekranin sahibi editor). Yani akisin bir sonraki adimi icin verilecek yonerge
+        /// ancak buradan gosterilebilir — Note ile gosterilse hicbir zaman gorunmezdi.
+        /// </summary>
+        public void ShowHint(string text, float seconds) => Show(text, seconds);
+
         void Show(string text, float hideAfter = -1f)
         {
             if (_panel == null)

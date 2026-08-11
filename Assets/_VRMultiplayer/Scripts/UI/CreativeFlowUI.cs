@@ -326,13 +326,12 @@ namespace VRMultiplayer.UI
         /// </summary>
         void FinishTagSetup()
         {
-            _tagStep = TagStep.Yok;
-
             // Hic plaka konmadiysa cevrilecek bir sey yok: kullanici adimi fiilen atlamis
             // demektir. Hata ekrani gostermek gurultu olurdu, normal cikisa birakiyoruz.
             var oturum = ConstructorSession.Instance;
             if (oturum == null || oturum.Layout == null || TagCapture.PlateCount(oturum.Layout) == 0)
             {
+                _tagStep = TagStep.Yok;
                 BeginExitFlow();
                 return;
             }
@@ -366,9 +365,17 @@ namespace VRMultiplayer.UI
             // ISIM SIMDI SORULUYOR: tag'ler fiziksel emek (duvara kagit yapistirildi) ve
             // isimsiz harita diske yazilamiyor. Cikisi beklemek, bir cokmede o emegin
             // tamamini goturur. Kayittan sonra insa modu basliyor.
+            //
+            // ADIM ANCAK KAYITLA KAPANIR (_tagStep = Yok yalnizca burada). Bastan kapatmak
+            // bir acik biraktiyordu: insa modundan kazara cikan -- sol cubuk tek tikla
+            // calisiyor -- yarim kalmis kurulumu bitirmis sayiliyordu, sonra konan plakalar
+            // hicbir zaman tag'e cevrilmiyordu ve bunun bir belirtisi yoktu. Isim
+            // verilmediyse adim ACIK kalir; sonraki cikista cevrim tekrar kosar.
+            // Cevrim yeniden kosmaya elverisli: ayni plakalar ayni tag'leri uretir, var
+            // olanlarin yaw'i ve acik/kapali durumu korunur.
             OpenName("HARİTA ADI", null,
-                ad => { DoSave(ad); EnterEditor(); },
-                () => EnterEditor());     // isim verilmedi: tag'ler oturumda duruyor
+                ad => { _tagStep = TagStep.Yok; DoSave(ad); EnterEditor(); },
+                () => EnterEditor());
         }
 
         void EnterEditor()
@@ -383,6 +390,17 @@ namespace VRMultiplayer.UI
             // "degisiklikleri at" ancak hicbir sey yazilmamissa bir anlam tasir.
             ConstructorSession.AutoSaveSuspended = true;
             Placer.SetBuildMode(true);
+
+            // TAG KURULUMUNDA cikis tusunu SOYLE. Adimin sonu "insa modundan cik" ama o tus
+            // (sol cubuk tiki) hicbir yerde yazmiyor; bilmeyen kisi plakalari koyup ekranda
+            // kalirdi. Yonerge insa modu panelinden veriliyor, cunku akisin kendi ekranlari
+            // insa modu acikken kapali.
+            if (_tagStep == TagStep.Plaka)
+                Placer.ShowHint(
+                    "TAG KURULUMU\n\n" +
+                    "Plakayi duvara koy — BEYAZ yuz odaya baksin,\n" +
+                    "kagit ayni anda tam o noktaya yapistirilsin.\n\n" +
+                    "Bitince SOL CUBUGA BAS: tag'ler kaydedilir.", 10f);
         }
 
         // ------------------------------------------------------------- cikis karar zinciri
