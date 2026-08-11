@@ -13,6 +13,16 @@
          Runtime permission is requested by RoomScanSync before reading. -->
     <uses-permission android:name="com.oculus.permission.USE_SCENE" />
 
+    <!-- AprilTag calibration reads the passthrough cameras (Assets/AprilTag).
+         The PASSTHROUGH feature must be declared or the Passthrough Camera API is refused —
+         the copied PCA editor script fails the build without it.
+         CAMERA is what WebCamTexture needs; HEADSET_CAMERA is what Horizon OS v74+ needs for
+         the passthrough cameras specifically. Both runtime permissions are requested by
+         PassthroughCameraPermissions before the camera is opened. -->
+    <uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="true" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="horizonos.permission.HEADSET_CAMERA" />
+
     <application>
         <!-- Application Entry Point = GameActivity (ProjectSettings androidApplicationEntry: 2).
              The OpenXR / Meta Quest feature injects the VR (immersive HMD) manifest entries

@@ -56,7 +56,7 @@ namespace VRMultiplayer
         public static event System.Action<GrabbableObject> AnySpawned;
 
         // Spawn edilmis grabbable'larin kayit listesi: WeaponInventory / HandGrabber.Reconcile /
-        // silah rafi / silah carki gibi PERIYODIK tuketiciler sahneyi FindObjectsByType ile
+        // silah rafi / kemer HUD'u gibi PERIYODIK tuketiciler sahneyi FindObjectsByType ile
         // taramasin — her cagri tum sahne objelerini gezer ve sonuc dizisini heap'e cikarir
         // (Quest'te tekrarlayan GC baskisi). Liste spawn/despawn'da guncellenir; tuketiciler
         // indeksle gezmeli (foreach sirasinda spawn olursa liste buyuyebilir).

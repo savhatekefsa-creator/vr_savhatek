@@ -62,7 +62,8 @@ namespace VRMultiplayer
 
         void CreatePanel()
         {
-            _panel = UI.HeadFollowPanel.Create("Team Select Panel",
+            // "~": passthrough acikken gizlenmesin. Takim secmeden oyuna girilemez.
+            _panel = UI.HeadFollowPanel.Create("~Team Select Panel",
                 "TAKIM SEC\n\nA tusu = A TAKIMI (mavi)\nB tusu = B TAKIMI (kirmizi)", Color.yellow);
         }
 

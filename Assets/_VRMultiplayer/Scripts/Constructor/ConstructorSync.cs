@@ -883,6 +883,11 @@ namespace VRMultiplayer.Constructor
             if (!ReadyClients.Contains(OwnerClientId)) yield break;
 
             // Oturum henuz acilmamis olabilir (oda taramasi gelmemis) — bir sure bekle.
+            //
+            // TAG-CERCEVE DALINDA buraya "Session.EnsureStarted()" eklenmisti: o dalda sunucu
+            // oturumu yalnizca TALEP UZERINE aciliyordu, kimse insa moduna girmezse hic
+            // acilmiyor ve katilan oyuncu haritasiz kaliyordu. Bu dalda gerekmiyor —
+            // ConstructorSession.BuildForPlay haritayi ACILISTA kuruyor.
             float deadline = Time.time + 10f;
             while (Time.time < deadline && (Session == null || !Session.IsActive))
                 yield return null;

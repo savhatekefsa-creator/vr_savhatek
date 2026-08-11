@@ -185,6 +185,27 @@ namespace VRMultiplayer.Constructor
         public RoomPlan builtForRoom = new RoomPlan();
 
         /// <summary>
+        /// Bu haritanin KENDI tag yerlesimi. Bos ise kalibrasyon prefabdaki/diskteki genel
+        /// yerlesimi kullanmaya devam eder (eski haritalar bozulmaz).
+        ///
+        /// NEDEN HARITANIN ICINDE: tag'ler fiziksel mekana cakili. Baska bir odaya gecince
+        /// hepsinin yeri degisiyor, ve tek bir genel yerlesim varken bu "her mekan
+        /// degisiminde yerlesimi bastan ayarla, eskisini kaybet" demekti. Harita zaten o
+        /// mekanin kaydi — tag'lerin oraya ait olmasi, odanin planinin oraya ait olmasiyla
+        /// ayni sey.
+        ///
+        /// BEDAVA GELEN FAYDA: harita her istemciye zaten parca parca gonderiliyor
+        /// (<see cref="ConstructorSync"/>), yani tag yerlesimi de kendiliginden gidiyor.
+        /// Bu, "cihazdaki TagLayout.json her gozlukte ayri" derdini yapisal olarak
+        /// bitiriyor — ikinci gozlukte tag'lerin "yerlesimde YOK" cikmasi bu yuzdendi.
+        ///
+        /// TIP AprilTagCalibration'DAN ODUNC: ayni kaydin ikinci bir tanimini yapmak, ikisini
+        /// ayri tutma isini surekli bir bakim borcuna cevirirdi. Proje tek derleme, yani
+        /// bagimlilik yalnizca kavramsal.
+        /// </summary>
+        public AprilTagCalibration.TagEntry[] tags = new AprilTagCalibration.TagEntry[0];
+
+        /// <summary>
         /// True when the map carries a room a grid can be built from. A saved map is the ONLY
         /// copy of the room it was authored in — the scan file it came from may be long gone.
         /// </summary>
@@ -325,6 +346,7 @@ namespace VRMultiplayer.Constructor
                 // JsonUtility eksik dizileri null birakir; tuketiciler her yerde null kontrolu
                 // yapmasin diye burada bir kez normalize ediyoruz.
                 if (m.props == null) m.props = new PlacedProp[0];
+                if (m.tags == null) m.tags = new AprilTagCalibration.TagEntry[0];
                 if (m.freeProps == null) m.freeProps = new FreePlacedProp[0];
                 foreach (var f in m.freeProps)
                     if (f != null && f.scale == Vector3.zero) f.scale = Vector3.one;

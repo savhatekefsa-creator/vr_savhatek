@@ -5,7 +5,7 @@ using VRMultiplayer.UI;
 using UnityEngine.InputSystem;
 #endif
 // Not: UnityEngine.XR'i "using" yapMIYORUZ — InputSystem ile ayni isimde (InputDevice) tipleri
-// var, cakisir. XR tiplerini tam adiyla yaziyoruz (WeaponSelectorUI'daki ayni ders).
+// var, cakisir. XR tiplerini tam adiyla yaziyoruz (WeaponBeltUI'daki ayni ders).
 
 namespace VRMultiplayer.Constructor
 {
@@ -657,12 +657,28 @@ namespace VRMultiplayer.Constructor
 #endif
 
             bool place = Edge(PlaceHeld(), ref _prevTrigger) && !paletteOpen;
-            if (place && _hasCursor && _valid)
+            if (place)
             {
-                // Online'da true yalnizca "istek yola cikti" demek — prop, sunucunun yayini
-                // gelince belirir. Yerel red (dolu hucre / prefabsiz prop) false doner.
-                if (!Session.TryPlace(def, _minCell, _placeLevel, _placeRot, _widthPct, _heightPct))
+                // SESSIZ RED YOK. Eskiden kosul "place && _hasCursor && _valid" idi: gecersiz
+                // bir konumda tetige basmak HICBIR SEY yapmiyordu — ne yerlestirme, ne log, ne
+                // de bir aciklama. Oyuncu tetige basip duruyor ve neden olmadigini bilmiyordu.
+                // Cihazda yasandi: masa yerlestirilemedi, sebep hicbir yerde yazmiyordu.
+                if (!_hasCursor)
+                {
+                    Show("YERLESTIRILEMEZ\n\nImlec bir yuzeye bakmiyor", 2f);
+                }
+                else if (!_valid)
+                {
+                    Show("YERLESTIRILEMEZ\n\nHucreler dolu ya da alan disi.\n" +
+                         "Baska yere bak, [ ile daralt,\nya da KAT degistir.", 3f);
+                }
+                else if (!Session.TryPlace(def, _minCell, _placeLevel, _placeRot, _widthPct, _heightPct))
+                {
+                    // Online'da true yalnizca "istek yola cikti" demek — prop, sunucunun yayini
+                    // gelince belirir. Yerel red (dolu hucre / prefabsiz prop) false doner.
+                    Show("YERLESTIRILEMEZ\n\nIstek reddedildi (Console'a bak)", 3f);
                     Debug.LogWarning("[Constructor] Yerlestirme reddedildi (hucreler dolu olabilir).");
+                }
             }
 
             if (Edge(UndoHeld(), ref _prevUndo) && !paletteOpen)
@@ -677,9 +693,18 @@ namespace VRMultiplayer.Constructor
                 // Isaret edilen hucrenin sahibini sil — ayak izinin min kosesini degil, imlecin
                 // TAM ALTINDAKI hucreyi soruyoruz, yoksa buyuk bir propun kenarina bakarken
                 // yanindaki bos hucre sorulup hicbir sey silinmezdi.
+                //
+                // IMLEC YOKKEN DE SERBEST PROP SILINEBILIR: serbest katman isinla secilir,
+                // hucreyle degil — imlecin bir yuzeye oturmasi onun icin sart degil.
+                //
+                // SESSIZ RED YOK: hicbiri tutmadiysa sebebi yaziliyor. Eskiden hicbir sey
+                // olmuyordu ve oyuncu yanlis yere mi baktigini, yanlis katta mi oldugunu
+                // bilemiyordu.
                 uint id = _hasCursor ? Session.InstanceIdAt(CursorCell(), _placeLevel) : 0u;
                 if (id != 0) Session.TryRemove(id);
                 else if (TryPickFreeProp(out uint freeId)) Session.TryRemoveFree(freeId);
+                else if (!_hasCursor) Show("SILINEMEZ\n\nImlec bir yuzeye bakmiyor", 2f);
+                else Show($"SILINECEK SEY YOK\n\nImlecin altinda prop yok (kat {_placeLevel})", 2f);
             }
         }
 
@@ -1530,7 +1555,11 @@ namespace VRMultiplayer.Constructor
         void Show(string text, float hideAfter = -1f)
         {
             if (_panel == null)
-                _panel = HeadFollowPanel.Create("Constructor Panel", "", new Color(0.5f, 0.9f, 1f));
+                // "~": insa modunun kendi UI'si. Passthrough tam da insa modunda aciliyor,
+                // yani oneksiz birakmak "aleti kullanirken aletin gostergesini gizlemek" olurdu.
+                // Su an yalnizca olusturma SIRASI sayesinde kurtuluyor (HideVirtualWorld
+                // etkinlestigi ANDAKI kok objeleri gizliyor) — kirilgan bir tesaduf.
+                _panel = HeadFollowPanel.Create("~Constructor Panel", "", new Color(0.5f, 0.9f, 1f));
             _panel.gameObject.SetActive(true);
             _panel.text = text;
             _hidePanelAt = hideAfter > 0f ? Time.time + hideAfter : -1f;
@@ -1548,7 +1577,7 @@ namespace VRMultiplayer.Constructor
         void EnsureStatusPanel()
         {
             if (_status != null) return;
-            _status = HeadFollowPanel.Create("Constructor Status", "", new Color(0.75f, 0.95f, 1f));
+            _status = HeadFollowPanel.Create("~Constructor Status", "", new Color(0.75f, 0.95f, 1f));
             var follow = _status.GetComponent<HeadFollowPanel>();
             follow.distance = 1.1f;
             follow.heightOffset = -0.45f;   // goz hizasinin ALTINDA: nisan aldigin yeri kapatmasin

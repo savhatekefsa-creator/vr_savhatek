@@ -16,9 +16,10 @@ namespace VRMultiplayer.UI
         [Tooltip("Panelin kafadan uzakligi (metre).")]
         public float distance = 1.4f;
 
-        [Tooltip("Goz hizasina gore dikey kaydirma (metre). Surekli acik kalan paneller " +
-                 "(or. insa modu durumu) asagi alinmali — goz hizasinda dururlarsa oyuncunun " +
-                 "tam bakmak istedigi yeri kapatirlar.")]
+        [Tooltip("Goz hizasina gore dikey kaydirma (metre). Iki gerekce: (1) ayni anda birden " +
+                 "fazla panel varken ust uste binmesinler, (2) surekli acik kalan paneller " +
+                 "(or. insa modu durumu, tag teshisi) asagi alinmali — goz hizasinda " +
+                 "dururlarsa oyuncunun tam bakmak istedigi yeri kapatirlar. 0 = eski davranis.")]
         public float heightOffset = 0f;
 
         [Tooltip("TEMBEL TAKIP: panel dunyaya sabit durur ve ancak kafa cok donunce onune " +
@@ -76,7 +77,18 @@ namespace VRMultiplayer.UI
         ///
         /// <paramref name="lazy"/> icin bkz. <see cref="lazy"/>: BEKLETEN her panelde true
         /// verilmeli. Varsayilan false, cunku adim adim ilerleyen kisa paneller (kalibrasyon)
-        /// bugunku sert takiple ayarlandi.</summary>
+        /// bugunku sert takiple ayarlandi.
+        ///
+        /// AD "~" ILE BASLAMALI (oyuncunun EYLEM yapmasi gereken paneller icin):
+        /// ConstructorPassthrough.HideVirtualWorld, passthrough acilinca cizen TUM kok
+        /// objeleri gizler ve bu paneller kok objedir. Oneksiz birakilan bir panel, passthrough
+        /// acikken kaybolur.
+        ///
+        /// Yasandi: "OYUNA KATILMAK ICIN B TUSUNA BAS" paneli passthrough acilista devreye
+        /// girince hic gorunmedi — oyuncu oyuna nasil girecegini gosteren tek yazidan oldu.
+        ///
+        /// Salt teshis panelleri (Avatar Fit Debug gibi) oneksiz kalabilir; onlarin insa
+        /// modunda gizlenmesi zaten istenen davranis.</summary>
         public static TextMesh Create(string name, string text, Color color, bool lazy = false)
         {
             var go = new GameObject(name);

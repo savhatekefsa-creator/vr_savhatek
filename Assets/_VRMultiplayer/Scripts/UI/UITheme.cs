@@ -422,10 +422,9 @@ namespace VRMultiplayer.UI
                 m.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
         }
 
-        // --- Radyal menu parcalari ---
-        // NOT: WeaponSelectorUI ayni uc yardimciyi kendi icinde PRIVATE tutuyor (bu ortak surum
-        // ondan sonra dogdu). Silah carki calisan ve ince ayarlanmis bir sistem oldugu icin
-        // dokunulmadi; ileride oradaki kopyalar buraya baglanabilir.
+        // --- Halka / yay parcalari ---
+        // Eskiden silah carki bu uc yardimcinin kendi PRIVATE kopyasini tasiyordu; cark
+        // kaldirilinca (yerine WeaponBeltUI geldi) kopyalar da gitti, tek kaynak burasi.
 
         /// <summary>
         /// Ic/dis yaricapli yay (pasta dilimi) mesh'i, XY duzleminde. Iki yuzu de cizer —

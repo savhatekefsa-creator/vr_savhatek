@@ -285,6 +285,12 @@ namespace VRMultiplayer.Constructor
             var plan = RoomPlanIO.Load();
             var saved = MapLayout.Load(CurrentMapName);
 
+            // BURAYA HAVUZ YEDEGI KOYULMAMALI. Bu dalda bir sure "adi tutmayan harita varsa
+            // havuzdan sec" yedegi vardi; mac haritasini ConstructorSync.ServerPickMatchMap
+            // cekiyor ve kurayi MatchMapChosen ile MAC BASINA BIR KEZ kilitliyor. Buraya
+            // ikinci bir secici koymak o kilidi delerdi: sonradan acilan bir oturum kendi
+            // kurasini ceker, ayni macin oyunculari baska haritalara duserdi.
+
             // Kurulacak kayitli harita yoksa SESSIZCE cik: cagiran oynanis yoluysa sahnedeki
             // her sey oldugu gibi kalmali (bkz. BuildForPlay). NotStartedReason yazilmiyor
             // — bu bir hata degil, "yapilacak is yok".
@@ -310,7 +316,17 @@ namespace VRMultiplayer.Constructor
                                  "Hicbir hucre mobilyaya kapali degil; gercek odanin duvarlari bilinmiyor.");
             }
 
-            bool ok = saved != null ? Adopt(saved, plan) : StartNew(plan);
+            // KAYITLI HARITANIN ODASI KENDI ICINDE. Tarama VARSA bile onu ezmemeli: izgaranin
+            // kokeni oda poligonundan turuyor, baska bir poligon koymak kokeni kaydirir ve
+            // haritadaki BUTUN yerlestirmeler yanlis yere duser.
+            //
+            // Bu kural yukaridaki "tarama yok" dalinda zaten yaziliydi ve OpenExisting de ayni
+            // sekilde davraniyordu; eksik olan tek yol buydu. Tam da mekan degistirirken
+            // isirirdi: yeni odada eski odanin taramasi diskte durur, kayitli bir harita
+            // acilir ve proplar sessizce kayardi.
+            bool ok = saved != null
+                ? Adopt(saved, saved.HasRoom ? null : plan)
+                : StartNew(plan);
             if (!ok) NotStartedReason = "Oda plani gecersiz: izgara kurulamadi.";
             return ok;
         }
@@ -492,8 +508,18 @@ namespace VRMultiplayer.Constructor
                 }
             }
 
+            // HARITANIN KENDI TAG YERLESIMI. Tek gecis noktasi burasi: OpenExisting (yaratici
+            // modda harita acma) da AdoptJson (sunucudan gelen harita) da Adopt'a dusuyor,
+            // yani "harita degisti -> tag'ler de degisti" tek yerde bagli.
+            //
+            // Bos birakan haritalar bozulmuyor: ApplyMapLayout bos gelince onyukleme
+            // yerlesimine donuyor.
+            if (AprilTagCalibration.Instance != null)
+                AprilTagCalibration.Instance.ApplyMapLayout(Layout.tags);
+
             Debug.Log($"[Constructor] Oturum acildi: '{Layout.name}' — {applied} yerlestirme + " +
                       $"{Layout.FreeCount} serbest, " +
+                      $"{(Layout.tags != null ? Layout.tags.Length : 0)} tag, " +
                       $"izgara {Grid.Cols}x{Grid.Rows}, {Grid.Report().free} oda-ici bos hucre " +
                       $"(+{Grid.OutsideMargin:0.0} m oda disi pay).");
 
