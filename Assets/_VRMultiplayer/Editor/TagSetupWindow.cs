@@ -320,9 +320,10 @@ namespace VRMultiplayer.EditorTools
         void DrawStep3Physical()
         {
             EditorGUILayout.LabelField("3. FIZIKSEL IS — kagitlari yapistir", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("Kagit tag'leri plakalarin TAM USTUNE yapistirin (plaka nereye " +
-                                    "dusuyorsa dogru yer orasi). Bu adim pencereden yapilamaz; asagidaki " +
-                                    "kutu fiziksel isin bittiginin beyanidir ve Adim 4'un kapisidir.",
+            EditorGUILayout.HelpBox("Kagit tag'leri plakalarin BEYAZ yuzune yapistirin (plaka nereye " +
+                                    "dusuyorsa dogru yer orasi). Kirmizi yuz duvara bakar. Bu adim " +
+                                    "pencereden yapilamaz; asagidaki kutu fiziksel isin bittiginin " +
+                                    "beyanidir ve Adim 4'un kapisidir.",
                                     MessageType.None);
             _papersGlued = EditorGUILayout.ToggleLeft(
                 "Kagitlar plakalarin uzerine yapistirildi", _papersGlued);

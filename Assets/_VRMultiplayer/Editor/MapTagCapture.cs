@@ -25,6 +25,17 @@ namespace VRMultiplayer.EditorTools
     ///
     /// SIRA POZISYON DEGIL: bir plakayi silip yeniden koyarsan sona duser ve ID'si degisir.
     /// Rapor esleme tablosunu her seferinde basiyor — kaydetmeden once bakilsin diye.
+    ///
+    /// PLAKANIN YUZU: kagit BEYAZ yuze (prefabin -Z'si) yapistirilir; kirmizi yuz DUVARA bakar.
+    /// Isaretsizken iki 14x14 yuz birbirinin ayni gorunuyordu ve kagidin hangi yuze gittigi
+    /// kisiden kisiye degisebiliyordu — yazilimla duzeltilemeyen tek hata turu bu, cunku her
+    /// plaka ayri yone bakabilir. Isaretli oldugu surece hepsi ayni yone bakar; konvansiyon
+    /// ters cikarsa duzeltme burada TEK satirdir (yaw + 180).
+    ///
+    /// 180 DERECE KAYMA YOK — OLCULDU (2026-08-11, HARITA2): tag 1'in kamera ile olculmus
+    /// yaw'i 270,3 derece; ayni noktadaki plakanin urettigi yaw 270,0 derece. Fark 0,3 derece
+    /// ve konum farki 0,000 m. Yani asagidaki "yaw = p.Yaw" dogru; plakadan gelen tag'e
+    /// duzeltme eklemeyin.
     /// </summary>
     public static class MapTagCapture
     {
@@ -62,7 +73,8 @@ namespace VRMultiplayer.EditorTools
 
             if (plates.Count == 0)
                 return $"'{mapName}' haritasinda hic plaka yok.\n\n" +
-                       "Yaratici modda cark > SIPER > TagIsaret, kat 3 (merkez 1.50 m).";
+                       "Yaratici modda cark > SIPER > TagIsaret, kat 3 (merkez 1.50 m).\n" +
+                       "Plakayi BEYAZ yuzu odaya bakacak sekilde koyun — kagit oraya gidiyor.";
 
             // Tag 0 KORUNUR: origin'in tanimi, plakadan turetilemez. Once haritada varsa
             // oradan, yoksa sahnedeki kalibrasyondan alinir.
