@@ -15,8 +15,8 @@ namespace VRMultiplayer.Weapons
     /// kategoriden EN FAZLA BIR silah tasinir). Ayni kategoriden yeni bir silah alinca
     /// yuvadaki ESKISININ YERINE gecer; "bomba yerine dorduncu silah" zaten mumkun degil,
     /// yuva sayisi sabit. Her silah icin GORSEL onizleme kopyasi (mesh+materyal, script/
-    /// fizik/ag YOK) uretilir — silah secici galerisi (<see cref="WeaponSelectorUI"/>)
-    /// yuvalari SABIT sirayla gosterir: uzun namlulu, tabanca, bomba.
+    /// fizik/ag YOK) uretilir — kemer HUD'u (VRMultiplayer.UI.WeaponBeltUI) yuvalari SABIT
+    /// sirayla gosterir: uzun namlulu, tabanca, bomba.
     ///
     /// Tamamen YEREL (kendi goruntun), ag yok. Her ~0.3sn elde tuttugun grabbable'lari tarar,
     /// bu yuzden HandGrabber / GrabbableObject'e HIC dokunmaz (sadece public alanlari okur) ve
@@ -30,10 +30,10 @@ namespace VRMultiplayer.Weapons
         {
             public string Key;         // tur anahtari (dedup + equip icin)
             public WeaponCategory Category;
-            public GameObject Preview;  // gorsel-only klon (galeride gosterilir), pasif baslar
+            public GameObject Preview;  // gorsel-only klon (kemerde gosterilir), pasif baslar
             public GameObject Prefab;   // Resources/WeaponPrefabs'taki kalip; secilince BUNDAN
                                         // yeni bir tane uretilir. null = bu silah spawn edilemez
-                                        // (kalibi yok) -> galeride durur ama equip edilemez.
+                                        // (kalibi yok) -> kemerde durur ama equip edilemez.
 
             // Silah cantaya kac mermiyle girdi. Geri cagirinca bu deger yeni silaha yazilir —
             // yoksa taze silah DOLU dogar (NetworkWeapon.OnNetworkSpawn) ve galeriyi acip
@@ -42,13 +42,13 @@ namespace VRMultiplayer.Weapons
             public int Ammo = -1;    // -1 = kayit yok -> silah dolu dogsun
             public int Spares = -1;  // -1 = dokunma (profilde sinirsiz olabilir)
 
-            // Namlunun silah-LOKAL yonu (profilden). Cark onizlemeyi buna gore YAN cevirir:
+            // Namlunun silah-LOKAL yonu (profilden). Kemer HUD'u onizlemeyi buna gore YAN cevirir:
             // sabit bir aci hepsine uymaz — cogu silahin namlusu Z'de ama HK416'ninki X'te,
-            // ayni doniste digerleri yan dururken o yuzunu doner ve taninmaz olur.
+            // ayni cevirmede digerleri yan dururken o yuzunu doner ve taninmaz olur.
             public Vector3 BarrelDir = Vector3.forward;
         }
 
-        // 3 sabit yuva (index = WeaponCategory). Galeri her zaman ayni sirayi gorur:
+        // 3 sabit yuva (index = WeaponCategory). Kemer her zaman ayni sirayi gorur:
         // uzun namlulu, tabanca, bomba — bos yuva listeye girmez.
         readonly Entry[] _slots = new Entry[3];
         readonly List<Entry> _view = new List<Entry>();
@@ -161,11 +161,11 @@ namespace VRMultiplayer.Weapons
             return null;
         }
 
-        /// <summary>Kategorinin yuvasindaki silah (bos yuva = null). Cark her dilimi buradan okur.</summary>
+        /// <summary>Kategorinin yuvasindaki silah (bos yuva = null). Kemer her halkayi buradan okur.</summary>
         public Entry Slot(WeaponCategory c) => _slots[(int)c];
 
         /// <summary>Bu turu cantadan CIKAR. El bombasi TUKETILEBILIR: atilinca (kullanilinca)
-        /// cantadaki kaydi silinir, cark bir daha o bombayi sunmaz. Yeni bomba raftan alinir.
+        /// cantadaki kaydi silinir, kemer bir daha o bombayi sunmaz. Yeni bomba raftan alinir.
         /// Silahlar icin cagrilmaz — onlar tekrar kullanilabilir, cantada kalir.</summary>
         public void RemoveType(string key)
         {
@@ -212,7 +212,7 @@ namespace VRMultiplayer.Weapons
         }
 
         // Silahin SADECE gorsel kopyasi (mesh + materyal). Her mesh, silah kokune GORE
-        // yerlestirilir (ic ice olceklere dayanikli), boylece galeride tek parca gibi durur.
+        // yerlestirilir (ic ice olceklere dayanikli), boylece kemerde tek parca gibi durur.
         static GameObject BuildPreview(GrabbableObject src, Transform parent)
         {
             var root = new GameObject("Preview_" + TypeKey(src));
@@ -233,7 +233,7 @@ namespace VRMultiplayer.Weapons
                 child.AddComponent<MeshRenderer>().sharedMaterials = mr.sharedMaterials;
             }
 
-            root.SetActive(false); // galeri acilana kadar gizli
+            root.SetActive(false); // kemer acilana kadar gizli
             return root;
         }
     }

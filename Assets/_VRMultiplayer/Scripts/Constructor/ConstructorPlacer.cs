@@ -5,7 +5,7 @@ using VRMultiplayer.UI;
 using UnityEngine.InputSystem;
 #endif
 // Not: UnityEngine.XR'i "using" yapMIYORUZ — InputSystem ile ayni isimde (InputDevice) tipleri
-// var, cakisir. XR tiplerini tam adiyla yaziyoruz (WeaponSelectorUI'daki ayni ders).
+// var, cakisir. XR tiplerini tam adiyla yaziyoruz (WeaponBeltUI'daki ayni ders).
 
 namespace VRMultiplayer.Constructor
 {

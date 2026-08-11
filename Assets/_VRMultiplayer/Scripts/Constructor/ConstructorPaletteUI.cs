@@ -4,7 +4,7 @@ using VRMultiplayer.UI;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
-// UnityEngine.XR "using" YOK — InputSystem ile InputDevice adi cakisiyor (WeaponSelectorUI'daki
+// UnityEngine.XR "using" YOK — InputSystem ile InputDevice adi cakisiyor (WeaponBeltUI'daki
 // ayni ders). XR tipleri tam adiyla yaziliyor.
 
 namespace VRMultiplayer.Constructor
