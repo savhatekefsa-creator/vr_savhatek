@@ -31,7 +31,9 @@ namespace VRMultiplayer.EditorTools
         /// <summary>Ilk plakanin alacagi tag ID'si. 0 origin'in oldugu icin 1'den basliyor.</summary>
         public const int FirstTagId = 1;
 
-        const string PlateId = "tagisaret";
+        // Public: Tag Kurulum Merkezi (menu 49) plaka sayisini gostermek icin ayni kimligi
+        // kullaniyor — kopyalansaydi iki sabit sessizce ayrisabilirdi.
+        public const string PlateId = "tagisaret";
 
         [MenuItem("Tools/VR Multiplayer/47. Plakalardan Tag Yerlesimi Uret")]
         public static void CaptureMenu() =>
