@@ -121,6 +121,11 @@ namespace VRMultiplayer.UI
                 : $"[Lazer] {g.name}: modelde lazer donanimi yok — isin namlu ucundan cikacak.");
         }
 
+        /// <summary>Disaridan kapatma anahtari: true iken isin ve benek hic cizilmez.
+        /// <see cref="Weapons.MuzzleWallBlock"/> namlu duvara girince bunu kaldirir — kilitli
+        /// silahin hala nisan gostermesi "ates edebilirim" yanilgisi veriyordu.</summary>
+        public bool Suppressed { get; set; }
+
         /// <summary>Silahi tutan kisi BU istemcinin oyuncusu mu? Adanmis sunucuda / tutucu
         /// yokken false — o zaman lazer hic cizilmez.</summary>
         bool HeldByLocalPlayer
@@ -140,7 +145,7 @@ namespace VRMultiplayer.UI
             // tutan oyuncu gorur. _holder agda senkron oldugu icin her istemci bu karari
             // kendi tarafinda dogru verir; tutucu degisimi (alma/birakma/kopma) bir sonraki
             // karede buraya yansir ve isin sonup yanar.
-            bool want = _grab.IsHeld && HeldByLocalPlayer;
+            bool want = _grab.IsHeld && HeldByLocalPlayer && !Suppressed;
             if (want != _on)
             {
                 _on = want;

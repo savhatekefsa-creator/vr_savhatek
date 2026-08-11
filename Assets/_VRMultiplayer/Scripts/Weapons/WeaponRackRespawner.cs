@@ -6,7 +6,7 @@ namespace VRMultiplayer.Weapons
 {
     /// <summary>
     /// SONSUZ RAF: izgaradaki silahlardan biri alininca yerine ANINDA yenisi gelir (ekip
-    /// karari: bardaki silahlar sinirsiz). Silah secicinin butun mimarisi de buna dayanir —
+    /// karari: bardaki silahlar sinirsiz). Kemer HUD'unun butun mimarisi de buna dayanir —
     /// canta NESNE degil TUR saklar, cunku ayni turden her zaman yenisi uretilebilir.
     ///
     /// Nasil: sunucu, sahneye ELLE yerlestirilmis silahlari (NetworkObject.IsSceneObject) bir

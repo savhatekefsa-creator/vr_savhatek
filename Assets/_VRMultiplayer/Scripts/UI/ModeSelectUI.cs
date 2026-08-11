@@ -9,7 +9,7 @@ namespace VRMultiplayer.UI
     /// (<see cref="PlayerEntryUI"/>) artik ancak buradan OYUNCU secilince dogar.
     ///
     /// Sahneye/prefaba DOKUNMAZ: kendini <see cref="RuntimeInitializeOnLoadMethod"/> ile kurar
-    /// (ayni desen: <see cref="PlayerEntryUI"/>, <see cref="WeaponSelectorUI"/>,
+    /// (ayni desen: <see cref="PlayerEntryUI"/>, <see cref="WeaponBeltUI"/>,
     /// <see cref="SingleAudioListener"/>). Yaratici mod ayri bir dalda gelistigi icin bu ONEMLI:
     /// sahne dosyasina dokunmayan iki dal catismaz.
     ///

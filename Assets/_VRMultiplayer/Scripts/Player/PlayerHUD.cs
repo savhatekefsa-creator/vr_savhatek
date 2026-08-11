@@ -35,6 +35,7 @@ namespace VRMultiplayer
         ScoreboardUI _scoreboard;       // B ile acilan mac tablosu
         MatchStatusUI _matchStatus;     // surekli gorunen faz gostergesi + geri sayim + ses: skorlar + sure + kendi bilgin
         SpawnRouteGuide _route;         // zeminde dogum bolgesine giden rota
+        HeadWallFade _wallFade;         // kafa duvara girince ekran kararmasi (oda-olcegi hile kapisi)
         int _lastHealth = PlayerHealth.MaxHealth;
         float _targetRatio = 1f;
         float _displayedRatio = -1f;   // -1: ilk deger henuz uygulanmadi (animasyonsuz atanir)
@@ -76,6 +77,9 @@ namespace VRMultiplayer
             if (_scoreboard != null) Destroy(_scoreboard.gameObject);
             if (_matchStatus != null) Destroy(_matchStatus.gameObject);
             if (_route != null) Destroy(_route.gameObject);
+            // Kararma perdesi MUTLAKA temizlenmeli: sahnede kalirsa kafa bir duvarin yaninda
+            // kaldigi anda ekran siyah donar ve onu kapatacak kimse kalmaz.
+            if (_wallFade != null) Destroy(_wallFade.gameObject);
         }
 
         void OnHealthChanged(int prev, int now)
@@ -269,6 +273,11 @@ namespace VRMultiplayer
             // Dogum bolgesine giden zemin rotasi. RespawnGuide "bolgene git + x.x m" YAZAR,
             // bu ise YOLU gosterir — ikisi birbirini tamamlar, ayni durumla beslenirler.
             _route = new GameObject("Spawn Route").AddComponent<SpawnRouteGuide>();
+
+            // Kafa duvara girince ekran kararmasi. Diger efektler gibi _root'un DISINDA ve
+            // olu oyuncuda da acik: bu bir HUD susu degil, oda-olceginde duvar arkasini
+            // gormeyi kapatan bir kapi. Olu oyuncunun kamerasi da odada dolasiyor.
+            _wallFade = new GameObject("Head Wall Fade").AddComponent<HeadWallFade>();
             Debug.Log("[PlayerHUD] BuildHud tamamlandi.");
         }
     }
