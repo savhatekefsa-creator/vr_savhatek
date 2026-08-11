@@ -19,6 +19,13 @@ namespace VRMultiplayer
     {
         const string ResourcePath = "FPHands/FP_Hands";
 
+        // FBX'in Glove_FP mesh'i parmak bogumlarinda TEK kemige katili bagli (vertexlerin
+        // %55'i) — parmak kivrilinca bogumlarda keskin kirilmanin sebebi. Duzeltilmis
+        // agirliklarla TURETILMIS kopya (uretimi: GripOlcum/DEVAM.md'deki reweight adimi);
+        // FBX'e dokunmamak icin degisim burada, kurulum sirasinda yapiliyor. Asset yoksa
+        // orijinal mesh aynen kalir.
+        const string ReweightedGlovePath = "FPHands/Glove_FP_Reweighted";
+
         /// <summary>
         /// Instantiates FP_Hands under <paramref name="avatarRoot"/> and retargets its
         /// renderers onto the avatar's skeleton. Returns the instance, or null on any
@@ -43,8 +50,15 @@ namespace VRMultiplayer
             var instance = Object.Instantiate(prefab, avatarRoot.transform, false);
             instance.name = "FP_Hands";
 
+            var reweighted = Resources.Load<Mesh>(ReweightedGlovePath);
+
             foreach (var smr in instance.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
+                // Bindpose'lar kopyada birebir ayni oldugu icin kemik yeniden baglamadan
+                // once/sonra atamak farksiz — burada, dongunun en basinda yapiliyor.
+                if (reweighted != null && smr.name == "Glove_FP")
+                    smr.sharedMesh = reweighted;
+
                 var src = smr.bones;
                 var dst = new Transform[src.Length];
                 for (int i = 0; i < src.Length; i++)
