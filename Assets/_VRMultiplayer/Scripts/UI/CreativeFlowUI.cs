@@ -301,8 +301,9 @@ namespace VRMultiplayer.UI
         {
             OpenConfirm("TAG KURULUMU",
                 "Yeni mekân: önce AprilTag'leri yerleştirelim.\n\n" +
-                "Plakaları duvarlara koyacaksın, BEYAZ yüzü odaya baksın —\n" +
-                "kâğıt oraya yapıştırılıyor. Sonra hepsi tek seferde kaydedilir.",
+                "Plakayı duvara koy, BEYAZ yüzü odaya baksın; yanındaki\n" +
+                "kâğıdı aynı anda tam o noktaya yapıştırsın.\n\n" +
+                "Bitince inşa modundan çık — tag'ler otomatik kaydedilir.",
                 "BAŞLA", "ATLA", UITheme.AccentCyan, basla =>
             {
                 // ATLA gecerli bir secim: kagitlar elde degilse tag kurulumunu simdi
@@ -314,47 +315,27 @@ namespace VRMultiplayer.UI
         }
 
         /// <summary>
-        /// Plaka adimindan cikildi. Kagidin yapistirilmasi FIZIKSEL is; yazilim bunu
-        /// dogrulayamaz, o yuzden beyan isteniyor. Once acilsaydi kalibrasyon tag'i
-        /// olmadigi bir yerde arardi ve dogru tag'lerin kurdugu cerceveyi de bozardi.
-        /// </summary>
-        void AskPapersGlued()
-        {
-            int plaka = 0;
-            var s = ConstructorSession.Instance;
-            if (s != null && s.Layout != null) plaka = TagCapture.PlateCount(s.Layout);
-
-            if (plaka == 0)
-            {
-                OpenConfirm("HİÇ PLAKA YOK",
-                    "Tag kurulumu için en az bir plaka gerekiyor.\n\n" +
-                    "Çark > SİPER > TagIsaret, kat 3.",
-                    "GERİ DÖN", "VAZGEÇ", UITheme.AccentCyan, geri =>
-                {
-                    if (geri) EnterEditor();
-                    else { _tagStep = TagStep.Yok; BeginExitFlow(); }
-                });
-                return;
-            }
-
-            OpenConfirm("KÂĞITLAR YAPIŞTIRILDI MI?",
-                plaka + " plaka kondu.\n\n" +
-                "Kâğıt tag'leri plakaların BEYAZ yüzüne yapıştırdıysan kaydet.\n" +
-                "Yapıştırmadan açılan tag, kalibrasyonu bozar.",
-                "EVET, KAYDET", "HENÜZ DEĞİL", UITheme.AccentCyan, hazir =>
-            {
-                if (hazir) FinishTagSetup();
-                else EnterEditor();          // plaka koymaya devam
-            });
-        }
-
-        /// <summary>
         /// Tag kurulumunu KAYDET: origin'i yaz, plakalari tag'e cevir, hepsini kalibrasyona ac.
         /// Cevrimi her zaman YETKI sahibi yapar (dosya ve harita onda); gozluk isterse RPC ile.
+        ///
+        /// "KAGITLAR YAPISTIRILDI MI" DIYE SORMUYORUZ. Sorulmasi, kagidin plakadan BAGIMSIZ
+        /// bir zamanda asildigi varsayimina dayaniyordu; sahadaki is boyle yurumuyor: gozlugu
+        /// takan kisi plakayi koyarken ikinci kisi ayni anda, onun tarifiyle kagidi tam o
+        /// noktaya yapistiriyor. Yerlestirme ile yapistirma es zamanli oldugu icin ayri bir
+        /// onay, her turda basilan ve hicbir zaman "hayir" cevabi almayan bir ekran olurdu.
         /// </summary>
         void FinishTagSetup()
         {
             _tagStep = TagStep.Yok;
+
+            // Hic plaka konmadiysa cevrilecek bir sey yok: kullanici adimi fiilen atlamis
+            // demektir. Hata ekrani gostermek gurultu olurdu, normal cikisa birakiyoruz.
+            var oturum = ConstructorSession.Instance;
+            if (oturum == null || oturum.Layout == null || TagCapture.PlateCount(oturum.Layout) == 0)
+            {
+                BeginExitFlow();
+                return;
+            }
 
             if (ConstructorSession.IsMapAuthority)
             {
@@ -367,6 +348,10 @@ namespace VRMultiplayer.UI
                         "GERİ DÖN", "VAZGEÇ", UITheme.TeamRedEdge, geri =>
                     {
                         if (geri) { _tagStep = TagStep.Plaka; EnterEditor(); }
+                        // VAZGEC de bir yere cikmali: normal kaydetme zinciri. Hicbir sey
+                        // yapmasaydi kullanici, konmus plakalari olan isimsiz bir haritayla
+                        // menude kalirdi ve o emegi kaydetmenin yolu gorunmezdi.
+                        else BeginExitFlow();
                     });
                     return;
                 }
@@ -408,10 +393,10 @@ namespace VRMultiplayer.UI
         /// </summary>
         void BeginExitFlow()
         {
-            // TAG KURULUMU ACIKKEN cikis "kaydet mi?" degil "kagitlar hazir mi?" demek.
-            // Normal zincire dusseydi kullanici plakalari koyup cikinca harita adi sorulur,
-            // tag'ler ise hic uretilmezdi -- akisin tam ortasinda sessizce kaybolurdu.
-            if (_tagStep == TagStep.Plaka) { AskPapersGlued(); return; }
+            // TAG KURULUMU ACIKKEN insa modundan cikmak "bitirdim" demek. Normal zincire
+            // dusseydi kullanici plakalari koyup cikinca harita adi sorulur, tag'ler ise hic
+            // uretilmezdi -- akisin tam ortasinda sessizce kaybolurdu.
+            if (_tagStep == TagStep.Plaka) { FinishTagSetup(); return; }
 
             var s = ConstructorSession.Instance;
             if (s == null || !s.HasUnsavedChanges) return;
