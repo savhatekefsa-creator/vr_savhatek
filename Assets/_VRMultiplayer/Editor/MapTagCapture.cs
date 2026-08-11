@@ -15,6 +15,15 @@ namespace VRMultiplayer.EditorTools
     /// yapistirilinca soru ortadan kalkiyor: plaka nereye duserse orasi dogru oluyor. Izgara
     /// kuantalamasi (6.25 cm) da bu yuzden zararsiz.
     ///
+    /// AMA YALNIZCA KAGIT SONRA YAPISTIRILIRSA. "Plaka dogruyu tanimlar" zinciri kagidin
+    /// plakayi TAKIP etmesine dayaniyor. Kagit ZATEN DUVARDAYSA yon tersine doner: plaka
+    /// kagidi kovalamak zorunda kalir ve 6.25 cm'lik izgaraya tam oturamaz. Olculdu
+    /// (2026-08-11, ayni fiziksel tag): kamerayla olculmus tag 2 ile plakadan turetileni
+    /// arasinda 6,1 cm ve 1,82 derece fark cikti — kuantalamanin tam beklenen buyuklugu.
+    ///
+    /// KURAL: kagidi asili olan bir tag'i plakadan YENIDEN turetmeyin, kamera olcumu daha
+    /// iyidir. Plaka yontemi YENI tag icindir.
+    ///
     /// ID NEREDEN GELIYOR: plakanin KOYULMA SIRASINDAN. Her yerlestirme artan bir
     /// <see cref="PlacedProp.instanceId"/> aliyor (<see cref="MapLayout.AddWithId"/>), yani
     /// sira zaten veride. Ilk konan plaka <see cref="FirstTagId"/>, sonraki bir sonraki.
@@ -29,13 +38,21 @@ namespace VRMultiplayer.EditorTools
     /// PLAKANIN YUZU: kagit BEYAZ yuze (prefabin -Z'si) yapistirilir; kirmizi yuz DUVARA bakar.
     /// Isaretsizken iki 14x14 yuz birbirinin ayni gorunuyordu ve kagidin hangi yuze gittigi
     /// kisiden kisiye degisebiliyordu — yazilimla duzeltilemeyen tek hata turu bu, cunku her
-    /// plaka ayri yone bakabilir. Isaretli oldugu surece hepsi ayni yone bakar; konvansiyon
-    /// ters cikarsa duzeltme burada TEK satirdir (yaw + 180).
+    /// plaka ayri yone bakabilir.
     ///
-    /// 180 DERECE KAYMA YOK — OLCULDU (2026-08-11, HARITA2): tag 1'in kamera ile olculmus
-    /// yaw'i 270,3 derece; ayni noktadaki plakanin urettigi yaw 270,0 derece. Fark 0,3 derece
-    /// ve konum farki 0,000 m. Yani asagidaki "yaw = p.Yaw" dogru; plakadan gelen tag'e
-    /// duzeltme eklemeyin.
+    /// YAW KONVANSIYONU DOGRULANDI (2026-08-11) — uc bagimsiz gozlem ayni yeri gosterdi:
+    ///
+    ///   1. Cihazda plaka konurken BEYAZ yuz oyuncuya, yani ODAYA bakiyor. Demek ki plakanin
+    ///      +Z'si (yani p.Yaw yonu) DUVARIN ICINE bakiyor.
+    ///   2. HARITA2'de tag 1'in kamerayla olculmus yaw'i 270,3 derece; ayni noktadaki plakanin
+    ///      urettigi yaw 270,0 derece, konum farki 0,000 m. Yani kameranin olctugu yaw da
+    ///      duvarin icine bakiyor — ikisi ayni yon, 180 derece kayma YOK.
+    ///   3. Tag 0 tek yaw referansidir (yawFromReferenceOnly + offsetReferenceTagId = 0,
+    ///      bkz. AprilTagCalibration satir 834). Yaw'i 180 derece yanlis olsaydi her yaw
+    ///      duzeltmesi dunyayi 180 derece dondururdu; sistem calistigina gore dogru.
+    ///
+    /// SONUC: asagidaki "yaw = p.Yaw" dogru, plakadan gelen tag'e duzeltme EKLEMEYIN.
+    /// yawDegrees kagidin baktigi yon DEGIL, tersi — duvarin icini gosteriyor.
     /// </summary>
     public static class MapTagCapture
     {
@@ -102,9 +119,11 @@ namespace VRMultiplayer.EditorTools
                 // yani RectCenter dogrudan plakanin merkezini veriyor.
                 Vector3 world = grid.RectCenter(rect, p.level, layout.levelHeight);
 
-                // Onceki yerlesimde bu ID varsa YAW'INI KORU. Plaka 15 derecelik adimlarda
-                // duruyor; kameranin olctugu yaw duvarin gercek acisina daha yakin ve kagit
-                // duvara duz yapistirildigi icin acisini duvar belirliyor.
+                // Onceki yerlesimde bu ID varsa YAW'INI KORU. Plaka 5 derecelik adimlarda
+                // duruyor (RotationStepDegrees), yani kuantalama en fazla 2,5 derece hata
+                // birakir; kameranin olctugu yaw duvarin gercek acisina daha yakin ve kagit
+                // duvara duz yapistirildigi icin acisini duvar belirliyor. Olculdu: ayni
+                // fiziksel tag icin kamera 271,82 derece derken plaka 270,00 verdi (1,82).
                 var eski = FindTag(layout.tags, id) ?? FindTag(SceneLayout(), id);
                 float yaw = eski != null ? eski.yawDegrees : p.Yaw;
 
@@ -127,9 +146,21 @@ namespace VRMultiplayer.EditorTools
                     useForCalibration = acik,
                 });
 
+                // NE KADAR OYNADI: izgara 6,25 cm'lik hucrelere kuantalıyor, yani plakayi
+                // ZATEN DUVARDA OLAN bir kagida gore koymak birkac cm sapma birakir. Bu sayi
+                // yazilmadan fark ancak iki haritayi elle karsilastirinca goruluyordu —
+                // cihazda yasandi: ayni fiziksel tag icin iki harita 6,1 cm ayristi.
+                string oynama = "";
+                if (eski != null)
+                {
+                    float cm = (world - eski.position).magnitude * 100f;
+                    oynama = cm < 0.05f ? "  (konum ayni)" : $"  KONUM {cm:0.0} cm OYNADI";
+                }
+
                 sb.AppendLine($"  tag {id}   instanceId {p.instanceId,-4}  " +
                               $"{world.x:0.000} {world.y:0.000} {world.z:0.000}  yaw {yaw:0.0}" +
-                              (eski != null ? "  (yaw korundu)" : "  (yaw plakadan, 15 derece adim)") +
+                              (eski != null ? "  (yaw korundu)" : "  (yaw plakadan, 5 derece adim)") +
+                              oynama +
                               (acik ? "  ACIK kaldi" : "  KAPALI"));
                 id++;
             }

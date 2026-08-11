@@ -35,7 +35,16 @@ namespace VRMultiplayer
                      "tag'in zeminden yuksekligi ve origin'e gore yeridir.")]
             public Vector3 position = new Vector3(0f, 1.0f, 0f);
 
-            [Tooltip("Tag'in baktigi yon — ortak cercevenin +Z'sine gore derece.")]
+            [Tooltip("Tag'in ekseninin yonu — ortak cercevenin +Z'sine gore derece.\n\n" +
+                     "DIKKAT, KAGIDIN BAKTIGI YON DEGIL: bu deger tam TERSINI, yani DUVARIN " +
+                     "ICINI gosteriyor. Tespit cozucusu tag'in +Z'sini kagidin ARKASINA " +
+                     "veriyor ve karsilastirma (satir 789) olculen yaw ile bu alani dogrudan " +
+                     "esitliyor, yani alan da ayni konvansiyonda olmak zorunda.\n\n" +
+                     "Dogrulandi 2026-08-11: cihazda plakanin BEYAZ (kagit) yuzu odaya " +
+                     "bakarken plakanin urettigi yaw 270,0 derece cikti; ayni noktada " +
+                     "kameranin olctugu yaw 270,3 derece. Ikisi de duvarin icini gosteriyor.\n\n" +
+                     "Duvara asili bir tag icin pratik kural: kagida bakarken okudugun yon " +
+                     "artı 180.")]
             public float yawDegrees;
 
             [Tooltip("Bu tag KALIBRASYONDA kullanilsin mi.\n\n" +
