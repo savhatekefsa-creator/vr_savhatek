@@ -125,7 +125,18 @@ namespace VRMultiplayer.EditorTools
                 // duvara duz yapistirildigi icin acisini duvar belirliyor. Olculdu: ayni
                 // fiziksel tag icin kamera 271,82 derece derken plaka 270,00 verdi (1,82).
                 var eski = FindTag(layout.tags, id) ?? FindTag(SceneLayout(), id);
+
+                // -180..180'e NORMALLESTIR. Hesapta gereksiz (her yer Mathf.DeltaAngle
+                // kullaniyor) ama OKUMADA sart: plaka yaw'i "rot * 5" ile hep POZITIF cikiyor
+                // (270), kamera olcumu ise Atan2'den -180..180 geliyor (-90). Ayni fiziksel
+                // yon iki ayri sayi olarak yazilinca dosyaya bakan kisi "yaw 270'ti, nasil
+                // -89 oldu" diye soruyor -- soruldu. Nudge kodu (AprilTagCalibration satir
+                // 1242) zaten bu araligi kanonik kabul ediyor, ayni yere hizalaniyoruz.
+                // Aralik (-180, 180]: Repeat kullanmak 180'i -180 yapardi ve tag 0 elle 180
+                // yazildigi icin dosyada 180 ile -180 yan yana gorunurdu -- ayni yon, ama
+                // ayni soruyu bir daha sordururdu.
                 float yaw = eski != null ? eski.yawDegrees : p.Yaw;
+                if (yaw > 180f) yaw -= 360f;
 
                 // YENI tag KAPALI dogar: kagit henuz plakanin uzerinde olmayabilir, ve
                 // dogrulanmadan kalibrasyona giren bir tag dogru olanlarin kurdugu cerceveyi
