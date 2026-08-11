@@ -31,7 +31,10 @@ namespace VRMultiplayer.EditorTools
         Vector2 _scroll;
         string _search = "";
         int _categoryFilter = -1;         // -1 = hepsi
+        int _paletteFilter = -1;          // -1 = hepsi, 0 = paletsiz, 1+ = palettes[i-1]
         bool _onlyPalette;
+        bool _showPalettes = true;
+        string _newPaletteName = "";
         readonly List<string> _problems = new List<string>();
 
         // Palet kurallarinin yerel kopyasi DEGIL: oturum acik olmadan da dogru cevap
@@ -59,9 +62,198 @@ namespace VRMultiplayer.EditorTools
 
             DrawToolbar();
             DrawSummary();
+            DrawPaletteManager();
             DrawDropArea();
             DrawList();
             DrawFooter();
+        }
+
+        // ------------------------------------------------------------- paletler
+
+        /// <summary>
+        /// Create, rename and fill the named prop sets the player switches between in build mode.
+        ///
+        /// This is the whole point of palettes being DATA instead of an enum: adding "UZAY" is
+        /// something you do here in a text field, not in a source file followed by a recompile.
+        ///
+        /// A prop with NO palette shows under every one of them, which is why the manager keeps
+        /// saying so — it is the difference between "this piece is scenery for one world" and
+        /// "this piece is a spawn ring and every world needs it".
+        /// </summary>
+        void DrawPaletteManager()
+        {
+            _showPalettes = EditorGUILayout.Foldout(_showPalettes,
+                $"Paletler ({_lib.PaletteCount})  —  insa modunda carkin ortasindan secilir", true,
+                EditorStyles.foldoutHeader);
+            if (!_showPalettes) return;
+
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                // --- yeni palet ---
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField("Yeni palet adi", GUILayout.Width(95f));
+                    _newPaletteName = EditorGUILayout.TextField(_newPaletteName);
+
+                    string wantId = PropLibrary.MakePaletteId(_newPaletteName);
+                    bool valid = !string.IsNullOrEmpty(wantId) && _lib.PaletteById(wantId) == null;
+
+                    using (new EditorGUI.DisabledScope(!valid))
+                        if (GUILayout.Button("Olustur", GUILayout.Width(80f)))
+                        {
+                            var list = new List<PropPalette>(_lib.palettes ?? new PropPalette[0])
+                            {
+                                new PropPalette
+                                {
+                                    id = wantId,
+                                    displayName = _newPaletteName.Trim().ToUpperInvariant(),
+                                },
+                            };
+                            _lib.palettes = list.ToArray();
+                            _newPaletteName = "";
+                            GUI.FocusControl(null);
+                            Save();
+                        }
+                }
+
+                if (!string.IsNullOrEmpty(_newPaletteName) &&
+                    _lib.PaletteById(PropLibrary.MakePaletteId(_newPaletteName)) != null)
+                    EditorGUILayout.HelpBox("Bu kimlikte bir palet zaten var.", MessageType.Warning);
+
+                if (_lib.PaletteCount == 0)
+                {
+                    EditorGUILayout.HelpBox(
+                        "Henuz palet yok — tum proplar tek listede cikiyor. Bir palet olustur, " +
+                        "sonra asagidaki listede her propun palet kutusundan ona ata.",
+                        MessageType.Info);
+                    return;
+                }
+
+                EditorGUILayout.Space(2f);
+
+                // --- mevcut paletler ---
+                for (int i = 0; i < _lib.palettes.Length; i++)
+                {
+                    var pal = _lib.palettes[i];
+                    if (pal == null) continue;
+
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        EditorGUILayout.LabelField(new GUIContent(pal.id, "sabit kimlik — proplar bunu tutar"),
+                            EditorStyles.miniLabel, GUILayout.Width(110f));
+
+                        string shown = EditorGUILayout.TextField(pal.displayName, GUILayout.Width(160f));
+                        if (shown != pal.displayName) { pal.displayName = shown; Save(); }
+
+                        int owned = _lib.OwnedCount(pal.id);
+                        EditorGUILayout.LabelField($"{owned} prop", EditorStyles.miniLabel,
+                            GUILayout.Width(70f));
+
+                        // Carkin dilim sirasi BU listenin sirasi — o yuzden sira buradan
+                        // degistirilebilmeli, yoksa dilimlerin yeri yalnizca paletlerin
+                        // olusturulma sirasina bagli kalirdi.
+                        using (new EditorGUI.DisabledScope(i == 0))
+                            if (GUILayout.Button("▲", GUILayout.Width(24f))) { SwapPalettes(i, i - 1); break; }
+                        using (new EditorGUI.DisabledScope(i == _lib.palettes.Length - 1))
+                            if (GUILayout.Button("▼", GUILayout.Width(24f))) { SwapPalettes(i, i + 1); break; }
+
+                        // Filtrede gorunen her seyi tek hamlede bu palete atamak: sekiz parcayi
+                        // tek tek acilir kutudan secmek, aramayi yazip bir dugmeye basmaktan
+                        // hem yavas hem daha hatali.
+                        if (GUILayout.Button(new GUIContent("Filtredekileri ata",
+                                "Su an listede gorunen TUM proplari bu palete tasir"),
+                                GUILayout.Width(130f)))
+                            AssignFiltered(pal.id);
+
+                        if (GUILayout.Button("Bosalt", GUILayout.Width(60f)))
+                            ClearPalette(pal.id);
+
+                        if (GUILayout.Button("Sil", GUILayout.Width(40f)))
+                            RemovePalette(i);
+                    }
+                }
+
+                EditorGUILayout.LabelField(
+                    "Buradaki her palet insa modunda carkta BIR DILIM olur. Paleti olmayan " +
+                    "proplar 'DIGER' diliminde toplanir — kaybolmazlar.", EditorStyles.miniLabel);
+            }
+        }
+
+        /// <summary>Reorders palettes — this list's order IS the wheel's slice order.</summary>
+        void SwapPalettes(int a, int b)
+        {
+            if (a < 0 || b < 0 || a >= _lib.palettes.Length || b >= _lib.palettes.Length) return;
+            var tmp = _lib.palettes[a];
+            _lib.palettes[a] = _lib.palettes[b];
+            _lib.palettes[b] = tmp;
+            Save();
+        }
+
+        /// <summary>Moves every prop the current filter shows into <paramref name="paletteId"/>.</summary>
+        void AssignFiltered(string paletteId)
+        {
+            var hits = new List<PropDef>();
+            foreach (var p in _lib.props)
+                if (p != null && Matches(p) && p.paletteId != paletteId) hits.Add(p);
+
+            if (hits.Count == 0)
+            {
+                ShowNotification(new GUIContent("Filtrede tasinacak prop yok"));
+                return;
+            }
+
+            if (!EditorUtility.DisplayDialog("Palete ata",
+                    $"Listede gorunen {hits.Count} prop '{_lib.PaletteName(paletteId)}' paletine " +
+                    "tasinsin mi?\n\n" +
+                    "Bu proplar bundan sonra YALNIZCA o palet secildiginde cikar.",
+                    "Ata", "Vazgec"))
+                return;
+
+            foreach (var p in hits) p.paletteId = paletteId;
+            Save();
+            ShowNotification(new GUIContent(hits.Count + " prop atandi"));
+        }
+
+        /// <summary>Sends a palette's props back to the "DIGER" slice.</summary>
+        void ClearPalette(string paletteId)
+        {
+            int n = 0;
+            foreach (var p in _lib.props)
+                if (p != null && p.paletteId == paletteId) { p.paletteId = ""; n++; }
+            Save();
+            ShowNotification(new GUIContent(n + " prop paletsize alindi"));
+        }
+
+        /// <summary>
+        /// Deletes a palette AND releases its props.
+        ///
+        /// Releasing is not optional: a prop pointing at an id that no longer exists is not
+        /// "unassigned", it is unreachable — the runtime filter would never match it and the
+        /// piece would quietly vanish from every palette at once.
+        /// </summary>
+        void RemovePalette(int index)
+        {
+            var pal = _lib.palettes[index];
+            int owned = _lib.OwnedCount(pal.id);
+
+            if (!EditorUtility.DisplayDialog("Paleti sil",
+                    $"'{pal.displayName}' paleti silinsin mi?\n\n" +
+                    (owned > 0
+                        ? $"Icindeki {owned} prop 'DIGER' dilimine alinir — silinmezler, " +
+                          "kutuphanede ve carkta kalirlar."
+                        : "Palet bos."),
+                    "Sil", "Vazgec"))
+                return;
+
+            foreach (var p in _lib.props)
+                if (p != null && p.paletteId == pal.id) p.paletteId = "";
+
+            var list = new List<PropPalette>(_lib.palettes);
+            list.RemoveAt(index);
+            _lib.palettes = list.ToArray();
+            if (_paletteFilter > index) _paletteFilter--;
+            else if (_paletteFilter == index + 1) _paletteFilter = -1;
+            Save();
         }
 
         // ------------------------------------------------------------- ust serit
@@ -76,6 +268,9 @@ namespace VRMultiplayer.EditorTools
                 names.AddRange(System.Enum.GetNames(typeof(PropCategory)));
                 _categoryFilter = EditorGUILayout.Popup(_categoryFilter + 1, names.ToArray(),
                     EditorStyles.toolbarPopup, GUILayout.Width(140f)) - 1;
+
+                _paletteFilter = EditorGUILayout.Popup(_paletteFilter + 1, PaletteFilterNames(),
+                    EditorStyles.toolbarPopup, GUILayout.Width(150f)) - 1;
 
                 _onlyPalette = GUILayout.Toggle(_onlyPalette, "Sadece palettekiler", EditorStyles.toolbarButton,
                     GUILayout.Width(140f));
@@ -188,28 +383,62 @@ namespace VRMultiplayer.EditorTools
         {
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
 
-            PropCategory? lastCat = null;
-            for (int i = 0; i < _lib.props.Length; i++)
-            {
-                var p = _lib.props[i];
-                if (p == null || !Matches(p)) continue;
+            // Artik PALETE gore gruplaniyor, kategoriye gore degil: insa modunda carkin
+            // dilimleri paletler, ve bu listenin oradaki duzeni yansitmasi gerekiyor.
+            var order = new List<string>();
+            if (_lib.palettes != null)
+                foreach (var pal in _lib.palettes)
+                    if (pal != null) order.Add(pal.id);
+            order.Add("");   // paletsizler en sona
 
-                if (lastCat != p.category)
+            foreach (var pid in order)
+            {
+                bool header = false;
+                for (int i = 0; i < _lib.props.Length; i++)
                 {
-                    lastCat = p.category;
-                    EditorGUILayout.Space(4f);
-                    EditorGUILayout.LabelField(ConstructorPaletteUI.CategoryName(p.category).ToUpperInvariant(),
-                        EditorStyles.boldLabel);
+                    var p = _lib.props[i];
+                    if (p == null || (p.paletteId ?? "") != pid || !Matches(p)) continue;
+
+                    if (!header)
+                    {
+                        header = true;
+                        EditorGUILayout.Space(4f);
+                        EditorGUILayout.LabelField(
+                            _lib.PaletteName(pid) + (pid == "" ? "  (carkta DIGER dilimi)" : ""),
+                            EditorStyles.boldLabel);
+                    }
+                    DrawRow(p, i);
                 }
-                DrawRow(p, i);
             }
 
             EditorGUILayout.EndScrollView();
         }
 
+        /// <summary>"Tum paletler", "Paletsiz", sonra her palet — indeks 0 filtresizdir.</summary>
+        string[] PaletteFilterNames()
+        {
+            var names = new List<string> { "Tum paletler", "DIGER (paletsiz)" };
+            if (_lib.palettes != null)
+                foreach (var pal in _lib.palettes)
+                    if (pal != null)
+                        names.Add(string.IsNullOrEmpty(pal.displayName) ? pal.id : pal.displayName);
+            return names.ToArray();
+        }
+
+        /// <summary>Palet filtresinin karsiligi: 0 = paletsiz, 1+ = o palet.</summary>
+        bool MatchesPaletteFilter(PropDef p)
+        {
+            if (_paletteFilter < 0) return true;
+            if (_paletteFilter == 0) return string.IsNullOrEmpty(p.paletteId);
+            int i = _paletteFilter - 1;
+            if (_lib.palettes == null || i >= _lib.palettes.Length || _lib.palettes[i] == null) return true;
+            return p.paletteId == _lib.palettes[i].id;
+        }
+
         bool Matches(PropDef p)
         {
             if (_categoryFilter >= 0 && (int)p.category != _categoryFilter) return false;
+            if (!MatchesPaletteFilter(p)) return false;
             if (_onlyPalette && (p.hiddenInPalette || !InPalette(p))) return false;
             if (string.IsNullOrEmpty(_search)) return true;
             return p.id.IndexOf(_search, System.StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -237,6 +466,15 @@ namespace VRMultiplayer.EditorTools
                     var cat = (PropCategory)EditorGUILayout.EnumPopup(p.category, GUILayout.Width(80f));
                     if (cat != p.category) { p.category = cat; Save(); }
 
+                    // Palet secici: 0 = paletsiz (her sette gorunur), 1+ = o palet.
+                    int cur = PaletteIndexOf(p.paletteId);
+                    int pick = EditorGUILayout.Popup(cur, PaletteChoiceNames(), GUILayout.Width(110f));
+                    if (pick != cur)
+                    {
+                        p.paletteId = pick == 0 ? "" : _lib.palettes[pick - 1].id;
+                        Save();
+                    }
+
                     EditorGUILayout.LabelField(FootprintText(p), GUILayout.Width(150f));
 
                     bool free = GUILayout.Toggle(p.freeRotation, "5°", "Button", GUILayout.Width(40f));
@@ -255,6 +493,30 @@ namespace VRMultiplayer.EditorTools
                 if (!string.IsNullOrEmpty(warn))
                     EditorGUILayout.LabelField("    " + warn, EditorStyles.miniLabel);
             }
+        }
+
+        /// <summary>Satirdaki acilir kutunun secenekleri: paletsiz + tum paletler.</summary>
+        string[] PaletteChoiceNames()
+        {
+            var names = new List<string> { "DIGER" };
+            if (_lib.palettes != null)
+                foreach (var pal in _lib.palettes)
+                    if (pal != null)
+                        names.Add(string.IsNullOrEmpty(pal.displayName) ? pal.id : pal.displayName);
+            return names.ToArray();
+        }
+
+        /// <summary>
+        /// Dropdown index for a prop's palette. An id that no longer resolves falls back to 0
+        /// ("her sette") so the control stays usable — the real problem is reported by
+        /// <see cref="PropLibrary.Validate"/>, which says the prop is currently unreachable.
+        /// </summary>
+        int PaletteIndexOf(string paletteId)
+        {
+            if (string.IsNullOrEmpty(paletteId) || _lib.palettes == null) return 0;
+            for (int i = 0; i < _lib.palettes.Length; i++)
+                if (_lib.palettes[i] != null && _lib.palettes[i].id == paletteId) return i + 1;
+            return 0;
         }
 
         void Remove(PropDef p, int index)
@@ -338,6 +600,12 @@ namespace VRMultiplayer.EditorTools
             _lib.InvalidateIndex();
             EditorUtility.SetDirty(_lib);
             AssetDatabase.SaveAssets();
+
+            // Play modunda acik bir oturum varsa suzgeclerini de tazele: palet duzenlemenin
+            // gozluge yansimasi icin oyunu yeniden baslatmak gerekmesin.
+            if (Application.isPlaying && ConstructorSession.Instance != null)
+                ConstructorSession.Instance.InvalidatePlaceable();
+
             _problems.Clear();
             _problems.AddRange(_lib.Validate());
         }

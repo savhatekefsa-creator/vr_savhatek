@@ -441,6 +441,16 @@ namespace VRMultiplayer.Constructor
             Grid = grid;
             Root = MapBuilder.EnsureRoot();
 
+            // Carki haritanin kendi setine al. SetPalette() ustunden DEGIL: o, degisikligi
+            // haritaya geri yazip kaydedilmemis-degisiklik bayragini kaldirirdi — yalnizca bir
+            // harita ACMAK haritayi kirletmemeli.
+            string want = Layout.paletteId ?? "";
+            if (ActivePaletteId != want)
+            {
+                ActivePaletteId = want;
+                InvalidatePlaceable();
+            }
+
             // Once dolulugu isle, SONRA sahneyi kur: boylece kayitli haritadaki cakisan bir
             // yerlestirme (elle duzenlenmis JSON, eski kutuphane) sessizce ust uste binmez.
             int applied = 0;
@@ -1353,45 +1363,100 @@ namespace VRMultiplayer.Constructor
             }
         }
 
+        // ------------------------------------------------------------- palette
+
         /// <summary>
-        /// Categories that actually contain something placeable, in enum order. The palette
-        /// wheel draws one slice per entry — an empty slice is a slice the player can waste a
-        /// selection on, so empty categories never get one.
+        /// The wheel slice currently selected. Empty means the "DIGER" slice — props nobody has
+        /// filed into a palette yet.
         /// </summary>
-        public IReadOnlyList<PropCategory> Categories
+        public string ActivePaletteId { get; private set; } = "";
+
+        /// <summary>
+        /// Selects a wheel slice.
+        ///
+        /// NO CACHE INVALIDATION HERE, unlike the earlier two-axis design: the palette does not
+        /// FILTER the placeable set any more, it SLICES it. Every slice is built once and stays
+        /// valid until the library itself changes, so switching slices is free.
+        /// </summary>
+        public void SetPalette(string paletteId)
         {
-            get
+            paletteId = paletteId ?? "";
+            if (ActivePaletteId == paletteId) return;
+            ActivePaletteId = paletteId;
+
+            // Harita hangi dilimde birakildigini hatirlasin: bir uzay haritasi tekrar
+            // acildiginda cark UZAY'da baslar.
+            if (Layout != null && Layout.paletteId != paletteId)
             {
-                if (_categories != null) return _categories;
-                _categories = new List<PropCategory>();
-                foreach (PropCategory c in System.Enum.GetValues(typeof(PropCategory)))
-                    if (PlaceableIn(c).Count > 0) _categories.Add(c);
-                return _categories;
+                Layout.paletteId = paletteId;
+                MarkDirty();
             }
         }
 
-        /// <summary>Placeable props in one category (cached; the list is rebuilt with the library).</summary>
-        public IReadOnlyList<PropDef> PlaceableIn(PropCategory category)
+        /// <summary>
+        /// The wheel's slices, in library order, with the unfiled ones last.
+        ///
+        /// ONE AXIS, ON PURPOSE. These used to be <see cref="PropCategory"/> values — a fixed
+        /// enum — while palettes were a second axis reached by a modifier key. That put UZAY
+        /// somewhere the player could not see, and left SIPER/DUVAR/DOGUS un-editable because
+        /// they lived in source. Slicing by palette instead makes every slice the same kind of
+        /// thing: named data, created and deleted in the library window (menu 31).
+        ///
+        /// The category enum SURVIVES and still does real work — it decides what is scenery
+        /// versus ground, what stops a bullet, and where a team spawns. It just no longer
+        /// decides what the wheel looks like.
+        ///
+        /// A palette appears only once it OWNS a placeable prop, so creating one and leaving it
+        /// empty does not put a dead slice in front of the player.
+        /// </summary>
+        public IReadOnlyList<string> Palettes
         {
-            if (_byCategory == null) _byCategory = new Dictionary<PropCategory, List<PropDef>>();
-            if (_byCategory.TryGetValue(category, out var list)) return list;
+            get
+            {
+                if (_palettes != null) return _palettes;
+                _palettes = new List<string>();
+
+                if (Library.palettes != null)
+                    foreach (var pal in Library.palettes)
+                    {
+                        if (pal == null || string.IsNullOrEmpty(pal.id)) continue;
+                        if (PlaceableIn(pal.id).Count > 0) _palettes.Add(pal.id);
+                    }
+
+                // Hicbir palete atanmamislar EN SONA, kendi dilimlerine. Gizlemek, kutuphaneye
+                // yeni giren bir propu sessizce yok ederdi — palet atamayi unutmak normal.
+                if (PlaceableIn("").Count > 0) _palettes.Add("");
+
+                return _palettes;
+            }
+        }
+
+        /// <summary>Placeable props in one palette (cached; rebuilt with the library).</summary>
+        public IReadOnlyList<PropDef> PlaceableIn(string paletteId)
+        {
+            paletteId = paletteId ?? "";
+            if (_byPalette == null) _byPalette = new Dictionary<string, List<PropDef>>();
+            if (_byPalette.TryGetValue(paletteId, out var list)) return list;
 
             list = new List<PropDef>();
             foreach (var p in Placeable)
-                if (p.category == category) list.Add(p);
-            _byCategory[category] = list;
+                if ((p.paletteId ?? "") == paletteId) list.Add(p);
+            _byPalette[paletteId] = list;
             return list;
         }
 
-        List<PropCategory> _categories;
-        Dictionary<PropCategory, List<PropDef>> _byCategory;
+        /// <summary>Shown name of the active slice — the wheel writes this under it.</summary>
+        public string ActivePaletteName => Library.PaletteName(ActivePaletteId);
 
-        /// <summary>Kutuphane editorde degistiyse (menu 25) filtreleri yeniden kur.</summary>
+        List<string> _palettes;
+        Dictionary<string, List<PropDef>> _byPalette;
+
+        /// <summary>Kutuphane editorde degistiyse (menu 25/31) dilimleri yeniden kur.</summary>
         public void InvalidatePlaceable()
         {
             _placeable = null;
-            _categories = null;
-            _byCategory = null;
+            _palettes = null;
+            _byPalette = null;
         }
     }
 }

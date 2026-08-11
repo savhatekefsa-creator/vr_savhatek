@@ -45,7 +45,9 @@ namespace VRMultiplayer.Constructor
         public Color centerColor = new Color(0.03f, 0.03f, 0.04f, 0.88f);
 
         public bool IsOpen { get; private set; }
-        public PropCategory ActiveCategory { get; private set; }
+
+        /// <summary>The selected slice. Empty = the "DIGER" slice (props with no palette).</summary>
+        public string ActivePaletteId { get; private set; } = "";
 
         int _pointed = -1;
         bool _pointedByStick;
@@ -56,6 +58,7 @@ namespace VRMultiplayer.Constructor
         GameObject[] _previews;
         Vector3[] _previewScales;
         int _builtSliceCount = -1;
+        string _builtSignature;
 
         ConstructorSession Session => ConstructorSession.Instance;
 
@@ -78,7 +81,7 @@ namespace VRMultiplayer.Constructor
         void Update()
         {
             bool canOpen = Placer != null && Placer.BuildMode &&
-                           Session != null && Session.IsActive && Session.Categories.Count > 0;
+                           Session != null && Session.IsActive && Session.Palettes.Count > 0;
             bool held = canOpen && PaletteHeld();
 
             if (!held)
@@ -89,15 +92,15 @@ namespace VRMultiplayer.Constructor
                 return;
             }
 
-            var cats = Session.Categories;
-            if (!IsOpen) OpenWheel(cats);
+            var sets = Session.Palettes;
+            if (!IsOpen) OpenWheel(sets);
             if (_wheel == null) return;
 
             Vector2 stick = RightStick();
             float mag = stick.magnitude;
             if (mag >= pointDeadzone)
             {
-                _pointed = NearestSlice(stick, cats.Count);
+                _pointed = NearestSlice(stick, sets.Count);
                 _pointedByStick = true;
             }
 
@@ -105,15 +108,17 @@ namespace VRMultiplayer.Constructor
             var kb = Keyboard.current;
             if (kb != null)
             {
-                if (kb.leftArrowKey.wasPressedThisFrame) StepPointed(-1, cats.Count);
-                if (kb.rightArrowKey.wasPressedThisFrame) StepPointed(1, cats.Count);
+                if (kb.leftArrowKey.wasPressedThisFrame) StepPointed(-1, sets.Count);
+                if (kb.rightArrowKey.wasPressedThisFrame) StepPointed(1, sets.Count);
             }
 #endif
 
-            Layout(cats);
+            if (_pointed >= sets.Count) _pointed = sets.Count - 1;
+
+            Layout(sets);
 
             // Silah carkiyla ayni onay: stick MERKEZE DONUNCE islenir. Vurgu aninda islenseydi
-            // stick gezerken ustunden gecilen her kategori secilirdi.
+            // stick gezerken ustunden gecilen her palet secilirdi.
             if (_pointedByStick && mag < pointDeadzone * 0.6f) CommitAndClose();
         }
 
@@ -125,33 +130,36 @@ namespace VRMultiplayer.Constructor
 
         // ------------------------------------------------------------- open / close
 
-        void OpenWheel(IReadOnlyList<PropCategory> cats)
+        void OpenWheel(IReadOnlyList<string> sets)
         {
-            EnsureWheel(cats);
+            EnsureWheel(sets);
             if (_wheel == null) return;
 
-            _pointed = IndexOf(cats, ActiveCategory);   // acilista mevcut kategori vurgulu
+            _pointed = IndexOf(sets, ActivePaletteId);   // acilista mevcut palet vurgulu
+            if (_pointed < 0) _pointed = 0;
             _pointedByStick = false;
             IsOpen = true;
             _wheel.gameObject.SetActive(true);
         }
 
         /// <summary>
-        /// Selects a category without going through the wheel. The watch menu (step 9) and any
-        /// scripted flow drive selection through here, so "how a category becomes active" stays
+        /// Selects a palette without going through the wheel. The watch menu (step 9) and any
+        /// scripted flow drive selection through here, so "how a palette becomes active" stays
         /// one code path no matter which surface asked for it.
         /// </summary>
-        public void SetCategory(PropCategory category)
+        public void SetPalette(string paletteId)
         {
-            if (ActiveCategory == category) return;
-            ActiveCategory = category;
+            paletteId = paletteId ?? "";
+            if (ActivePaletteId == paletteId) return;
+            ActivePaletteId = paletteId;
+            if (Session != null) Session.SetPalette(paletteId);
             if (Placer != null) Placer.OnCategoryChanged();
         }
 
         void CommitAndClose()
         {
-            var cats = Session != null && Session.IsActive ? Session.Categories : null;
-            if (cats != null && _pointed >= 0 && _pointed < cats.Count) SetCategory(cats[_pointed]);
+            var sets = Session != null && Session.IsActive ? Session.Palettes : null;
+            if (sets != null && _pointed >= 0 && _pointed < sets.Count) SetPalette(sets[_pointed]);
             CloseWheel();
         }
 
@@ -163,9 +171,9 @@ namespace VRMultiplayer.Constructor
             if (_wheel != null) _wheel.gameObject.SetActive(false);
         }
 
-        static int IndexOf(IReadOnlyList<PropCategory> list, PropCategory c)
+        static int IndexOf(IReadOnlyList<string> list, string id)
         {
-            for (int i = 0; i < list.Count; i++) if (list[i] == c) return i;
+            for (int i = 0; i < list.Count; i++) if (list[i] == id) return i;
             return -1;
         }
 
@@ -192,13 +200,13 @@ namespace VRMultiplayer.Constructor
 
         // ------------------------------------------------------------- visuals
 
-        void Layout(IReadOnlyList<PropCategory> cats)
+        void Layout(IReadOnlyList<string> sets)
         {
             Transform head = XRRigReference.HeadOrCamera;
             if (head == null) return;
             _wheel.SetPositionAndRotation(head.position + head.rotation * viewOffset, head.rotation);
 
-            for (int i = 0; i < cats.Count && i < _sliceMats.Length; i++)
+            for (int i = 0; i < sets.Count && i < _sliceMats.Length; i++)
             {
                 bool sel = _pointed == i;
 
@@ -206,10 +214,11 @@ namespace VRMultiplayer.Constructor
                     UITheme.SetMaterialColor(_sliceMats[i], sel ? sliceSelectedColor : sliceColor);
 
                 if (_labels[i] != null)
-                    _labels[i].text = CategoryName(cats[i]) + "\n" + Session.PlaceableIn(cats[i]).Count;
+                    _labels[i].text = Session.Library.PaletteName(sets[i]) + "\n" +
+                                      Session.PlaceableIn(sets[i]).Count;
 
                 if (_previews[i] == null) continue;
-                float rad = SliceAngle(i, cats.Count) * Mathf.Deg2Rad;
+                float rad = SliceAngle(i, sets.Count) * Mathf.Deg2Rad;
                 var dir = new Vector3(Mathf.Cos(rad), Mathf.Sin(rad), 0f);
                 _previews[i].transform.position = _wheel.TransformPoint(dir * previewRadius + Vector3.back * 0.05f);
                 _previews[i].transform.rotation = _wheel.rotation * Quaternion.Euler(20f, 35f, 0f);
@@ -217,16 +226,22 @@ namespace VRMultiplayer.Constructor
             }
         }
 
-        void EnsureWheel(IReadOnlyList<PropCategory> cats)
+        void EnsureWheel(IReadOnlyList<string> sets)
         {
-            // Kutuphane degisirse (menu 25) dilim sayisi degisebilir — o zaman carki bastan or.
-            if (_wheel != null && _builtSliceCount == cats.Count) return;
+            // Kutuphane degisirse (menu 25/31) dilimler degisebilir — o zaman carki bastan or.
+            //
+            // IMZA dilim SAYISI degil, dilimlerin KIMLIKLERI: bir paleti silip yerine baskasini
+            // koymak sayiyi ayni birakir, ve yalnizca sayiya bakan bir kontrol o durumda carki
+            // yenilemez — dilimlerin uzerinde silinmis paletin onizlemeleri durmaya devam
+            // ederdi.
+            string sig = string.Join("|", sets as string[] ?? new List<string>(sets).ToArray());
+            if (_wheel != null && _builtSliceCount == sets.Count && _builtSignature == sig) return;
             if (_wheel != null) Destroy(_wheel.gameObject);
 
             _wheel = new GameObject("ConstructorPaletteWheel").transform;
             _wheel.SetParent(transform, false);
 
-            int n = cats.Count;
+            int n = sets.Count;
             _sliceMats = new Material[n];
             _labels = new TextMesh[n];
             _previews = new GameObject[n];
@@ -239,7 +254,7 @@ namespace VRMultiplayer.Constructor
             {
                 float mid = SliceAngle(i, n);
 
-                var go = new GameObject("Slice_" + cats[i]);
+                var go = new GameObject("Slice_" + Session.Library.PaletteName(sets[i]));
                 go.transform.SetParent(_wheel, false);
                 go.AddComponent<MeshFilter>().sharedMesh =
                     UITheme.ArcMesh(centerRadius + 0.012f, discRadius, mid - half, mid + half, 24);
@@ -248,10 +263,10 @@ namespace VRMultiplayer.Constructor
                 mr.sharedMaterial = _sliceMats[i];
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
-                _labels[i] = UITheme.CreateLabel(_wheel, CategoryName(cats[i]),
+                _labels[i] = UITheme.CreateLabel(_wheel, Session.Library.PaletteName(sets[i]),
                     AngleToPos(mid, labelRadius), labelSize, 3002);
 
-                _previews[i] = MakePreview(cats[i]);
+                _previews[i] = MakePreview(sets[i]);
                 _previewScales[i] = _previews[i] != null ? _previews[i].transform.localScale : Vector3.one;
             }
 
@@ -263,25 +278,26 @@ namespace VRMultiplayer.Constructor
             cmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
             _builtSliceCount = n;
-            _wheel.gameObject.SetActive(false);
+            _builtSignature = sig;
+            _wheel.gameObject.SetActive(IsOpen);
         }
 
         /// <summary>
-        /// A shrunk, collider-free stand-in of the category's first prop.
+        /// A shrunk, collider-free stand-in of the palette's first prop.
         ///
         /// Every preview is normalized to the SAME on-screen size: a flower and a 1.5 m barrier
         /// are otherwise unreadable side by side — one fills its slice, the other is a dot.
         /// </summary>
-        GameObject MakePreview(PropCategory cat)
+        GameObject MakePreview(string paletteId)
         {
-            var list = Session.PlaceableIn(cat);
+            var list = Session.PlaceableIn(paletteId);
             if (list.Count == 0) return null;
 
             var prefab = list[0].Resolve();
             if (prefab == null) return null;
 
             var go = Instantiate(prefab, _wheel);
-            go.name = "Preview_" + cat;
+            go.name = "Preview_" + Session.Library.PaletteName(paletteId);
             foreach (var c in go.GetComponentsInChildren<Collider>(true)) Destroy(c);
             foreach (var rb in go.GetComponentsInChildren<Rigidbody>(true)) Destroy(rb);
 

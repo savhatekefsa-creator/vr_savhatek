@@ -12,28 +12,39 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 836b73326beb1724c8de15b779af465e, type: 3}
   m_Name: PropLibrary
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Constructor.PropLibrary
-  contentVersion: 7
+  contentVersion: 17
   schemaVersion: 1
   sourceFolders:
   - Assets/P A I N T B A L L S E R I ES MK/Content/Prefabs
   - Assets/Standout7
   - Assets/_VRMultiplayer/Resources/ConstructorProps
+  palettes:
+  - id: siper
+    displayName: SIPER
+  - id: duvar
+    displayName: DUVAR
+  - id: dogus
+    displayName: DOGUS
+  - id: uzay
+    displayName: UZAY
   props:
   - id: barrier_1
     displayName: Barrier_1
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 1439118902092037865, guid: 593fc4de788b92e4e82175b0d48589bd, type: 3}
     resourcePath: 
     sizeMeters: {x: 1.4327731, y: 0.08406655}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 2.4080095
   - id: bunkers_1
     displayName: Bunkers_1
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 350938287721182934, guid: f9a400476c850464c9be3cb605e73fac, type: 3}
     resourcePath: 
@@ -46,6 +57,7 @@ MonoBehaviour:
   - id: bunkers_1_variant
     displayName: Bunkers_1 Variant
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 3192074779576495835, guid: 30134d84aacdb9c439adb1daa492b472, type: 3}
     resourcePath: 
@@ -58,6 +70,7 @@ MonoBehaviour:
   - id: bunkers_2
     displayName: Bunkers_2
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 2013578663232966064, guid: dd6e3ca704938d549af0c23a68d2f8c4, type: 3}
     resourcePath: 
@@ -70,6 +83,7 @@ MonoBehaviour:
   - id: bunkers_2_variant
     displayName: Bunkers_2 Variant
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 8242217577655492393, guid: 8e59aef8d2b59d94996ab0a6d1151c43, type: 3}
     resourcePath: 
@@ -82,6 +96,7 @@ MonoBehaviour:
   - id: bush_01
     displayName: Bush_01
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 3358239249305421335, guid: 48f38177168a5194abd4b04ba1d359ca, type: 3}
     resourcePath: 
@@ -94,6 +109,7 @@ MonoBehaviour:
   - id: bush_02
     displayName: Bush_02
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 1454289880402102513, guid: b0fbc810043f4b24482cd958fa54de19, type: 3}
     resourcePath: 
@@ -106,6 +122,7 @@ MonoBehaviour:
   - id: bush_03
     displayName: Bush_03
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 351927751914730105, guid: d55e889b489eb5b44a9cbc092b067d97, type: 3}
     resourcePath: 
@@ -118,6 +135,7 @@ MonoBehaviour:
   - id: flower_01
     displayName: Flower_01
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 1252722442161804667, guid: dc19cb118b90ce748b19a86b643d1ef5, type: 3}
     resourcePath: 
@@ -130,6 +148,7 @@ MonoBehaviour:
   - id: flower_02
     displayName: Flower_02
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 5337358614072046915, guid: d274cf7e3f4c0fb4b84b139085f9dcdb, type: 3}
     resourcePath: 
@@ -142,6 +161,7 @@ MonoBehaviour:
   - id: grass_01
     displayName: Grass_01
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 8424460880615930960, guid: 1bfa86ef5225c2647a528b5f83663f34, type: 3}
     resourcePath: 
@@ -154,6 +174,7 @@ MonoBehaviour:
   - id: grass_02
     displayName: Grass_02
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 6557119605712345327, guid: 9e547ec77694fe0439123051255f148a, type: 3}
     resourcePath: 
@@ -166,6 +187,7 @@ MonoBehaviour:
   - id: grass_03
     displayName: Grass_03
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 8694767800780763106, guid: cc3d4a6650daeb042833e9d9f4313015, type: 3}
     resourcePath: 
@@ -178,102 +200,111 @@ MonoBehaviour:
   - id: ground_01
     displayName: Ground_01
     category: 3
+    paletteId: 
     snap: 0
     prefab: {fileID: 7272769714256850150, guid: 089b19cc28246f14fad256bdcbd59aed, type: 3}
     resourcePath: 
     sizeMeters: {x: 40, y: 40}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 10
   - id: ground_trail_01
     displayName: Ground_Trail_01
     category: 3
+    paletteId: 
     snap: 0
     prefab: {fileID: 2062950849215094690, guid: 0cf6130c207e3114483f364ccf0b1fb7, type: 3}
     resourcePath: 
     sizeMeters: {x: 40, y: 40}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 10
   - id: ground_trail_02
     displayName: Ground_Trail_02
     category: 3
+    paletteId: 
     snap: 0
     prefab: {fileID: 6287645740455302863, guid: 083596621506adb4cb3c758355be3909, type: 3}
     resourcePath: 
     sizeMeters: {x: 40, y: 40}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 10
   - id: ground_trail_03
     displayName: Ground_Trail_03
     category: 3
+    paletteId: 
     snap: 0
     prefab: {fileID: 7511583219889778625, guid: 90aa271c4ead2064993753c575336a3b, type: 3}
     resourcePath: 
     sizeMeters: {x: 40, y: 40}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 10
   - id: ground_trail_04
     displayName: Ground_Trail_04
     category: 3
+    paletteId: 
     snap: 0
     prefab: {fileID: 4340745229858153758, guid: 6261f3f046a3f1a44bfe9125e5a1c8f1, type: 3}
     resourcePath: 
     sizeMeters: {x: 40, y: 40}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 10
   - id: hill_01
     displayName: Hill_01
     category: 3
+    paletteId: 
     snap: 0
     prefab: {fileID: 3659774957864682057, guid: b56bf7ef419098244b42b43ee9929fa7, type: 3}
     resourcePath: 
     sizeMeters: {x: 40, y: 40}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 20
   - id: hill_02
     displayName: Hill_02
     category: 3
+    paletteId: 
     snap: 0
     prefab: {fileID: 7389807771812058209, guid: ffcce22defb330646a961542f7f2a3c3, type: 3}
     resourcePath: 
     sizeMeters: {x: 40, y: 40}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 20
   - id: metal_floor
     displayName: Metal_Floor
     category: 3
+    paletteId: 
     snap: 0
     prefab: {fileID: 5305834180310489442, guid: e5fd5b2fc20f09747b9ec3c5ac51dbb1, type: 3}
     resourcePath: 
     sizeMeters: {x: 9.255671, y: 0.08948606}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 2.6198404
   - id: mushroom_01
     displayName: Mushroom_01
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 4102273071643827582, guid: 77ea1b5557a09ca4d8401c747fd0d2ef, type: 3}
     resourcePath: 
@@ -286,18 +317,20 @@ MonoBehaviour:
   - id: paintball_maker
     displayName: Paintball_Maker
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 8821762834127311646, guid: 945b62c9bdfdbd7459e6bc27f2f23094, type: 3}
     resourcePath: 
     sizeMeters: {x: 9.255671, y: 0.08948606}
     fitToFootprint: 1
     freeRotation: 0
-    hiddenInPalette: 0
+    hiddenInPalette: 1
     networked: 0
     height: 2.6198404
   - id: rack_long_a
     displayName: Rack_Long_A
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 5167233613692774374, guid: c5c0d9eee28ecfa42803bcf9f332ae4f, type: 3}
     resourcePath: 
@@ -310,6 +343,7 @@ MonoBehaviour:
   - id: rack_long_b
     displayName: Rack_Long_B
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 804371035748764917, guid: 95eb50d3202791645ac1207efc4cd716, type: 3}
     resourcePath: 
@@ -322,6 +356,7 @@ MonoBehaviour:
   - id: rack_sidearm
     displayName: Rack_Sidearm
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 4065383819202563490, guid: eba2750be89d1cb4e9dd7c245f509883, type: 3}
     resourcePath: 
@@ -334,6 +369,7 @@ MonoBehaviour:
   - id: rack_wall
     displayName: Rack_Wall
     category: 1
+    paletteId: duvar
     snap: 0
     prefab: {fileID: 3161598684565635527, guid: 5fa72a47b5ae34b4f9cdb836c336ed57, type: 3}
     resourcePath: 
@@ -346,6 +382,7 @@ MonoBehaviour:
   - id: rock_01
     displayName: Rock_01
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 4157550255247529502, guid: f9f8184406215c944aaa8b41ae30e64b, type: 3}
     resourcePath: 
@@ -358,6 +395,7 @@ MonoBehaviour:
   - id: rock_02
     displayName: Rock_02
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 1289251798203634266, guid: bea77074d5f28994d857b1526a5a6f08, type: 3}
     resourcePath: 
@@ -370,6 +408,7 @@ MonoBehaviour:
   - id: rock_03
     displayName: Rock_03
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 3991935088641552341, guid: 498111f52cd07b0488c3e9f997ea115c, type: 3}
     resourcePath: 
@@ -382,6 +421,7 @@ MonoBehaviour:
   - id: rock_cluster_01
     displayName: Rock_Cluster_01
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 8837294510968195423, guid: 14c33174f0bc6f04595c83ed05bbdc09, type: 3}
     resourcePath: 
@@ -394,6 +434,7 @@ MonoBehaviour:
   - id: rock_large_01
     displayName: Rock_Large_01
     category: 0
+    paletteId: siper
     snap: 0
     prefab: {fileID: 7535282723049241791, guid: cfca709250278b74196fa85824a118d1, type: 3}
     resourcePath: 
@@ -406,6 +447,7 @@ MonoBehaviour:
   - id: spawn_a
     displayName: Spawn_A
     category: 4
+    paletteId: dogus
     snap: 0
     prefab: {fileID: 7486102337037777875, guid: 99816018b50ebac4d839639dc36030cb, type: 3}
     resourcePath: 
@@ -418,6 +460,7 @@ MonoBehaviour:
   - id: spawn_b
     displayName: Spawn_B
     category: 4
+    paletteId: dogus
     snap: 0
     prefab: {fileID: 5136051861248150689, guid: d13f5ef043ea18d4aa6e9a30bcb71ab1, type: 3}
     resourcePath: 
@@ -430,6 +473,7 @@ MonoBehaviour:
   - id: table_low
     displayName: Table_Low
     category: 0
+    paletteId: duvar
     snap: 0
     prefab: {fileID: 8068688853840761795, guid: 375ae9ad4d7bf5f4e818cce94ae2bfda, type: 3}
     resourcePath: 
@@ -442,6 +486,7 @@ MonoBehaviour:
   - id: tree_dead_01
     displayName: Tree_Dead_01
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 1796324170710814378, guid: f1f53dae909b33a479188f2356247220, type: 3}
     resourcePath: 
@@ -454,6 +499,7 @@ MonoBehaviour:
   - id: tree_dead_02
     displayName: Tree_Dead_02
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 6337688662297916073, guid: 5690cfc4372908b4a83434038fbe50b1, type: 3}
     resourcePath: 
@@ -466,6 +512,7 @@ MonoBehaviour:
   - id: tree_dead_03
     displayName: Tree_Dead_03
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 7686843880362580030, guid: 801e7c127f8a4b042b5775f7db773f32, type: 3}
     resourcePath: 
@@ -478,6 +525,7 @@ MonoBehaviour:
   - id: tree_oak_01
     displayName: Tree_Oak_01
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 6321362666111808326, guid: 3aac9188dc820924982fdeb35d07fd4d, type: 3}
     resourcePath: 
@@ -490,6 +538,7 @@ MonoBehaviour:
   - id: tree_oak_02
     displayName: Tree_Oak_02
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 6512635336271992924, guid: 96fd74fc8791b7241b790072d333280a, type: 3}
     resourcePath: 
@@ -502,6 +551,7 @@ MonoBehaviour:
   - id: tree_oak_03
     displayName: Tree_Oak_03
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 8906819787460443968, guid: 75bb06f27c4ca434eaf604ba88a0cc0c, type: 3}
     resourcePath: 
@@ -514,6 +564,7 @@ MonoBehaviour:
   - id: tree_pine_01
     displayName: Tree_Pine_01
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 4642169480068221980, guid: 84d582c611c3ca041a3ed2d33d512d2f, type: 3}
     resourcePath: 
@@ -526,6 +577,7 @@ MonoBehaviour:
   - id: tree_pine_02
     displayName: Tree_Pine_02
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 7753842755086306885, guid: 304c657415fc8c44fa2a51da59848bf4, type: 3}
     resourcePath: 
@@ -538,6 +590,7 @@ MonoBehaviour:
   - id: tree_pine_03
     displayName: Tree_Pine_03
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 7588876461647340230, guid: 9f2e16aa3d61ce64c9ee6139c6cb64dc, type: 3}
     resourcePath: 
@@ -550,6 +603,7 @@ MonoBehaviour:
   - id: tree_trunk_01
     displayName: Tree_Trunk_01
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 3222320587681295883, guid: a82f57b3d8678e241b8684877c0a2e04, type: 3}
     resourcePath: 
@@ -562,6 +616,7 @@ MonoBehaviour:
   - id: tree_trunk_02
     displayName: Tree_Trunk_02
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 7140356518038980105, guid: 3da4a72388f961b4d8eb39f6a29eb095, type: 3}
     resourcePath: 
@@ -574,6 +629,7 @@ MonoBehaviour:
   - id: tree_trunk_03
     displayName: Tree_Trunk_03
     category: 2
+    paletteId: 
     snap: 0
     prefab: {fileID: 5810254577706793558, guid: ea5db6e4cafabc947bfd2e61ee67813e, type: 3}
     resourcePath: 
@@ -586,6 +642,7 @@ MonoBehaviour:
   - id: wall_door
     displayName: Wall_Door
     category: 1
+    paletteId: duvar
     snap: 0
     prefab: {fileID: 841034521661257330, guid: 79788f68b975082449f7ab5a66c7a9a7, type: 3}
     resourcePath: 
@@ -598,6 +655,7 @@ MonoBehaviour:
   - id: wall_solid
     displayName: Wall_Solid
     category: 1
+    paletteId: duvar
     snap: 0
     prefab: {fileID: 6114980788094906394, guid: 11cb81abafa702d41b20658fa1fe44b2, type: 3}
     resourcePath: 
@@ -610,6 +668,7 @@ MonoBehaviour:
   - id: wood_modular_5
     displayName: Wood_Modular_5
     category: 1
+    paletteId: duvar
     snap: 0
     prefab: {fileID: 6936862231133190960, guid: f9c35b2351bd45c44aa90a9b22eba43c, type: 3}
     resourcePath: 
@@ -622,6 +681,7 @@ MonoBehaviour:
   - id: wood_modular_6
     displayName: Wood_Modular_6
     category: 1
+    paletteId: duvar
     snap: 0
     prefab: {fileID: 4888029965223745769, guid: 5f9a3e00b6264dc4699eb347d1593758, type: 3}
     resourcePath: 
@@ -634,6 +694,7 @@ MonoBehaviour:
   - id: wood_modular_7
     displayName: Wood_Modular_7
     category: 1
+    paletteId: duvar
     snap: 0
     prefab: {fileID: 8430239549741167464, guid: 6d86e1c981487554f8a8c495c2354d28, type: 3}
     resourcePath: 
@@ -646,6 +707,7 @@ MonoBehaviour:
   - id: wood_modular_8
     displayName: Wood_Modular_8
     category: 1
+    paletteId: duvar
     snap: 0
     prefab: {fileID: 546125613873445015, guid: f7c62caa58030714f91f9d62871a952f, type: 3}
     resourcePath: 
@@ -655,3 +717,107 @@ MonoBehaviour:
     hiddenInPalette: 0
     networked: 0
     height: 2.2630243
+  - id: scifi_wall_solid
+    displayName: Uzay Duvari
+    category: 1
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 920992486517614723, guid: e7ba661651e00cc4ab60975d08c87ede, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1, y: 0.25}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 2.2
+  - id: scifi_wall_door
+    displayName: Uzay Kapisi
+    category: 1
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 7399424144815105790, guid: be385b7e6d3a948439ce0e57fe07397b, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1.5, y: 0.25}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 2.2
+  - id: scifi_wall_window
+    displayName: Uzay Penceresi
+    category: 1
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 8801070746615242133, guid: e582e113194163642a195b1b929dc56e, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1, y: 0.25}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 2.2
+  - id: scifi_cover_low
+    displayName: Enerji Siperi
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 8792305659466635567, guid: 2752394fb9729284db8afab6c3e125e6, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1, y: 0.25}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.875
+  - id: scifi_cargo_container
+    displayName: Kargo Kasasi
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 1836036423837746511, guid: 255dadbe8db92a345b9167717f4db563, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 0.75, y: 0.5}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.75
+  - id: scifi_barrier_corner
+    displayName: Kose Barikati
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 1643308432224931619, guid: f2b7bf88ed0049d4786bfb27e496779a, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 0.5, y: 0.5}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.875
+  - id: scifi_control_console
+    displayName: Kontrol Konsolu
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 345146471767728767, guid: 3121881175a76984daaa04c02ef36164, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1, y: 0.5}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.8985996
+  - id: scifi_power_core
+    displayName: Guc Reaktoru
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 1408084161108336099, guid: 9f614375a46755142a1e6004c364dd86, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 0.5, y: 0.5}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 1.25

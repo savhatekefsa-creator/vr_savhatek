@@ -829,13 +829,13 @@ namespace VRMultiplayer.Constructor
         {
             if (_palette != null)
             {
-                var inCategory = Session.PlaceableIn(_palette.ActiveCategory);
-                if (inCategory.Count > 0) return inCategory;
+                var inPalette = Session.PlaceableIn(_palette.ActivePaletteId);
+                if (inPalette.Count > 0) return inPalette;
             }
             return Session.Placeable;
         }
 
-        /// <summary>The palette committed a different category — start from its first prop.</summary>
+        /// <summary>The wheel committed a different palette — start from its first prop.</summary>
         public void OnCategoryChanged() => _propIndex = 0;
 
         // ------------------------------------------------------------- build mode
@@ -1575,7 +1575,7 @@ namespace VRMultiplayer.Constructor
             _nextStatusAt = Time.time + 0.15f;
 
             string cat = _palette != null
-                ? ConstructorPaletteUI.CategoryName(_palette.ActiveCategory) : "-";
+                ? Session.Library.PaletteName(_palette.ActivePaletteId) : "-";
             var list = CurrentList();
 
             string snap = _snapped ? "  [YAPISTI]" : "";
@@ -1637,13 +1637,14 @@ namespace VRMultiplayer.Constructor
             }
 
             var def = SelectedProp();
-            GUILayout.BeginArea(new Rect(Screen.width - 340f, 20f, 320f, 250f), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(Screen.width - 340f, 20f, 320f, 272f), GUI.skin.box);
             GUILayout.Label("CONSTRUCTOR — INSA MODU ACIK  [B kapatir]");
             if (PlacementLocked)
                 GUILayout.Label("KOYMA KILITLI [P] — hayalet ve isin gizli");
-            GUILayout.Label("Kategori: " + ConstructorPaletteUI.CategoryName(
-                                _palette != null ? _palette.ActiveCategory : PropCategory.Cover) +
-                            "   [C basili tut + ok tuslari]" + (_palette != null && _palette.IsOpen ? "  <ACIK>" : ""));
+            GUILayout.Label("Palet: " + (_palette != null
+                                ? Session.Library.PaletteName(_palette.ActivePaletteId) : "-") +
+                            "  (" + Session.Palettes.Count + " palet)   [C basili tut + ok tuslari]" +
+                            (_palette != null && _palette.IsOpen ? "  <ACIK>" : ""));
             GUILayout.Label("Prop: " + (def != null ? def.displayName : "-") +
                             "  (" + (_propIndex + 1) + "/" + CurrentList().Count + ")   [Z/X]");
             float cellM = Session != null && Session.Grid != null

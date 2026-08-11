@@ -7,6 +7,30 @@ namespace VRMultiplayer.Constructor
     /// <summary>Palette grouping — one ring per category in the in-VR selector wheel.</summary>
     public enum PropCategory { Cover, Wall, Nature, Ground, Spawn, Target }
 
+    /// <summary>
+    /// A named SET of props — "UZAY", "ORMAN" — the second axis of the build palette, crossing
+    /// <see cref="PropCategory"/> rather than replacing it.
+    ///
+    /// Category answers "what does this piece DO" (is it cover, is it a wall); a palette answers
+    /// "which world is it FROM". Both questions are real: folding them together would give the
+    /// wheel one SPACE slice holding walls, crates and consoles at once, and a player looking for
+    /// a wall would have to walk past the consoles to find it.
+    ///
+    /// DATA, NOT AN ENUM. Adding a world is something the person building the game does in the
+    /// library window (menu 31) — naming it, filling it, renaming it later — and an enum would
+    /// have made every one of those a code change plus a recompile.
+    /// </summary>
+    [Serializable]
+    public class PropPalette
+    {
+        [Tooltip("SABIT kimlik — proplar ve kayitli haritalar bunu tutar. Bir kez verildikten " +
+                 "sonra degistirme; gorunen adi degistirmek serbest.")]
+        public string id;
+
+        [Tooltip("Insa modunda carkin ortasinda yazan ad. Serbestce degistirilebilir.")]
+        public string displayName;
+    }
+
     /// <summary>How a prop attaches to the scanned room.</summary>
     public enum PropSnap { Floor, Wall, Free }
 
@@ -25,6 +49,20 @@ namespace VRMultiplayer.Constructor
         public string displayName;
 
         public PropCategory category = PropCategory.Cover;
+
+        /// <summary>
+        /// Which <see cref="PropPalette"/> this prop belongs to. EMPTY MEANS EVERY PALETTE.
+        ///
+        /// The empty default is what keeps this axis free: a library that has never been split
+        /// into palettes behaves exactly as it did, because every prop reads as "belongs
+        /// everywhere". It is also the right answer for pieces that have no world of their own —
+        /// spawn rings, the weapon rack, targets. Hiding those while UZAY is selected would leave
+        /// the map missing the parts the match itself needs.
+        /// </summary>
+        [Tooltip("Ait oldugu palet kimligi. BOS = HER palette gorunur (dogus halkasi, silah " +
+                 "rafi gibi dunyasi olmayan parcalar boyle kalmali). Menu 31'den atanir.")]
+        public string paletteId = "";
+
         public PropSnap snap = PropSnap.Floor;
 
         [Tooltip("Dogrudan referans. Doluysa kutuphane yuklenirken prefab da bellege gelir.")]
@@ -278,6 +316,10 @@ namespace VRMultiplayer.Constructor
         [Tooltip("Tarama aracinin (menu 25) prefab arayacagi klasorler.")]
         public string[] sourceFolders = new string[0];
 
+        [Tooltip("Adlandirilmis prop setleri. Menu 31'den olusturulur; oyuncu insa modunda " +
+                 "carkin ortasindan aralarinda gecis yapar.")]
+        public PropPalette[] palettes = new PropPalette[0];
+
         public PropDef[] props = new PropDef[0];
 
         Dictionary<string, int> _index;
@@ -302,6 +344,52 @@ namespace VRMultiplayer.Constructor
         public PropDef ByIndex(int i) => (i >= 0 && i < props.Length) ? props[i] : null;
 
         public int Count => props != null ? props.Length : 0;
+
+        // ------------------------------------------------------------- palettes
+
+        public int PaletteCount => palettes != null ? palettes.Length : 0;
+
+        public PropPalette PaletteById(string id)
+        {
+            if (string.IsNullOrEmpty(id) || palettes == null) return null;
+            foreach (var p in palettes)
+                if (p != null && p.id == id) return p;
+            return null;
+        }
+
+        /// <summary>
+        /// A palette's shown name, or a readable stand-in.
+        ///
+        /// An unknown id is NOT an error worth hiding: it means a prop points at a palette that
+        /// was deleted, and saying so on the wheel is how anyone finds out.
+        /// </summary>
+        public string PaletteName(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "DIGER";
+            var p = PaletteById(id);
+            return p != null && !string.IsNullOrEmpty(p.displayName)
+                ? p.displayName : "? " + id;
+        }
+
+        /// <summary>Props assigned to <paramref name="id"/> — NOT counting the always-visible ones.</summary>
+        public int OwnedCount(string id)
+        {
+            if (props == null) return 0;
+            int n = 0;
+            foreach (var p in props)
+                if (p != null && p.paletteId == id) n++;
+            return n;
+        }
+
+        /// <summary>Turns a display name into a stable id: lowercase, letters and digits only.</summary>
+        public static string MakePaletteId(string displayName)
+        {
+            if (string.IsNullOrEmpty(displayName)) return "";
+            var sb = new System.Text.StringBuilder(displayName.Length);
+            foreach (char c in displayName.ToLowerInvariant())
+                sb.Append(char.IsLetterOrDigit(c) ? c : '_');
+            return sb.ToString().Trim('_');
+        }
 
         void EnsureIndex()
         {
@@ -344,6 +432,20 @@ namespace VRMultiplayer.Constructor
                 return problems;
             }
 
+            // Paletler once: proplarin isaret ettigi kimlikler buradan dogrulaniyor.
+            var paletteIds = new HashSet<string>();
+            if (palettes != null)
+            {
+                for (int i = 0; i < palettes.Length; i++)
+                {
+                    var pal = palettes[i];
+                    if (pal == null) { problems.Add($"palet[{i}] null girdi."); continue; }
+                    if (string.IsNullOrEmpty(pal.id)) problems.Add($"palet[{i}] kimlik bos.");
+                    else if (!paletteIds.Add(pal.id))
+                        problems.Add($"palet[{i}] kopya kimlik: '{pal.id}'.");
+                }
+            }
+
             var seen = new HashSet<string>();
             for (int i = 0; i < props.Length; i++)
             {
@@ -352,6 +454,12 @@ namespace VRMultiplayer.Constructor
 
                 if (string.IsNullOrEmpty(p.id)) problems.Add($"[{i}] kimlik bos.");
                 else if (!seen.Add(p.id)) problems.Add($"[{i}] kopya kimlik: '{p.id}'.");
+
+                // Silinmis bir palete isaret eden prop HICBIR palette gorunmez — bos
+                // paletteId "her yerde" demek, taninmayan bir kimlik ise "hicbir yerde".
+                if (!string.IsNullOrEmpty(p.paletteId) && !paletteIds.Contains(p.paletteId))
+                    problems.Add($"[{i}] '{p.id}' silinmis/bilinmeyen palete bagli: " +
+                                 $"'{p.paletteId}' — hicbir palette gorunmez.");
 
                 if (p.prefab == null && string.IsNullOrEmpty(p.resourcePath))
                     problems.Add($"[{i}] '{p.id}' icin ne prefab ne resourcePath var.");

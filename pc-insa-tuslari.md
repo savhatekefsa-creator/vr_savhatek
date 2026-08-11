@@ -26,7 +26,29 @@ anında iki tarafta da görünür ve haritaya kaydedilir.
 | `T` | Maket (dollhouse) modu — haritaya yukarıdan bak |
 | `H` | Yükseklik modu (VR'daki sağ stick tıkının PC karşılığı) |
 | `C` **basılı tut** | Prop paletini aç |
-| `C` + `←` `→` | Palet açıkken kategori seç |
+| `C` + `←` `→` | Palet açıkken **palet seç** (UZAY / SİPER / DUVAR / DOĞUŞ …) |
+
+### Paletler
+
+Çarkın her dilimi bir **palet**. Paletler sabit değil — `Tools > VR Multiplayer >
+31. İnşa Modu Kütüphanesi` penceresinden oluşturulur, adlandırılır, sıralanır ve silinir.
+Çarktaki dilim sırası, o penceredeki liste sırasıdır (`▲` `▼` ile değiştir).
+
+Palete eşya eklemek: prop satırındaki palet kutusundan seç. Çok sayıda propu tek hamlede
+taşımak için arama/filtreyi daralt, sonra paletin yanındaki **Filtredekileri ata**'ya bas.
+
+Paleti olmayan proplar kaybolmaz — çarkta **DİĞER** diliminde toplanırlar. O dilim boşsa hiç
+çizilmez, yani kütüphaneye yeni giren bir propu palete atamayı unutsan bile onu bulabilirsin.
+
+Bir paleti silmek propları silmez, onları DİĞER'e alır.
+
+Seçili palet haritayla kaydedilir: uzay haritanı tekrar açtığında çark UZAY'da başlar. Palet
+hiçbir şeyi **kısıtlamaz**, yalnızca çarkı böler — proplar kimlikle çözüldüğü için paletleri
+karıştırarak kurduğun harita olduğu gibi korunur.
+
+> **Not:** *Kategori* (Cover/Wall/Spawn…) alanı duruyor ama artık çarkı belirlemiyor. O alan
+> hâlâ gerçek iş yapıyor: neyin zemin parçası sayılacağı, neyin mermi durduracağı ve takım
+> doğuş noktalarının nasıl bulunacağı ona bağlı.
 
 ---
 
