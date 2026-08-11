@@ -56,6 +56,20 @@ namespace VRMultiplayer.Constructor
 
         public const string PlateId = "tagisaret";
 
+        /// <summary>
+        /// Tag 0 kagidinin MERKEZININ zeminden yuksekligi (metre). SABIT KABUL EDILIYOR.
+        ///
+        /// NEDEN SABIT: kurulumu yapan kisiye her seferinde bir sayi sordurmak, en cok yapilan
+        /// isi en kolay yanlis yapilan is haline getiriyordu — ve yanlis girilen yukseklik
+        /// sessizce butun cerceveyi dikeyde kaydirir. 1,50 m ayrica plakanin kat 3'e konmasiyla
+        /// birebir ayni sayi (kat yuksekligi 0,5 m x 3), yani origin ile plakalar ayni hatta.
+        ///
+        /// DEGISTIRMEK ICIN: burayi degistirin, tek yer burasi. Degistirdikten sonra CIHAZDAKI
+        /// haritalarda tag 0 kendiliginden guncellenmez — yeni harita akisi yeni degeri yazar,
+        /// var olan haritalar icin menu 49'daki "Origin'i Yaz" dugmesi kullanilir.
+        /// </summary>
+        public const float DefaultOriginHeight = 1.5f;
+
         /// <summary>Haritadaki plaka sayisi.</summary>
         public static int PlateCount(MapLayout layout)
         {
@@ -130,7 +144,22 @@ namespace VRMultiplayer.Constructor
                        "Plakayi BEYAZ yuzu odaya bakacak sekilde koyun — kagit oraya gidiyor.";
 
             // Tag 0 KORUNUR: origin'in tanimi, plakadan turetilemez.
-            var zero = FindTag(layout.tags, 0) ?? FindTag(SceneLayout(), 0);
+            //
+            // KOPYALANIR, REFERANS ALINMAZ. Sahnedeki yerlesimden dusuldugunde eskiden
+            // SAHNENIN TagEntry nesnesi dogrudan haritanin dizisine giriyordu; ikisi ayni
+            // nesne olunca haritada yapilan her degisiklik sahneyi de -- yani prefab
+            // override'ini -- sessizce degistiriyordu. Yasandi: bir harita uzerinde origin
+            // yuksekligi denenince sahnedeki tag 0 da 1,50'den 1,62'ye kaydi ve bunu kimse
+            // istememisti.
+            var kaynak = FindTag(layout.tags, 0) ?? FindTag(SceneLayout(), 0);
+            AprilTagCalibration.TagEntry zero = kaynak == null ? null
+                : new AprilTagCalibration.TagEntry
+                {
+                    id = 0,
+                    position = kaynak.position,
+                    yawDegrees = kaynak.yawDegrees,
+                    useForCalibration = kaynak.useForCalibration,
+                };
 
             var tags = new List<AprilTagCalibration.TagEntry>();
             if (zero != null) tags.Add(zero);
@@ -238,7 +267,7 @@ namespace VRMultiplayer.Constructor
         /// yanlislar. Yeni bir mekanda deger serbesttir (cerceveyi o tanimlar); var olan bir
         /// mekanda degistirmek bilincli bir karardir, akis ici bir ayar degil.
         /// </summary>
-        public static void SetOrigin(MapLayout layout, float heightMeters)
+        public static void SetOrigin(MapLayout layout, float heightMeters = DefaultOriginHeight)
         {
             if (layout == null) return;
 

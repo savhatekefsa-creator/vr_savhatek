@@ -504,6 +504,108 @@ namespace VRMultiplayer.Constructor
             if (ok) StartCoroutine(SendLayoutToOwner());
         }
 
+        // ------------------------------------------------------- TAG KURULUMU (yeni harita)
+        //
+        // Yeni harita akisinin son adimi: konan plakalari tag yerlesimine cevir, origin'i yaz,
+        // hepsini kalibrasyona ac. Cevrimin kendisi TagCapture'da ve calisma zamaninda kosuyor;
+        // burasi yalnizca YETKIYI tasiyor.
+        //
+        // NEDEN SUNUCUYA GIDIYOR: dosyayi her zaman sunucu yazar ve harita SUNUCUNUN
+        // belleginde. Gozlukte cevrilseydi tag'ler yalnizca o gozlukte olurdu, sunucu eski
+        // yerlesimde kalirdi ve ilk senkron gozlugunkini ezerdi -- yerlestirmede yasanan
+        // sessiz uyusmazligin aynisi.
+
+        /// <summary>Istemci: "plakalari tag'e cevir, origin'i yaz, hepsini ac".</summary>
+        public static bool ClientRequestTagSetup(float originHeight)
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.TagSetupServerRpc(originHeight);
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void TagSetupServerRpc(float originHeight, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null || !Session.IsActive || Session.Layout == null)
+            {
+                TagSetupResultOwnerRpc(false, 0, "Oturum yok.");
+                return;
+            }
+
+            var layout = Session.Layout;
+            TagCapture.SetOrigin(layout, originHeight);
+            string rapor = TagCapture.Capture(layout, out bool _);
+
+            // Cevrim tag uretemediyse (plaka yok / izgara kurulamadi) DURMA NOKTASI burasi:
+            // bos yerlesimi acmak ve yaymak, calisan bir cerceveyi sessizce silerdi.
+            if (layout.tags == null || layout.tags.Length == 0)
+            {
+                TagSetupResultOwnerRpc(false, 0, rapor);
+                return;
+            }
+
+            TagCapture.Enable(layout, out int _);
+            ApplyTagsLocally(layout);
+
+            // Bagli gozluklere yeni yerlesimi duyur. Onlarda Adopt kosacagi icin
+            // ApplyMapLayout kendiliginden cagriliyor; sunucuda kosmadigi icin yukarida elle.
+            StartCoroutine(SendLayout(true));
+
+            TagSetupResultOwnerRpc(true, layout.tags.Length, rapor);
+        }
+
+        /// <summary>
+        /// Yerlesim degisikligini SUNUCUNUN kendi kalibrasyonuna da islet.
+        ///
+        /// GEREKLI, cunku "harita degisti -> tag'ler degisti" bagi ConstructorSession.Adopt'ta
+        /// kurulu ve Adopt yalnizca harita ACILIRKEN kosuyor. Burada oturum ZATEN acikken
+        /// Layout.tags'i yerinde degistiriyoruz; elle cagirmazsak tag'ler diske yazilir ama
+        /// kalibrasyon o oturum boyunca eski yerlesimle calisir ve sebebi hicbir yerde gorunmez.
+        /// </summary>
+        static void ApplyTagsLocally(MapLayout layout)
+        {
+            if (AprilTagCalibration.Instance != null)
+                AprilTagCalibration.Instance.ApplyMapLayout(layout.tags);
+        }
+
+        /// <summary>Sunucudan donen tag kurulumu sonucu; akis bunu bir kez gosterip temizler.</summary>
+        public static string TagSetupMessage;
+
+        [Rpc(SendTo.Owner)]
+        void TagSetupResultOwnerRpc(bool ok, int tagCount, string rapor)
+        {
+            TagSetupMessage = ok
+                ? $"TAG KURULUMU TAMAM\n\n{tagCount} tag kaydedildi ve kalibrasyona acildi."
+                : "TAG KURULUMU YAPILAMADI\n\n" + rapor;
+            Debug.Log("[ConstructorSync] Tag kurulumu: " + (ok ? "tamam" : "basarisiz") + "\n" + rapor);
+        }
+
+        /// <summary>
+        /// Sunucu/tek-makine yolu: ayni isi RPC'siz yapar. Yetki bizdeyken RPC'ye sapmak
+        /// gereksiz bir tur ve PC'de tek basina calisirken ag hic acilmamis olabilir.
+        /// </summary>
+        public static string HostTagSetup(float originHeight, out bool ok)
+        {
+            ok = false;
+            var s = Session;
+            if (s == null || !s.IsActive || s.Layout == null) return "Oturum yok.";
+
+            TagCapture.SetOrigin(s.Layout, originHeight);
+            string rapor = TagCapture.Capture(s.Layout, out bool _);
+            if (s.Layout.tags == null || s.Layout.tags.Length == 0) return rapor;
+
+            TagCapture.Enable(s.Layout, out int _);
+            ApplyTagsLocally(s.Layout);
+
+            var sync = AnySpawned();
+            if (sync != null) sync.StartCoroutine(sync.SendLayout(true));
+
+            ok = true;
+            return rapor;
+        }
+
         /// <summary>Last save result from the server; the placer shows it once and clears it.</summary>
         public static string SaveMessage { get; set; }
 

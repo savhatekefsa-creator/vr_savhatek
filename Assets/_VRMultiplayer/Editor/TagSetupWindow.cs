@@ -50,7 +50,9 @@ namespace VRMultiplayer.EditorTools
         readonly List<string> _warnings = new List<string>();
 
         // ---- form alanlari ----
-        float _originHeight = 1.5f;
+        // Varsayilan TEK YERDEN: TagCapture.DefaultOriginHeight. Cihazdaki yeni harita akisi
+        // da onu kullaniyor; burada 1.5 yazsaydik iki yol sessizce ayrisabilirdi.
+        float _originHeight = TagCapture.DefaultOriginHeight;
         float _tagSize = 0.14f;
         bool _papersGlued;                 // oturumluk kapi; kalici degil, cunku fiziksel
                                            // durumun kaydi degil BEYANI — her turda yeniden

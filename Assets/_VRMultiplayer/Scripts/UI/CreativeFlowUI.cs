@@ -46,6 +46,18 @@ namespace VRMultiplayer.UI
         // yapacagini bu belirliyor (bkz. OnMapPicked).
         bool _managing;
 
+        /// <summary>
+        /// TAG KURULUMU, yalnizca YENI harita akisinda. Sifirdan bir mekan kuruluyor demek
+        /// tag'lerin de o mekanda tanimlanmasi demek; ayri bir menu maddesi olsaydi
+        /// unutulabilirdi ve tag'siz harita kalibre EDILEMEYEN haritadir.
+        ///
+        /// Plaka koyma adimi ayri bir yerlestirme sistemi DEGIL, insa modunun kendisi:
+        /// palet zaten TagIsaret'i veriyor ve ikinci bir yerlestirici yazmak, izgara
+        /// kurallarini ikinci kez uygulamak olurdu.
+        /// </summary>
+        enum TagStep { Yok, Plaka }
+        TagStep _tagStep = TagStep.Yok;
+
         // Aboneligi AppMode.ResetStatics temizler (domain reload kapaliyken abonelik listesi
         // oyunlar arasi tasinir ve ikinci Play'de IKI akis dogardi — PlayerEntryUI'daki ders).
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -265,7 +277,7 @@ namespace VRMultiplayer.UI
                     StartCoroutine(Note("SUNUCUYA BAĞLI DEĞİL\n\nHaritalar PC'de tutuluyor.", 5f));
                     return;
                 }
-                EnterEditor();
+                BeginTagSetup();
                 return;
             }
 
@@ -276,7 +288,102 @@ namespace VRMultiplayer.UI
                 StartCoroutine(Note("YENİ HARİTA AÇILAMADI\n\nConsole'a bak.", 4f));
                 return;
             }
-            EnterEditor();
+            BeginTagSetup();
+        }
+
+        // ------------------------------------------------------------- tag kurulumu (yeni harita)
+        //
+        // SIRA: OpenNew ONCE calisir, tag kurulumu SONRA. Plakalar haritanin icindeki proplar,
+        // yani yerlestirmek icin acik bir oturum ve izgara gerekiyor. OpenNew diske hicbir sey
+        // yazmadigi ve isimsiz actigi icin bu sira kullaniciya gorunmez.
+
+        void BeginTagSetup()
+        {
+            OpenConfirm("TAG KURULUMU",
+                "Yeni mekân: önce AprilTag'leri yerleştirelim.\n\n" +
+                "Plakaları duvarlara koyacaksın, BEYAZ yüzü odaya baksın —\n" +
+                "kâğıt oraya yapıştırılıyor. Sonra hepsi tek seferde kaydedilir.",
+                "BAŞLA", "ATLA", UITheme.AccentCyan, basla =>
+            {
+                // ATLA gecerli bir secim: kagitlar elde degilse tag kurulumunu simdi
+                // yapmaya zorlamak, bos plakalar konmasina ve yanlis yerlesime yol acardi.
+                // Harita sonradan menu 49'dan ya da yeniden acilarak tamamlanabilir.
+                _tagStep = basla ? TagStep.Plaka : TagStep.Yok;
+                EnterEditor();
+            });
+        }
+
+        /// <summary>
+        /// Plaka adimindan cikildi. Kagidin yapistirilmasi FIZIKSEL is; yazilim bunu
+        /// dogrulayamaz, o yuzden beyan isteniyor. Once acilsaydi kalibrasyon tag'i
+        /// olmadigi bir yerde arardi ve dogru tag'lerin kurdugu cerceveyi de bozardi.
+        /// </summary>
+        void AskPapersGlued()
+        {
+            int plaka = 0;
+            var s = ConstructorSession.Instance;
+            if (s != null && s.Layout != null) plaka = TagCapture.PlateCount(s.Layout);
+
+            if (plaka == 0)
+            {
+                OpenConfirm("HİÇ PLAKA YOK",
+                    "Tag kurulumu için en az bir plaka gerekiyor.\n\n" +
+                    "Çark > SİPER > TagIsaret, kat 3.",
+                    "GERİ DÖN", "VAZGEÇ", UITheme.AccentCyan, geri =>
+                {
+                    if (geri) EnterEditor();
+                    else { _tagStep = TagStep.Yok; BeginExitFlow(); }
+                });
+                return;
+            }
+
+            OpenConfirm("KÂĞITLAR YAPIŞTIRILDI MI?",
+                plaka + " plaka kondu.\n\n" +
+                "Kâğıt tag'leri plakaların BEYAZ yüzüne yapıştırdıysan kaydet.\n" +
+                "Yapıştırmadan açılan tag, kalibrasyonu bozar.",
+                "EVET, KAYDET", "HENÜZ DEĞİL", UITheme.AccentCyan, hazir =>
+            {
+                if (hazir) FinishTagSetup();
+                else EnterEditor();          // plaka koymaya devam
+            });
+        }
+
+        /// <summary>
+        /// Tag kurulumunu KAYDET: origin'i yaz, plakalari tag'e cevir, hepsini kalibrasyona ac.
+        /// Cevrimi her zaman YETKI sahibi yapar (dosya ve harita onda); gozluk isterse RPC ile.
+        /// </summary>
+        void FinishTagSetup()
+        {
+            _tagStep = TagStep.Yok;
+
+            if (ConstructorSession.IsMapAuthority)
+            {
+                string rapor = ConstructorSync.HostTagSetup(TagCapture.DefaultOriginHeight, out bool ok);
+                if (!ok)
+                {
+                    // Basarisizsa insa moduna GERI DON: kullanici plakayi duzeltip
+                    // tekrar deneyebilsin. Menuye dusurmek yapilan isi gorunmez kilardi.
+                    OpenConfirm("TAG KURULUMU YAPILAMADI", rapor,
+                        "GERİ DÖN", "VAZGEÇ", UITheme.TeamRedEdge, geri =>
+                    {
+                        if (geri) { _tagStep = TagStep.Plaka; EnterEditor(); }
+                    });
+                    return;
+                }
+                StartCoroutine(Note("TAG KURULUMU TAMAM\n\n" + rapor, 6f));
+            }
+            else if (!ConstructorSync.ClientRequestTagSetup(TagCapture.DefaultOriginHeight))
+            {
+                StartCoroutine(Note("SUNUCUYA BAĞLI DEĞİL\n\nTag kurulumu PC'de yapılıyor.", 5f));
+                return;
+            }
+
+            // ISIM SIMDI SORULUYOR: tag'ler fiziksel emek (duvara kagit yapistirildi) ve
+            // isimsiz harita diske yazilamiyor. Cikisi beklemek, bir cokmede o emegin
+            // tamamini goturur. Kayittan sonra insa modu basliyor.
+            OpenName("HARİTA ADI", null,
+                ad => { DoSave(ad); EnterEditor(); },
+                () => EnterEditor());     // isim verilmedi: tag'ler oturumda duruyor
         }
 
         void EnterEditor()
@@ -301,6 +408,11 @@ namespace VRMultiplayer.UI
         /// </summary>
         void BeginExitFlow()
         {
+            // TAG KURULUMU ACIKKEN cikis "kaydet mi?" degil "kagitlar hazir mi?" demek.
+            // Normal zincire dusseydi kullanici plakalari koyup cikinca harita adi sorulur,
+            // tag'ler ise hic uretilmezdi -- akisin tam ortasinda sessizce kaybolurdu.
+            if (_tagStep == TagStep.Plaka) { AskPapersGlued(); return; }
+
             var s = ConstructorSession.Instance;
             if (s == null || !s.HasUnsavedChanges) return;
             AskSave();
@@ -514,7 +626,12 @@ namespace VRMultiplayer.UI
             _recentering = false;
         }
 
-        void OpenName(string title, string prefill)
+        /// <param name="onConfirmed">
+        /// Bos birakilirsa varsayilan davranis: kaydet (cikis zinciri). Tag kurulumu kendi
+        /// devamini vermek zorunda — orada isimden sonra insa moduna DONULUYOR, cikilmiyor.
+        /// </param>
+        void OpenName(string title, string prefill,
+            Action<string> onConfirmed = null, Action onCancelled = null)
         {
             CloseConfirm();
             CloseName();
@@ -524,8 +641,16 @@ namespace VRMultiplayer.UI
             go.transform.SetParent(transform, false);
             _name = go.AddComponent<NameEntryPanel>();
             _name.Setup(title, prefill);
-            _name.Confirmed += ad => { CloseName(); DoSave(ad); };
-            _name.Cancelled += () => { CloseName(); AskSave(); };
+            _name.Confirmed += ad =>
+            {
+                CloseName();
+                if (onConfirmed != null) onConfirmed(ad); else DoSave(ad);
+            };
+            _name.Cancelled += () =>
+            {
+                CloseName();
+                if (onCancelled != null) onCancelled(); else AskSave();
+            };
 
             _placed = false;
             _recentering = false;

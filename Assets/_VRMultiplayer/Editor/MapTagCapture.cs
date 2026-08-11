@@ -4,25 +4,24 @@ using VRMultiplayer.Constructor;
 namespace VRMultiplayer.EditorTools
 {
     /// <summary>
-    ///   47/48 — plakalari haritanin tag yerlesimine ceviren menulerin EDITOR KABUGU.
+    /// Plaka -> tag cevriminin DISK KABUGU: "oku -> cevir -> yaz -> AssetDatabase.Refresh".
+    ///
+    /// MENUSU YOK. Eski 47 ve 48 maddeleri kaldirildi, cunku ikisinin de yaptigini
+    /// <see cref="TagSetupWindow"/> (menu 49) tek pencerede ve on kosullari denetleyerek
+    /// yapiyor: 47 kagit yapistirilmadan cagrilabiliyordu, 48 ise haritada kac tag'in
+    /// plakadan turedigini soylemeden hepsini aciyordu. Cihazda ayni isi yaratici modun
+    /// tag kurulumu adimi yapiyor. Bu sinif ikisinin de ortak govdesi olarak duruyor.
     ///
     /// MANTIK BURADA DEGIL: <see cref="TagCapture"/> icinde, cunku ayni cevrim gozlukte de
-    /// kosmali (yaratici modda yeni harita acarken tag kurulumu). Burasi yalnizca
-    /// "diskten oku -> cevir -> diske yaz -> AssetDatabase.Refresh" yapiyor. Kopyalansaydi
-    /// editor yolu ile cihaz yolu sessizce ayrisirdi.
+    /// kosmali. Kopyalansaydi editor yolu ile cihaz yolu sessizce ayrisirdi.
     ///
-    /// Yontemin gerekcesi, olculmus sayilar (6,1 cm vakasi, yaw konvansiyonunun uc bagimsiz
+    /// Yontemin gerekcesi ve olculmus sayilar (6,1 cm vakasi, yaw konvansiyonunun uc bagimsiz
     /// dogrulamasi, plakanin beyaz yuzu) <see cref="TagCapture"/> ozetinde.
     /// </summary>
     public static class MapTagCapture
     {
         public const int FirstTagId = TagCapture.FirstTagId;
         public const string PlateId = TagCapture.PlateId;
-
-        [MenuItem("Tools/VR Multiplayer/47. Plakalardan Tag Yerlesimi Uret")]
-        public static void CaptureMenu() =>
-            EditorUtility.DisplayDialog("VR Multiplayer",
-                Capture(ConstructorSession.DefaultMapName), "Tamam");
 
         public static string Capture(string mapName)
         {
@@ -42,11 +41,6 @@ namespace VRMultiplayer.EditorTools
                    "Bir plakayi silip yeniden koyarsan sona duser ve ID'si degisir —\n" +
                    "yukaridaki tablo bunun icin basiliyor.";
         }
-
-        [MenuItem("Tools/VR Multiplayer/48. Haritadaki Tag'leri Kalibrasyona Ac")]
-        public static void EnableMenu() =>
-            EditorUtility.DisplayDialog("VR Multiplayer",
-                Enable(ConstructorSession.DefaultMapName), "Tamam");
 
         public static string Enable(string mapName)
         {
