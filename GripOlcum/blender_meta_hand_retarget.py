@@ -96,6 +96,7 @@ for o in list(ours_objs):
 log("bizim iskelet:", ours_arm.name, len(ours_arm.data.bones), "kemik | olcek modu:", SCALE_MODE)
 
 out_parts = []
+snap_lines = []
 for side, fbx in (("R", META_R_FBX), ("L", META_L_FBX)):
     S = "Right" if side == "R" else "Left"
     objs = import_new(fbx)
@@ -170,6 +171,33 @@ for side, fbx in (("R", META_R_FBX), ("L", META_L_FBX)):
         target_of[b.name] = tgt.format(S=S)
     if side == "R":
         log("  segment oranlari (bizim/meta):", ", ".join("%s=%.2f" % (k, v) for k, v in ratios))
+
+    # SNAP: mesh'e HIC dokunma - tek kati donusumle (bilek cercevesi + avuc
+    # olcegi) yerine kondur, sonra BIZIM parmak kemiklerini Meta'nin eklem
+    # konumlarina tasi. Rig duzeldigi icin gerilme/incelme/sisme kalmaz.
+    if SCALE_MODE == "snap":
+        Rw = frame_of(o_head[S + "_Hand"], o_head[S + "_MiddleProximal"], o_palm) @ \
+             (frame_of(m_head["wrist"], m_head["middle1"], m_palm).transposed() * g_scale)
+        T_snap = Matrix.Translation(o_head[S + "_Hand"]) @ Rw.to_4x4() @ Matrix.Translation(-m_head["wrist"])
+        for b in m_arm.data.bones:
+            mk = meta_key(b.name)
+            if mk in DEF:
+                xforms[b.name] = T_snap
+        # duzeltilmis eklem konumlari (bizim kemik adi -> Meta ekleminin yeni yeri)
+        SNAP_JOINT = {
+            "{S}_ThumbProximal": "thumb0", "{S}_ThumbIntermediate": "thumb1",
+            "{S}_ThumbDistal": "thumb2", "{S}_ThumbDistalEnd": "thumb3",
+        }
+        for _f, _o in (("index", "Index"), ("middle", "Middle"), ("ring", "Ring"), ("pinky", "Pinky")):
+            n1 = "1" if _f != "pinky" else "1"
+            SNAP_JOINT["{S}_" + _o + "Proximal"] = _f + n1
+            SNAP_JOINT["{S}_" + _o + "Intermediate"] = _f + "2"
+            SNAP_JOINT["{S}_" + _o + "Distal"] = _f + "3"
+            SNAP_JOINT["{S}_" + _o + "DistalEnd"] = _f + "_null"
+        for on, mn in SNAP_JOINT.items():
+            p = T_snap @ m_head[mn]
+            snap_lines.append("%s %.8f %.8f %.8f" % (on.format(S=S), p.x, p.y, p.z))
+        log(side, "snap: %d parmak eklemi yeniden konumlandirilacak" % len(SNAP_JOINT))
 
     me = m_obj.data
     mwv = m_obj.matrix_world
@@ -268,4 +296,9 @@ out = OUT_BASE + "_" + SCALE_MODE + ".bin"
 with open(out, "wb") as f:
     f.write(buf)
 log("BIN yazildi:", out, len(buf), "bayt")
+if snap_lines:
+    jf = OUT_BASE + "_snap_joints.txt"
+    with open(jf, "w") as f:
+        f.write("\n".join(snap_lines))
+    log("EKLEM TABLOSU yazildi:", jf, len(snap_lines), "satir (Blender uzayi)")
 log("BITTI")
