@@ -146,19 +146,26 @@ for side, fbx in (("R", META_R_FBX), ("L", META_L_FBX)):
         mv = m_head[mp[1]] - m_head[mp[0]]
         ov = o_head[ot] - o_head[of]
         r = ov.length / mv.length if mv.length > 1e-9 else g_scale
+        # Son segment (uca giden) oranlari YALAN: Meta iskeleti mesh'in ucundan
+        # once bitiyor, oran 1.85-2.67 cikiyor. Yalnizca onlari kirp.
+        r_len = min(r, 1.5) if mp[1].endswith("_null") else r
         if SCALE_MODE == "perbone":
-            s = r
-        elif SCALE_MODE == "mid":
-            s = (g_scale * r) ** 0.5
+            s = (r_len, r_len, r_len)
         elif SCALE_MODE == "perfinger":
             fam = next((f for f in finger_scale if mk.startswith(f)), None)
-            s = finger_scale[fam] if fam else g_scale
+            v = finger_scale[fam] if fam else g_scale
+            s = (v, v, v)
+        elif SCALE_MODE == "aniso":
+            # Uzatma YALNIZ kemik ekseni boyunca; kesit avuc olceginde kalir.
+            # Tek-tip olcek basparmagi (oran 1.67-2.09) sisiriyordu.
+            s = (r_len, g_scale, g_scale)
         else:
-            s = g_scale
+            s = (g_scale, g_scale, g_scale)
         ratios.append((mk, r))
         Rm = frame_of(m_head[mp[0]], m_head[mp[1]], m_palm)
         Ro = frame_of(o_head[of], o_head[ot], o_palm)
-        M3 = Ro @ (Rm.transposed() * s)
+        S3 = Matrix.Diagonal(Vector(s))
+        M3 = Ro @ S3 @ Rm.transposed()
         xforms[b.name] = Matrix.Translation(o_head[of]) @ M3.to_4x4() @ Matrix.Translation(-m_head[mp[0]])
         target_of[b.name] = tgt.format(S=S)
     if side == "R":
