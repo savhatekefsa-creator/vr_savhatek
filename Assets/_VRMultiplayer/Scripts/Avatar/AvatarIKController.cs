@@ -176,6 +176,8 @@ namespace VRMultiplayer
         // TwoBoneIK constraint'lerinden cozulur (prefabta LeftElbowHint / RightElbowHint).
         Transform _lElbowHint, _rElbowHint;
         float _maxReachL, _maxReachR;
+        // Erisim kelepcesinin kol boyu (yerel uzayda, bir kere olculur) - bkz. ArmReach.
+        float _lArmLen, _rArmLen;
 
         void SetupHandOrientation(Animator animator)
         {
@@ -191,6 +193,11 @@ namespace VRMultiplayer
             _rUpper = animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
             _rLower = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
             _rHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
+
+            // Erisim kelepcesi icin kol boyu: BIR KERE, yerel uzayda. Canli olcum
+            // WeaponHandWeld'in mutlak bilek yazmasindan beslenip kayardi.
+            _lArmLen = ArmReach.MeasureLocal(_lUpper, _lLower, _lHand);
+            _rArmLen = ArmReach.MeasureLocal(_rUpper, _rLower, _rHand);
 
             foreach (var c in GetComponentsInChildren<TwoBoneIKConstraint>(true))
             {
@@ -361,11 +368,18 @@ namespace VRMultiplayer
         {
             Vector3 pos = src.position + src.rotation * gripPosOffset
                         - src.forward * (palmOffset * _scaleK);
-            if (!armReachRemap) return pos;
 
             Transform up = left ? _lUpper : _rUpper;
             Transform lo = left ? _lLower : _rLower;
             Transform ha = left ? _lHand : _rHand;
+
+            // Kol UZAYAMAZ: hedef erisim disindaysa bilek en uzak erisilebilir
+            // noktaya kelepcelenir, kol dumduz kalip hedefe dogru bakar. Erisim
+            // icindeyken hicbir etkisi yok. armReachRemap'ten BAGIMSIZ - o kapali
+            // olsa bile bu kural gecerli.
+            pos = ArmReach.Clamp(pos, up, left ? _lArmLen : _rArmLen);
+
+            if (!armReachRemap) return pos;
             if (up == null || lo == null || ha == null) return pos;
 
             Vector3 dir = pos - up.position;

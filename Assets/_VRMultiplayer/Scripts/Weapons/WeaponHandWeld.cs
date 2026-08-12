@@ -50,6 +50,10 @@ namespace VRMultiplayer.Weapons
         Animator _anim;
         AvatarIKController _ik;
         Transform _leftBone, _rightBone;
+        // Erisim kelepcesi icin kol kemikleri (bkz. ArmReach): silah nerede olursa
+        // olsun kol boyundan uzagini yazmiyoruz.
+        Transform _leftUpper, _leftLower, _rightUpper, _rightLower;
+        float _leftArmLen, _rightArmLen;   // yerel uzayda, Awake'te bir kere olculur
 
         void Awake()
         {
@@ -59,6 +63,15 @@ namespace VRMultiplayer.Weapons
             {
                 _leftBone = _anim.GetBoneTransform(HumanBodyBones.LeftHand);
                 _rightBone = _anim.GetBoneTransform(HumanBodyBones.RightHand);
+                _leftUpper = _anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                _leftLower = _anim.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+                _rightUpper = _anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                _rightLower = _anim.GetBoneTransform(HumanBodyBones.RightLowerArm);
+
+                // Boy BIR KERE, henuz hicbir weld calismadan olculuyor - yoksa
+                // kendi yazdigimiz bilek konumunu geri okurduk (bkz. ArmReach).
+                _leftArmLen = ArmReach.MeasureLocal(_leftUpper, _leftLower, _leftBone);
+                _rightArmLen = ArmReach.MeasureLocal(_rightUpper, _rightLower, _rightBone);
             }
         }
 
@@ -185,6 +198,16 @@ namespace VRMultiplayer.Weapons
             }
 
             ComputeTarget(ref w, left, out Vector3 targetPos, out Quaternion targetRot);
+
+            // KOL UZAYAMAZ. Bu yazma mutlak (rig'den sonra), dolayisiyla kelepce
+            // olmadan bilek silaha isinlaniyor ve el koldan kopmus gorunuyordu.
+            // Kelepce yalnizca hedef kol boyunu ASTIGINDA calisir; normal tutusta
+            // hicbir sey degismez, yani "destek eli silaha tam guclu kaynakli
+            // kalsin" kurali korunur. ROTASYON kelepcelenmez: kol duz kalsa bile
+            // el silahin/kumandanin yonune bakmaya devam eder.
+            targetPos = ArmReach.Clamp(targetPos,
+                left ? _leftUpper : _rightUpper,
+                left ? _leftArmLen : _rightArmLen);
 
             // Engage/release weight. The bone's pose here is this frame's IK/animator result
             // (the weld runs after both), so a partial weight blends between that and the
