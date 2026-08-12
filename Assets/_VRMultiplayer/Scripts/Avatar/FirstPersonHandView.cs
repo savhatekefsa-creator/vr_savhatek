@@ -52,6 +52,14 @@ namespace VRMultiplayer
         // ters-olcek dugumudur, oraya dokunmak makaslama kuralini bozar.
         const float HandScale = 1.10f;
 
+        // Elin kumandaya gore ince ayari. SIFIR = yalnizca OpenXR grip cerçevesi.
+        // Spec dogru cerceveyi verir ama son 10-20 dereceyi veremez: dogru durus
+        // kumandanin FIZIKSEL sekline ve gercek elin sapi nasil kavradigina bagli.
+        // O yuzden bu iki sayi cihazda ayarlanip buraya islenir.
+        // YALNIZ SAG EL: sol el aynalanarak turetilir (bkz. BuildHandModel).
+        static readonly Vector3 WristOffsetEuler = Vector3.zero;
+        static readonly Vector3 WristOffsetPosition = Vector3.zero;
+
         const float DotDiameter = 0.02f;
         const float DotFadeStart = 0.03f;
         const float DotFadeEnd = 0.25f;
@@ -312,36 +320,60 @@ namespace VRMultiplayer
             // Sabit euler gommek yerine kemiklerden HESAPLANIYOR - model yeniden import
             // edilirse veya Meta duruşu degistirirse kendiliginden dogru kalir.
             string pre = left ? "b_l_" : "b_r_";
-            Transform wrist = null, mid = null, thumb = null;
+            Transform wrist = null, mid = null, thumb = null, idx = null, pky = null;
             foreach (var t in go.GetComponentsInChildren<Transform>(true))
             {
                 if (t.name == pre + "wrist") wrist = t;
                 else if (t.name == pre + "middle1") mid = t;
                 else if (t.name == pre + "thumb1") thumb = t;
+                else if (t.name == pre + "index1") idx = t;
+                else if (t.name == pre + "pinky1") pky = t;
             }
-            if (wrist != null && mid != null && thumb != null)
+            if (wrist != null && mid != null && thumb != null && idx != null && pky != null)
             {
                 // Boyut once: olcek bilegi de oynatir, konum duzeltmesi ONDAN SONRA
                 // yapilmali.
                 go.transform.localScale = Vector3.one * HandScale;
 
-                // HEDEF DURUS: parmaklar +z, BASPARMAK +y. Kumanda duz tutuldugunda
-                // dort parmak ileri, basparmak yukari, avuc ice bakar.
+                // HEDEF DURUS: OpenXR grip pose. Spec'te "ileri" ekseni, kapali elin
+                // dort parmaginin olusturdugu TUPUN ekseni - yani sapin uzandigi yon.
+                // Onceki surum ACIK ELIN PARMAK YONUNU oraya hizaliyordu; ikisi arasinda
+                // 72 derece var, cihazda "dort parmak yukari bakiyor" diye goruldu.
                 //
-                // Basparmagi referans almak KRITIK. Onceki surum avuc normalini
-                // Cross(parmak, isaret-serce) ile buluyordu; o carpim SAG elin
-                // avucundan ama SOL elin SIRTINDAN disari bakar. Iki eli de ayni
-                // eksene zorlayinca biri 180 derece donuyordu - cihazda "sol elin
-                // avcu bana, sagin ileri bakiyor" diye goruldu. Basparmak ise dogasi
-                // geregi ellidir (sag elde bir yanda, solda obur yanda), dolayisiyla
-                // bu tanim kendiliginden AYNA-SIMETRIKTIR ve el basina isaret
-                // duzeltmesi istemez. Ayni tuzagin bilinen hali icin bkz.
-                // FingerCurlMath.PalmFrame (left ? -palmNormal : palmNormal).
+                // Tup ekseni = parmak mentese ekseni = Cross(parmak yonu, avuc disi).
+                // avucDisi el-liligi zaten tasiyor (sol elde ham carpim tersine bakar).
+                //
+                // ISARET ELLE VERILIYOR ve bu SART: LookRotation ayna-esdeger degildir,
+                // aynalanmis iki girdiden AYNI donusu uretir. Isaret konmazsa iki elin
+                // avucu da ayni yone bakar - bu oturumda tam olarak bu hata iki kez
+                // yasandi. Isaretin dogrulugu OpenXR'in kuraliyla sabitleniyor:
+                // "avuc normali sol avuctan disari, SAG avuctan iceri", yani sag el
+                // avucu -x'e bakmali. Olculdu: ayna testi uc eksende de 0.00 derece.
                 Vector3 fingers = (mid.position - wrist.position).normalized;
+                Vector3 rawCross = Vector3.Cross(fingers, (idx.position - pky.position).normalized).normalized;
+                Vector3 palmOut = left ? -rawCross : rawCross;
+                Vector3 tube = Vector3.Cross(fingers, palmOut).normalized;
+                if (left) tube = -tube;
                 Vector3 thumbDir = (thumb.position - wrist.position).normalized;
-                Vector3 up = (thumbDir - fingers * Vector3.Dot(thumbDir, fingers)).normalized;
+                Vector3 up = (thumbDir - tube * Vector3.Dot(thumbDir, tube)).normalized;
                 if (up.sqrMagnitude > 1e-6f)
-                    go.transform.rotation = Quaternion.Inverse(Quaternion.LookRotation(fingers, up)) * go.transform.rotation;
+                {
+                    go.transform.rotation = Quaternion.Inverse(Quaternion.LookRotation(tube, up)) * go.transform.rotation;
+
+                    // Yazili duzeltme: cihazda ayarlanip buraya islenir. YALNIZ SAG EL
+                    // icin yazilir, sol el aynalanarak turetilir - silah profillerinde
+                    // de gecerli olan kural (bkz. WeaponGripTuner). Boylece simetri
+                    // ayarin degil YAPININ garantisi olur; sol el icin ayri bir sayi yok.
+                    Quaternion offRot = Quaternion.Euler(WristOffsetEuler);
+                    Vector3 offPos = WristOffsetPosition;
+                    if (left)
+                    {
+                        offRot = Weapons.WeaponGripMath.MirrorX(offRot);
+                        offPos = Weapons.WeaponGripMath.MirrorX(offPos);
+                    }
+                    go.transform.localRotation = offRot * go.transform.localRotation;
+                    go.transform.localPosition += offPos;
+                }
 
                 // Bilek tam Pose orijinine gelsin (modelin kokunde olmayabilir).
                 go.transform.position += pose.position - wrist.position;
