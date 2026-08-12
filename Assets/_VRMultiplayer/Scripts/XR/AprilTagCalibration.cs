@@ -424,6 +424,9 @@ namespace VRMultiplayer
         float _lastTagTime = -1f;    // YALNIZCA tag gercekten bulundugunda
         float _detectHz;
 
+        /// <summary>Bu turdan once tag'siz gecen sure (sn); hic gorulmediyse -1. Teshis satirlarina yazilir.</summary>
+        float _tagGapSeconds = -1f;
+
         TextMesh _panel;
 
         /// <summary>
@@ -647,6 +650,18 @@ namespace VRMultiplayer
             float now = Time.time;
             if (_lastPassTime > 0f) _detectHz = 1f / Mathf.Max(0.0001f, now - _lastPassTime);
             _lastPassTime = now;
+
+            // TAG'SIZ GECEN SURE — tur basina BIR kez, tag'ler islenmeden ONCE olculur
+            // (RecordMeasurement _lastTagTime'i eziyor; sonra bakilsa hep ~0 cikardi).
+            //
+            // NEDEN GEREKLI: buyuk bir duzeltmenin SEBEBINI log'dan okuyabilmek icin.
+            // Iki bambaska olay ayni satiri uretiyor ve ayirt edilemiyordu:
+            //   duzlemsel belirsizlik flipi -> ardisik kareler arasi olur (bosluk ~0,3 sn)
+            //   takip kopmasi/relokalizasyon -> uzun sessizlikten sonra olur (saniyeler)
+            // Taban cizgisinde tam bu karisti: 4,96 m'lik sicramayi flip sandim, oysa
+            // gozluk cikarilip tag 1'e yuruyup takilmisti ve arada 21 saniye tag yoktu.
+            // Bosluk yazilsaydi soru hic sorulmayacakti.
+            _tagGapSeconds = _lastTagTime > 0f ? now - _lastTagTime : -1f;
 
             var camPose = PassthroughCameraUtils.GetCameraPoseInWorld(_camMgr.Eye);
 
@@ -1126,14 +1141,21 @@ namespace VRMultiplayer
             // bakmak. "sapma/mesafe" orani sabitse acisal, "sapma" sabitse konumsal.
             string dm = $"  d {distance:0.00} m  sapma/d {dev / Mathf.Max(0.01f, distance) * 100f:0.0} cm/m";
 
+            // TAG'SIZ GECEN SURE — buyuk bir duzeltmenin SEBEBINI ayirt eden tek sayi.
+            // Flip ardisik kareler arasi olur (bosluk ~0,3 sn); takip kopmasi saniyeler
+            // suren bir sessizlikten sonra gelir. Taban cizgisinde 4,96 m'lik sicramayi
+            // flip sandim, oysa 21 saniyelik boslugun ardindan gelmisti -- gozluk cikarilip
+            // odanin obur ucunda takilmisti. Bu sayi yazilsaydi soru hic sorulmayacakti.
+            string bosluk = _tagGapSeconds >= 0.5f ? $"  bosluk {_tagGapSeconds:0.0} sn" : "";
+
             if (snap)
             {
-                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}");
+                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}{bosluk}");
             }
             else if (Time.time >= _nextStateDiagAt)
             {
                 _nextStateDiagAt = Time.time + 5f;
-                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}");
+                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}{bosluk}");
             }
 
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
