@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 836b73326beb1724c8de15b779af465e, type: 3}
   m_Name: PropLibrary
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Constructor.PropLibrary
-  contentVersion: 23
+  contentVersion: 24
   schemaVersion: 1
   sourceFolders:
   - Assets/P A I N T B A L L S E R I ES MK/Content/Prefabs
@@ -109,6 +109,19 @@ MonoBehaviour:
     hiddenInPalette: 1
     networked: 0
     height: 1.3034182
+  - id: burning_barrel
+    displayName: Burning_Barrel
+    category: 0
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 6675442859387585979, guid: de5e35d420524da45b62c34ef8d16f88, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 0.9980449, y: 0.99821913}
+    fitToFootprint: 1
+    freeRotation: 1
+    hiddenInPalette: 0
+    networked: 0
+    height: 1.5
   - id: bush_01
     displayName: Bush_01
     category: 2
