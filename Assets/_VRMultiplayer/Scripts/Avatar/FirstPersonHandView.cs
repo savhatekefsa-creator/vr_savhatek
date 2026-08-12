@@ -1,4 +1,5 @@
 using UnityEngine;
+using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer
 {
@@ -7,82 +8,132 @@ namespace VRMultiplayer
     /// kumanda tasiyicisinin ALTINA parent'lanir.
     ///
     /// Sart: kumanda neredeyse el ORADADIR. Sinir yok - kumanda 2 m otede yerdeyse
-    /// el de oradadir. Bu garanti her karede konum yazan bir koddan degil,
-    /// parent-child iliskisinin kendisinden gelir; yani bir kare geride kalma,
-    /// IK yakinsama hatasi ve govde yaw olu bolgesi gibi hata siniflarinin tamami
-    /// yapisal olarak imkansiz. Bu yuzden burada Update/LateUpdate YOK.
+    /// el de oradadir. Bos elde bu garanti hicbir koddan degil, parent-child
+    /// iliskisinden gelir. Kol IK'si (uzak oyuncularin gordugu) bundan bagimsiz
+    /// calisir; orada kural terstir - kol uzayamaz (bkz. <see cref="ArmReach"/>).
     ///
-    /// Kol IK'si (uzak oyuncularin gordugu) bundan bagimsiz calismaya devam eder;
-    /// orada kural terstir - kol uzayamaz, sinirinda dumduz kalir
-    /// (bkz. <see cref="ArmReach"/>).
+    /// TEK istisna: silah tutulurken el silahin uzerine oturur. Ozellikle DESTEK
+    /// ELI kundakta kaymali ama kundaktan AYRILMAMALI - weld'in ray izdusumu
+    /// bunu zaten hesapliyor, burada onu takip ediyoruz. Bu bir erisim siniri
+    /// DEGIL (silah zaten kumandanin ucunda), sadece elin silaha yapismasi.
+    ///
+    /// Hiyerarsi ve neden boyle:
+    ///   tasiyici (DUZGUN OLMAYAN olcek 0.08/0.045/0.13)
+    ///   +- FP_HandView   <- olcegi tersleyen dugum; donusu HEP identity
+    ///      +- Pose       <- poz burada surulur (weld takibi)
+    ///         +- Palm / Thumb / Fingers
+    /// Ters olcek ile serbest donus AYNI dugumde olursa mesh makaslanir
+    /// (S * R * S_inv, S duzgun degilse ortonormal degildir). Ters olcek
+    /// dugumunun donusu identity kaldigi surece S * S_inv sadelesir ve alttaki
+    /// Pose dugumu serbestce dondurulebilir.
     ///
     /// Gorsel su an YER TUTUCU: "el dogru yerde mi, dogru mu donuyor" sorusunu
     /// cevaplamak icin kod ile uretilen basit bloklar. Gercek el modeli ayri is.
     /// </summary>
-    public static class FirstPersonHandView
+    [DefaultExecutionOrder(120)]   // HandGrabber (silahi tasir) ve WeaponHandWeld (110) SONRASI
+    public class FirstPersonHandView : MonoBehaviour
     {
         public const string ObjectName = "FP_HandView";
 
         // OpenXR grip pose zaten avucun icinde oturur, o yuzden tasiyiciya gore
-        // kaydirma sifir. Faz 3 olcumu (el <-> silah kabzasi mesafesi) burayi
-        // ayarlamak icin tek dokunus noktasi.
+        // kaydirma sifir. Elin silaha gore yerini ayarlamak gerekirse tek dokunus
+        // noktasi burasi.
         static readonly Vector3 PalmLocalOffset = Vector3.zero;
+
+        // Silaha yapisma/birakma tek karede olursa el ziplar. WeaponHandWeld
+        // avatarin bilegini ayni sebeple harmanliyor (0.12 s) - FP eli de oyle.
+        // Agirlik TAM 0 oldugunda poz kumandaya birebir esitlenir, yani bos elde
+        // hicbir gecikme/yumusatma YOKTUR; harman yalnizca gecis aninda yasar.
+        const float BlendSeconds = 0.12f;
+
+        Transform _carrier;      // kumanda tasiyicisi
+        Transform _pose;         // surulen dugum
+        GameObject _avatar;      // WeaponHandWeld calisma aninda buraya ekleniyor
+        bool _left;
+        WeaponHandWeld _weld;
+        float _weight;           // 0 = kumanda, 1 = silah ankraji
+        Vector3 _lastAnchor;
 
         /// <summary>
         /// Iki kumanda tasiyicisinin altina el gorselini kurar. Yalnizca SAHIP
         /// icin cagrilir; aga hic girmez, uzak istemcilerde hic yaratilmaz.
         /// </summary>
-        public static void Attach(Transform leftCarrier, Transform rightCarrier)
+        public static void Attach(Transform leftCarrier, Transform rightCarrier, GameObject avatar)
         {
-            Build(leftCarrier, true);
-            Build(rightCarrier, false);
+            Build(leftCarrier, true, avatar);
+            Build(rightCarrier, false, avatar);
         }
 
-        static void Build(Transform carrier, bool left)
+        static void Build(Transform carrier, bool left, GameObject avatar)
         {
             if (carrier == null) return;
-
-            // ApplyVisibility birden fazla kez calisabilir - ikinci el takilmasin.
-            var existing = carrier.Find(ObjectName);
-            if (existing != null) return;
+            if (carrier.Find(ObjectName) != null) return;   // ikinci el takilmasin
 
             var root = new GameObject(ObjectName);
             root.transform.SetParent(carrier, false);
-            root.transform.localPosition = PalmLocalOffset;
-            root.transform.localRotation = Quaternion.identity;
+            root.transform.localRotation = Quaternion.identity;   // DEGISTIRME (bkz. sinif notu)
 
-            // Tasiyicilar eski "basit el kupu"ndan kalma DUZGUN OLMAYAN bir olcek
-            // tasiyor (0.08, 0.045, 0.13). Altina konan her sey hem kuculur hem
-            // carpilir. Olcegi burada tersine cevirip gorseli gercek dunya
-            // olcusune dondururuz. Tasiyicinin olcegini prefabta duzeltmek
-            // caziptir ama YAPILMAMALI: HandGrabber silah tutus offsetlerini
+            // Tasiyicilar eski "basit el kupu"ndan kalma duzgun olmayan bir olcek
+            // tasiyor. Tasiyicinin olcegini prefabta duzeltmek caziptir ama
+            // YAPILMAMALI: HandGrabber silah tutus offsetlerini
             // anchor.InverseTransformPoint ile cozuyor, yani olcek tutus
-            // kalibrasyonunun icinde.
-            //
-            // DIKKAT: duzgun olmayan bir olcegin tersi ancak cocuklar EKSEN
-            // HIZALI ise dogru sonuc verir. Asagidaki parcalarin donusu bilerek
-            // identity - yeni bir parca eklerken de oyle kalmali, yoksa mesh
-            // makaslanir.
+            // kalibrasyonunun icinde. Burada tersliyoruz.
             Vector3 s = carrier.lossyScale;
             root.transform.localScale = new Vector3(
                 Mathf.Approximately(s.x, 0f) ? 1f : 1f / s.x,
                 Mathf.Approximately(s.y, 0f) ? 1f : 1f / s.y,
                 Mathf.Approximately(s.z, 0f) ? 1f : 1f / s.z);
+            // localPosition ust dugumun olceginden gecer; offset sifir oldugu icin
+            // fark etmiyor, sifirdan farkli verilecekse olcege bolunmeli.
+            root.transform.localPosition = PalmLocalOffset;
 
-            // Yer tutucu: avuc + basparmak + parmak yonu. Uc parcanin rengi ayri,
-            // boylece elin hangi yone baktigi duz isikta bile okunuyor.
-            // Basparmak hangi tarafta: eli duz tut, avuc asagi, parmaklar ileri (+z),
-            // elin sirti yukari (+y). SAG elin basparmagi o zaman -x'te (govde
-            // ortasina dogru), sol elinki +x'te kalir.
-            float side = left ? 1f : -1f;
-            var body = new Color(0.62f, 0.60f, 0.58f);
-            var thumb = new Color(0.85f, 0.45f, 0.15f);
-            var fingers = new Color(0.25f, 0.65f, 0.80f);
+            var pose = new GameObject("Pose");
+            pose.transform.SetParent(root.transform, false);
 
-            //            ad          konum                                  olcek                          renk
-            Piece(root, "Palm", new Vector3(0f, 0f, 0.01f), new Vector3(0.075f, 0.028f, 0.095f), body);
-            Piece(root, "Thumb", new Vector3(side * 0.042f, 0.004f, 0.028f), new Vector3(0.024f, 0.022f, 0.052f), thumb);
-            Piece(root, "Fingers", new Vector3(0f, -0.002f, 0.082f), new Vector3(0.068f, 0.022f, 0.062f), fingers);
+            float side = left ? 1f : -1f;   // sag elin basparmagi -x'te (govde ortasina dogru)
+            Piece(pose, "Palm", new Vector3(0f, 0f, 0.01f), new Vector3(0.075f, 0.028f, 0.095f), new Color(0.62f, 0.60f, 0.58f));
+            Piece(pose, "Thumb", new Vector3(side * 0.042f, 0.004f, 0.028f), new Vector3(0.024f, 0.022f, 0.052f), new Color(0.85f, 0.45f, 0.15f));
+            Piece(pose, "Fingers", new Vector3(0f, -0.002f, 0.082f), new Vector3(0.068f, 0.022f, 0.062f), new Color(0.25f, 0.65f, 0.80f));
+
+            var view = root.AddComponent<FirstPersonHandView>();
+            view._carrier = carrier;
+            view._pose = pose.transform;
+            view._avatar = avatar;
+            view._left = left;
+        }
+
+        void LateUpdate()
+        {
+            if (_pose == null || _carrier == null) return;
+
+            // Weld calisma aninda WeaponGrip tarafindan avatara EKLENIYOR, o yuzden
+            // bir kere bulup onbellege almak yetmez - yoksa her karede tekrar bak.
+            if (_weld == null && _avatar != null)
+                _weld = _avatar.GetComponentInChildren<WeaponHandWeld>();
+
+            // Silah tutuluyorsa el silahin uzerindeki noktaya oturur. Destek eli
+            // icin bu, profildeki ray noktasidir - el kundaktan AYRILMAZ. Donus
+            // kumandadan gelmeye devam eder: elin nereye baktigi oyuncunun
+            // bilegine ait, silaha degil.
+            bool welded = _weld != null && _weld.TryGetHandAnchor(_left, out _lastAnchor);
+
+            float target = welded ? 1f : 0f;
+            if (Application.isPlaying && BlendSeconds > 0f)
+                _weight = Mathf.MoveTowards(_weight, target, Time.deltaTime / BlendSeconds);
+            else
+                _weight = target;   // editor/olcum: geciste takilip kalmayalim
+
+            if (_weight <= 0f)
+            {
+                // Bos el: tasiyiciya BIREBIR yapisik, ara islem yok.
+                _pose.localPosition = Vector3.zero;
+                _pose.localRotation = Quaternion.identity;
+                return;
+            }
+
+            _pose.SetPositionAndRotation(
+                Vector3.Lerp(_carrier.position, _lastAnchor, _weight),
+                _carrier.rotation);
         }
 
         static void Piece(GameObject parent, string name, Vector3 localPos, Vector3 scale, Color color)

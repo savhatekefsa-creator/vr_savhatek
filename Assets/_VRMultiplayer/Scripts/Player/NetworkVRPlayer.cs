@@ -120,7 +120,7 @@ namespace VRMultiplayer
 
                     // Tasiyicilarin kendi mesh'leri yukarida HideRenderers ile zaten
                     // kapatildi; el gorseli ondan SONRA kuruluyor ki kapanmasin.
-                    FirstPersonHandView.Attach(leftHand, rightHand);
+                    FirstPersonHandView.Attach(leftHand, rightHand, remoteAvatar);
                 }
             }
         }

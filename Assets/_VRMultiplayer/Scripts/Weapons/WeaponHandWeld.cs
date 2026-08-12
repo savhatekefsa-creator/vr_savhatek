@@ -154,7 +154,33 @@ namespace VRMultiplayer.Weapons
             return true;
         }
 
+        /// <summary>
+        /// Elin silah uzerinde OTURDUGU nokta (bilek offset'i uygulanmadan onceki
+        /// tutamak/ray noktasi). Birinci sahis eli bunu kullanir: destek eli
+        /// kundaga yapisik kalsin diye. Bilek hedefinden farkli olarak burada
+        /// avatarin bilek kemigi konvansiyonu yok, dolayisiyla FP gorseli icin
+        /// donus donusturmesi gerekmez.
+        /// </summary>
+        public bool TryGetHandAnchor(bool left, out Vector3 pos)
+        {
+            pos = Vector3.zero;
+            ref HandWeld w = ref (left ? ref _left : ref _right);
+            if (!w.active || w.fadingOut) return false;
+            if (w.weapon == null || w.profile == null) return false;
+            ComputeAnchor(ref w, left, out pos, out _);
+            return true;
+        }
+
         void ComputeTarget(ref HandWeld w, bool left, out Vector3 targetPos, out Quaternion targetRot)
+        {
+            ComputeAnchor(ref w, left, out Vector3 anchorPos, out Quaternion anchorRot);
+            // Anchor on the (scaled) weapon; the wrist offset is authored in meters (hand-sized,
+            // independent of the weapon's scale).
+            targetPos = anchorPos + anchorRot * w.wristLocalPos;
+            targetRot = anchorRot * w.wristLocalRot;
+        }
+
+        void ComputeAnchor(ref HandWeld w, bool left, out Vector3 anchorPos, out Quaternion anchorRot)
         {
             Vector3 anchorLocal;
             Quaternion anchorLocalRot = w.gripLocalRot;
@@ -177,12 +203,8 @@ namespace VRMultiplayer.Weapons
                 anchorLocal = Vector3.Lerp(rs, re, t);
             }
 
-            // Anchor on the (scaled) weapon; the wrist offset is authored in meters (hand-sized,
-            // independent of the weapon's scale).
-            Vector3 anchorPos = w.weapon.TransformPoint(anchorLocal);
-            Quaternion anchorRot = w.weapon.rotation * anchorLocalRot;
-            targetPos = anchorPos + anchorRot * w.wristLocalPos;
-            targetRot = anchorRot * w.wristLocalRot;
+            anchorPos = w.weapon.TransformPoint(anchorLocal);
+            anchorRot = w.weapon.rotation * anchorLocalRot;
         }
 
         void WeldSide(ref HandWeld w, bool left)
