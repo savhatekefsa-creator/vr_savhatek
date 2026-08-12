@@ -23,7 +23,6 @@ namespace VRMultiplayer.Constructor
             // (Palet <-> Placer cifti icin sira onemsiz: palet karsi tarafi tembel cozuyor.)
             go.AddComponent<ConstructorSession>();
             go.AddComponent<ConstructorGridView>();
-            go.AddComponent<ConstructorDollhouse>();
             go.AddComponent<ConstructorPassthrough>();
             go.AddComponent<ConstructorPaletteUI>();
             go.AddComponent<ConstructorPlacer>();

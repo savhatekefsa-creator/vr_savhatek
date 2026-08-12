@@ -72,8 +72,8 @@ namespace VRMultiplayer.Constructor
 
         /// <summary>
         /// Parent of every cell layer, and the grid's ODA UZAYI: mesh vertices are written in
-        /// room coordinates, so shrinking this one transform (dollhouse mode) scales the whole
-        /// grid with the map and nothing has to be rebuilt.
+        /// room coordinates, so moving or scaling this one transform moves the whole grid with
+        /// the map and nothing has to be rebuilt.
         /// </summary>
         public Transform Container
         {

@@ -372,22 +372,34 @@ namespace VRMultiplayer.UI
         }
 
         /// <summary>
-        /// Alfa ile solabilen (transparan) unlit materyal olusturur — hasar flasi gibi efektler icin.
+        /// Alfa ile solabilen (transparan) unlit materyal olusturur — insa izgarasi, hayalet
+        /// prop, hasar flasi gibi her sey icin.
         ///
-        /// HEDEF ALFA KORUNUR — PASSTHROUGH ICIN SART. Bu oyunda gercek oda uygulamanin ALTINA
-        /// kompozit ediliyor ve kare tamponunun ALFASI "burada sanal icerik var mi" demek.
-        /// Duz alfa harmani (SrcAlpha/OneMinusSrcAlpha) alfa kanalini DA harmanlar:
+        /// ALFA KANALI AYRI HARMANLANIR — PASSTHROUGH ICIN SART. Bu oyunda gercek oda uygulamanin
+        /// ALTINA kompozit ediliyor ve kare tamponunun ALFASI "burada ne kadar sanal icerik var"
+        /// demek. Duz alfa harmani (SrcAlpha/OneMinusSrcAlpha) alfa kanalini DA carpar:
         ///
         ///     dstA = srcA^2 + (1 - srcA) * dstA        alfa 0.5 ile:  1.00 -> 0.75
         ///
-        /// Yani yari saydam bir hasar flasi ya da vinyet, sanal dunyanin USTUNE cizilse bile
-        /// oranin alfasini dusurur ve GERCEK ODA efektin icinden sizar. Bombadan hasar alinca
-        /// "bir sure gercek dunyayi gormek" tam olarak buydu.
+        /// yani yari saydam bir hasar flasi, sanal dunyanin USTUNE cizilse bile oranin alfasini
+        /// DUSURUR ve gercek oda efektin icinden sizar. Bombadan hasar alinca "bir sure gercek
+        /// dunyayi gormek" tam olarak buydu.
         ///
-        /// Cozum: alfa kanali icin AYRI harman — Zero/One, yani "hedef alfaya dokunma".
-        /// RGB normal harmanlanmaya devam eder, gorunum degismez. URP/Unlit bu ozellikleri
-        /// (_SrcBlendAlpha / _DstBlendAlpha) tanimliyor; tanimlamayan bir shader'a duserse
-        /// kod sessizce eski davranista kalir (efekt yine cizilir, yalnizca sizinti surer).
+        /// Dogru harman "uzerine" (over) formulu — One / OneMinusSrcAlpha:
+        ///
+        ///     dstA = srcA + (1 - srcA) * dstA
+        ///
+        /// Alfa BUNUNLA ASLA DUSMEZ (opak dunyanin ustunde 1 kalir, sizinti kapali) ama bos bir
+        /// tampona cizilince ARTAR — yani icerik gercek odanin uzerinde gorunur.
+        ///
+        /// ONCEKI COZUM (Zero/One = "hedef alfaya hic dokunma") sizintiyi kapatiyordu ama isin
+        /// ikinci yarisini kiriyordu: passthrough acikken kamera alfa 0'a temizliyor, saydam
+        /// hicbir sey alfa yazmadigi icin tampon 0'da kaliyor ve kompozitor SADECE gercek odayi
+        /// gosteriyordu. INSA MODUNDA GERCEK DUNYAYA GECINCE ZEMINDEKI IZGARANIN, HAYALETIN VE
+        /// ISININ KAYBOLMASININ SEBEBI BUYDU.
+        ///
+        /// URP/Unlit bu ozellikleri (_SrcBlendAlpha / _DstBlendAlpha) tanimliyor; tanimlamayan
+        /// bir shader'a duserse kod sessizce eski davranista kalir.
         ///
         /// PANELLER BUNU KULLANAMAZ: URP/Unlit sahne geometrisine takilir (ZTest Always yok,
         /// bkz. <see cref="CreateOverlayMaterial"/>). Panellerin cozumu opak renk.
@@ -406,20 +418,20 @@ namespace VRMultiplayer.UI
                 m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             }
-            PreserveDestinationAlpha(m);
+            CompositeAlphaOver(m);
             SetMaterialColor(m, color);
             return m;
         }
 
-        /// <summary>Malzemeyi "hedef alfaya dokunma" moduna alir (bkz.
-        /// <see cref="CreateTransparentMaterial"/>). Ozellikler yoksa hicbir sey yapmaz.</summary>
-        public static void PreserveDestinationAlpha(Material m)
+        /// <summary>Alfa kanalini "uzerine" (over) harmanina alir: dstA = srcA + (1-srcA)*dstA
+        /// (bkz. <see cref="CreateTransparentMaterial"/>). Ozellikler yoksa hicbir sey yapmaz.</summary>
+        public static void CompositeAlphaOver(Material m)
         {
             if (m == null) return;
             if (m.HasProperty("_SrcBlendAlpha"))
-                m.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.Zero);
+                m.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
             if (m.HasProperty("_DstBlendAlpha"))
-                m.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
+                m.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
         }
 
         // --- Halka / yay parcalari ---

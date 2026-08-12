@@ -105,3 +105,7 @@ unused_textures_report.csv
 # DISINDA duruyorlar ki Unity onlari ikinci bir sahne diye ice aktarmasin, ve surumleme
 # disinda ki 1.7 MB'lik sahne kopyalari gecmisi sismansin.
 _SceneBackups/
+
+# Blender otomatik yedegi: her kaydetmede bir onceki surumu .blend1 olarak birakiyor.
+# Kaynak dosyanin kendisi (.blend) depoda; yedegi ikinci bir kopya olarak tasimanin anlami yok.
+*.blend1

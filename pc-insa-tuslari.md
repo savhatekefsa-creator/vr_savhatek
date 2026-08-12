@@ -23,7 +23,7 @@ anında iki tarafta da görünür ve haritaya kaydedilir.
 | `+` / `-` | Boy (yükseklik) yüzdesini artır / azalt — numpad `+` `-` de çalışır |
 | `[` / `]` | En (genişlik) — **birer hücre** adımla |
 | `PageUp` / `PageDown` | Kat (yükseklik adımı) ↑ / ↓ |
-| `T` | Maket (dollhouse) modu — haritaya yukarıdan bak |
+| `T` | Passthrough aç / kapat — gerçek oda ↔ sanal dünya (VR'daki **sol grip**'in PC karşılığı) |
 | `H` | Yükseklik modu (VR'daki sağ stick tıkının PC karşılığı) |
 | `C` **basılı tut** | Prop paletini aç |
 | `C` + `←` `→` | Palet açıkken **palet seç** (UZAY / SİPER / DUVAR / DOĞUŞ …) |

@@ -486,6 +486,7 @@ MonoBehaviour:
   - id: tagisaret
     displayName: TagIsaret
     category: 0
+    paletteId: dogus
     snap: 0
     prefab: {fileID: 2610870547581201412, guid: 2fab6fde8b927c240a191923360a7df0, type: 3}
     resourcePath: 

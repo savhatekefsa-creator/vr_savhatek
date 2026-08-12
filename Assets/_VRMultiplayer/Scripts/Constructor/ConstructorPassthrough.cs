@@ -64,7 +64,7 @@ namespace VRMultiplayer.Constructor
         ///
         /// Burada kapatmak KOK COZUM: ozellik acik kalabilir, insa modu <see cref="SetActive"/>
         /// ile istedigi an geri acar. Malzeme tarafindaki alfa duzeltmeleri (bkz.
-        /// <c>UITheme.PreserveDestinationAlpha</c>) ikinci savunma hatti olarak durur — passthrough
+        /// <c>UITheme.CompositeAlphaOver</c>) ikinci savunma hatti olarak durur — passthrough
         /// bir gun oyun icinde de acilirsa efektler yine delik acmaz.
         /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

@@ -412,9 +412,9 @@ namespace VRMultiplayer.Constructor
         }
 
         /// <summary>
-        /// Gizmodan gelen DUNYA pozunu oda uzayina cevirip oturuma verir. Kok (oda uzayi)
-        /// maket modunda kucultulup tasindigi icin donusum sart — dunya degeri dogrudan
-        /// yazilsaydi maket acikken prop haritanin disina firlardi.
+        /// Gizmodan gelen DUNYA pozunu oda uzayina cevirip oturuma verir. Kayit ODA UZAYINDA
+        /// tutulur; donusum, kok bir gun tasinir ya da dondurulurse kaydin yine de dogru
+        /// kalmasini saglayan sey.
         /// </summary>
         void OnGizmoMoved(Vector3 worldPos, Quaternion worldRot, bool commit)
         {
@@ -433,8 +433,8 @@ namespace VRMultiplayer.Constructor
 
         /// <summary>
         /// Gizmodan gelen YENI olcegi oturuma verir. <see cref="OnGizmoMoved"/>'in aksine uzay
-        /// donusumu YOK: olcek bir kat sayisi, kokun maket kuculmesinden etkilenmez — donusum
-        /// uygulansaydi maket acikken her jest propu ayrica kucultuyor olurdu.
+        /// donusumu YOK: olcek bir kat sayisi, kokun kendi olceginden bagimsizdir — donusum
+        /// uygulansaydi kok kuculdugu anda her jest propu ayrica kucultuyor olurdu.
         ///
         /// Konum ve aci KAYITTAN oldugu gibi geri yazilir: bu jest onlara dokunmuyor.
         /// </summary>
