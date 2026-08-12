@@ -279,6 +279,12 @@ namespace VRMultiplayer
         float _nextDetectAt;
         bool _alignedNow;   // son olcumde hiza olu bolge icinde miydi (tespit hizini belirler)
 
+        /// <summary>
+        /// Yerlesim degisti ama rig HENUZ yeni cerceveye oturmadi. Harita degisiminden
+        /// ilk basarili duzeltmeye kadar true. Bkz. <see cref="ApplyMapLayout"/>.
+        /// </summary>
+        bool _layoutStale;
+
         // Olcum (FAZ 0): son tespitler uzerinden menzil ve jitter
         // JITTER TAG BASINA tutulur.
         //
@@ -351,6 +357,17 @@ namespace VRMultiplayer
             _calibYaw.Clear();
             _calibId = -1;
             _lastTagTime = -1f;
+
+            // CERCEVE BAYAT: rig hala ESKI haritanin cercevesinde duruyor. Yerlesimi
+            // degistirmek rig'i oynatmiyor, yani yeni harita oyuncunun etrafina yanlis
+            // cercevede kuruluyor — oyuncu duvarin icinde dogabilir.
+            //
+            // Kendiliginden toparlaniyordu ama YAVAS: tag daha hic gorulmedigi icin
+            // tagFresh false, dolayisiyla "busy" false kaliyor ve tespit BOSTA hizinda
+            // (1 Hz) suruyordu. Bayrak uc yeri birden duzeltiyor: tespit tam hizda kosar,
+            // ilk duzeltme yumusatilmadan ANINDA uygulanir ve panel oyuncuya tag'e bakmasini
+            // soyler. Ilk duzeltme uygulanunca dusuyor (bkz. ApplyCorrection).
+            _layoutStale = haritadan;
 
             RebuildMarkers();
             Debug.Log(haritadan
@@ -455,7 +472,10 @@ namespace VRMultiplayer
             // false (tag daha hic gorulmedi), yani ilk tur idle hizinda geciyordu: 1 Hz =
             // oyuncunun tag'e bakip bosuna bekledigi 1 saniye. Tasarruf edilecek bir sey yok,
             // oyuncu zaten duvara bakmis bekliyor.
-            bool busy = (tagFresh && !_alignedNow) || !CalibrationManager.Calibrated;
+            // _layoutStale de "is var" sayilir: harita degistiginde tag daha hic gorulmedigi
+            // icin tagFresh false ve kapi kapali kalirdi -- tam da en hizli aramamiz gereken
+            // anda 1 Hz'de tarardik.
+            bool busy = (tagFresh && !_alignedNow) || !CalibrationManager.Calibrated || _layoutStale;
             float rate = busy ? detectionsPerSecond : idleDetectionsPerSecond;
             _nextDetectAt = Time.time + 1f / Mathf.Max(0.2f, rate);
 
@@ -903,7 +923,12 @@ namespace VRMultiplayer
             //
             // Buyuk sapma yumusatilmaz: uyku sonrasi ya da takip kaybinda oyuncu dunyanin
             // HEMEN yerine oturmasini ister, saniyelerce suzulmesini degil.
-            bool snap = dev > snapThresholdMeters || Mathf.Abs(yawDelta) > snapThresholdDegrees;
+            // HARITA DEGISIMINDEN SONRAKI ILK DUZELTME HEP ANINDA. Baska bir mekanin
+            // cercevesine yumusak gecis diye bir sey yok: aradaki fark sapma degil, tamamen
+            // baska bir dunya. Sapma buyukse zaten snap olurdu; kucuk ciktiginda (iki harita
+            // benzer cercevede) suzulmek oyuncuyu saniyelerce yanlis yerde tutardi.
+            bool snap = _layoutStale
+                     || dev > snapThresholdMeters || Mathf.Abs(yawDelta) > snapThresholdDegrees;
             float rate = snap ? 1f : Mathf.Clamp01(smallCorrectionRate);
 
             // Duzeltmeler saniyede 3'e kadar tetiklenir; hepsini yazmak dosyayi bogar.
@@ -951,6 +976,9 @@ namespace VRMultiplayer
             // anchor LateUpdate'te mutlak poz yazacak. Once ogretmezsek duzeltmemizi ezer,
             // ki iki sistemin eski kavgasi tam olarak buydu.
             TickAnchorHold();
+
+            // Rig yeni cerceveye oturdu: bayat isareti kalkar, tespit bosta hizina donebilir.
+            _layoutStale = false;
 
             // Oyuncu bunu okuyacak: "duzeltildi" tek basina neyin duzeldigini soylemiyordu.
             _calibNote = $"KALIBRE EDILDI ({dev * 100f:0.0} cm duzeltildi)";
@@ -2192,7 +2220,10 @@ namespace VRMultiplayer
             if (!learnMode)
             {
                 if (!seen)
-                    return "Tag GORUNMUYOR" + (cameraRunning ? "" : "\nKAMERA YOK (izin?)");
+                    // Harita yeni degistiyse SEBEBI de yaz: "tag gorunmuyor" tek basina
+                    // "bekle" gibi okunuyor, oysa oyuncunun YAPMASI gereken bir sey var.
+                    return (_layoutStale ? "YENI HARITA — bir TAG'E BAK\n" : "")
+                         + "Tag GORUNMUYOR" + (cameraRunning ? "" : "\nKAMERA YOK (izin?)");
 
                 var q = new System.Text.StringBuilder($"Tag {_lastId} GORUNDU   {_lastDistance:0.00} m\n");
 
