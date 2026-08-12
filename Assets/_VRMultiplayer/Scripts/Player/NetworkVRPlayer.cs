@@ -76,6 +76,14 @@ namespace VRMultiplayer
             _bound = _srcHead != null && head != null;
         }
 
+        // BIRINCI SAHIS ELLERI GECICI OLARAK KAPALI. El sistemi sifirdan yazilacak
+        // (kumandaya MUTLAK kilitli el; uzak oyuncuda kol uzayamaz, sinirda dumduz
+        // kalir). O sistem gelene kadar oyuncu kendi elini gormuyor - yanlis yerde
+        // duran bir el, hic el olmamasindan kotu. Geri acmak icin: true.
+        // (const degil, static readonly: const olsa derleyici "ulasilamaz kod"
+        //  uyarilari yagdiriyor.)
+        static readonly bool ShowFirstPersonBody = false;
+
         void ApplyVisibility()
         {
             // The primitive Head/Hand carriers are invisible pose sources — hide their meshes.
@@ -100,7 +108,21 @@ namespace VRMultiplayer
                     // weights locked to the hand bones — no cuff stretching). When it attaches,
                     // hide EVERY avatar piece incl. glove|watch and show only the FP renderers.
                     // If the asset is missing the old glove|watch path below still works.
-                    var fpHands = FirstPersonHands.TryAttach(remoteAvatar);
+                    var fpHands = ShowFirstPersonBody ? FirstPersonHands.TryAttach(remoteAvatar) : null;
+
+                    if (!ShowFirstPersonBody)
+                    {
+                        // Sahibin gordugu HER avatar parcasi kapali - govde, kafa, eldiven,
+                        // saat. Uzak oyuncular tam askeri gormeye devam eder.
+                        foreach (var r in remoteAvatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                            r.enabled = false;
+                        foreach (var tm in remoteAvatar.GetComponentsInChildren<TextMesh>(true))
+                        {
+                            var tr = tm.GetComponent<MeshRenderer>();
+                            if (tr != null) tr.enabled = false;
+                        }
+                        return;
+                    }
 
                     // You see only your own hands — no head in the camera, no torso/legs
                     // blocking the view. Remote players still see the full soldier. Models
