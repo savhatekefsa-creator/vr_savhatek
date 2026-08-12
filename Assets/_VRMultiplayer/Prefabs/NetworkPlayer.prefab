@@ -1599,10 +1599,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc09f0931e0d08343a4d3c046e0ddf90, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.ProceduralFingerPoser
-  proximalCurl: 0
-  intermediateCurl: 0
-  distalCurl: 0
-  thumbCurl: 0
+  proximalCurl: 55
+  intermediateCurl: 80
+  distalCurl: 55
+  thumbCurl: 40
   palmRollDegrees: 0
   invertCurl: 0
   smoothing: 14

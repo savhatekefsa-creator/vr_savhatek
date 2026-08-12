@@ -39,6 +39,12 @@ namespace VRMultiplayer
         // Beyaz nokta: sapma bu degerin altindayken hic gorunmez (normal nisan alirken
         // gorus temiz kalsin), ustunde opaklik dogrusal olarak 1'e cikar. Ust sinir
         // simdilik sabit; cihaz olcumunden sonra profildeki kopma mesafesine baglanacak.
+        // Meta XR Core SDK el modeli (lisans: Oculus SDK License - Meta onayli cihazlar
+        // icin serbest, hedefimiz Quest). "L"/"R" sona eklenir.
+        const string ModelPath = "FPHands/Meta/OculusHand_";
+        const string GloveBodyMat = "FPHands/Meta/M_FPGlove_Govde";
+        const string GloveTipMat = "FPHands/Meta/M_FPGlove_Uc";
+
         const float DotDiameter = 0.02f;
         const float DotFadeStart = 0.03f;
         const float DotFadeEnd = 0.25f;
@@ -123,10 +129,7 @@ namespace VRMultiplayer
             dmr.receiveShadows = false;
             dmr.enabled = false;   // sapma olmadan gorunmez
 
-            float side = left ? 1f : -1f;   // sag elin basparmagi -x'te (govde ortasina dogru)
-            Piece(pose, "Palm", new Vector3(0f, 0f, 0.01f), new Vector3(0.075f, 0.028f, 0.095f), new Color(0.62f, 0.60f, 0.58f));
-            Piece(pose, "Thumb", new Vector3(side * 0.042f, 0.004f, 0.028f), new Vector3(0.024f, 0.022f, 0.052f), new Color(0.85f, 0.45f, 0.15f));
-            Piece(pose, "Fingers", new Vector3(0f, -0.002f, 0.082f), new Vector3(0.068f, 0.022f, 0.062f), new Color(0.25f, 0.65f, 0.80f));
+            BuildHandModel(pose.transform, left);
 
             var view = root.AddComponent<FirstPersonHandView>();
             view._carrier = carrier;
@@ -275,31 +278,71 @@ namespace VRMultiplayer
                 Vector3.Distance(wpos, _lastAnchor) * 1000f));
         }
 
-        static void Piece(GameObject parent, string name, Vector3 localPos, Vector3 scale, Color color)
+        /// <summary>
+        /// Meta XR Core SDK'nin el modelini kurar. Model KENDI rig'iyle kullaniliyor -
+        /// avatarin iskeletine oturtulmuyor. Daha once o yol denendi ve mesh'i mahvetti:
+        /// avatarin parmaklari anatomik olandan %34 uzun, mesh gerilip incelmisti.
+        /// Burada bilek dogrudan Pose'a oturur, gerisi modelin kendi kemiklerinde kalir.
+        /// </summary>
+        static void BuildHandModel(Transform pose, bool left)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = name;
-
-            // CreatePrimitive collider'la geliyor. Elin uzerinde collider kalirsa
-            // silah yakalama ve fizik bundan etkilenir - kaldiriliyor.
-            // Object.Destroy oyun modu DISINDA ertelenir ve hic calismaz (editor
-            // olcum kosumunda collider hayatta kaliyordu), o yuzden moda gore secim.
-            var col = go.GetComponent<Collider>();
-            if (col != null)
+            var prefab = Resources.Load<GameObject>(ModelPath + (left ? "L" : "R"));
+            if (prefab == null)
             {
-                if (Application.isPlaying) Object.Destroy(col);
-                else Object.DestroyImmediate(col);
+                Debug.LogWarning("[FirstPersonHandView] El modeli bulunamadi: " + ModelPath + (left ? "L" : "R"));
+                return;
             }
 
-            go.transform.SetParent(parent.transform, false);
-            go.transform.localPosition = localPos;
-            go.transform.localRotation = Quaternion.identity;
-            go.transform.localScale = scale;
+            var go = Object.Instantiate(prefab, pose, false);
+            go.name = "Hand";
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localScale = Vector3.one;
 
-            var mr = go.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = MakeMaterial(color);
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
+            var smr = go.GetComponentInChildren<SkinnedMeshRenderer>(true);
+            if (smr == null) return;
+
+            // Modelin duruşunu kumanda cercevesine hizala: parmaklar +z, elin sirti +y.
+            // Sabit euler gommek yerine kemiklerden HESAPLANIYOR - model yeniden import
+            // edilirse veya Meta duruşu degistirirse kendiliginden dogru kalir.
+            string pre = left ? "b_l_" : "b_r_";
+            Transform wrist = null, idx = null, mid = null, pky = null;
+            foreach (var t in go.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == pre + "wrist") wrist = t;
+                else if (t.name == pre + "index1") idx = t;
+                else if (t.name == pre + "middle1") mid = t;
+                else if (t.name == pre + "pinky1") pky = t;
+            }
+            if (wrist != null && idx != null && mid != null && pky != null)
+            {
+                Vector3 fingers = (mid.position - wrist.position).normalized;
+                Vector3 palmN = Vector3.Cross(fingers, (idx.position - pky.position).normalized).normalized;
+                go.transform.rotation = Quaternion.Inverse(Quaternion.LookRotation(fingers, -palmN)) * go.transform.rotation;
+                // Bilek tam Pose orijinine gelsin (modelin kokunde olmayabilir).
+                go.transform.position += pose.position - wrist.position;
+            }
+
+            // Askeri boyama: govde + uc bogumlar ayri alt-mesh (renkler askerin kendi
+            // eldiven dokusundan olculdu). Mesh FBX'inkiyle ayni vertex/bindpose setini
+            // tasiyor, yalnizca ucgenler iki gruba ayrildi.
+            var painted = Resources.Load<Mesh>(ModelPath.Replace("OculusHand_", "Glove_Meta_") + (left ? "L" : "R"));
+            var body = Resources.Load<Material>(GloveBodyMat);
+            var tip = Resources.Load<Material>(GloveTipMat);
+            if (painted != null) smr.sharedMesh = painted;
+            if (body != null && tip != null) smr.sharedMaterials = new[] { body, tip };
+
+            smr.updateWhenOffscreen = true;   // el goruse yakin, hatali kirpilmasin
+            smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            smr.receiveShadows = false;
+
+            // Bilek acik bir mesh (el bilekten kesik). Tek yuzlu cizilirse icine
+            // bakildiginda delik gibi okunuyor - avatarin eldiveninde de ayni dert vardi.
+            MaterialDoubleSided.Apply(smr);
+
+            // Parmaklari grip/tetikten kivir. Kemikler modelin kendi rig'inde oldugu icin
+            // surucu de burada, elin uzerinde duruyor.
+            var curl = go.AddComponent<FirstPersonFingerCurl>();
+            curl.Init(left, pose.GetComponentInParent<NetworkVRPlayer>());
         }
 
         static Material MakeMaterial(Color color)

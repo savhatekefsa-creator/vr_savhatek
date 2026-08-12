@@ -187,9 +187,10 @@ namespace VRMultiplayer
             Transform midP = Bone(left ? HumanBodyBones.LeftMiddleProximal : HumanBodyBones.RightMiddleProximal);
             if (wrist == null || idxP == null || litP == null || midP == null) return;
 
+            // Avuc cercevesi de ORTAK (bkz. FingerCurlMath.PalmFrame).
+            FingerCurlMath.PalmFrame(wrist, idxP, litP, midP, left,
+                out Vector3 palmNormal, out Vector3 curlPlaneNormalShared, out Vector3 thumbTargetShared);
             Vector3 fingersDir = (midP.position - wrist.position).normalized;
-            Vector3 sideDir = (idxP.position - litP.position).normalized;
-            Vector3 palmNormal = Vector3.Cross(fingersDir, sideDir).normalized;
 
             // Palm roll about the finger-pointing axis; sign chosen so the palm tilts toward the
             // avatar's forward (reads as "inward"), the same visual way on both hands.
@@ -203,11 +204,8 @@ namespace VRMultiplayer
             int overrideSign = left ? rollSignOverrideLeft : rollSignOverrideRight;
             if (overrideSign != 0) rollSignOut = Mathf.Sign(overrideSign);
 
-            Vector3 thumbTarget = (idxP.position + midP.position) * 0.5f; // across the palm
-
-            // Palm-FACING direction for the curl planes. sideDir (index→little) makes the raw
-            // cross face out of the right palm but out of the LEFT hand's back — flip it there.
-            Vector3 curlPlaneNormal = left ? -palmNormal : palmNormal;
+            Vector3 thumbTarget = thumbTargetShared;
+            Vector3 curlPlaneNormal = curlPlaneNormalShared;
 
             AddFinger(outList, left, thumbTarget, 0, false, null,
                 HumanBodyBones.LeftThumbProximal, HumanBodyBones.LeftThumbIntermediate, HumanBodyBones.LeftThumbDistal,
@@ -258,26 +256,22 @@ namespace VRMultiplayer
         {
             if (bone == null || bone.parent == null) return;
 
-            // FOUR FINGERS (planeNormal set): hinge = Cross(extension, palm normal) — every
-            // finger folds parallel in its OWN plane like a real fist. Curling them toward one
-            // shared point made the fingers converge into the palm centre and clip.
-            // THUMB (planeNormal null): hinge = Cross(extension, toTarget) — a positive angle
-            // bends it straight toward the target, sweeping ACROSS the palm.
-            Vector3 hinge = planeNormal.HasValue
-                ? Vector3.Cross(extWorld.normalized, planeNormal.Value)
-                : Vector3.Cross(extWorld.normalized, (target - bone.position).normalized);
-            if (hinge.sqrMagnitude < 1e-6f) return;
-            Vector3 axisParent = bone.parent.InverseTransformDirection(hinge.normalized).normalized;
-
             float deg = curlDeg * (invertCurl ? -1f : 1f);
             // Open pose = the REST snapshot (T-pose), not the live pose: by capture time the idle
             // clip has already curled some fingers and that curl must not leak into "open".
-            Quaternion open = _restPose.TryGetValue(bone, out var rest) ? rest : bone.localRotation;
+            Quaternion rest = _restPose.TryGetValue(bone, out var r) ? r : bone.localRotation;
+
+            // Mentese kurali ORTAK: birinci sahis eli de ayni matematigi kullaniyor
+            // (bkz. FingerCurlMath). Burada degistirilirse orasi da degisir.
+            if (!FingerCurlMath.Solve(bone, extWorld, target, planeNormal, deg, rest,
+                                      out Quaternion open, out Quaternion closed))
+                return;
+
             outList.Add(new Phalanx
             {
                 t = bone,
                 open = open,
-                closed = Quaternion.AngleAxis(deg, axisParent) * open,
+                closed = closed,
                 useTrigger = useTrigger,
                 finger = finger,
             });
