@@ -90,11 +90,31 @@ namespace VRMultiplayer.Constructor
         public static int NextTagId(MapLayout layout)
         {
             var kullanilan = new HashSet<int> { 0 };
+            var damgali = new HashSet<uint>();
             if (layout != null && layout.tags != null)
                 foreach (var t in layout.tags)
-                    if (t != null) kullanilan.Add(t.id);
+                    if (t != null)
+                    {
+                        kullanilan.Add(t.id);
+                        if (t.sourceInstanceId != 0) damgali.Add(t.sourceInstanceId);
+                    }
+
+            // SIRADAKI PLAKALARI DA SAY. Cevrim tag kurulumunun SONUNDA kosuyor, yani plakalar
+            // konarken layout.tags'te henuz yalnizca tag 0 var. Yalnizca tags'e bakan bir
+            // sayac her plakada "TAG 1" derdi ve hicbir zaman ilerlemezdi -- sahada yasandi.
+            // Tag'i olmayan her plaka bir numara TUKETIR; biz ondan SONRAKINI istiyoruz.
+            int bekleyen = 0;
+            if (layout != null && layout.props != null)
+                foreach (var p in layout.props)
+                    if (p != null && p.propId == PlateId && !damgali.Contains(p.instanceId))
+                        bekleyen++;
 
             int id = FirstTagId;
+            for (int k = 0; k < bekleyen; k++)
+            {
+                while (kullanilan.Contains(id)) id++;
+                kullanilan.Add(id);
+            }
             while (kullanilan.Contains(id)) id++;
             return id;
         }

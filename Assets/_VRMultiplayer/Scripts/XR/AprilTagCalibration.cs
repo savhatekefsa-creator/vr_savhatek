@@ -316,6 +316,33 @@ namespace VRMultiplayer
         /// <summary>Uyari log'a bir kez yazilsin; her karede degil.</summary>
         bool _refWarned;
 
+        // ---- CERCEVE TAZELIGI -------------------------------------------------------------
+        //
+        // Plaka yerlestirme, konuldugu ANDAKI cerceveyi miras aliyor: kaydedilen sey bir oda
+        // uzayi hucresi, kagit ise fiziksel duvarda. Ikisini birbirine baglayan tek sey o
+        // andaki kalibrasyon.
+        //
+        // Harita koku DUNYA uzayinda duruyor (MapBuilder.EnsureRoot), duzeltme ise RIG'i
+        // oynatiyor. Yani her duzeltme, konmus plakalari passthrough'taki gercek odaya gore
+        // KAYDIRIR. Sahada gorulen "tag 1 yerinde durmuyor" tam olarak budur ve bir hata
+        // degil: son duzeltmeden bu yana biriken suruklenmenin gorunur hale gelmesidir.
+        //
+        // Yazilimin yapabilecegi sey suruklenmeyi yok etmek degil -- o SLAM'in isi -- ne
+        // zaman guvenilir olmadigini SOYLEMEK. Plakayi taze cercevede koymak, yontemin
+        // gecerlilik sarti.
+        float _lastCorrectionAt = -1f;
+
+        /// <summary>
+        /// Son uygulanan duzeltmeden bu yana gecen sure (sn). Hic duzeltilmediyse -1.
+        /// Yerlestirme katmani bunu "plakayi simdi koymak guvenli mi" diye soruyor.
+        /// </summary>
+        public float SecondsSinceCorrection =>
+            _lastCorrectionAt < 0f ? -1f : Time.time - _lastCorrectionAt;
+
+        /// <summary>Kalibrasyon yoksa -1; bkz. <see cref="SecondsSinceCorrection"/>.</summary>
+        public static float FrameAgeSeconds =>
+            Instance != null ? Instance.SecondsSinceCorrection : -1f;
+
         /// <summary>Yaw referansinda sorun varsa aciklamasi, yoksa null.</summary>
         string YawReferenceWarning()
         {
@@ -1047,6 +1074,7 @@ namespace VRMultiplayer
 
             // Rig yeni cerceveye oturdu: bayat isareti kalkar, tespit bosta hizina donebilir.
             _layoutStale = false;
+            _lastCorrectionAt = Time.time;
 
             // Oyuncu bunu okuyacak: "duzeltildi" tek basina neyin duzeldigini soylemiyordu.
             _calibNote = $"KALIBRE EDILDI ({dev * 100f:0.0} cm duzeltildi)";

@@ -1148,6 +1148,16 @@ namespace VRMultiplayer.Constructor
         TextMesh _tagLabel;
 
         /// <summary>
+        /// Plaka koymadan once cercevenin ne kadar taze olmasi gerektigi (sn).
+        ///
+        /// 15 sn OLCULMUS BIR SAYI DEGIL, bilincli bir tahmin: kucuk bir odada tag'den
+        /// tag'e yurumek bu mertebede suruyor ve bu surede biriken suruklenme birkac cm.
+        /// Sahada kagit-plaka farki hala buyukse ONCE bu sayiyi kucultun; kalibrasyonda
+        /// baska bir sey aramadan once en ucuz deney bu.
+        /// </summary>
+        const float FrameStaleSeconds = 15f;
+
+        /// <summary>
         /// Plaka hayaletinin ustunde ALACAGI TAG ID'sini yazar.
         ///
         /// NEDEN GEREKLI: tag ID'si plakanin KOYULMA SIRASINDAN geliyor (TagCapture.Capture,
@@ -1184,7 +1194,20 @@ namespace VRMultiplayer.Constructor
             // Kurali TagCapture veriyor, burada TEKRARLANMIYOR: etiket "TAG 3" derken cevrim
             // 4 verirse kagidi asan kisi yanlis numarayi asar ve hatanin kaynagi gorunmez olur.
             string s = "TAG " + TagCapture.NextTagId(Session.Layout);
+
+            // CERCEVE TAZELIGI. Plaka konuldugu andaki cerceveyi miras aliyor; son
+            // duzeltmeden bu yana ne kadar cok zaman gectiyse suruklenme o kadar birikmis
+            // olur ve kagit plakadan o kadar kayar. Sahada gorulen "plaka yerinde durmuyor"
+            // bunun gorunur hali. Sayiyi burada gosteriyoruz cunku karar tam burada veriliyor.
+            float yas = AprilTagCalibration.FrameAgeSeconds;
+            if (yas < 0f) s += "\nKALIBRE DEGIL";
+            else if (yas > FrameStaleSeconds) s += $"\nTAG'E BAK ({yas:0} sn)";
             if (_tagLabel.text != s) _tagLabel.text = s;
+
+            // Taze degilse SARI degil KIRMIZI: koymadan once bakilmasi gereken bir sey var.
+            var renk = (yas < 0f || yas > FrameStaleSeconds)
+                ? new Color(1f, 0.35f, 0.25f) : new Color(1f, 0.85f, 0.15f);
+            if (_tagLabel.color != renk) _tagLabel.color = renk;
 
             _tagLabel.gameObject.SetActive(true);
             _tagLabel.transform.localPosition = centerLocal + Vector3.up * 0.16f;
