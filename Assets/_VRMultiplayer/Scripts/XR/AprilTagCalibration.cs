@@ -1135,7 +1135,54 @@ namespace VRMultiplayer
             ApplyLearned();
         }
 
-        /// <summary>Son GORULEN tag'in kalibrasyon iznini cevirir ve diske yazar.</summary>
+        /// <summary>
+        /// Yerlesimi DOGRU HEDEFE yazar: harita yerlesimi aktifse HARITAYA, degilse cihazin
+        /// TagLayout.json'una.
+        ///
+        /// NEDEN VAR: dort ogrenme yolu da dogrudan <see cref="TagLayoutStore.Save"/>
+        /// cagiriyordu, ama bir harita acikken <see cref="tagLayout"/> HARITANIN listesidir
+        /// (<see cref="ApplyMapLayout"/> onu oyle yapti). Sonuc iki hata birdendi:
+        ///
+        ///   1. Duzenleme CIHAZIN dosyasina yaziliyordu, yani onyukleme yerlesimi o mekanin
+        ///      tag'leriyle kirleniyordu. Baska bir mekanda acilista o kirlilik devreye
+        ///      giriyordu -- "yeni harita eski mekanin tag'leriyle kalibre olmaya calisiyor"
+        ///      vakasinin KAYNAGI buydu; onu tohumlama ile kapatmistik, burasi kok neden.
+        ///   2. HARITAYA hic yazilmiyordu. Olcum, ait oldugu kayitta gorunmuyordu; harita
+        ///      baska bir gozluge gidince duzenleme onunla birlikte gitmiyordu.
+        ///
+        /// Harita dosyasini HER ZAMAN yetki sahibi yazar (bkz.
+        /// <see cref="Constructor.ConstructorSync.ClientRequestSave"/>): gozlukte yazilan
+        /// kopyayi kimse okumaz ve ilk senkron ezer. Bellekteki duzenleme zaten uygulanmis
+        /// durumda -- tagLayout ile Layout.tags AYNI dizi -- burada yalnizca kalicilastiriliyor.
+        /// </summary>
+        bool PersistLayout()
+        {
+            if (!_fromMap) return TagLayoutStore.Save(tagLayout, layoutVersion);
+
+            if (Constructor.ConstructorSession.IsMapAuthority)
+            {
+                var s = Constructor.ConstructorSession.Instance;
+                if (s == null || s.Layout == null) return false;
+
+                // DIZIYI GERI BAGLA. Yeni tag eklenince "tagLayout = list.ToArray()" calisiyor
+                // (ApplyTouchDerived / ApplyLearned) ve haritanin dizisiyle paylasim KOPUYOR.
+                // Baglamazsak Save, yeni tag'i olmayan ESKI diziyi yazar ve olcum sessizce
+                // kaybolur -- duzenleme ekranda gorunur ama dosyaya hic gitmez.
+                s.Layout.tags = tagLayout;
+                return s.Save();
+            }
+
+            // ISTEMCI: harita SUNUCUNUN belleginde. Yalnizca "kaydet" demek, sunucunun
+            // DUZENLENMEMIS kopyasini yazdirirdi ve panel "kaydedildi" derken olcum kaybolurdu.
+            // O yuzden once tag'lerin kendisi gidiyor; sunucu uygulayip kaydediyor ve
+            // digerlerine yayiyor.
+            return Constructor.ConstructorSync.ClientRequestTagLayout(tagLayout);
+        }
+
+        /// <summary>Yazmanin nereye gittigi — panel ve log metinleri icin.</summary>
+        string PersistTarget => _fromMap ? "haritaya" : "cihaza";
+
+        /// <summary>Son GORULEN tag'in kalibrasyon iznini cevirir ve kalici hale getirir.</summary>
         void ToggleUseForSeenTag()
         {
             var entry = Find(_lastId);
@@ -1146,15 +1193,15 @@ namespace VRMultiplayer
             }
 
             entry.useForCalibration = !entry.useForCalibration;
-            bool saved = TagLayoutStore.Save(tagLayout, layoutVersion);
+            bool saved = PersistLayout();
             RebuildMarkers();
 
             _learnNote = $"tag {entry.id} kalibrasyon " +
                          (entry.useForCalibration ? "ACIK" : "KAPALI") +
-                         (saved ? "" : " — DISKE YAZILAMADI");
+                         (saved ? "" : $" — {PersistTarget.ToUpperInvariant()} YAZILAMADI");
 
             Debug.Log($"[AprilTagCalib] Tag {entry.id} useForCalibration = {entry.useForCalibration} " +
-                      $"({(saved ? "diske yazildi" : "DISKE YAZILAMADI")}).");
+                      $"({(saved ? $"{PersistTarget} yazildi" : $"{PersistTarget.ToUpperInvariant()} YAZILAMADI")}).");
 
             // Log'a da yazilir: acma/kapama olayi gorunmezse, "neden yazilmadi" sorusunu
             // cevaplamak icin tahmin yurutmek gerekiyordu.
@@ -1208,9 +1255,10 @@ namespace VRMultiplayer
                 // saniyede 12 dosya yazmasi demek olurdu.
                 if (_nudgeDirty)
                 {
-                    bool ok = TagLayoutStore.Save(tagLayout, layoutVersion);
+                    bool ok = PersistLayout();
                     _nudgeDirty = false;
-                    _learnNote = ok ? "ince ayar kaydedildi" : "ince ayar DISKE YAZILAMADI";
+                    _learnNote = ok ? $"ince ayar {PersistTarget} kaydedildi"
+                                    : $"ince ayar {PersistTarget.ToUpperInvariant()} YAZILAMADI";
                 }
                 _nudgePrev = Vector2.zero;
                 return;
@@ -1770,14 +1818,14 @@ namespace VRMultiplayer
             bool yawFromCam = _seenTime.TryGetValue(best, out float st) && Time.time - st < 3f;
             if (yawFromCam) entry.yawDegrees = _seenYaw[best];
 
-            bool saved = TagLayoutStore.Save(tagLayout, layoutVersion);
+            bool saved = PersistLayout();
             if (isNew) RebuildMarkers(); else SyncMarkerPoses();
             NoteWrite(best, pos, entry.yawDegrees);
 
             _learnNote = (isNew ? $"tag {best} KUMANDADAN olusturuldu"
                                 : $"tag {best} KUMANDADAN yazildi ({(pos - before).magnitude * 100f:0} cm oynadi)")
                        + (yawFromCam ? "" : "  [yaw YOK — tag'e bak]")
-                       + (saved ? "" : "  — DISKE YAZILAMADI");
+                       + (saved ? "" : $"  — {PersistTarget.ToUpperInvariant()} YAZILAMADI");
 
             Debug.Log($"[AprilTagCalib] Tag {best} konumu kumanda dokunusundan turetildi: " +
                       $"{before} -> {pos}, yaw {entry.yawDegrees:0.0} ({(yawFromCam ? "kameradan" : "eski")}). " +
@@ -1884,23 +1932,25 @@ namespace VRMultiplayer
             entry.yawDegrees = _learnedYaw;
             tagLayout = list.ToArray();
 
-            bool saved = TagLayoutStore.Save(tagLayout, layoutVersion);
+            bool saved = PersistLayout();
             RebuildMarkers();
             NoteWrite(_learnId, entry.position, entry.yawDegrees);
 
             float moved = (entry.position - before).magnitude;
             float yawMoved = Mathf.Abs(Mathf.DeltaAngle(beforeYaw, entry.yawDegrees));
+            string hedefBuyuk = PersistTarget.ToUpperInvariant();
 
             _learnNote = isNew
-                ? (saved ? $"TAG {_learnId} EKLENDI (kapali)" : $"TAG {_learnId} EKLENDI — DISKE YAZILAMADI")
+                ? (saved ? $"TAG {_learnId} EKLENDI (kapali)" : $"TAG {_learnId} EKLENDI — {hedefBuyuk} YAZILAMADI")
                 : (saved ? $"UYGULANDI ({moved * 100f:0} cm, {yawMoved:0.0} derece oynadi)"
-                         : "UYGULANDI — DISKE YAZILAMADI");
+                         : $"UYGULANDI — {hedefBuyuk} YAZILAMADI");
 
             Debug.Log($"[AprilTagCalib] Tag {_learnId} yerlesimi guncellendi.\n" +
                       $"  once : {before}  yaw {beforeYaw:0.0}\n" +
                       $"  simdi: {entry.position}  yaw {entry.yawDegrees:0.0}\n" +
                       $"  fark : {moved * 100f:0.0} cm, {yawMoved:0.0} derece\n" +
-                      $"  dosya: {TagLayoutStore.FilePath} ({(saved ? "yazildi" : "YAZILAMADI")})");
+                      $"  hedef: {PersistTarget} ({(saved ? "yazildi" : "YAZILAMADI")})" +
+                      (_fromMap ? "" : $"  {TagLayoutStore.FilePath}"));
 
             ResetLearn();
         }

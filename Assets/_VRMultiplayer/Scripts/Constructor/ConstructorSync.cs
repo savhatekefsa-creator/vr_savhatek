@@ -594,6 +594,55 @@ namespace VRMultiplayer.Constructor
                 AprilTagCalibration.Instance.ApplyMapLayout(layout.tags);
         }
 
+        // ---- OGRENME MODUNDAN GELEN TAG DUZENLEMESI ---------------------------------------
+        //
+        // Gozlukte olculen/ince ayarlanan tag'ler. Yalnizca "kaydet" demek yetmezdi: harita
+        // SUNUCUNUN belleginde ve duzenleme gozlukte, yani sunucu kendi DUZENLENMEMIS
+        // kopyasini yazardi -- panel "kaydedildi" derken olcum kaybolurdu.
+        //
+        // Tum harita degil YALNIZCA tag dizisi gidiyor: uc-bes kayit, ~300 bayt, tek RPC'ye
+        // sigiyor. Haritayi geri yollamak olcumu 14 KB'lik bir transferin arkasina koyardi.
+
+        [Serializable]
+        class TagWrapper { public AprilTagCalibration.TagEntry[] tags; }
+
+        public static bool ClientRequestTagLayout(AprilTagCalibration.TagEntry[] tags)
+        {
+            var sync = LocalOwned();
+            if (sync == null || tags == null || tags.Length == 0) return false;
+            sync.TagLayoutServerRpc(JsonUtility.ToJson(new TagWrapper { tags = tags }));
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void TagLayoutServerRpc(string json, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null || !Session.IsActive || Session.Layout == null) return;
+
+            TagWrapper w;
+            try { w = JsonUtility.FromJson<TagWrapper>(json); }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[ConstructorSync] Tag yerlesimi okunamadi: " + e.Message);
+                return;
+            }
+            // BOS GELEN YERLESIM UYGULANMAZ: bozuk bir paket calisan bir cerceveyi silerdi.
+            if (w == null || w.tags == null || w.tags.Length == 0) return;
+
+            Session.Layout.tags = w.tags;
+            ApplyTagsLocally(Session.Layout);
+
+            bool ok = Session.Save();
+            SaveResultOwnerRpc(ok, Session.PlacedCount);
+
+            // Diger gozlukler de gorsun: tag'ler haritayla birlikte tasiniyor.
+            StartCoroutine(SendLayout(true));
+
+            Debug.Log($"[ConstructorSync] Tag yerlesimi istemciden alindi ({w.tags.Length} tag), " +
+                      $"kaydetme {(ok ? "basarili" : "BASARISIZ")}.");
+        }
+
         /// <summary>Sunucudan donen tag kurulumu sonucu; akis bunu bir kez gosterip temizler.</summary>
         public static string TagSetupMessage;
 
