@@ -433,6 +433,23 @@ namespace VRMultiplayer.Constructor
                 buildMargin = grid.OutsideMargin,
                 builtForRoom = plan,
             };
+
+            // YENI HARITA TERTEMIZ TAG LISTESIYLE BASLAR: yalnizca origin.
+            //
+            // BOS BIRAKILAMAZ. ApplyMapLayout bos listeyi "bu harita tag tasimiyor" sayip
+            // ONYUKLEME yerlesimine doner, o da cihazdaki TagLayout.json'dur -- yani BASKA
+            // BIR MEKANIN olculmus tag'leri. Cihazda yasandi: yepyeni bir haritada tag
+            // kurulumu daha baslamadan sistem eski mekanin tag 1/2'siyle kalibre olmaya
+            // calisiyordu. Geri donus eski haritalar icin dogru (tag'siz kayitlar cerceve
+            // sizsiz kalmasin), ama SIFIRDAN acilan harita icin tam tersi: burada eski
+            // yerlesim bilgi degil, kirlilik.
+            //
+            // TAG 0 ACIK DOGAR, cunku o olculmus bir deger degil origin'in TANIMI: (0, h, 0)
+            // olmasi haritanin kendi sifir noktasini tarif ediyor. Kagidi henuz asilmamis
+            // olabilir ve bu zararsizdir -- GORULMEYEN tag suruklenme uretmez, YANLIS YERDE
+            // duran tag uretir. Plakadan turetilenler ise kapali dogmaya devam ediyor.
+            TagCapture.SetOrigin(layout);
+
             return Adopt(layout, plan);
         }
 
