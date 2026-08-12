@@ -190,6 +190,31 @@ namespace VRMultiplayer
                  "sanip kacak bir geri besleme kuruyor (cihazda yasandi, 3 derece ile).")]
         public float yawRecoveryDegrees = 10f;
 
+        [Tooltip("Kurtarmanin UST siniri (derece). Bunun ustundeki sapma TEK BASINA kabul " +
+                 "edilmez, TEYIT ister.\n\n" +
+                 "NEDEN VAR: kurtarma bir ISIN degil BANT olmali. Alt esik tek basina " +
+                 "birakildiginda kapi ustten sinirsiz kaliyor ve duzlemsel poz belirsizliginden " +
+                 "gelen buyuk bir flip 'gercek kayip' sayilip mesafe ve referans kisitlarini " +
+                 "birden baypas ediyor.\n\n" +
+                 "TABAN CIZGISINDE YAKALANDI (2026-08-12, EV): referans OLMAYAN tag 1'den gelen " +
+                 "+147,30 derecelik tek bir okuma kabul edildi ve dunyayi 4,96 m kaydirdi. " +
+                 "Log'da kanit: tag 1'in diger butun duzeltmelerinde '(uygulanmadi)' yaziyor, " +
+                 "yalnizca o satirda yazmiyor.\n\n" +
+                 "35 derece SECILDI, olculmedi: ayni turdaki mesru kurtarma +40,29 dereceydi ve " +
+                 "REFERANS tag'den geliyordu, yani bandin ustunde kalmasi sorun degil — teyit " +
+                 "ister, reddedilmez. Bandi daraltmak gerekirse once bu sayi denenir.")]
+        public float yawRecoveryMaxDegrees = 35f;
+
+        [Tooltip("Bandin USTUNDEKI sapmanin kabul edilmesi icin kac ARDISIK olcumde ayni " +
+                 "degeri vermesi gerektigi.\n\n" +
+                 "NEDEN TEYIT, NEDEN RED DEGIL: gercek takip kaybi da bandin ustune cikar. " +
+                 "Ikisini AYIRAN sey tekrarlanabilirlik — duzlemsel belirsizlik flipi kareler " +
+                 "arasi ziplar ve ust uste ayni degeri vermez; gercek kayip verir, cunku dunya " +
+                 "gercekten o kadar donmustur.\n\n" +
+                 "Bedeli: gercek kayipta duzeltme birkac tespit turu (~1 sn) gecikir. Yanlis " +
+                 "kabulun bedeli 5 metrelik bir sicramaydi.")]
+        [Range(2, 6)] public int yawRecoveryConfirmations = 3;
+
         [Header("Hareket kapisi")]
         [Tooltip("Kafa bu hizdan hizli hareket ederken tespitler kalibrasyona ve olcume " +
                  "KATILMAZ (m/sn). 0 = kapali.\n\n" +
@@ -954,7 +979,7 @@ namespace VRMultiplayer
             // yon GERCEKTEN kaybolabilir ve o zaman duzeltecek baska bir sey yok. Kaybi
             // gurultuden ayiran sey buyukluk -- gercek kayip 10 derece mertebesindedir,
             // gurultu tabaninin cok uzaginda. Esik oraya konuldu.
-            bool yawRecovery = yawDev > yawRecoveryDegrees;
+            bool yawRecovery = YawRecoveryAccepted(yawDev, entry.id);
             bool yawCounts = !yawFromReferenceOnly
                              || entry.id == offsetReferenceTagId
                              || yawRecovery;
@@ -982,6 +1007,63 @@ namespace VRMultiplayer
 
             // Rig oynadi: pencere artik eski cerceveye ait, temizle — yeni cercevede dolsun.
             _calibPos.Clear(); _calibYaw.Clear();
+        }
+
+        // ---- YAW KURTARMA BANDI -----------------------------------------------------------
+        //
+        // Kurtarma ISIN degil BANT. Eskiden tek bir alt esik vardi
+        // ("yawDev > yawRecoveryDegrees") ve kapi USTTEN SINIRSIZ kaliyordu: ne kadar buyuk
+        // olursa olsun her sapma "gercek kayip" sayilip yawFromReferenceOnly ve
+        // yawCorrectionMaxDistance kisitlarini BIRDEN baypas ediyordu. Yani korunmak istenen
+        // sey kapidan iceri aliniyordu.
+        //
+        // TABAN CIZGISINDE OLCULDU (2026-08-12, EV haritasi, 6,5 dakika, 2 tag):
+        //   [361,6] SNAP tag 1  sapma 496,2 cm  yaw +147,30
+        // Tag 1 referans DEGIL, yani yonu duzeltmemeliydi. 147 > 10 oldugu icin kurtarma
+        // acildi ve tek bir okuma dunyayi 4,96 m kaydirdi. Ayni turda mesru bir kurtarma da
+        // vardi (+40,29, REFERANS tag'den) -- ikisini ayirmak gerekiyordu.
+        //
+        // AYIRAN SEY TEKRARLANABILIRLIK: duzlemsel poz belirsizligi flipi kareler arasi
+        // ziplar, ust uste ayni degeri vermez. Gercek takip kaybi verir, cunku dunya
+        // gercekten o kadar donmustur. Bu yuzden bandin ustu REDDEDILMIYOR, TEYIT istiyor.
+        int _bigYawRun;        // ust uste kac kez ayni buyuk sapma goruldu
+        float _bigYawFirst;    // dizinin ilk degeri -- karsilastirma buna gore
+        int _bigYawTag = -1;   // hangi tag'den; tag degisince dizi bastan baslar
+
+        /// <summary>Teyit dizisinde "ayni deger" sayilma toleransi (derece).</summary>
+        const float BigYawTolerance = 5f;
+
+        /// <summary>
+        /// Bu sapma icin kurtarma kapisi acilsin mi? Sayaci da bu metot yonetiyor — kapiyi
+        /// cagiran yerde tutmak, normal okumalarda sifirlamayi unutturuyordu.
+        /// </summary>
+        bool YawRecoveryAccepted(float yawDev, int tagId)
+        {
+            // Kurtarma gerekmiyor: dizi varsa bozulur, cunku arada normal bir okuma gecti.
+            if (yawDev <= yawRecoveryDegrees) { _bigYawRun = 0; return false; }
+
+            // BANT ICI: gercek kayip bu mertebede, dogrudan kabul.
+            if (yawDev <= yawRecoveryMaxDegrees) { _bigYawRun = 0; return true; }
+
+            // BANDIN USTU: teyit iste. Farkli tag ya da farkli buyukluk diziyi bastan baslatir.
+            bool devam = _bigYawRun > 0 && _bigYawTag == tagId &&
+                         Mathf.Abs(yawDev - _bigYawFirst) <= BigYawTolerance;
+            if (devam) _bigYawRun++;
+            else { _bigYawRun = 1; _bigYawFirst = yawDev; _bigYawTag = tagId; }
+
+            if (_bigYawRun >= yawRecoveryConfirmations)
+            {
+                WriteDiag($"YAW TEYITLI  tag {tagId}  {yawDev:0.0} derece  " +
+                          $"({_bigYawRun} ardisik) — gercek kayip sayildi");
+                _bigYawRun = 0;
+                return true;
+            }
+
+            // REDDEDILEN HER OKUMA YAZILIR. Bu satirlarin SAYISI, sorunun gercekten burada
+            // olup olmadiginin cevabi: sifirsa flip baska yerden geliyor demektir.
+            WriteDiag($"YAW REDDEDILDI  tag {tagId}  {yawDev:0.0} derece  " +
+                      $"(bant ustu, {_bigYawRun}/{yawRecoveryConfirmations} teyit)");
+            return false;
         }
 
         /// <summary>
