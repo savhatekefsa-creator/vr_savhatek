@@ -1370,8 +1370,12 @@ namespace VRMultiplayer.Constructor
         ///
         /// Raised again for the weapon wall, which is 3.75 m: it is one deliberate object, not
         /// terrain, and the buildable area is roughly 15 x 14 m.
+        ///
+        /// Raised to 5 m for the apocalypse set. Ruined_Wall measures 4.31 m and was landing
+        /// just outside — it is a wall segment, the most ordinary thing a player builds with.
+        /// The line stays well under the paintball marker's 9.26 m, which really is terrain.
         /// </summary>
-        const float MaxPlaceableMetres = 4f;
+        const float MaxPlaceableMetres = 5f;
 
         /// <summary>
         /// Props the player may drop on the floor. Terrain-sized pieces are filtered out — a
@@ -1389,14 +1393,56 @@ namespace VRMultiplayer.Constructor
             {
                 if (_placeable != null) return _placeable;
                 _placeable = new List<PropDef>();
+
+                // Emekliye ayrilmamis olup yine de elenenleri BIRIKTIR ve bir kez bildir.
+                // Bu kapi uzun sure SESSIZDI ve maliyeti soyle oldu: kutuphane penceresi
+                // KIYAMET'te 12 prop gosterirken cark 10 gosteriyordu, ve aradaki iki propun
+                // (Power_Pole 10.4 m, Ruined_Wall 4.31 m) nereye gittigini soyleyen hicbir
+                // yer yoktu — "galiba 10 sinir var" diye okunmasi kacinilmazdi. Bir kutuphane
+                // aracinin bir seyi gizlemesi sorun degil; NEDEN gizledigini sylemamesi sorun.
+                List<string> dropped = null;
+
                 foreach (var p in Library.props)
-                    if (p != null && !p.hiddenInPalette &&
-                        p.snap == PropSnap.Floor && p.category != PropCategory.Ground &&
-                        p.sizeMeters.x <= MaxPlaceableMetres && p.sizeMeters.y <= MaxPlaceableMetres &&
-                        p.Resolve() != null)
-                        _placeable.Add(p);
+                {
+                    string why = WhyNotPlaceable(p);
+                    if (why == null) { _placeable.Add(p); continue; }
+                    if (p == null || p.hiddenInPalette) continue;   // emekli: kasten, sessiz kalsin
+                    (dropped ??= new List<string>()).Add($"{p.id} -> {why}");
+                }
+
+                if (dropped != null)
+                    Debug.LogWarning($"[Constructor] {dropped.Count} prop palete ALINMADI " +
+                                     "(emekli olanlar haric):\n - " + string.Join("\n - ", dropped) +
+                                     "\nAyrinti/onarim: menu 51.");
+
                 return _placeable;
             }
+        }
+
+        /// <summary>
+        /// Why <paramref name="p"/> is kept out of the palette, or null when it is offered.
+        ///
+        /// THE SINGLE STATEMENT OF THE RULE. <see cref="Placeable"/>, the warning above and the
+        /// editor report (menu 51) all ask this one method, so what the player sees and what the
+        /// report explains cannot drift apart — which is exactly how a filter becomes folklore.
+        ///
+        /// GROUND IS NO LONGER EXCLUDED. The category used to be a proxy for "terrain-sized":
+        /// every Ground entry was a 40 m landscape tile from the forest pack, so dropping the
+        /// category dropped the tiles. That proxy broke the moment a Ground prop meant a flat
+        /// PATCH you place on purpose — rubble, scorch marks, broken glass — which are among the
+        /// most placeable things in the library. The size limit below already excludes the 40 m
+        /// tiles on their own merits, and it does it by measuring the actual problem.
+        /// </summary>
+        public static string WhyNotPlaceable(PropDef p)
+        {
+            if (p == null) return "girdi bos";
+            if (p.hiddenInPalette) return "emekli (hiddenInPalette acik)";
+            if (p.snap != PropSnap.Floor) return $"zemine oturmuyor (snap={p.snap})";
+            if (p.sizeMeters.x > MaxPlaceableMetres || p.sizeMeters.y > MaxPlaceableMetres)
+                return $"ayak izi cok buyuk ({p.sizeMeters.x:0.00} x {p.sizeMeters.y:0.00} m, " +
+                       $"sinir {MaxPlaceableMetres} m)";
+            if (p.Resolve() == null) return "prefab cozulemedi (prefab/resourcePath bos ya da eksik)";
+            return null;
         }
 
         // ------------------------------------------------------------- palette

@@ -415,7 +415,7 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 217380427826591957, guid: 737a780a5809b3f45b20e7e973f60c8e, type: 3}
     resourcePath: 
-    sizeMeters: {x: 10.416418, y: 6.4900513}
+    sizeMeters: {x: 0.6, y: 0.6}
     fitToFootprint: 0
     freeRotation: 0
     hiddenInPalette: 0

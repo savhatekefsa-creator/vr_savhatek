@@ -40,7 +40,6 @@ namespace VRMultiplayer.EditorTools
         // Palet kurallarinin yerel kopyasi DEGIL: oturum acik olmadan da dogru cevap
         // verebilmek icin ConstructorSession'daki suzgecin ayni sartlarini burada tekrar
         // ediyoruz. Ikisi ayrilirsa pencere yalan soyler, o yuzden tek yerde toplandi.
-        const float MaxPlaceableMetres = 4f;
 
         void Reload()
         {
@@ -298,9 +297,25 @@ namespace VRMultiplayer.EditorTools
 
             EditorGUILayout.HelpBox(
                 $"{total} prop  ·  paletde {palette}  ·  elle gizlenen {hidden}  ·  kural geregi elenen {filtered}\n" +
-                "Elenenler: Ground kategorisi, zemine oturmayanlar, " + MaxPlaceableMetres + " m'den buyukler, " +
-                "prefabi cozulemeyenler.",
+                "Kural geregi elenenlerin SEBEBI kendi satirlarinda yaziyor. Toplu liste: menu 51.",
                 palette > 0 ? MessageType.Info : MessageType.Warning);
+
+            // Sessizce elenmis prop varsa BURADA soyle. Kullanicinin bu pencerede 12 prop
+            // gorup gozlukte 10 bulmasinin sebebi, bu sayinin hicbir yerde yazmamasiydi.
+            if (filtered > 0)
+            {
+                var lines = new List<string>();
+                foreach (var p in _lib.props)
+                {
+                    if (p == null || p.hiddenInPalette) continue;
+                    string why = ConstructorSession.WhyNotPlaceable(p);
+                    if (why != null) lines.Add($"{p.displayName ?? p.id}: {why}");
+                }
+                if (lines.Count > 0)
+                    EditorGUILayout.HelpBox(
+                        "Bu proplar KUTUPHANEDE var ama insa modu paletinde CIKMAZ:\n - " +
+                        string.Join("\n - ", lines), MessageType.Warning);
+            }
 
             if (_problems.Count > 0)
                 EditorGUILayout.HelpBox("Dogrulama:\n - " + string.Join("\n - ", _problems), MessageType.Warning);
@@ -439,7 +454,7 @@ namespace VRMultiplayer.EditorTools
         {
             if (_categoryFilter >= 0 && (int)p.category != _categoryFilter) return false;
             if (!MatchesPaletteFilter(p)) return false;
-            if (_onlyPalette && (p.hiddenInPalette || !InPalette(p))) return false;
+            if (_onlyPalette && !InPalette(p)) return false;
             if (string.IsNullOrEmpty(_search)) return true;
             return p.id.IndexOf(_search, System.StringComparison.OrdinalIgnoreCase) >= 0 ||
                    (p.displayName ?? "").IndexOf(_search, System.StringComparison.OrdinalIgnoreCase) >= 0;
@@ -447,7 +462,7 @@ namespace VRMultiplayer.EditorTools
 
         void DrawRow(PropDef p, int index)
         {
-            bool inPalette = !p.hiddenInPalette && InPalette(p);
+            bool inPalette = InPalette(p);
 
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
@@ -540,11 +555,17 @@ namespace VRMultiplayer.EditorTools
         // ------------------------------------------------------------- bilgi
 
         /// <summary>Same filter <see cref="ConstructorSession.Placeable"/> applies at runtime.</summary>
-        static bool InPalette(PropDef p) =>
-            p.snap == PropSnap.Floor &&
-            p.category != PropCategory.Ground &&
-            p.sizeMeters.x <= MaxPlaceableMetres && p.sizeMeters.y <= MaxPlaceableMetres &&
-            p.prefab != null;
+        /// <summary>
+        /// Whether the prop actually reaches the build wheel — asked of the RUNTIME gate, not
+        /// re-derived here.
+        ///
+        /// This window used to carry its own copy of the rule, with its own 4 m constant, and the
+        /// two drifted exactly as far as you would expect: the library said KIYAMET had 12 props
+        /// and the wheel in the headset showed 10, with nothing anywhere naming the two that fell
+        /// out. A tool whose job is to explain the library cannot answer from a second copy of
+        /// the library's rules.
+        /// </summary>
+        static bool InPalette(PropDef p) => ConstructorSession.WhyNotPlaceable(p) == null;
 
         static string FootprintText(PropDef p)
         {
@@ -564,14 +585,15 @@ namespace VRMultiplayer.EditorTools
         {
             if (p.prefab == null && string.IsNullOrEmpty(p.resourcePath))
                 return "prefab YOK — hicbir yerde gorunmez";
-            if (p.category == PropCategory.Ground)
-                return "Ground kategorisi paletten elenir (zemin parcasi, prop degil)";
-            if (p.snap != PropSnap.Floor)
-                return "snap Floor degil — palet yalnizca zemine oturanlari gosterir";
-            if (p.sizeMeters.x > MaxPlaceableMetres || p.sizeMeters.y > MaxPlaceableMetres)
-                return $"{p.sizeMeters.x:0.00} x {p.sizeMeters.y:0.00} m, sinir {MaxPlaceableMetres} m — paletten elenir";
 
-            if (!inPalette) return "";
+            // Elenme sebebi calisma zamani kapisindan geliyor; burada YENIDEN TURETILMIYOR
+            // (bkz. InPalette). Emekli olan prop zaten kendi dugmesiyle isaretli, onu tekrar
+            // uyari olarak yazmak gurultu olurdu.
+            if (!inPalette)
+            {
+                if (p.hiddenInPalette) return "";
+                return ConstructorSession.WhyNotPlaceable(p) + " — PALETTE CIKMAZ";
+            }
 
             var notes = new List<string>();
 
