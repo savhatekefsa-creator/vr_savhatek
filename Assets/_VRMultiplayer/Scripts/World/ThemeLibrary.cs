@@ -71,6 +71,40 @@ namespace VRMultiplayer
                  "isigini HIC almaz ve kapkara kalir.")]
         public string floorMaterialPath = "";
 
+        // ------------------------------------------------------------- ambiyans
+
+        /// <summary>
+        /// Resources-relative path of the looping ambience bed, lazily loaded like the rest.
+        ///
+        /// AMBIENCE IS NOT MUSIC and does not go through <c>MusicPlayer</c>: music is one track
+        /// for the whole app and ambience belongs to the place. It is also the cheapest thing in
+        /// this file by a wide margin — a room reads as "outdoors, windy, empty" from sound
+        /// alone, before the player has looked at anything.
+        /// </summary>
+        [Tooltip("Donguye giren ortam sesinin Resources altindaki yolu (uzantisiz). " +
+                 "BOS = ortam sesi yok.\n\nMuzik DEGIL: muzik tum uygulamanin, ambiyans MEKANIN.")]
+        public string ambiencePath = "";
+
+        [Tooltip("Ortam sesi siddeti. Altinda kalmasi gereken sey oyunun kendi sesleri — " +
+                 "ayak sesi ve silah, ambiyansi bastirabilmeli.")]
+        [Range(0f, 1f)] public float ambienceVolume = 0.35f;
+
+        /// <summary>
+        /// Ambient motes per second — ash, dust, snow. Zero turns the emitter off entirely.
+        ///
+        /// EMITTED AROUND THE PLAYER, not across the map (see <see cref="ThemeAmbience"/>): a
+        /// world-sized emitter spends almost all of its particles where nobody is looking. A
+        /// small box that follows the head gets the same effect from a few dozen particles,
+        /// which is the difference between free and not on a Quest.
+        /// </summary>
+        [Tooltip("Saniyede uretilen toz/kul zerresi. 0 = kapali. Yayici oyuncunun ETRAFINDA " +
+                 "duruyor, haritaya yayilmiyor — harita boyu bir yayici zerrelerinin cogunu " +
+                 "kimsenin bakmadigi yere harcar.")]
+        [Min(0f)] public float ambientMoteRate = 14f;
+
+        [Tooltip("Zerrelerin rengi.")]
+        public Color ambientMoteColor = new Color(0.55f, 0.47f, 0.38f, 0.5f);
+
         // ------------------------------------------------------------- gunes
 
         [Tooltip("Yonlu isigin rengi. Kiyamet/gun batimi icin sicak amber, steril bir ic mekan " +
@@ -155,6 +189,8 @@ namespace VRMultiplayer
         [NonSerialized] bool _skyTried;
         [NonSerialized] Material _floor;
         [NonSerialized] bool _floorTried;
+        [NonSerialized] AudioClip _ambience;
+        [NonSerialized] bool _ambienceTried;
 
         /// <summary>
         /// The skybox material, lazily loaded and cached. Null both when no sky is configured
@@ -191,6 +227,21 @@ namespace VRMultiplayer
             return _floor;
         }
 
+        /// <summary>The ambience loop, lazily loaded. Null means "silent theme".</summary>
+        public AudioClip ResolveAmbience()
+        {
+            if (_ambience != null) return _ambience;
+            if (_ambienceTried) return null;
+            _ambienceTried = true;
+
+            if (string.IsNullOrEmpty(ambiencePath)) return null;
+
+            _ambience = Resources.Load<AudioClip>(ambiencePath);
+            if (_ambience == null)
+                Debug.LogWarning($"[ThemeLibrary] '{id}' icin Resources/{ambiencePath} bulunamadi.");
+            return _ambience;
+        }
+
         /// <summary>The sun's rotation, built from the two authored angles.</summary>
         public Quaternion SunRotation => Quaternion.Euler(sunPitch, sunYaw, 0f);
 
@@ -201,6 +252,8 @@ namespace VRMultiplayer
             _skyTried = false;
             _floor = null;
             _floorTried = false;
+            _ambience = null;
+            _ambienceTried = false;
         }
     }
 

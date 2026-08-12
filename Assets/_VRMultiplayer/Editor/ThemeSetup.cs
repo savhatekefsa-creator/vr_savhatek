@@ -61,6 +61,7 @@ namespace VRMultiplayer.EditorTools
 
             log.AppendLine(EnsureKiyametSky());
             log.AppendLine(EnsureKiyametFloor());
+            log.AppendLine(EnsureKiyametAmbience());
 
             var themes = new List<ThemeDef>(lib.themes ?? new ThemeDef[0]);
             var existing = lib.ById(KiyametId);
@@ -82,6 +83,8 @@ namespace VRMultiplayer.EditorTools
                 { existing.skyboxPath = fresh.skyboxPath; filled.Add("skyboxPath"); }
                 if (string.IsNullOrEmpty(existing.floorMaterialPath))
                 { existing.floorMaterialPath = fresh.floorMaterialPath; filled.Add("floorMaterialPath"); }
+                if (string.IsNullOrEmpty(existing.ambiencePath))
+                { existing.ambiencePath = fresh.ambiencePath; filled.Add("ambiencePath"); }
                 existing.InvalidateCache();
 
                 log.AppendLine(filled.Count == 0
@@ -127,6 +130,10 @@ namespace VRMultiplayer.EditorTools
             displayName = "KIYAMET",
             skyboxPath = "Themes/Sky_Kiyamet",
             floorMaterialPath = "Themes/M_Kiyamet_Floor",
+            ambiencePath = "Themes/Ambience_Kiyamet",
+            ambienceVolume = 0.32f,
+            ambientMoteRate = 14f,
+            ambientMoteColor = new Color(0.52f, 0.44f, 0.35f, 0.45f),
 
             sunColor = new Color(1.00f, 0.70f, 0.45f),
             sunIntensity = 1.05f,
@@ -254,6 +261,95 @@ namespace VRMultiplayer.EditorTools
             AssetDatabase.CreateAsset(mat, matPath);
             return msg.Append("M_Kiyamet_Floor.mat olusturuldu (Simple Lit, " +
                               FloorMetresPerTile + " m/tekrar).").ToString();
+        }
+
+        // ------------------------------------------------------------- ambiyans
+
+        const int AmbienceRate = 22050;      // ruzgar alcak frekansli; 44.1k'ya gerek yok
+        const float AmbienceSeconds = 9f;
+
+        /// <summary>
+        /// Writes the looping wind bed.
+        ///
+        /// SYNTHESISED, like the sky and the floor, because there is no ambience audio in the
+        /// project either. Wind is the easiest natural sound to fake convincingly: it has no
+        /// pitch and no attack, only broadband noise whose loudness breathes. Two leaky
+        /// integrators give the low roar and the high hiss, and the breathing is a sum of sines
+        /// whose periods all divide the clip length — that is what lets it loop.
+        /// </summary>
+        static string EnsureKiyametAmbience()
+        {
+            const string path = SkyFolder + "/Ambience_Kiyamet.wav";
+            if (File.Exists(path)) return "Ambience_Kiyamet.wav zaten var.";
+
+            File.WriteAllBytes(path, WavWriter.ToWav(Wind(90210), AmbienceRate));
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+
+            var imp = AssetImporter.GetAtPath(path) as AudioImporter;
+            if (imp != null)
+            {
+                var s = imp.defaultSampleSettings;
+                // Dokuz saniyelik bir dongu bellekte PCM olarak durmasin: sikistirilmis
+                // yuklenip calarken cozulsun. Tek bir uzun dongude bu tam da Vorbis'in
+                // isi; kisa tek atislarda (adim, citirti) tersi dogru olurdu.
+                s.loadType = AudioClipLoadType.CompressedInMemory;
+                s.compressionFormat = AudioCompressionFormat.Vorbis;
+                s.quality = 0.5f;
+                imp.defaultSampleSettings = s;
+                imp.forceToMono = true;
+                imp.SaveAndReimport();
+            }
+
+            return $"Ambience_Kiyamet.wav sentezlendi ({AmbienceSeconds:0} sn dongu).";
+        }
+
+        /// <summary>
+        /// Looping wind: filtered noise with a breathing envelope, crossfaded end into start.
+        ///
+        /// THE CROSSFADE IS WHAT MAKES IT A LOOP. Noise has no natural period, so the last
+        /// sample and the first never line up and a raw loop clicks once every pass — the kind
+        /// of tick a player stops noticing consciously and keeps finding irritating. Generating
+        /// a tail past the loop point and mixing it back over the head removes the seam without
+        /// shortening the clip.
+        /// </summary>
+        static float[] Wind(int seed)
+        {
+            var rnd = new System.Random(seed);
+            int n = (int)(AmbienceRate * AmbienceSeconds);
+            int fade = (int)(AmbienceRate * 1.2f);
+            var raw = new float[n + fade];
+
+            float low = 0f, high = 0f;
+            for (int i = 0; i < raw.Length; i++)
+            {
+                float w = (float)(rnd.NextDouble() * 2.0 - 1.0);
+                low += (w - low) * 0.045f;    // ugultu
+                high += (w - high) * 0.42f;   // hisirti
+                raw[i] = low * 3.4f + high * 0.30f;
+            }
+
+            // Zarf DONGUYLE TAM PERIYODIK: her bilesenin periyodu klip boyunu tam boluyor,
+            // yani i ile i+n ayni degeri veriyor ve capraz gecis pürüzsüz oluyor.
+            for (int i = 0; i < raw.Length; i++)
+            {
+                float t = i / (float)n;
+                float env = 0.58f
+                          + 0.26f * Mathf.Sin(2f * Mathf.PI * t)
+                          + 0.11f * Mathf.Sin(2f * Mathf.PI * 3f * t + 1.1f)
+                          + 0.06f * Mathf.Sin(2f * Mathf.PI * 7f * t + 2.3f);
+                raw[i] *= Mathf.Max(0.06f, env);
+            }
+
+            var outp = new float[n];
+            System.Array.Copy(raw, outp, n);
+            for (int i = 0; i < fade; i++)
+            {
+                float k = i / (float)fade;
+                outp[i] = outp[i] * k + raw[n + i] * (1f - k);
+            }
+
+            WavWriter.Normalize(outp, 0.70f);   // yatak sesi; oyunun uzerine cikmasin
+            return outp;
         }
 
         static void ConfigureGroundTexture(string path)

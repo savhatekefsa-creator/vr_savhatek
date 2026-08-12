@@ -214,7 +214,7 @@ namespace VRMultiplayer.EditorTools
             {
                 string path = SoundFolder + "/glass_step_" + i + ".wav";
                 if (File.Exists(path)) continue;
-                File.WriteAllBytes(path, Wav(Crunch(Seed + i * 977), SampleRate));
+                File.WriteAllBytes(path, WavWriter.ToWav(Crunch(Seed + i * 977), SampleRate));
                 made++;
             }
             if (made == 0) return "Citirti klipleri zaten var.";
@@ -280,13 +280,7 @@ namespace VRMultiplayer.EditorTools
 
             // Tepe degerine normalize: klipler arasi seviye farki, ayni yuzeyin bazi
             // adimlarda daha sert basilmis gibi duyulmasina yol acardi.
-            float peak = 0f;
-            for (int i = 0; i < n; i++) peak = Mathf.Max(peak, Mathf.Abs(s[i]));
-            if (peak > 0f)
-            {
-                float k2 = 0.92f / peak;
-                for (int i = 0; i < n; i++) s[i] *= k2;
-            }
+            WavWriter.Normalize(s, 0.92f);
 
             // Son 15 ms'de kapan: ani kesilen bir klip "tak" diye tiklar.
             int fade = (int)(0.015f * SampleRate);
@@ -296,32 +290,6 @@ namespace VRMultiplayer.EditorTools
             return s;
         }
 
-        /// <summary>16-bit PCM mono WAV.</summary>
-        static byte[] Wav(float[] samples, int rate)
-        {
-            using (var ms = new MemoryStream())
-            using (var w = new BinaryWriter(ms))
-            {
-                int dataLen = samples.Length * 2;
-                w.Write(Encoding.ASCII.GetBytes("RIFF"));
-                w.Write(36 + dataLen);
-                w.Write(Encoding.ASCII.GetBytes("WAVE"));
-                w.Write(Encoding.ASCII.GetBytes("fmt "));
-                w.Write(16);                       // fmt blok boyu
-                w.Write((short)1);                 // PCM
-                w.Write((short)1);                 // mono
-                w.Write(rate);
-                w.Write(rate * 2);                 // byte/sn
-                w.Write((short)2);                 // blok hizalama
-                w.Write((short)16);                // bit/ornek
-                w.Write(Encoding.ASCII.GetBytes("data"));
-                w.Write(dataLen);
-                foreach (float f in samples)
-                    w.Write((short)(Mathf.Clamp(f, -1f, 1f) * 32767f));
-                w.Flush();
-                return ms.ToArray();
-            }
-        }
 
         // ------------------------------------------------------------- kutuphane kaydi
 

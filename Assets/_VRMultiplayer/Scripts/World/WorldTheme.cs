@@ -29,6 +29,19 @@ namespace VRMultiplayer
         /// <summary>The theme currently on the scene. Empty means the scene's authored look.</summary>
         public static string ActiveId { get; private set; } = "";
 
+        /// <summary>
+        /// Raised whenever the theme changes — the new <see cref="ThemeDef"/>, or null when the
+        /// scene's own look is restored.
+        ///
+        /// THE SEAM THAT KEEPS THIS TYPE SMALL. Ambience is a looping AudioSource and a particle
+        /// emitter: things with a lifetime, an owner and a place in the hierarchy, which is
+        /// exactly what this class promises not to have. Announcing the change instead of acting
+        /// on it lets <see cref="ThemeAmbience"/> own that side without either of them knowing
+        /// how the other works — and anything added later (border decor, weather) hooks the same
+        /// seam rather than growing this file.
+        /// </summary>
+        public static event System.Action<ThemeDef> Changed;
+
         // ---- yakalanmis ozgun sahne ayarlari (yalnizca ilk degisiklikte doldurulur)
         static bool _captured;
         static Material _skybox0;
@@ -115,12 +128,19 @@ namespace VRMultiplayer
             DynamicGI.UpdateEnvironment();
 
             ActiveId = themeId;
+            Changed?.Invoke(def);
         }
 
         /// <summary>Puts the scene back the way it was authored. No-op if nothing was ever applied.</summary>
         public static void Restore()
         {
-            if (!_captured) { ActiveId = ""; return; }
+            // Ambiyans HER DURUMDA susturulur, RenderSettings yakalanmamis olsa bile:
+            // yakalama yalnizca gorsel ayarlar icin var, ses onun disinda yasiyor ve
+            // "geri al" dedikten sonra calmaya devam eden bir ruzgar sesi hata olurdu.
+            ActiveId = "";
+            Changed?.Invoke(null);
+
+            if (!_captured) return;
 
             RenderSettings.skybox = _skybox0;
             RenderSettings.sun = _sun0Ref;
@@ -152,7 +172,6 @@ namespace VRMultiplayer
             UnpaintFloor();
 
             DynamicGI.UpdateEnvironment();
-            ActiveId = "";
         }
 
         // ------------------------------------------------------------- uygulama
