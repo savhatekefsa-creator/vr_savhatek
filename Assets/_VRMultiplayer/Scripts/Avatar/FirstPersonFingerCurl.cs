@@ -22,7 +22,15 @@ namespace VRMultiplayer
         public float proximalCurl = 55f;
         public float intermediateCurl = 80f;
         public float distalCurl = 55f;
-        public float thumbCurlDegrees = 40f;
+        // Basparmak digerlerinden AZ kivrilir: fazlasi ucu avucun icine sokuyor.
+        public float thumbCurlDegrees = 30f;
+
+        // Basparmak ucunun avuc duzleminden en az bu kadar onde kalmasi gerekir (m).
+        // Mesh yaricapi ~12-15 mm; bunun altina inince el ic ice geciyor.
+        const float ThumbClearance = 0.014f;
+        // Hedefi avuc duzleminden disari kaydirma - basparmak avucun ICINE degil,
+        // kivrilmis parmaklarin ONUNDEN gecsin.
+        const float ThumbTargetLift = 0.015f;
 
         // Ham eksen degerleri titrek; poser'daki ile ayni mertebede yumusatma.
         public float smoothing = 14f;
@@ -36,6 +44,10 @@ namespace VRMultiplayer
         }
 
         readonly List<Phalanx> _phalanges = new List<Phalanx>();
+        int _thumbCount;                 // listenin bastaki bu kadar bogumu basparmak
+        float _thumbLimit = 1f;          // guvenlik kilidi (bkz. LimitThumb)
+        Transform _thumbTip;
+        Vector3 _palmPoint, _palmNormal;
         NetworkVRPlayer _net;
         bool _left;
         float _grip, _trigger;
@@ -66,15 +78,57 @@ namespace VRMultiplayer
             FingerCurlMath.PalmFrame(wrist, idx1, pky1, mid1, _left,
                 out _, out Vector3 curlPlane, out Vector3 thumbTarget);
 
-            // Basparmak: duzlem YOK (avucun uzerinden capraz gecer), hedefi avuc ici.
+            // curlPlane iki elde de AVUCTAN DISARI bakar (PalmFrame elliligi zaten
+            // duzeltiyor). Hedefi o yonde kaldirip biraz da isaret parmagina dogru
+            // otelemek, basparmagi avucun ICINE degil ONUNDEN geciriyor.
+            Transform idx2;
+            map.TryGetValue(p + "index2", out idx2);
+            if (idx2 != null) thumbTarget = Vector3.Lerp(thumbTarget, idx2.position, 0.5f);
+            thumbTarget += curlPlane * ThumbTargetLift;
+            _palmPoint = wrist.position;
+            _palmNormal = curlPlane;
+
+            // Basparmak: duzlem YOK (avucun uzerinden capraz gecer).
             AddFinger(map, p + "thumb", thumbTarget, null, false,
                       thumbCurlDegrees, thumbCurlDegrees, thumbCurlDegrees * 0.8f);
+            _thumbCount = _phalanges.Count;   // ilk N bogum basparmaga ait
             // Dort parmak: kendi duzleminde katlanir. Isaret parmagi TETIGI izler.
             AddFinger(map, p + "index", wrist.position, curlPlane, true, proximalCurl, intermediateCurl, distalCurl);
             AddFinger(map, p + "middle", wrist.position, curlPlane, false, proximalCurl, intermediateCurl, distalCurl);
             AddFinger(map, p + "ring", wrist.position, curlPlane, false, proximalCurl, intermediateCurl, distalCurl);
             AddFinger(map, p + "pinky", wrist.position, curlPlane, false, proximalCurl, intermediateCurl, distalCurl);
+
+            map.TryGetValue(p + "thumb3", out _thumbTip);
+            LimitThumb();
             return _phalanges.Count > 0;
+        }
+
+        /// <summary>
+        /// SERT GUVENLIK KILIDI: basparmak kivrimini, ucu avuc duzleminden
+        /// <see cref="ThumbClearance"/> kadar onde kalacak sekilde sinirlar.
+        /// Aci ayari bozulsa bile mesh elin icine giremez - cihazda goruldugu gibi
+        /// tam kavramada uc, avuc duzleminin 2 mm yakinina kadar iniyordu.
+        /// Kilit BIR KEZ, kurulumda hesaplanir; her karede olcum yapilmaz.
+        /// </summary>
+        void LimitThumb()
+        {
+            _thumbLimit = 1f;
+            if (_thumbTip == null || _thumbCount == 0) return;
+
+            // Kaba tarama yeterli: 1.0'dan asagi inip kisiti saglayan ilk degeri al.
+            for (float k = 1f; k > 0.05f; k -= 0.05f)
+            {
+                for (int i = 0; i < _thumbCount; i++)
+                    _phalanges[i].t.localRotation = Quaternion.Slerp(_phalanges[i].open, _phalanges[i].closed, k);
+                if (Vector3.Dot(_thumbTip.position - _palmPoint, _palmNormal) >= ThumbClearance)
+                {
+                    _thumbLimit = k;
+                    break;
+                }
+            }
+            // Olcum icin bozulan pozu geri ac.
+            for (int i = 0; i < _thumbCount; i++)
+                _phalanges[i].t.localRotation = _phalanges[i].open;
         }
 
         void AddFinger(Dictionary<string, Transform> map, string prefix, Vector3 target,
@@ -131,6 +185,7 @@ namespace VRMultiplayer
             {
                 var ph = _phalanges[i];
                 float k = ph.useTrigger ? index : grip;
+                if (i < _thumbCount) k *= _thumbLimit;   // basparmak guvenlik kilidi
                 ph.t.localRotation = Quaternion.Slerp(ph.open, ph.closed, k);
             }
         }

@@ -45,6 +45,13 @@ namespace VRMultiplayer
         const string GloveBodyMat = "FPHands/Meta/M_FPGlove_Govde";
         const string GloveTipMat = "FPHands/Meta/M_FPGlove_Uc";
 
+        // Meta'nin eli anatomik olarak GERCEK boyutta (bilek->uc ~190 mm, olcek 1.000);
+        // ortada olcek hatasi yok. Ama VR'da gercek boyutlu el sik sik kucuk algilanir,
+        // ustelik kolu/mansetı olmayan bir el daha da kucuk okunur. Cihazda ayarlanacak
+        // tek dokunus noktasi burasi. Olcek "Hand" dugumune uygulanir - FP_HandView koku
+        // ters-olcek dugumudur, oraya dokunmak makaslama kuralini bozar.
+        const float HandScale = 1.10f;
+
         const float DotDiameter = 0.02f;
         const float DotFadeStart = 0.03f;
         const float DotFadeEnd = 0.25f;
@@ -305,19 +312,37 @@ namespace VRMultiplayer
             // Sabit euler gommek yerine kemiklerden HESAPLANIYOR - model yeniden import
             // edilirse veya Meta duruşu degistirirse kendiliginden dogru kalir.
             string pre = left ? "b_l_" : "b_r_";
-            Transform wrist = null, idx = null, mid = null, pky = null;
+            Transform wrist = null, mid = null, thumb = null;
             foreach (var t in go.GetComponentsInChildren<Transform>(true))
             {
                 if (t.name == pre + "wrist") wrist = t;
-                else if (t.name == pre + "index1") idx = t;
                 else if (t.name == pre + "middle1") mid = t;
-                else if (t.name == pre + "pinky1") pky = t;
+                else if (t.name == pre + "thumb1") thumb = t;
             }
-            if (wrist != null && idx != null && mid != null && pky != null)
+            if (wrist != null && mid != null && thumb != null)
             {
+                // Boyut once: olcek bilegi de oynatir, konum duzeltmesi ONDAN SONRA
+                // yapilmali.
+                go.transform.localScale = Vector3.one * HandScale;
+
+                // HEDEF DURUS: parmaklar +z, BASPARMAK +y. Kumanda duz tutuldugunda
+                // dort parmak ileri, basparmak yukari, avuc ice bakar.
+                //
+                // Basparmagi referans almak KRITIK. Onceki surum avuc normalini
+                // Cross(parmak, isaret-serce) ile buluyordu; o carpim SAG elin
+                // avucundan ama SOL elin SIRTINDAN disari bakar. Iki eli de ayni
+                // eksene zorlayinca biri 180 derece donuyordu - cihazda "sol elin
+                // avcu bana, sagin ileri bakiyor" diye goruldu. Basparmak ise dogasi
+                // geregi ellidir (sag elde bir yanda, solda obur yanda), dolayisiyla
+                // bu tanim kendiliginden AYNA-SIMETRIKTIR ve el basina isaret
+                // duzeltmesi istemez. Ayni tuzagin bilinen hali icin bkz.
+                // FingerCurlMath.PalmFrame (left ? -palmNormal : palmNormal).
                 Vector3 fingers = (mid.position - wrist.position).normalized;
-                Vector3 palmN = Vector3.Cross(fingers, (idx.position - pky.position).normalized).normalized;
-                go.transform.rotation = Quaternion.Inverse(Quaternion.LookRotation(fingers, -palmN)) * go.transform.rotation;
+                Vector3 thumbDir = (thumb.position - wrist.position).normalized;
+                Vector3 up = (thumbDir - fingers * Vector3.Dot(thumbDir, fingers)).normalized;
+                if (up.sqrMagnitude > 1e-6f)
+                    go.transform.rotation = Quaternion.Inverse(Quaternion.LookRotation(fingers, up)) * go.transform.rotation;
+
                 // Bilek tam Pose orijinine gelsin (modelin kokunde olmayabilir).
                 go.transform.position += pose.position - wrist.position;
             }
