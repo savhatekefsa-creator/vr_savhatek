@@ -171,6 +171,14 @@ namespace VRMultiplayer.Weapons
             return true;
         }
 
+        /// <summary>Bu elin su an kaynakli oldugu silah (teshis icin).</summary>
+        public bool TryGetHeldWeapon(bool left, out Transform weapon)
+        {
+            ref HandWeld w = ref (left ? ref _left : ref _right);
+            weapon = w.weapon;
+            return w.active && !w.fadingOut && weapon != null;
+        }
+
         void ComputeTarget(ref HandWeld w, bool left, out Vector3 targetPos, out Quaternion targetRot)
         {
             ComputeAnchor(ref w, left, out Vector3 anchorPos, out Quaternion anchorRot);

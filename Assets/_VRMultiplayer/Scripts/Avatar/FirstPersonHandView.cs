@@ -153,6 +153,37 @@ namespace VRMultiplayer
             _pose.SetPositionAndRotation(
                 Vector3.Lerp(_carrier.position, _lastAnchor, _weight),
                 Quaternion.Slerp(_carrier.rotation, _gripDelta * _carrier.rotation, _weight));
+
+            LogDiagnostic(welded);
+        }
+
+        // TESHIS: cihazda "el silaha oturmuyor" derdini pikselden degil SAYIDAN
+        // okuyabilmek icin. Yalnizca silah tutulurken ve saniyede bir yaziyor, yani
+        // normal oyunda gurultu yapmaz. adb logcat ile kablodan canli okunur:
+        //   adb logcat -s Unity:I | findstr FPEl
+        // Dert cozulunce bu blok silinebilir.
+        float _nextLog;
+
+        void LogDiagnostic(bool welded)
+        {
+            if (!welded || Time.time < _nextLog) return;
+            _nextLog = Time.time + 1f;
+
+            float toAnchor = Vector3.Distance(_pose.position, _lastAnchor) * 1000f;
+            float toCarrier = Vector3.Distance(_pose.position, _carrier.position) * 1000f;
+            float gripAngle = Quaternion.Angle(Quaternion.identity, _gripDelta);
+            string wname = "-";
+            Vector3 wpos = Vector3.zero;
+            if (_weld != null && _weld.TryGetHeldWeapon(_left, out Transform wt) && wt != null)
+            {
+                wname = wt.name;
+                wpos = wt.position;
+            }
+            Debug.Log(string.Format(
+                "[FPEl] {0} agirlik={1:0.00} el->ankraj={2:0.0}mm el->kumanda={3:0.0}mm " +
+                "tutus_duzeltme={4:0.0}deg silah={5} silah->ankraj={6:0.0}mm",
+                _left ? "SOL" : "SAG", _weight, toAnchor, toCarrier, gripAngle, wname,
+                Vector3.Distance(wpos, _lastAnchor) * 1000f));
         }
 
         static void Piece(GameObject parent, string name, Vector3 localPos, Vector3 scale, Color color)
