@@ -80,6 +80,25 @@ namespace VRMultiplayer.Constructor
             return n;
         }
 
+        /// <summary>
+        /// Bir sonraki plakanin alacagi tag ID'si — EN KUCUK BOS numara.
+        ///
+        /// Yerlestirme onizlemesindeki etiket (bkz. ConstructorPlacer.UpdateTagLabel) ve
+        /// <see cref="Capture"/> AYNI kurali kullanmak zorunda: etiket "TAG 3" derken cevrim
+        /// 4 verirse kagidi asan kisi yanlis numarayi asar ve hatanin kaynagi gorunmez olur.
+        /// </summary>
+        public static int NextTagId(MapLayout layout)
+        {
+            var kullanilan = new HashSet<int> { 0 };
+            if (layout != null && layout.tags != null)
+                foreach (var t in layout.tags)
+                    if (t != null) kullanilan.Add(t.id);
+
+            int id = FirstTagId;
+            while (kullanilan.Contains(id)) id++;
+            return id;
+        }
+
         /// <summary>Plakadan turemis (yani 0 olmayan) tag sayisi.</summary>
         public static int PlateDerivedTagCount(MapLayout layout)
         {
@@ -164,10 +183,57 @@ namespace VRMultiplayer.Constructor
             var tags = new List<AprilTagCalibration.TagEntry>();
             if (zero != null) tags.Add(zero);
 
+            // ---- ID COZUMLEME: kimlik SIRAYA degil PLAKAYA bagli --------------------------
+            //
+            // Eskiden ID'yi sira veriyordu (i'nci plaka -> FirstTagId + i). Ortadaki bir
+            // plakayi silmek sonraki TUM tag'lerin numarasini kaydiriyordu; duvardaki
+            // kagitlarda ise basili, degismez numaralar var. Sonuc: kalibrasyon tag 2'yi
+            // tag 3'un yerinde arar ve hata iki tag arasindaki mesafe kadar olur.
+            //
+            // Artik her tag onu ureten plakanin instanceId'sini tasiyor. Plaka silinince
+            // yalnizca onun tag'i duser.
+            var eskiKaynakli = new Dictionary<uint, AprilTagCalibration.TagEntry>();
+            if (layout.tags != null)
+                foreach (var t in layout.tags)
+                    if (t != null && t.sourceInstanceId != 0) eskiKaynakli[t.sourceInstanceId] = t;
+
+            // GOC: damgalanmamis eski harita. Bu haritadaki tag'ler siradan turemis, yani
+            // simdi damgalarsak ayni sirayi kullanmak zorundayiz -- yoksa ilk cevrimde
+            // numaralar kayar ve tam da onlemek istedigimiz sey olur. Bir kez damgalandiktan
+            // sonra bu dal bir daha calismaz.
+            bool goc = eskiKaynakli.Count == 0;
+
+            var cozulen = new AprilTagCalibration.TagEntry[plates.Count];
+            var kullanilan = new HashSet<int> { 0 };   // 0 origin'in
+            for (int i = 0; i < plates.Count; i++)
+            {
+                AprilTagCalibration.TagEntry eskiTag;
+                if (!eskiKaynakli.TryGetValue(plates[i].instanceId, out eskiTag) && goc)
+                    eskiTag = FindTag(layout.tags, FirstTagId + i);   // eski sira kurali
+
+                cozulen[i] = eskiTag;
+                if (eskiTag != null) kullanilan.Add(eskiTag.id);
+            }
+
+            // Eslesmeyen plakalara EN KUCUK BOS ID. Serbest kalan numarayi yeniden kullanmak
+            // dogru: basili tag'ler fiziksel bir envanter, indirdigin kagidi baska yere
+            // asabilirsin. Her seferinde max+1 vermek envanteri gereksiz buyuturdu.
+            var atanan = new int[plates.Count];
+            int sonraki = FirstTagId;
+            for (int i = 0; i < plates.Count; i++)
+            {
+                if (cozulen[i] != null) { atanan[i] = cozulen[i].id; continue; }
+                while (kullanilan.Contains(sonraki)) sonraki++;
+                atanan[i] = sonraki;
+                kullanilan.Add(sonraki);
+            }
+
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"{plates.Count} plaka cevrildi.");
+            if (goc && eskiKaynakli.Count == 0 && layout.tags != null && layout.tags.Length > 1)
+                sb.AppendLine("(eski harita: mevcut numaralar korunup plakalara baglandi)");
             sb.AppendLine();
-            sb.AppendLine("ESLEME (koyma sirasi):");
+            sb.AppendLine("ESLEME:");
 
             if (zero != null)
                 sb.AppendLine("  tag 0   (origin, plakadan degil)   " +
@@ -175,17 +241,19 @@ namespace VRMultiplayer.Constructor
             else
                 sb.AppendLine("  tag 0   YOK — origin tanimi bulunamadi, once onu ayarla");
 
-            int id = FirstTagId;
-            foreach (var p in plates)
+            for (int i = 0; i < plates.Count; i++)
             {
+                var p = plates[i];
+                int id = atanan[i];
                 var rect = grid.FootprintRect(def, p.cellX, p.cellZ, p.rot, p.scalePct);
                 // Plakanin pivotu kupun MERKEZINDE ve MapBuilder dikeyde duzeltme yapmiyor,
                 // yani RectCenter dogrudan plakanin merkezini veriyor.
                 Vector3 world = grid.RectCenter(rect, p.level, layout.levelHeight);
 
-                // Onceki yerlesimde bu ID varsa YAW'INI KORU: kameranin olctugu yaw duvarin
-                // gercek acisina plakanin 5 derecelik adimlarindan daha yakin.
-                var eski = FindTag(layout.tags, id) ?? FindTag(SceneLayout(), id);
+                // Bu plakanin ONCEKI kaydi: artik ID'ye gore degil PLAKAYA gore bulunuyor
+                // (cozulen[]). Sahne yerlesimi yalnizca hicbir eslesme yokken yedek — yeni
+                // bir haritada tag 0 disindaki degerlerin oradan gelmesi zaten istenmiyor.
+                var eski = cozulen[i] ?? (eskiKaynakli.Count == 0 ? FindTag(SceneLayout(), id) : null);
 
                 // (-180, 180]'e cek: plaka yaw'i hep pozitif (270), kamera olcumu Atan2'den
                 // negatif (-90) geliyordu ve ayni yon iki sayi olarak yaziliyordu.
@@ -202,6 +270,7 @@ namespace VRMultiplayer.Constructor
                     position = world,
                     yawDegrees = yaw,
                     useForCalibration = acik,
+                    sourceInstanceId = p.instanceId,   // kimligi PLAKAYA bagla
                 };
                 tags.Add(yeni);
 
@@ -211,6 +280,8 @@ namespace VRMultiplayer.Constructor
                     float cm = (world - eski.position).magnitude * 100f;
                     oynama = cm < 0.05f ? "  (konum ayni)" : $"  KONUM {cm:0.0} cm OYNADI";
                     if (cm >= 0.05f || !Mathf.Approximately(eski.yawDegrees, yaw)) changed = true;
+                    if (eski.id != id) { oynama += $"  ID {eski.id} -> {id}"; changed = true; }
+                    if (eski.sourceInstanceId != p.instanceId) changed = true;
                 }
                 else changed = true;
 
@@ -219,7 +290,6 @@ namespace VRMultiplayer.Constructor
                               (eski != null ? "  (yaw korundu)" : "  (yaw plakadan, 5 derece adim)") +
                               oynama +
                               (acik ? "  ACIK kaldi" : "  KAPALI"));
-                id++;
             }
 
             // Tag sayisi degistiyse de degisiklik var (plaka silinmis olabilir).

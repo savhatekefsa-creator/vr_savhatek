@@ -1181,9 +1181,9 @@ namespace VRMultiplayer.Constructor
             var space = Space;
             if (_tagLabel.transform.parent != space) _tagLabel.transform.SetParent(space, false);
 
-            // Bir sonraki plaka, mevcut plaka sayisindan SONRAKI ID'yi alir -- Capture
-            // ID'leri FirstTagId'den baslayip instanceId sirasina gore dagitiyor.
-            string s = "TAG " + (TagCapture.FirstTagId + TagCapture.PlateCount(Session.Layout));
+            // Kurali TagCapture veriyor, burada TEKRARLANMIYOR: etiket "TAG 3" derken cevrim
+            // 4 verirse kagidi asan kisi yanlis numarayi asar ve hatanin kaynagi gorunmez olur.
+            string s = "TAG " + TagCapture.NextTagId(Session.Layout);
             if (_tagLabel.text != s) _tagLabel.text = s;
 
             _tagLabel.gameObject.SetActive(true);

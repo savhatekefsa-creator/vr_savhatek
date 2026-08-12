@@ -47,6 +47,16 @@ namespace VRMultiplayer
                      "artı 180.")]
             public float yawDegrees;
 
+            [Tooltip("Bu tag'i ureten PLAKANIN kimligi (PlacedProp.instanceId). 0 = plakadan " +
+                     "gelmedi (tag 0/origin, kamerayla olculmus ya da elle yazilmis tag).\n\n" +
+                     "NEDEN VAR: tag ID'si eskiden plakalarin SIRASINDAN turetiliyordu, yani " +
+                     "ortadaki bir plakayi silmek sonraki TUM tag'lerin ID'sini kaydiriyordu. " +
+                     "Duvardaki kagitlarin uzerinde ise basili, degismez numaralar var — " +
+                     "kayma, kalibrasyonu sessizce yanlis tag'i aramaya gonderirdi.\n\n" +
+                     "Bu alan kimligi SIRAYA degil PLAKAYA baglar: plaka silinince yalnizca " +
+                     "onun tag'i duser, digerleri numarasini korur.")]
+            public uint sourceInstanceId;
+
             [Tooltip("Bu tag KALIBRASYONDA kullanilsin mi.\n\n" +
                      "KAPALIYKEN tag yine gorulur, olculur ve panelde gorunur — ama rig'i " +
                      "OYNATMAZ. Yeni asilan bir tag icin yerlesim degerleri gozle dogrulanana " +
