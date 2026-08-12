@@ -664,6 +664,57 @@ namespace VRMultiplayer.Constructor
                       $"kaydetme {(ok ? "basarili" : "BASARISIZ")}.");
         }
 
+        // ---- TAG'LERI BASKA BIR HARITADAN KOPYALA ------------------------------------------
+        //
+        // Ayni mekanda ikinci harita. Kagitlar duvarda oldugu icin plaka koymak yanlis yol
+        // (bkz. TagCapture.CopyTagsFrom). Kaynak haritanin DOSYASI sunucuda, gozlukte yok —
+        // o yuzden kopyalama da sunucuda olmak zorunda; gozluk yalnizca adi yolluyor.
+
+        public static bool ClientRequestCopyTags(string sourceMapName)
+        {
+            var sync = LocalOwned();
+            if (sync == null || string.IsNullOrEmpty(sourceMapName)) return false;
+            sync.CopyTagsServerRpc(sourceMapName);
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void CopyTagsServerRpc(string sourceMapName, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            string rapor = HostCopyTags(sourceMapName, out bool ok);
+            TagSetupResultOwnerRpc(ok, ok && Session != null && Session.Layout != null
+                ? Session.Layout.tags.Length : 0, rapor);
+        }
+
+        /// <summary>Sunucu/tek-makine yolu; RPC bunu cagiriyor.</summary>
+        public static string HostCopyTags(string sourceMapName, out bool ok)
+        {
+            ok = false;
+            var s = Session;
+            if (s == null || !s.IsActive || s.Layout == null) return "Oturum yok.";
+
+            var kaynak = MapLayout.Load(sourceMapName);
+            if (kaynak == null) return $"'{sourceMapName}' okunamadi.";
+
+            int n = TagCapture.CopyTagsFrom(kaynak, s.Layout);
+            if (n == 0) return $"'{sourceMapName}' haritasinda tag yok.";
+
+            ApplyTagsLocally(s.Layout.tags);
+            BroadcastTags(s.Layout.tags);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"'{sourceMapName}' haritasindan {n} tag kopyalandi.");
+            foreach (var t in s.Layout.tags)
+                sb.AppendLine($"  tag {t.id}   {t.position.x:0.000} {t.position.y:0.000} " +
+                              $"{t.position.z:0.000}  yaw {t.yawDegrees:0.0}   " +
+                              (t.useForCalibration ? "ACIK" : "KAPALI"));
+            sb.AppendLine();
+            sb.AppendLine("Kagitlar duvarda oldugu gibi kaliyor; plaka koymana gerek yok.");
+            ok = true;
+            return sb.ToString();
+        }
+
         /// <summary>Sunucudan donen tag kurulumu sonucu; akis bunu bir kez gosterip temizler.</summary>
         public static string TagSetupMessage;
 

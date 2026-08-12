@@ -58,6 +58,9 @@ namespace VRMultiplayer.UI
         enum TagStep { Yok, Plaka }
         TagStep _tagStep = TagStep.Yok;
 
+        /// <summary>Harita listesi su an TAG KAYNAGI secmek icin acik (bkz. OnMapPicked).</summary>
+        bool _pickingTagSource;
+
         // Aboneligi AppMode.ResetStatics temizler (domain reload kapaliyken abonelik listesi
         // oyunlar arasi tasinir ve ikinci Play'de IKI akis dogardi — PlayerEntryUI'daki ders).
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -220,9 +223,16 @@ namespace VRMultiplayer.UI
             var go = new GameObject("Map List Panel");
             go.transform.SetParent(transform, false);
             _list = go.AddComponent<MapListPanel>();
-            _list.SetTitle(_managing ? "HARİTA YÖNETİCİSİ" : "KAYITLI HARİTALAR");
+            _list.SetTitle(_pickingTagSource ? "TAG'LERİ HANGİ HARİTADAN ALAYIM?"
+                         : _managing ? "HARİTA YÖNETİCİSİ" : "KAYITLI HARİTALAR");
             _list.Picked += OnMapPicked;
-            _list.Back += () => { _managing = false; CloseList(); };
+            _list.Back += () =>
+            {
+                _managing = false;
+                CloseList();
+                // Tag kaynagi secmekten VAZGECILDI: akis yarida kalmasin, plaka yoluna dus.
+                if (_pickingTagSource) { _pickingTagSource = false; AskPlateSetup(); }
+            };
 
             _placed = false;
             _recentering = false;
@@ -230,6 +240,16 @@ namespace VRMultiplayer.UI
 
         void OnMapPicked(string mapName)
         {
+            // TAG KAYNAGI SECIMI: satir bir harita ACMAZ, yalnizca tag yerlesimini verir.
+            // Acik olan yeni harita oldugu gibi kaliyor.
+            if (_pickingTagSource)
+            {
+                _pickingTagSource = false;
+                CloseList();
+                CopyTagsFrom(mapName);
+                return;
+            }
+
             // YONETICI AKISINDA liste kapanmaz mantigi degisir: satir bir haritayi ACMAZ,
             // o haritanin islemlerini acar. "Ekleme/cikarma sinirsiz tekrarlanabilir" kurali
             // bundan cikiyor — islem bitince listeye geri donuluyor, menuye degil.
@@ -297,7 +317,74 @@ namespace VRMultiplayer.UI
         // yani yerlestirmek icin acik bir oturum ve izgara gerekiyor. OpenNew diske hicbir sey
         // yazmadigi ve isimsiz actigi icin bu sira kullaniciya gorunmez.
 
+        /// <summary>Tag tanimli kac harita var — secenegin sunulup sunulmayacagini belirler.</summary>
+        static int TagliHaritaSayisi()
+        {
+            int n = 0;
+            foreach (var e in MapCatalog.All)
+                if (e != null && e.tagCount > 0) n++;
+            return n;
+        }
+
         void BeginTagSetup()
+        {
+            // AYNI MEKANDA IKINCI HARITA. Kagitlar duvarda oldugu icin plaka koymak yanlis
+            // yol: plaka kagidi kovalamak zorunda kalir ve 6,25 cm'lik izgaraya oturamaz
+            // (olculdu: ayni fiziksel tag icin 6,1 cm fark). Once bunu soruyoruz, cunku
+            // "yeniden kur" secilirse geri donusu olmayan fiziksel is basliyor.
+            //
+            // KAYNAK HARITAYI KENDIMIZ SECMIYORUZ. Ilk yazilan hali "en son kaydedilen"i
+            // otomatik oneriyordu; denemede yanlis haritayi sectI, cunku havuz ayari topluca
+            // yapilinca uc haritanin savedAt'i ayni saniyeye dustu. Yanlis mekanin tag'lerini
+            // sessizce kullanmak, bu sistemde bulabilecegimiz en kotu hata — bir tus fazla
+            // basmak buna degmez. Hangi haritanin kagitlarinin duvarda oldugunu bilen kisi
+            // zaten odadaki kisi.
+            if (TagliHaritaSayisi() > 0)
+            {
+                OpenConfirm("TAG'LER ZATEN VAR MI?",
+                    "Bu mekânda daha önce tag kurduysan onları kullan —\n" +
+                    "kâğıtlar duvarda durduğu sürece plaka koymana gerek yok\n" +
+                    "ve değerler daha doğru olur.\n\n" +
+                    "Başka bir mekândaysan YENİDEN KUR.",
+                    "HARİTADAN AL", "YENİDEN KUR", UITheme.AccentCyan, al =>
+                {
+                    if (al) { _pickingTagSource = true; OpenList(); }
+                    else AskPlateSetup();
+                });
+                return;
+            }
+            AskPlateSetup();
+        }
+
+        /// <summary>Tag'leri var olan bir haritadan al; plaka adimi hic calismaz.</summary>
+        void CopyTagsFrom(string sourceMap)
+        {
+            _tagStep = TagStep.Yok;
+
+            if (ConstructorSession.IsMapAuthority)
+            {
+                string rapor = ConstructorSync.HostCopyTags(sourceMap, out bool ok);
+                if (!ok)
+                {
+                    OpenConfirm("KOPYALANAMADI", rapor, "PLAKA KOY", "VAZGEÇ",
+                        UITheme.TeamRedEdge, plaka => { if (plaka) AskPlateSetup(); else EnterEditor(); });
+                    return;
+                }
+                StartCoroutine(Note("TAG'LER KOPYALANDI\n\n" + rapor, 6f));
+            }
+            else if (!ConstructorSync.ClientRequestCopyTags(sourceMap))
+            {
+                StartCoroutine(Note("SUNUCUYA BAĞLI DEĞİL\n\nTag'ler PC'de tutuluyor.", 5f));
+                return;
+            }
+
+            // Tag'ler hazir: isimlendirip insaya gec. Plaka adimi hic acilmiyor.
+            OpenName("HARİTA ADI", null,
+                ad => { DoSave(ad); EnterEditor(); },
+                () => EnterEditor());
+        }
+
+        void AskPlateSetup()
         {
             OpenConfirm("TAG KURULUMU",
                 "Yeni mekân: önce AprilTag'leri yerleştirelim.\n\n" +

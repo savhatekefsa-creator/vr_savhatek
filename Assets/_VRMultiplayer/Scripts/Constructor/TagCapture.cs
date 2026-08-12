@@ -57,6 +57,18 @@ namespace VRMultiplayer.Constructor
         public const string PlateId = "tagisaret";
 
         /// <summary>
+        /// <c>sourceInstanceId</c> icin nisan: "bu tag BU HARITANIN plakalarindan gelmedi ve
+        /// hicbir plakaya baglanmamali."
+        ///
+        /// NEDEN AYRI BIR DEGER: kopyalanan tag'lerde alani 0 birakmak yetmiyordu. 0 ayni
+        /// zamanda "damgalanmamis eski harita" demek ve goc dali o tag'leri SIRAYA gore
+        /// plakalara dagitiyor. Sonuc: baska bir haritadan kopyalanan tag 1'i, bu haritaya
+        /// konan ilk plaka sahipleniyordu -- yani kagidi duvarda duran bir tag'in konumu
+        /// sessizce yeni plakanin konumuyla degistiriliyordu.
+        /// </summary>
+        public const uint ExternalSource = uint.MaxValue;
+
+        /// <summary>
         /// Tag 0 kagidinin MERKEZININ zeminden yuksekligi (metre). SABIT KABUL EDILIYOR.
         ///
         /// NEDEN SABIT: kurulumu yapan kisiye her seferinde bir sayi sordurmak, en cok yapilan
@@ -117,6 +129,49 @@ namespace VRMultiplayer.Constructor
             }
             while (kullanilan.Contains(id)) id++;
             return id;
+        }
+
+        /// <summary>
+        /// Bir haritanin tag yerlesimini BASKASINDAN kopyalar (derin kopya).
+        ///
+        /// NE ZAMAN: ayni mekanda ikinci bir harita kurarken. Kagitlar zaten duvarda oldugu
+        /// icin plaka koymak YANLIS yol — plaka kagidi kovalamak zorunda kalir ve 6,25 cm'lik
+        /// izgaraya oturamaz (olculdu: ayni fiziksel tag icin 6,1 cm fark). Kagitlar
+        /// oynamadigina gore dogru degerler zaten oteki haritada duruyor, ustelik cogu zaman
+        /// kamerayla dogrulanmis halde.
+        ///
+        /// DERIN KOPYA SART: ayni TagEntry nesnelerini paylasmak, bir haritada yapilan
+        /// duzenlemeyi digerine de yazardi. Bu tuzak bu projede bir kez yasandi (sahne ile
+        /// harita ayni nesneyi paylasinca origin yuksekligi sessizce kaymisti).
+        ///
+        /// sourceInstanceId <see cref="ExternalSource"/> olur: kopyalanan tag bu haritanin
+        /// plakalarindan gelmedi. Kaynak haritanin instanceId'sini TASIMAK yanlis olurdu —
+        /// numaralar her haritada 1'den basliyor, yani kaynagin 3 numarali plakasi buradaki
+        /// BASKA bir propla eslesirdi. Sifir birakmak da yanlisti: sifir "damgalanmamis eski
+        /// harita" anlamina geliyor ve goc dali tag'i ilk plakaya baglayabiliyordu.
+        /// </summary>
+        public static int CopyTagsFrom(MapLayout source, MapLayout target)
+        {
+            if (source == null || target == null) return 0;
+            if (source.tags == null || source.tags.Length == 0) return 0;
+
+            var kopya = new List<AprilTagCalibration.TagEntry>();
+            foreach (var t in source.tags)
+            {
+                if (t == null) continue;
+                kopya.Add(new AprilTagCalibration.TagEntry
+                {
+                    id = t.id,
+                    position = t.position,
+                    yawDegrees = t.yawDegrees,
+                    useForCalibration = t.useForCalibration,
+                    sourceInstanceId = t.id == 0 ? 0u : ExternalSource,
+                });
+            }
+            if (kopya.Count == 0) return 0;
+
+            target.tags = kopya.ToArray();
+            return kopya.Count;
         }
 
         /// <summary>Plakadan turemis (yani 0 olmayan) tag sayisi.</summary>
@@ -213,17 +268,25 @@ namespace VRMultiplayer.Constructor
             // Artik her tag onu ureten plakanin instanceId'sini tasiyor. Plaka silinince
             // yalnizca onun tag'i duser.
             var eskiKaynakli = new Dictionary<uint, AprilTagCalibration.TagEntry>();
+            bool disaridanGelenVar = false;
             if (layout.tags != null)
                 foreach (var t in layout.tags)
-                    if (t != null && t.sourceInstanceId != 0) eskiKaynakli[t.sourceInstanceId] = t;
+                {
+                    if (t == null || t.sourceInstanceId == 0) continue;
+                    if (t.sourceInstanceId == ExternalSource) { disaridanGelenVar = true; continue; }
+                    eskiKaynakli[t.sourceInstanceId] = t;
+                }
 
             // GOC: damgalanmamis eski harita. Bu haritadaki tag'ler siradan turemis, yani
             // simdi damgalarsak ayni sirayi kullanmak zorundayiz -- yoksa ilk cevrimde
             // numaralar kayar ve tam da onlemek istedigimiz sey olur. Bir kez damgalandiktan
             // sonra bu dal bir daha calismaz.
-            bool goc = eskiKaynakli.Count == 0;
+            // Disaridan kopyalanmis tag varsa bu harita ESKI degil: goc dali kapali kalmali,
+            // yoksa kopyalanan tag'i ilk plaka sahiplenir.
+            bool goc = eskiKaynakli.Count == 0 && !disaridanGelenVar;
 
             var cozulen = new AprilTagCalibration.TagEntry[plates.Count];
+            var eslesen = new HashSet<AprilTagCalibration.TagEntry>();
             var kullanilan = new HashSet<int> { 0 };   // 0 origin'in
             for (int i = 0; i < plates.Count; i++)
             {
@@ -232,8 +295,31 @@ namespace VRMultiplayer.Constructor
                     eskiTag = FindTag(layout.tags, FirstTagId + i);   // eski sira kurali
 
                 cozulen[i] = eskiTag;
-                if (eskiTag != null) kullanilan.Add(eskiTag.id);
+                if (eskiTag != null) { kullanilan.Add(eskiTag.id); eslesen.Add(eskiTag); }
             }
+
+            // PLAKASI OLMAYAN TAG'LER KORUNUR. Cevrim ciktiyi plakalardan kuruyordu, yani
+            // hicbir plakanin sahiplenmedigi tag SILINIYORDU. Bu, tag'leri baska bir
+            // haritadan kopyalayip (ayni mekan, kagitlar zaten duvarda) sonra tek bir plaka
+            // koymayi imkansiz kiliyordu: kopyalananlarin hepsi ucuyordu.
+            //
+            // AYIRT EDICI KURAL sourceInstanceId:
+            //   gercek bir instanceId ama plakasi yok -> plakasi SILINMIS, tag de dusmeli
+            //   ExternalSource                        -> kopyalanmis, HER ZAMAN korunur
+            //   0 ve eslesmemis (tag 0 haric)         -> kamerayla olculmus -> korunur
+            // Goc dalinda sourceInstanceId == 0 olanlar konumsal eslesmeyle "eslesen"e
+            // giriyor, yani yanlislikla ikilenmiyorlar.
+            var korunan = new List<AprilTagCalibration.TagEntry>();
+            if (layout.tags != null)
+                foreach (var t in layout.tags)
+                {
+                    if (t == null || t.id == 0 || eslesen.Contains(t)) continue;
+                    bool plakadanGelmemis = t.sourceInstanceId == 0 ||
+                                            t.sourceInstanceId == ExternalSource;
+                    if (!plakadanGelmemis) continue;   // plakasi silinmis -> dusuyor
+                    korunan.Add(t);
+                    kullanilan.Add(t.id);              // yeni plaka bu numarayi CALMASIN
+                }
 
             // Eslesmeyen plakalara EN KUCUK BOS ID. Serbest kalan numarayi yeniden kullanmak
             // dogru: basili tag'ler fiziksel bir envanter, indirdigin kagidi baska yere
@@ -260,6 +346,15 @@ namespace VRMultiplayer.Constructor
                               $"{zero.position.x:0.000} {zero.position.y:0.000} {zero.position.z:0.000}");
             else
                 sb.AppendLine("  tag 0   YOK — origin tanimi bulunamadi, once onu ayarla");
+
+            // Plakasiz tag'ler ciktiya once giriyor ki rapor ID sirasinda okunsun.
+            foreach (var t in korunan)
+            {
+                tags.Add(t);
+                sb.AppendLine($"  tag {t.id}   (plakadan degil — korundu)   " +
+                              $"{t.position.x:0.000} {t.position.y:0.000} {t.position.z:0.000}  " +
+                              $"yaw {t.yawDegrees:0.0}   {(t.useForCalibration ? "ACIK" : "KAPALI")}");
+            }
 
             for (int i = 0; i < plates.Count; i++)
             {
