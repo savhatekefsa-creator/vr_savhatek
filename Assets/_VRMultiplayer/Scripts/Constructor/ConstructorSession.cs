@@ -467,6 +467,16 @@ namespace VRMultiplayer.Constructor
                 InvalidatePlaceable();
             }
 
+            // DUNYA GORUNUMU. Burada duruyor cunku Adopt TEK HUNI: yerel harita acma da
+            // (yukaridaki uc cagri) sunucudan gelen harita da (AdoptJson) buraya dusuyor.
+            // Tema uygulamasini menuye ya da oyuncu moduna koymak, ayni isi iki yerde
+            // tutmak ve birini unutunca "PC'de kiyamet, gozlukte ogle vakti" demek olurdu.
+            //
+            // KOSULSUZ, insa modunda bile: orada passthrough sanal dunyayi zaten gizliyor,
+            // yani gorunur bir etkisi yok — ama insa modundan cikildiginda tema hazir
+            // durur, ayrica bir tetikleyiciye gerek kalmaz.
+            WorldTheme.Apply(Layout.themeId ?? "");
+
             // Once dolulugu isle, SONRA sahneyi kur: boylece kayitli haritadaki cakisan bir
             // yerlestirme (elle duzenlenmis JSON, eski kutuphane) sessizce ust uste binmez.
             int applied = 0;
@@ -1417,6 +1427,35 @@ namespace VRMultiplayer.Constructor
                 Layout.paletteId = paletteId;
                 MarkDirty();
             }
+        }
+
+        // ------------------------------------------------------------- theme
+
+        /// <summary>The world look on screen right now. Empty = the scene's own look.</summary>
+        public string ActiveThemeId => WorldTheme.ActiveId;
+
+        /// <summary>
+        /// Changes the map's world look and puts it on screen immediately.
+        ///
+        /// WRITES THE MAP, unlike a passing view setting: <see cref="MapLayout.themeId"/> is
+        /// what every other peer will read, so a theme that is only applied locally would look
+        /// right to the person who picked it and wrong to everyone else. Marking dirty is the
+        /// same reason — leaving it unsaved means the choice survives until the next map load
+        /// and no longer.
+        ///
+        /// The SERVER is the one that broadcasts (see <see cref="ConstructorSync"/>); a client
+        /// calling this changes only its own view until the layout goes round, which is why the
+        /// theme picker belongs on the host.
+        /// </summary>
+        public void SetTheme(string themeId)
+        {
+            themeId = themeId ?? "";
+            if (Layout != null && (Layout.themeId ?? "") != themeId)
+            {
+                Layout.themeId = themeId;
+                MarkDirty();
+            }
+            WorldTheme.Apply(themeId);
         }
 
         /// <summary>
