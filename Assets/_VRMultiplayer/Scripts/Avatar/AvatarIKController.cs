@@ -415,6 +415,24 @@ namespace VRMultiplayer
             return Quaternion.LookRotation(fingersW, palmW) * basisInv * Quaternion.Euler(trimEuler);
         }
 
+        /// <summary>
+        /// Bilek, silah TUTULMADAN yalnizca kumandadan turetilseydi hangi donuse
+        /// sahip olurdu. <see cref="FirstPersonHandView"/> bunu weld'in bilek
+        /// hedefiyle karsilastirip aradaki farki (tutusun ele verdigi donus
+        /// duzeltmesi) kendi gorseline uygular. Boylece FP eli, avatarin bilek
+        /// kemigi konvansiyonunu hic bilmeden dogru sarilir.
+        /// LateUpdate'teki weld'siz dal ile AYNI hesap - degistirirsen ikisini
+        /// birlikte degistir.
+        /// </summary>
+        public Quaternion ControllerWristRotation(bool left)
+        {
+            Transform src = left ? leftHandSource : rightHandSource;
+            if (src == null) return Quaternion.identity;
+            Vector3 trim = left ? leftGripEulerOffset : rightGripEulerOffset;
+            bool ok = left ? _leftRotOK : _rightRotOK;
+            return ok ? HandRotation(src, left, trim) : src.rotation * Quaternion.Euler(trim);
+        }
+
         // --- Height calibration (read by AvatarFitDebug) ---
         public bool FitLocked => _fitLocked;
         public float StandingHeight => _standingH;

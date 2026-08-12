@@ -51,8 +51,10 @@ namespace VRMultiplayer
         GameObject _avatar;      // WeaponHandWeld calisma aninda buraya ekleniyor
         bool _left;
         WeaponHandWeld _weld;
-        float _weight;           // 0 = kumanda, 1 = silah ankraji
+        AvatarIKController _ik;
+        float _weight;                                    // 0 = kumanda, 1 = silah ankraji
         Vector3 _lastAnchor;
+        Quaternion _gripDelta = Quaternion.identity;      // tutusun ele verdigi donus duzeltmesi
 
         /// <summary>
         /// Iki kumanda tasiyicisinin altina el gorselini kurar. Yalnizca SAHIP
@@ -112,10 +114,25 @@ namespace VRMultiplayer
                 _weld = _avatar.GetComponentInChildren<WeaponHandWeld>();
 
             // Silah tutuluyorsa el silahin uzerindeki noktaya oturur. Destek eli
-            // icin bu, profildeki ray noktasidir - el kundaktan AYRILMAZ. Donus
-            // kumandadan gelmeye devam eder: elin nereye baktigi oyuncunun
-            // bilegine ait, silaha degil.
+            // icin bu, profildeki ray noktasidir - el kundaktan AYRILMAZ.
             bool welded = _weld != null && _weld.TryGetHandAnchor(_left, out _lastAnchor);
+
+            // DONUS de silaha gore olmali: Quest'in grip pose ileri ekseni nisan
+            // hattindan ~56 derece asagida (olculmus kalibrasyon), yani ham kumanda
+            // donusu kullanilirsa avuc ve basparmak silahi SARMAZ.
+            //
+            // Bilek hedefinin donusunu dogrudan alamayiz - o, avatarin bilek kemigi
+            // konvansiyonunda. Bunun yerine FARKI aliyoruz: weld'in bileğe verdigi
+            // donus ile ayni bilegin silahsiz (yalnizca kumandadan) alacagi donus
+            // arasindaki delta. Delta dunya uzayinda bir duzeltmedir, iki taraf da
+            // ayni kemik cercevesinde oldugu icin konvansiyon sadelesir. Onu
+            // kumandanin donusune uygulayinca gorsel dogru sarilir.
+            if (welded)
+            {
+                if (_ik == null && _avatar != null) _ik = _avatar.GetComponentInChildren<AvatarIKController>();
+                if (_ik != null && _weld.TryGetWristTarget(_left, out _, out Quaternion wristRot))
+                    _gripDelta = wristRot * Quaternion.Inverse(_ik.ControllerWristRotation(_left));
+            }
 
             float target = welded ? 1f : 0f;
             if (Application.isPlaying && BlendSeconds > 0f)
@@ -131,9 +148,11 @@ namespace VRMultiplayer
                 return;
             }
 
+            // Duzeltme de agirlikla harmanlanir: agirlik 0'a dusunce donus tam
+            // olarak kumandanin donusudur.
             _pose.SetPositionAndRotation(
                 Vector3.Lerp(_carrier.position, _lastAnchor, _weight),
-                _carrier.rotation);
+                Quaternion.Slerp(_carrier.rotation, _gripDelta * _carrier.rotation, _weight));
         }
 
         static void Piece(GameObject parent, string name, Vector3 localPos, Vector3 scale, Color color)
