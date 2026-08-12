@@ -181,6 +181,12 @@ namespace VRMultiplayer.UI
         {
             EnsurePointer();
 
+            // KATALOGU SIMDIDEN ISTE. Gozlukte liste ag uzerinden geliyor ve "yeni harita"
+            // secilir secilmez tag kaynagi sorusu icin gerekiyor. Menu acilirken istemek,
+            // oyuncu karar verene kadar cevabin gelmis olmasini sagliyor; beklemeyi
+            // BeginTagSetupRoutine yine de yapiyor ama pratikte hic beklemiyor.
+            MapCatalog.Refresh();
+
             var go = new GameObject("Creative Menu Panel");
             go.transform.SetParent(transform, false);
             _menu = go.AddComponent<CreativeMenuPanel>();
@@ -326,8 +332,29 @@ namespace VRMultiplayer.UI
             return n;
         }
 
-        void BeginTagSetup()
+        /// <summary>Katalogun gozluge ulasmasi icin beklenecek en fazla sure (sn).</summary>
+        const float CatalogWaitSeconds = 1.5f;
+
+        void BeginTagSetup() => StartCoroutine(BeginTagSetupRoutine());
+
+        IEnumerator BeginTagSetupRoutine()
         {
+            // KATALOG GOZLUKTE ANINDA GELMIYOR. MapCatalog.Refresh istemcide yalnizca ISTEK
+            // yolluyor, liste cevap gelince doluyor (MapCatalog.Refresh: "istemci kendi
+            // diskine bakmaz"). Senkron sormak secenegin cihazda HIC cikmamasina yol
+            // aciyordu -- sahada goruldu: "yeni haritadan sonra sadece BASLA/ATLA vardi".
+            MapCatalog.Refresh();
+            if (!ConstructorSession.IsMapAuthority)
+            {
+                float bitis = Time.time + CatalogWaitSeconds;
+                while (Time.time < bitis && MapCatalog.All.Count == 0) yield return null;
+            }
+
+            // BILMIYORSAK SORUYORUZ. Katalog hala bossa bu "harita yok" demek degil, "cevap
+            // gelmedi" demek olabilir; secenegi gizlemek onu sessizce kaybettirir. Liste bos
+            // cikarsa GERI tusu plaka yoluna dusuruyor, yani cikmaz sokak degil.
+            bool biliyoruz = ConstructorSession.IsMapAuthority || MapCatalog.All.Count > 0;
+
             // AYNI MEKANDA IKINCI HARITA. Kagitlar duvarda oldugu icin plaka koymak yanlis
             // yol: plaka kagidi kovalamak zorunda kalir ve 6,25 cm'lik izgaraya oturamaz
             // (olculdu: ayni fiziksel tag icin 6,1 cm fark). Once bunu soruyoruz, cunku
@@ -339,7 +366,7 @@ namespace VRMultiplayer.UI
             // sessizce kullanmak, bu sistemde bulabilecegimiz en kotu hata — bir tus fazla
             // basmak buna degmez. Hangi haritanin kagitlarinin duvarda oldugunu bilen kisi
             // zaten odadaki kisi.
-            if (TagliHaritaSayisi() > 0)
+            if (!biliyoruz || TagliHaritaSayisi() > 0)
             {
                 OpenConfirm("TAG'LER ZATEN VAR MI?",
                     "Bu mekânda daha önce tag kurduysan onları kullan —\n" +
@@ -351,7 +378,7 @@ namespace VRMultiplayer.UI
                     if (al) { _pickingTagSource = true; OpenList(); }
                     else AskPlateSetup();
                 });
-                return;
+                yield break;
             }
             AskPlateSetup();
         }
