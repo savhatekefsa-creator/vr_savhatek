@@ -113,9 +113,22 @@ namespace VRMultiplayer
             if (_weld == null && _avatar != null)
                 _weld = _avatar.GetComponentInChildren<WeaponHandWeld>();
 
-            // Silah tutuluyorsa el silahin uzerindeki noktaya oturur. Destek eli
-            // icin bu, profildeki ray noktasidir - el kundaktan AYRILMAZ.
-            bool welded = _weld != null && _weld.TryGetHandAnchor(_left, out _lastAnchor);
+            // ANA EL silah tutarken silahin kabza ankrajina oturur. Silah zaten ana
+            // kumandanin ucunda oldugu icin bu, kumandadan sapma DEMEK DEGIL -
+            // cihazda olculdu: her silahta el<->kumanda 0-7 mm.
+            //
+            // DESTEK ELI kasten haric: profillerdeki destek rayi NOKTA-ray
+            // (baslangic == bitis), yani el silah uzerinde tek bir sabit noktaya
+            // cakiliyordu. Cihaz olcumu bunun bedelini gosterdi - gorsel el,
+            // oyuncunun gercek elinden 12 silahta 81-212 mm uzaga isinlaniyor ve
+            // 40-159 derece donuyordu. Kullanicinin mutlak kurali ("kumanda
+            // neredeyse EL ORADA") bunu yener: destek eli kumandada kalir. Iki elle
+            // tutarken oyuncunun eli zaten kundagin uzerindedir, dolayisiyla dogal
+            // gorunur. Avatarin (uzak oyuncularin gordugu) destek eli WeaponHandWeld
+            // ile silaha kaynakli kalmaya devam eder - orasi degismedi.
+            bool welded = _weld != null
+                       && _weld.TryGetHandAnchor(_left, out _lastAnchor, out bool isSupport)
+                       && !isSupport;
 
             // DONUS de silaha gore olmali: Quest'in grip pose ileri ekseni nisan
             // hattindan ~56 derece asagida (olculmus kalibrasyon), yani ham kumanda

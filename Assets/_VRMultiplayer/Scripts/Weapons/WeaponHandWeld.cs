@@ -161,12 +161,13 @@ namespace VRMultiplayer.Weapons
         /// avatarin bilek kemigi konvansiyonu yok, dolayisiyla FP gorseli icin
         /// donus donusturmesi gerekmez.
         /// </summary>
-        public bool TryGetHandAnchor(bool left, out Vector3 pos)
+        public bool TryGetHandAnchor(bool left, out Vector3 pos, out bool isSupport)
         {
-            pos = Vector3.zero;
+            pos = Vector3.zero; isSupport = false;
             ref HandWeld w = ref (left ? ref _left : ref _right);
             if (!w.active || w.fadingOut) return false;
             if (w.weapon == null || w.profile == null) return false;
+            isSupport = w.isSupport;
             ComputeAnchor(ref w, left, out pos, out _);
             return true;
         }
