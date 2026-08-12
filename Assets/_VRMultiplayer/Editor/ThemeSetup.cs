@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEngine;
 using VRMultiplayer;
 using VRMultiplayer.Constructor;
+using static VRMultiplayer.EditorTools.ProceduralNoise;
 
 namespace VRMultiplayer.EditorTools
 {
@@ -329,102 +330,6 @@ namespace VRMultiplayer.EditorTools
             tex.SetPixels(px);
             tex.Apply();
             return tex;
-        }
-
-        /// <summary>
-        /// An fBm field stretched to fill 0..1.
-        ///
-        /// THE STRETCH IS THE POINT. Raw fBm has a narrow, noise-dependent spread, so a threshold
-        /// written as a constant means something different for every frequency and octave count —
-        /// and usually means "never". Normalising first makes the thresholds below read as what
-        /// they look like: fractions of the range that actually occurs.
-        /// </summary>
-        static float[] NoiseField(int size, float freq, int octaves, float seed)
-        {
-            var f = new float[size * size];
-            float min = float.MaxValue, max = float.MinValue;
-
-            for (int y = 0; y < size; y++)
-            {
-                float v = y / (float)size;
-                for (int x = 0; x < size; x++)
-                {
-                    float n = Fbm(x / (float)size, v, freq, octaves, seed);
-                    f[y * size + x] = n;
-                    if (n < min) min = n;
-                    if (n > max) max = n;
-                }
-            }
-
-            float span = Mathf.Max(1e-5f, max - min);
-            for (int i = 0; i < f.Length; i++) f[i] = (f[i] - min) / span;
-            return f;
-        }
-
-        /// <summary>
-        /// Ridged noise, normalised: peaks where the underlying field crosses its own middle,
-        /// which is what turns blobs into the connected thin lines a crack pattern needs.
-        /// </summary>
-        static float[] RidgeField(int size, float freq, int octaves, float seed)
-        {
-            var f = NoiseField(size, freq, octaves, seed);
-            float min = float.MaxValue, max = float.MinValue;
-
-            for (int i = 0; i < f.Length; i++)
-            {
-                float r = 1f - Mathf.Abs(f[i] * 2f - 1f);
-                f[i] = r;
-                if (r < min) min = r;
-                if (r > max) max = r;
-            }
-
-            float span = Mathf.Max(1e-5f, max - min);
-            for (int i = 0; i < f.Length; i++) f[i] = (f[i] - min) / span;
-            return f;
-        }
-
-        /// <summary>
-        /// Smooth 0..1 threshold — 0 below <paramref name="edge0"/>, 1 above
-        /// <paramref name="edge1"/>, eased in between.
-        ///
-        /// NOT <see cref="Mathf.SmoothStep"/>, and this is exactly the trap that made the first
-        /// generated floor come out as one flat brown. Unity's SmoothStep(from, to, t) is an
-        /// INTERPOLATION — it returns a value between from and to — while every use below wants
-        /// the GLSL meaning: "how far past this edge is x". Written with Unity's version,
-        /// SmoothStep(0.86, 0.99, crack) never returns less than 0.86, so the crack colour was
-        /// blended over the ENTIRE texture at near-full strength instead of along thin lines,
-        /// and every other layer did the same. The two have the same name and different jobs.
-        /// </summary>
-        static float Step01(float edge0, float edge1, float x)
-        {
-            float t = Mathf.Clamp01((x - edge0) / Mathf.Max(1e-5f, edge1 - edge0));
-            return t * t * (3f - 2f * t);
-        }
-
-        /// <summary>Kesintisiz Perlin: alan genisligi kadar kaydirilmis dort kopyanin harmani.</summary>
-        static float TileNoise(float u, float v, float freq, float seed)
-        {
-            float x = u * freq, y = v * freq;
-            float a = Mathf.PerlinNoise(x + seed, y + seed);
-            float b = Mathf.PerlinNoise(x - freq + seed, y + seed);
-            float c = Mathf.PerlinNoise(x + seed, y - freq + seed);
-            float d = Mathf.PerlinNoise(x - freq + seed, y - freq + seed);
-            return a * (1f - u) * (1f - v) + b * u * (1f - v)
-                 + c * (1f - u) * v + d * u * v;
-        }
-
-        /// <summary>Kesintisizligi koruyan cok katmanli gurultu.</summary>
-        static float Fbm(float u, float v, float freq, int octaves, float seed)
-        {
-            float sum = 0f, amp = 1f, norm = 0f;
-            for (int i = 0; i < octaves; i++)
-            {
-                sum += TileNoise(u, v, freq, seed + i * 37f) * amp;
-                norm += amp;
-                freq *= 2f;
-                amp *= 0.5f;
-            }
-            return norm > 0f ? sum / norm : 0f;
         }
 
         // ------------------------------------------------------------- 49b / 49c

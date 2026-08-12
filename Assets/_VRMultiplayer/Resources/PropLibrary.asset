@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 836b73326beb1724c8de15b779af465e, type: 3}
   m_Name: PropLibrary
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Constructor.PropLibrary
-  contentVersion: 22
+  contentVersion: 23
   schemaVersion: 1
   sourceFolders:
   - Assets/P A I N T B A L L S E R I ES MK/Content/Prefabs
@@ -551,6 +551,19 @@ MonoBehaviour:
     hiddenInPalette: 1
     networked: 0
     height: 2.198786
+  - id: rubble_patch
+    displayName: Rubble_Patch
+    category: 3
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 3549668150613826716, guid: a260e31727847254698e0ca72f525a6c, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1.1751966, y: 1.1720896}
+    fitToFootprint: 1
+    freeRotation: 1
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.11672569
   - id: ruined_wall
     displayName: Ruined_Wall
     category: 1
@@ -681,6 +694,19 @@ MonoBehaviour:
     hiddenInPalette: 0
     networked: 0
     height: 2.2
+  - id: scorch_mark
+    displayName: Scorch_Mark
+    category: 3
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 6868695620300616273, guid: 09d12f8199a2bd746a0fcb78520cf894, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1.4, y: 1.4}
+    fitToFootprint: 1
+    freeRotation: 1
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.05
   - id: scorched_tree
     displayName: Scorched_Tree
     category: 2
