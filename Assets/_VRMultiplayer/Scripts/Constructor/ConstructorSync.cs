@@ -179,30 +179,6 @@ namespace VRMultiplayer.Constructor
             return null;
         }
 
-        /// <summary>
-        /// Sahibi SUNUCU OLMAYAN ilk tasiyici — <see cref="SendLayout"/> icin.
-        ///
-        /// NEDEN AYRI: SendLayout ilk satirinda "OwnerClientId == ServerClientId" ise hicbir
-        /// sey gondermeden cikiyor (sunucunun kendi oyuncu objesine harita yollamak anlamsiz).
-        /// <see cref="AnySpawned"/> ise listedeki ILK objeyi doner ve host'un kendi oyuncu
-        /// objesini elemez. Dedicated server kurulumunda kaza eseri dogru calisiyordu —
-        /// orada sunucunun oyuncu objesi hic yok — ama HOST+OYUNCU kurulumunda harita
-        /// degisikligi istemcilere HIC ulasmazdi ve bunun bir belirtisi olmazdi.
-        ///
-        /// Hangi obje tasidiginin alicilara etkisi yok: parcalar
-        /// <see cref="LayoutChunkClientRpc"/> ile gidiyor ve o SendTo.NotServer.
-        /// </summary>
-        static ConstructorSync AnyClientOwned()
-        {
-            for (int i = 0; i < Spawned.Count; i++)
-            {
-                var s = Spawned[i];
-                if (s != null && s.IsSpawned && s.OwnerClientId != NetworkManager.ServerClientId)
-                    return s;
-            }
-            return null;
-        }
-
         /// <param name="preferredId">
         /// Geri alma yolunda propun ESKI kimligi; 0 = yeni kimlik ver. Sunucu bunu dogrular
         /// (bkz. <see cref="ConstructorSession.ResolveInstanceId"/>) — bayat bir istek yasayan
@@ -571,11 +547,12 @@ namespace VRMultiplayer.Constructor
             }
 
             TagCapture.Enable(layout, out int _);
-            ApplyTagsLocally(layout);
+            ApplyTagsLocally(layout.tags);
 
-            // Bagli gozluklere yeni yerlesimi duyur. Onlarda Adopt kosacagi icin
-            // ApplyMapLayout kendiliginden cagriliyor; sunucuda kosmadigi icin yukarida elle.
-            StartCoroutine(SendLayout(true));
+            // Haritayi degil YALNIZCA tag'leri yolluyoruz: proplar plakalar konurken zaten
+            // senkron oldu. Bkz. BroadcastTags — parcali gonderimde tag'ler birkac kare
+            // yolda kaliyordu ve o pencerede kalibre olan gozluk bayat listeyle hizalaniyordu.
+            BroadcastTags(layout.tags);
 
             TagSetupResultOwnerRpc(true, layout.tags.Length, rapor);
         }
@@ -588,10 +565,10 @@ namespace VRMultiplayer.Constructor
         /// Layout.tags'i yerinde degistiriyoruz; elle cagirmazsak tag'ler diske yazilir ama
         /// kalibrasyon o oturum boyunca eski yerlesimle calisir ve sebebi hicbir yerde gorunmez.
         /// </summary>
-        static void ApplyTagsLocally(MapLayout layout)
+        static void ApplyTagsLocally(AprilTagCalibration.TagEntry[] tags)
         {
             if (AprilTagCalibration.Instance != null)
-                AprilTagCalibration.Instance.ApplyMapLayout(layout.tags);
+                AprilTagCalibration.Instance.ApplyMapLayout(tags);
         }
 
         // ---- OGRENME MODUNDAN GELEN TAG DUZENLEMESI ---------------------------------------
@@ -605,6 +582,48 @@ namespace VRMultiplayer.Constructor
 
         [Serializable]
         class TagWrapper { public AprilTagCalibration.TagEntry[] tags; }
+
+        /// <summary>
+        /// Yeni tag yerlesimini butun istemcilere TEK RPC ile yollar.
+        ///
+        /// NEDEN HARITAYI YOLLAMIYORUZ: tag kurulumu bittiginde haritanin PROP'LARI zaten
+        /// senkron -- plakalar konurken her yerlestirme kendi RPC'siyle gitti. Yeni olan tek
+        /// sey tag dizisi. Buna ragmen SendLayout(true) ile 14 KB'lik haritayi yeniden
+        /// yolluyorduk: 3000 baytlik parcalara boluniyor ve 8 parcada bir kare devrediyor,
+        /// yani tag'ler birkac kare boyunca yolda kaliyordu. O pencerede kalibre olan bir
+        /// gozluk BAYAT tag listesiyle hizalanir ve yanlis cerceveye oturur.
+        ///
+        /// Tag dizisi ~330 bayt (3 tag): tek RPC'ye sigiyor, parcalanma ve bekleme yok.
+        /// </summary>
+        static void BroadcastTags(AprilTagCalibration.TagEntry[] tags)
+        {
+            if (tags == null || tags.Length == 0) return;
+            var sync = AnySpawned();
+            if (sync == null) return;   // bagli kimse yok — haber verilecek taraf da yok
+            sync.TagLayoutClientRpc(JsonUtility.ToJson(new TagWrapper { tags = tags }));
+        }
+
+        [Rpc(SendTo.NotServer)]
+        void TagLayoutClientRpc(string json)
+        {
+            TagWrapper w;
+            try { w = JsonUtility.FromJson<TagWrapper>(json); }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[ConstructorSync] Tag yerlesimi okunamadi: " + e.Message);
+                return;
+            }
+            // BOS/BOZUK YERLESIM UYGULANMAZ: calisan bir cerceveyi silerdi.
+            if (w == null || w.tags == null || w.tags.Length == 0) return;
+
+            // AYNI DIZI iki yere: Layout.tags ile kalibrasyonun yerlesimi ayrisirsa sonraki
+            // kaydetme, kalibrasyonun kullandigindan baska bir sey yazar.
+            if (Session != null && Session.IsActive && Session.Layout != null)
+                Session.Layout.tags = w.tags;
+
+            ApplyTagsLocally(w.tags);
+            Debug.Log($"[ConstructorSync] Tag yerlesimi sunucudan alindi ({w.tags.Length} tag).");
+        }
 
         public static bool ClientRequestTagLayout(AprilTagCalibration.TagEntry[] tags)
         {
@@ -631,13 +650,15 @@ namespace VRMultiplayer.Constructor
             if (w == null || w.tags == null || w.tags.Length == 0) return;
 
             Session.Layout.tags = w.tags;
-            ApplyTagsLocally(Session.Layout);
+            ApplyTagsLocally(w.tags);
 
             bool ok = Session.Save();
             SaveResultOwnerRpc(ok, Session.PlacedCount);
 
-            // Diger gozlukler de gorsun: tag'ler haritayla birlikte tasiniyor.
-            StartCoroutine(SendLayout(true));
+            // Diger gozlukler de gorsun. Gonderen istemci de aliyor ve kendi yerlesimini
+            // yeniden uyguluyor: veri ayni oldugu icin zararsiz, ustelik dogru -- tag'in
+            // ILAN EDILEN yeri degistiginde cerceve iliskisi de degisti, yeniden oturmali.
+            BroadcastTags(w.tags);
 
             Debug.Log($"[ConstructorSync] Tag yerlesimi istemciden alindi ({w.tags.Length} tag), " +
                       $"kaydetme {(ok ? "basarili" : "BASARISIZ")}.");
@@ -670,13 +691,8 @@ namespace VRMultiplayer.Constructor
             if (s.Layout.tags == null || s.Layout.tags.Length == 0) return rapor;
 
             TagCapture.Enable(s.Layout, out int _);
-            ApplyTagsLocally(s.Layout);
-
-            // AnySpawned DEGIL: bkz. AnyClientOwned. Host+oyuncu kurulumunda AnySpawned
-            // host'un kendi objesini dondurebilir ve SendLayout sessizce hicbir sey yollamaz.
-            // Bagli istemci yoksa null doner ve yayin atlanir -- haber verilecek kimse yok.
-            var sync = AnyClientOwned();
-            if (sync != null) sync.StartCoroutine(sync.SendLayout(true));
+            ApplyTagsLocally(s.Layout.tags);
+            BroadcastTags(s.Layout.tags);
 
             ok = true;
             return rapor;
@@ -1042,6 +1058,14 @@ namespace VRMultiplayer.Constructor
         IEnumerator SendLayout(bool toAll)
         {
             // Sunucunun kendi oyuncu objesi yok; bu yalnizca istemci objeleri icin anlamli.
+            //
+            // TUZAK: bu satir yuzunden SendLayout, HOST'un kendi oyuncu objesi uzerinden
+            // cagrilirsa hicbir sey gondermeden ve hicbir sey soylemeden ciker. Cagiran taraf
+            // "yolladim" saniyor. Dedicated server'da hic yasanmaz (sunucunun oyuncu objesi
+            // yok), host+oyuncu kurulumunda sessizce yasanir. Cagirmadan once tasiyicinin
+            // sahibinin ISTEMCI oldugundan emin olun; yalnizca istemcilere ulasmasi yeten
+            // kucuk veriler icin SendTo.NotServer'li dogrudan bir RPC daha guvenli
+            // (bkz. BroadcastTags).
             if (OwnerClientId == NetworkManager.ServerClientId) yield break;
 
             // BAGLANTI ONAYININ ORTASINA RPC SOKMA.
