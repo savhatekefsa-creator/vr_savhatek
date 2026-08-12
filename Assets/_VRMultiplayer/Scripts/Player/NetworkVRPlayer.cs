@@ -108,15 +108,14 @@ namespace VRMultiplayer
                     // (FirstPersonHandView) ve avatarin kendi govdesi tamamen kapatilir.
                     // Uzak oyuncular tam askeri gormeye devam eder; orada kural terstir,
                     // kol uzayamaz ve sinirinda dumduz kalir (ArmReach).
-                    foreach (var r in remoteAvatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    // TUM renderer turleri - yalnizca SkinnedMeshRenderer DEGIL. Avatarda
+                    // deri kemiga bagli olmayan parcalar da var (kol saati ekrani, isim
+                    // etiketi); bunlar kapatilmayinca karakterden geriye gorunen bir
+                    // artik kaliyor. Dahasi o parcalar avatarin BILEK kemigini takip
+                    // ediyor, yani kolun erisim siniri yuzunden kumandadan geride
+                    // kalip goruste yuzuyorlar. Tur bazli filtre yerine hepsi.
+                    foreach (var r in remoteAvatar.GetComponentsInChildren<Renderer>(true))
                         r.enabled = false;
-
-                    // Kendi isim etiketini de gorme.
-                    foreach (var tm in remoteAvatar.GetComponentsInChildren<TextMesh>(true))
-                    {
-                        var tr = tm.GetComponent<MeshRenderer>();
-                        if (tr != null) tr.enabled = false;
-                    }
 
                     // Tasiyicilarin kendi mesh'leri yukarida HideRenderers ile zaten
                     // kapatildi; el gorseli ondan SONRA kuruluyor ki kapanmasin.
