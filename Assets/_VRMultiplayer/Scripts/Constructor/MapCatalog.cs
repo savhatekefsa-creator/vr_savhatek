@@ -40,6 +40,15 @@ namespace VRMultiplayer.Constructor
             public int propCount;
             public string savedAt;
 
+            /// <summary>
+            /// Bu haritanin PLAKADAN TUREMIS tag sayisi (origin haric).
+            ///
+            /// Listede gosterilmiyor; "ayni mekanda ikinci bir harita kuruyorum, tag'leri
+            /// zaten tanimli" durumunu dosyalari acmadan bulabilmek icin var. Gozlukte
+            /// harita dosyalari yok, yani bu bilgi katalogda tasinmazsa oraya hic ulasmaz.
+            /// </summary>
+            public int tagCount;
+
             /// <summary>Havuza girebilir mi? Giremiyorsa sebebi <see cref="poolBlockReason"/>.</summary>
             public bool poolEligible;
             public string poolBlockReason;
@@ -476,6 +485,7 @@ namespace VRMultiplayer.Constructor
                 inPool = m.inPool,
                 propCount = m.Count,
                 savedAt = m.savedAt,
+                tagCount = TagCapture.PlateDerivedTagCount(m),
                 poolEligible = ok,
                 poolBlockReason = sebep,
             };

@@ -1,13 +1,13 @@
 {
-    "version": 1,
+    "version": 3,
     "name": "HARITA2",
     "createdBy": "HATICE",
-    "savedAt": "2026-08-10 10:36:35",
-    "libraryVersion": 8,
+    "savedAt": "2026-08-12 14:53:44",
+    "libraryVersion": 7,
     "cellSize": 0.0625,
     "levelHeight": 0.5,
     "buildMargin": 25.0,
-    "inPool": true,
+    "inPool": false,
     "builtForRoom": {
         "version": 1,
         "capturedAt": "",
@@ -44,16 +44,7 @@
                 "z": 0.0
             },
             "yawDegrees": 180.0,
-            "useForCalibration": true
-        },
-        {
-            "id": 2,
-            "position": {
-                "x": -2.511815071105957,
-                "y": 1.4999090433120728,
-                "z": -0.5048270225524902
-            },
-            "yawDegrees": -88.18314361572266,
+            "sourceInstanceId": 0,
             "useForCalibration": true
         },
         {
@@ -61,9 +52,21 @@
             "position": {
                 "x": -2.53125,
                 "y": 1.5,
-                "z": -3.25
+                "z": -0.6875
             },
-            "yawDegrees": -89.723388671875,
+            "yawDegrees": -90.0,
+            "sourceInstanceId": 4294967295,
+            "useForCalibration": true
+        },
+        {
+            "id": 2,
+            "position": {
+                "x": -2.53125,
+                "y": 1.5,
+                "z": -3.3125
+            },
+            "yawDegrees": -90.0,
+            "sourceInstanceId": 4294967295,
             "useForCalibration": true
         }
     ],
@@ -113,7 +116,7 @@
             "cellX": 544,
             "cellZ": 498,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 250,
             "heightPct": 120,
             "instanceId": 14
@@ -123,7 +126,7 @@
             "cellX": 544,
             "cellZ": 538,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 106,
             "heightPct": 120,
             "instanceId": 15
@@ -133,7 +136,7 @@
             "cellX": 529,
             "cellZ": 548,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 94,
             "heightPct": 120,
             "instanceId": 16
@@ -143,7 +146,7 @@
             "cellX": 514,
             "cellZ": 548,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 94,
             "heightPct": 120,
             "instanceId": 17
@@ -153,7 +156,7 @@
             "cellX": 499,
             "cellZ": 548,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 94,
             "heightPct": 120,
             "instanceId": 18
@@ -163,7 +166,7 @@
             "cellX": 484,
             "cellZ": 548,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 94,
             "heightPct": 120,
             "instanceId": 20
@@ -173,7 +176,7 @@
             "cellX": 475,
             "cellZ": 548,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 56,
             "heightPct": 120,
             "instanceId": 21
@@ -183,7 +186,7 @@
             "cellX": 472,
             "cellZ": 510,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 238,
             "heightPct": 120,
             "instanceId": 22
@@ -193,7 +196,7 @@
             "cellX": 452,
             "cellZ": 489,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 238,
             "heightPct": 120,
             "instanceId": 23
@@ -203,7 +206,7 @@
             "cellX": 453,
             "cellZ": 451,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 238,
             "heightPct": 120,
             "instanceId": 24
@@ -213,7 +216,7 @@
             "cellX": 470,
             "cellZ": 479,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 100,
             "heightPct": 120,
             "instanceId": 26
@@ -223,7 +226,7 @@
             "cellX": 471,
             "cellZ": 463,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 100,
             "heightPct": 120,
             "instanceId": 27
@@ -233,7 +236,7 @@
             "cellX": 468,
             "cellZ": 440,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 100,
             "heightPct": 120,
             "instanceId": 29
@@ -243,7 +246,7 @@
             "cellX": 470,
             "cellZ": 456,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 44,
             "heightPct": 120,
             "instanceId": 30
@@ -253,7 +256,7 @@
             "cellX": 469,
             "cellZ": 433,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 44,
             "heightPct": 120,
             "instanceId": 31
@@ -263,7 +266,7 @@
             "cellX": 469,
             "cellZ": 426,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 44,
             "heightPct": 120,
             "instanceId": 32
@@ -273,7 +276,7 @@
             "cellX": 470,
             "cellZ": 422,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 44,
             "heightPct": 120,
             "instanceId": 33
@@ -283,7 +286,7 @@
             "cellX": 473,
             "cellZ": 394,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 175,
             "heightPct": 120,
             "instanceId": 34
@@ -303,7 +306,7 @@
             "cellX": 467,
             "cellZ": 389,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 31,
             "heightPct": 120,
             "instanceId": 36
@@ -313,7 +316,7 @@
             "cellX": 467,
             "cellZ": 384,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 31,
             "heightPct": 120,
             "instanceId": 37
@@ -333,7 +336,7 @@
             "cellX": 450,
             "cellZ": 426,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 62,
             "heightPct": 110,
             "instanceId": 39
@@ -343,7 +346,7 @@
             "cellX": 447,
             "cellZ": 416,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 62,
             "heightPct": 110,
             "instanceId": 40
@@ -353,7 +356,7 @@
             "cellX": 444,
             "cellZ": 406,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 62,
             "heightPct": 110,
             "instanceId": 41
@@ -363,7 +366,7 @@
             "cellX": 440,
             "cellZ": 391,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 94,
             "heightPct": 110,
             "instanceId": 42
@@ -373,7 +376,7 @@
             "cellX": 440,
             "cellZ": 376,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 94,
             "heightPct": 110,
             "instanceId": 43
@@ -383,7 +386,7 @@
             "cellX": 440,
             "cellZ": 361,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 94,
             "heightPct": 110,
             "instanceId": 45
@@ -393,7 +396,7 @@
             "cellX": 474,
             "cellZ": 365,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 94,
             "heightPct": 110,
             "instanceId": 47
@@ -403,7 +406,7 @@
             "cellX": 474,
             "cellZ": 360,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 31,
             "heightPct": 110,
             "instanceId": 48
@@ -413,7 +416,7 @@
             "cellX": 444,
             "cellZ": 358,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 188,
             "heightPct": 110,
             "instanceId": 49
@@ -433,7 +436,7 @@
             "cellX": 454,
             "cellZ": 542,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 38,
             "heightPct": 110,
             "instanceId": 51
@@ -443,7 +446,7 @@
             "cellX": 448,
             "cellZ": 542,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 38,
             "heightPct": 110,
             "instanceId": 52
@@ -453,7 +456,7 @@
             "cellX": 442,
             "cellZ": 542,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 38,
             "heightPct": 110,
             "instanceId": 53
@@ -463,7 +466,7 @@
             "cellX": 436,
             "cellZ": 541,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 38,
             "heightPct": 110,
             "instanceId": 54
@@ -473,7 +476,7 @@
             "cellX": 432,
             "cellZ": 530,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 88,
             "heightPct": 110,
             "instanceId": 55
@@ -493,7 +496,7 @@
             "cellX": 436,
             "cellZ": 517,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 62,
             "heightPct": 110,
             "instanceId": 57
@@ -503,7 +506,7 @@
             "cellX": 440,
             "cellZ": 517,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 75,
             "heightPct": 110,
             "instanceId": 58
@@ -513,7 +516,7 @@
             "cellX": 453,
             "cellZ": 527,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 25,
             "heightPct": 110,
             "instanceId": 59
@@ -523,7 +526,7 @@
             "cellX": 458,
             "cellZ": 543,
             "level": 0,
-            "rot": 23,
+            "rot": 69,
             "scalePct": 61,
             "heightPct": 100,
             "instanceId": 60
@@ -533,7 +536,7 @@
             "cellX": 472,
             "cellZ": 499,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 61,
             "heightPct": 100,
             "instanceId": 62
@@ -543,77 +546,17 @@
             "cellX": 467,
             "cellZ": 440,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 61,
             "heightPct": 100,
             "instanceId": 63
-        },
-        {
-            "propId": "table_low",
-            "cellX": 495,
-            "cellZ": 520,
-            "level": 0,
-            "rot": 6,
-            "scalePct": 106,
-            "heightPct": 100,
-            "instanceId": 64
-        },
-        {
-            "propId": "table_low",
-            "cellX": 503,
-            "cellZ": 520,
-            "level": 0,
-            "rot": 6,
-            "scalePct": 106,
-            "heightPct": 100,
-            "instanceId": 65
-        },
-        {
-            "propId": "table_low",
-            "cellX": 511,
-            "cellZ": 520,
-            "level": 0,
-            "rot": 6,
-            "scalePct": 106,
-            "heightPct": 100,
-            "instanceId": 67
-        },
-        {
-            "propId": "table_low",
-            "cellX": 519,
-            "cellZ": 520,
-            "level": 0,
-            "rot": 6,
-            "scalePct": 106,
-            "heightPct": 100,
-            "instanceId": 68
-        },
-        {
-            "propId": "table_low",
-            "cellX": 527,
-            "cellZ": 520,
-            "level": 0,
-            "rot": 6,
-            "scalePct": 106,
-            "heightPct": 100,
-            "instanceId": 69
-        },
-        {
-            "propId": "table_low",
-            "cellX": 495,
-            "cellZ": 512,
-            "level": 0,
-            "rot": 0,
-            "scalePct": 250,
-            "heightPct": 100,
-            "instanceId": 71
         },
         {
             "propId": "rack_wall",
             "cellX": 476,
             "cellZ": 513,
             "level": 1,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 58,
             "heightPct": 100,
             "instanceId": 73
@@ -623,7 +566,7 @@
             "cellX": 456,
             "cellZ": 518,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 100,
             "heightPct": 100,
             "instanceId": 74
@@ -633,7 +576,7 @@
             "cellX": 470,
             "cellZ": 470,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 100,
             "heightPct": 100,
             "instanceId": 75
@@ -643,7 +586,7 @@
             "cellX": 472,
             "cellZ": 398,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 100,
             "heightPct": 100,
             "instanceId": 76
@@ -653,7 +596,7 @@
             "cellX": 448,
             "cellZ": 407,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 100,
             "heightPct": 100,
             "instanceId": 77
@@ -673,7 +616,7 @@
             "cellX": 464,
             "cellZ": 495,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 35,
             "heightPct": 100,
             "instanceId": 81
@@ -683,7 +626,7 @@
             "cellX": 451,
             "cellZ": 425,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 35,
             "heightPct": 100,
             "instanceId": 82
@@ -693,7 +636,7 @@
             "cellX": 444,
             "cellZ": 364,
             "level": 1,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 68,
             "heightPct": 100,
             "instanceId": 86
@@ -703,7 +646,7 @@
             "cellX": 465,
             "cellZ": 496,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 37,
             "heightPct": 100,
             "instanceId": 88
@@ -713,7 +656,7 @@
             "cellX": 465,
             "cellZ": 497,
             "level": 0,
-            "rot": 12,
+            "rot": 36,
             "scalePct": 37,
             "heightPct": 70,
             "instanceId": 89
@@ -723,7 +666,7 @@
             "cellX": 457,
             "cellZ": 469,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 37,
             "heightPct": 100,
             "instanceId": 91
@@ -733,7 +676,7 @@
             "cellX": 458,
             "cellZ": 469,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 37,
             "heightPct": 60,
             "instanceId": 92
@@ -743,7 +686,7 @@
             "cellX": 457,
             "cellZ": 476,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 37,
             "heightPct": 60,
             "instanceId": 93
@@ -753,7 +696,7 @@
             "cellX": 457,
             "cellZ": 462,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 37,
             "heightPct": 60,
             "instanceId": 94
@@ -763,7 +706,7 @@
             "cellX": 457,
             "cellZ": 451,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 100,
             "heightPct": 40,
             "instanceId": 95
@@ -773,7 +716,7 @@
             "cellX": 468,
             "cellZ": 431,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 100,
             "heightPct": 40,
             "instanceId": 96
@@ -783,7 +726,7 @@
             "cellX": 479,
             "cellZ": 532,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 100,
             "heightPct": 100,
             "instanceId": 97
@@ -793,7 +736,7 @@
             "cellX": 458,
             "cellZ": 364,
             "level": 0,
-            "rot": 6,
+            "rot": 18,
             "scalePct": 100,
             "heightPct": 100,
             "instanceId": 98
@@ -803,7 +746,7 @@
             "cellX": 455,
             "cellZ": 443,
             "level": 3,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 100,
             "heightPct": 110,
             "instanceId": 104
@@ -813,7 +756,7 @@
             "cellX": 453,
             "cellZ": 445,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 38,
             "heightPct": 80,
             "instanceId": 105
@@ -823,7 +766,7 @@
             "cellX": 451,
             "cellZ": 441,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 25,
             "heightPct": 80,
             "instanceId": 106
@@ -833,11 +776,52 @@
             "cellX": 453,
             "cellZ": 436,
             "level": 0,
-            "rot": 18,
+            "rot": 54,
             "scalePct": 31,
             "heightPct": 80,
             "instanceId": 107
+        },
+        {
+            "propId": "table_low",
+            "cellX": 498,
+            "cellZ": 524,
+            "level": 0,
+            "rot": 0,
+            "scalePct": 100,
+            "heightPct": 100,
+            "instanceId": 108
+        },
+        {
+            "propId": "table_low",
+            "cellX": 498,
+            "cellZ": 516,
+            "level": 0,
+            "rot": 0,
+            "scalePct": 100,
+            "heightPct": 100,
+            "instanceId": 109
+        },
+        {
+            "propId": "table_low",
+            "cellX": 514,
+            "cellZ": 524,
+            "level": 0,
+            "rot": 0,
+            "scalePct": 100,
+            "heightPct": 100,
+            "instanceId": 110
+        },
+        {
+            "propId": "table_low",
+            "cellX": 514,
+            "cellZ": 516,
+            "level": 0,
+            "rot": 0,
+            "scalePct": 100,
+            "heightPct": 100,
+            "instanceId": 111
         }
     ],
-    "nextInstanceId": 108
+    "freeProps": [],
+    "nextInstanceId": 112
 }

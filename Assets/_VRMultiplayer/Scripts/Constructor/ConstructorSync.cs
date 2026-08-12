@@ -504,6 +504,251 @@ namespace VRMultiplayer.Constructor
             if (ok) StartCoroutine(SendLayoutToOwner());
         }
 
+        // ------------------------------------------------------- TAG KURULUMU (yeni harita)
+        //
+        // Yeni harita akisinin son adimi: konan plakalari tag yerlesimine cevir, origin'i yaz,
+        // hepsini kalibrasyona ac. Cevrimin kendisi TagCapture'da ve calisma zamaninda kosuyor;
+        // burasi yalnizca YETKIYI tasiyor.
+        //
+        // NEDEN SUNUCUYA GIDIYOR: dosyayi her zaman sunucu yazar ve harita SUNUCUNUN
+        // belleginde. Gozlukte cevrilseydi tag'ler yalnizca o gozlukte olurdu, sunucu eski
+        // yerlesimde kalirdi ve ilk senkron gozlugunkini ezerdi -- yerlestirmede yasanan
+        // sessiz uyusmazligin aynisi.
+
+        /// <summary>Istemci: "plakalari tag'e cevir, origin'i yaz, hepsini ac".</summary>
+        public static bool ClientRequestTagSetup(float originHeight)
+        {
+            var sync = LocalOwned();
+            if (sync == null) return false;
+            sync.TagSetupServerRpc(originHeight);
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void TagSetupServerRpc(float originHeight, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null || !Session.IsActive || Session.Layout == null)
+            {
+                TagSetupResultOwnerRpc(false, 0, "Oturum yok.");
+                return;
+            }
+
+            var layout = Session.Layout;
+            TagCapture.SetOrigin(layout, originHeight);
+            string rapor = TagCapture.Capture(layout, out bool _);
+
+            // Cevrim tag uretemediyse (plaka yok / izgara kurulamadi) DURMA NOKTASI burasi:
+            // bos yerlesimi acmak ve yaymak, calisan bir cerceveyi sessizce silerdi.
+            if (layout.tags == null || layout.tags.Length == 0)
+            {
+                TagSetupResultOwnerRpc(false, 0, rapor);
+                return;
+            }
+
+            TagCapture.Enable(layout, out int _);
+            ApplyTagsLocally(layout.tags);
+
+            // Haritayi degil YALNIZCA tag'leri yolluyoruz: proplar plakalar konurken zaten
+            // senkron oldu. Bkz. BroadcastTags — parcali gonderimde tag'ler birkac kare
+            // yolda kaliyordu ve o pencerede kalibre olan gozluk bayat listeyle hizalaniyordu.
+            BroadcastTags(layout.tags);
+
+            TagSetupResultOwnerRpc(true, layout.tags.Length, rapor);
+        }
+
+        /// <summary>
+        /// Yerlesim degisikligini SUNUCUNUN kendi kalibrasyonuna da islet.
+        ///
+        /// GEREKLI, cunku "harita degisti -> tag'ler degisti" bagi ConstructorSession.Adopt'ta
+        /// kurulu ve Adopt yalnizca harita ACILIRKEN kosuyor. Burada oturum ZATEN acikken
+        /// Layout.tags'i yerinde degistiriyoruz; elle cagirmazsak tag'ler diske yazilir ama
+        /// kalibrasyon o oturum boyunca eski yerlesimle calisir ve sebebi hicbir yerde gorunmez.
+        /// </summary>
+        static void ApplyTagsLocally(AprilTagCalibration.TagEntry[] tags)
+        {
+            if (AprilTagCalibration.Instance != null)
+                AprilTagCalibration.Instance.ApplyMapLayout(tags);
+        }
+
+        // ---- OGRENME MODUNDAN GELEN TAG DUZENLEMESI ---------------------------------------
+        //
+        // Gozlukte olculen/ince ayarlanan tag'ler. Yalnizca "kaydet" demek yetmezdi: harita
+        // SUNUCUNUN belleginde ve duzenleme gozlukte, yani sunucu kendi DUZENLENMEMIS
+        // kopyasini yazardi -- panel "kaydedildi" derken olcum kaybolurdu.
+        //
+        // Tum harita degil YALNIZCA tag dizisi gidiyor: uc-bes kayit, ~300 bayt, tek RPC'ye
+        // sigiyor. Haritayi geri yollamak olcumu 14 KB'lik bir transferin arkasina koyardi.
+
+        [Serializable]
+        class TagWrapper { public AprilTagCalibration.TagEntry[] tags; }
+
+        /// <summary>
+        /// Yeni tag yerlesimini butun istemcilere TEK RPC ile yollar.
+        ///
+        /// NEDEN HARITAYI YOLLAMIYORUZ: tag kurulumu bittiginde haritanin PROP'LARI zaten
+        /// senkron -- plakalar konurken her yerlestirme kendi RPC'siyle gitti. Yeni olan tek
+        /// sey tag dizisi. Buna ragmen SendLayout(true) ile 14 KB'lik haritayi yeniden
+        /// yolluyorduk: 3000 baytlik parcalara boluniyor ve 8 parcada bir kare devrediyor,
+        /// yani tag'ler birkac kare boyunca yolda kaliyordu. O pencerede kalibre olan bir
+        /// gozluk BAYAT tag listesiyle hizalanir ve yanlis cerceveye oturur.
+        ///
+        /// Tag dizisi ~330 bayt (3 tag): tek RPC'ye sigiyor, parcalanma ve bekleme yok.
+        /// </summary>
+        static void BroadcastTags(AprilTagCalibration.TagEntry[] tags)
+        {
+            if (tags == null || tags.Length == 0) return;
+            var sync = AnySpawned();
+            if (sync == null) return;   // bagli kimse yok — haber verilecek taraf da yok
+            sync.TagLayoutClientRpc(JsonUtility.ToJson(new TagWrapper { tags = tags }));
+        }
+
+        [Rpc(SendTo.NotServer)]
+        void TagLayoutClientRpc(string json)
+        {
+            TagWrapper w;
+            try { w = JsonUtility.FromJson<TagWrapper>(json); }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[ConstructorSync] Tag yerlesimi okunamadi: " + e.Message);
+                return;
+            }
+            // BOS/BOZUK YERLESIM UYGULANMAZ: calisan bir cerceveyi silerdi.
+            if (w == null || w.tags == null || w.tags.Length == 0) return;
+
+            // AYNI DIZI iki yere: Layout.tags ile kalibrasyonun yerlesimi ayrisirsa sonraki
+            // kaydetme, kalibrasyonun kullandigindan baska bir sey yazar.
+            if (Session != null && Session.IsActive && Session.Layout != null)
+                Session.Layout.tags = w.tags;
+
+            ApplyTagsLocally(w.tags);
+            Debug.Log($"[ConstructorSync] Tag yerlesimi sunucudan alindi ({w.tags.Length} tag).");
+        }
+
+        public static bool ClientRequestTagLayout(AprilTagCalibration.TagEntry[] tags)
+        {
+            var sync = LocalOwned();
+            if (sync == null || tags == null || tags.Length == 0) return false;
+            sync.TagLayoutServerRpc(JsonUtility.ToJson(new TagWrapper { tags = tags }));
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void TagLayoutServerRpc(string json, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (Session == null || !Session.IsActive || Session.Layout == null) return;
+
+            TagWrapper w;
+            try { w = JsonUtility.FromJson<TagWrapper>(json); }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[ConstructorSync] Tag yerlesimi okunamadi: " + e.Message);
+                return;
+            }
+            // BOS GELEN YERLESIM UYGULANMAZ: bozuk bir paket calisan bir cerceveyi silerdi.
+            if (w == null || w.tags == null || w.tags.Length == 0) return;
+
+            Session.Layout.tags = w.tags;
+            ApplyTagsLocally(w.tags);
+
+            bool ok = Session.Save();
+            SaveResultOwnerRpc(ok, Session.PlacedCount);
+
+            // Diger gozlukler de gorsun. Gonderen istemci de aliyor ve kendi yerlesimini
+            // yeniden uyguluyor: veri ayni oldugu icin zararsiz, ustelik dogru -- tag'in
+            // ILAN EDILEN yeri degistiginde cerceve iliskisi de degisti, yeniden oturmali.
+            BroadcastTags(w.tags);
+
+            Debug.Log($"[ConstructorSync] Tag yerlesimi istemciden alindi ({w.tags.Length} tag), " +
+                      $"kaydetme {(ok ? "basarili" : "BASARISIZ")}.");
+        }
+
+        // ---- TAG'LERI BASKA BIR HARITADAN KOPYALA ------------------------------------------
+        //
+        // Ayni mekanda ikinci harita. Kagitlar duvarda oldugu icin plaka koymak yanlis yol
+        // (bkz. TagCapture.CopyTagsFrom). Kaynak haritanin DOSYASI sunucuda, gozlukte yok —
+        // o yuzden kopyalama da sunucuda olmak zorunda; gozluk yalnizca adi yolluyor.
+
+        public static bool ClientRequestCopyTags(string sourceMapName)
+        {
+            var sync = LocalOwned();
+            if (sync == null || string.IsNullOrEmpty(sourceMapName)) return false;
+            sync.CopyTagsServerRpc(sourceMapName);
+            return true;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        void CopyTagsServerRpc(string sourceMapName, RpcParams p = default)
+        {
+            if (p.Receive.SenderClientId != OwnerClientId) return;
+            string rapor = HostCopyTags(sourceMapName, out bool ok);
+            TagSetupResultOwnerRpc(ok, ok && Session != null && Session.Layout != null
+                ? Session.Layout.tags.Length : 0, rapor);
+        }
+
+        /// <summary>Sunucu/tek-makine yolu; RPC bunu cagiriyor.</summary>
+        public static string HostCopyTags(string sourceMapName, out bool ok)
+        {
+            ok = false;
+            var s = Session;
+            if (s == null || !s.IsActive || s.Layout == null) return "Oturum yok.";
+
+            var kaynak = MapLayout.Load(sourceMapName);
+            if (kaynak == null) return $"'{sourceMapName}' okunamadi.";
+
+            int n = TagCapture.CopyTagsFrom(kaynak, s.Layout);
+            if (n == 0) return $"'{sourceMapName}' haritasinda tag yok.";
+
+            ApplyTagsLocally(s.Layout.tags);
+            BroadcastTags(s.Layout.tags);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"'{sourceMapName}' haritasindan {n} tag kopyalandi.");
+            foreach (var t in s.Layout.tags)
+                sb.AppendLine($"  tag {t.id}   {t.position.x:0.000} {t.position.y:0.000} " +
+                              $"{t.position.z:0.000}  yaw {t.yawDegrees:0.0}   " +
+                              (t.useForCalibration ? "ACIK" : "KAPALI"));
+            sb.AppendLine();
+            sb.AppendLine("Kagitlar duvarda oldugu gibi kaliyor; plaka koymana gerek yok.");
+            ok = true;
+            return sb.ToString();
+        }
+
+        /// <summary>Sunucudan donen tag kurulumu sonucu; akis bunu bir kez gosterip temizler.</summary>
+        public static string TagSetupMessage;
+
+        [Rpc(SendTo.Owner)]
+        void TagSetupResultOwnerRpc(bool ok, int tagCount, string rapor)
+        {
+            TagSetupMessage = ok
+                ? $"TAG KURULUMU TAMAM\n\n{tagCount} tag kaydedildi ve kalibrasyona acildi."
+                : "TAG KURULUMU YAPILAMADI\n\n" + rapor;
+            Debug.Log("[ConstructorSync] Tag kurulumu: " + (ok ? "tamam" : "basarisiz") + "\n" + rapor);
+        }
+
+        /// <summary>
+        /// Sunucu/tek-makine yolu: ayni isi RPC'siz yapar. Yetki bizdeyken RPC'ye sapmak
+        /// gereksiz bir tur ve PC'de tek basina calisirken ag hic acilmamis olabilir.
+        /// </summary>
+        public static string HostTagSetup(float originHeight, out bool ok)
+        {
+            ok = false;
+            var s = Session;
+            if (s == null || !s.IsActive || s.Layout == null) return "Oturum yok.";
+
+            TagCapture.SetOrigin(s.Layout, originHeight);
+            string rapor = TagCapture.Capture(s.Layout, out bool _);
+            if (s.Layout.tags == null || s.Layout.tags.Length == 0) return rapor;
+
+            TagCapture.Enable(s.Layout, out int _);
+            ApplyTagsLocally(s.Layout.tags);
+            BroadcastTags(s.Layout.tags);
+
+            ok = true;
+            return rapor;
+        }
+
         /// <summary>Last save result from the server; the placer shows it once and clears it.</summary>
         public static string SaveMessage { get; set; }
 
@@ -864,6 +1109,14 @@ namespace VRMultiplayer.Constructor
         IEnumerator SendLayout(bool toAll)
         {
             // Sunucunun kendi oyuncu objesi yok; bu yalnizca istemci objeleri icin anlamli.
+            //
+            // TUZAK: bu satir yuzunden SendLayout, HOST'un kendi oyuncu objesi uzerinden
+            // cagrilirsa hicbir sey gondermeden ve hicbir sey soylemeden ciker. Cagiran taraf
+            // "yolladim" saniyor. Dedicated server'da hic yasanmaz (sunucunun oyuncu objesi
+            // yok), host+oyuncu kurulumunda sessizce yasanir. Cagirmadan once tasiyicinin
+            // sahibinin ISTEMCI oldugundan emin olun; yalnizca istemcilere ulasmasi yeten
+            // kucuk veriler icin SendTo.NotServer'li dogrudan bir RPC daha guvenli
+            // (bkz. BroadcastTags).
             if (OwnerClientId == NetworkManager.ServerClientId) yield break;
 
             // BAGLANTI ONAYININ ORTASINA RPC SOKMA.
