@@ -285,6 +285,57 @@ namespace VRMultiplayer
         /// </summary>
         bool _layoutStale;
 
+        // ---- YAW REFERANSI GOZCUSU --------------------------------------------------------
+        //
+        // yawFromReferenceOnly aciksa YONU yalnizca TEK bir tag duzeltiyor
+        // (offsetReferenceTagId, varsayilan 0; bkz. satir ~834'teki yawCounts). O tag'in
+        // kagidi yirtilir, onune dolap cekilir, ya da hicbir zaman
+        // yawCorrectionMaxDistance kadar yaklasilmazsa yaw duzeltmesi SESSIZCE durur.
+        //
+        // Sessiz olmasinin sebebi: KONUM duzelmeye devam ediyor (onu her tag yapiyor), yani
+        // panelde her sey yolunda gorunuyor. Sapma yawRecoveryDegrees'i (10 derece) bulana
+        // kadar hicbir belirti yok, ve 10 derece 4 metrede 70 cm demek.
+        //
+        // Gozcu "ne zamandir goremedim" sorusunu soruyor. Olculemeyen bir sey yoktu ortada —
+        // sorulmayan bir sey vardi.
+        const float RefStaleSeconds = 300f;   // 5 dakika
+
+        /// <summary>Bu yerlesimin ne zamandir yururlukte oldugu — "hic gorulmedi" suresini olcer.</summary>
+        float _layoutSince;
+
+        /// <summary>Uyari log'a bir kez yazilsin; her karede degil.</summary>
+        bool _refWarned;
+
+        /// <summary>Yaw referansinda sorun varsa aciklamasi, yoksa null.</summary>
+        string YawReferenceWarning()
+        {
+            // Yaw'i her tag duzeltiyorsa tek nokta arizasi yok.
+            if (!yawFromReferenceOnly) return null;
+            if (!CalibrationManager.Calibrated) return null;
+
+            if (Find(offsetReferenceTagId) == null)
+                return $"YAW REFERANSI YOK — tag {offsetReferenceTagId} yerlesimde degil";
+
+            bool gorulmus = _seenTime.TryGetValue(offsetReferenceTagId, out float t);
+            float gecen = gorulmus ? Time.time - t : Time.time - _layoutSince;
+            if (gecen < RefStaleSeconds) return null;
+
+            return gorulmus
+                ? $"YAW REFERANSI (tag {offsetReferenceTagId}) {gecen / 60f:0} dk gorulmedi"
+                : $"YAW REFERANSI (tag {offsetReferenceTagId}) HIC gorulmedi — yon duzeltilmiyor";
+        }
+
+        /// <summary>Uyariyi log'a bir kez yazar; referans yeniden gorununce sifirlanir.</summary>
+        void TickRefWatch()
+        {
+            string uyari = YawReferenceWarning();
+            if (uyari == null) { _refWarned = false; return; }
+            if (_refWarned) return;
+            _refWarned = true;
+            WriteDiag("UYARI  " + uyari);
+            Debug.LogWarning("[AprilTagCalib] " + uyari);
+        }
+
         // Olcum (FAZ 0): son tespitler uzerinden menzil ve jitter
         // JITTER TAG BASINA tutulur.
         //
@@ -369,6 +420,12 @@ namespace VRMultiplayer
             // soyler. Ilk duzeltme uygulanunca dusuyor (bkz. ApplyCorrection).
             _layoutStale = haritadan;
 
+            // Yeni yerlesim, yeni sayac: "referansi hic gormedim" suresi bu andan olculur.
+            // Eski yerlesimden kalan gorulme zamani yeni tag 0 icin bir sey soylemiyor.
+            _layoutSince = Time.time;
+            _seenTime.Remove(offsetReferenceTagId);
+            _refWarned = false;
+
             RebuildMarkers();
             Debug.Log(haritadan
                 ? $"[AprilTagCalib] Tag yerlesimi HARITADAN alindi ({fromMap.Length} tag)."
@@ -399,6 +456,7 @@ namespace VRMultiplayer
             }
 
             _bootLayout = tagLayout;
+            _layoutSince = Time.time;
 
             // Kalibrasyon, haritayi kuran oturumdan SONRA da uyanabilir (bilesen sirasi
             // garanti degil). Harita zaten acilmissa yerlesimini simdi al — yoksa bu oturum
@@ -2144,6 +2202,11 @@ namespace VRMultiplayer
 
         void TickPanel()
         {
+            // Gozcu PANELDEN BAGIMSIZ kosar: showPanel kapaliyken de log'a yazsin. Uyariyi
+            // yalnizca panele baglamak, paneli kapatan kurulumda sorunu tekrar gorunmez
+            // yapardi — kapatilan sey teshis, olen sey teshisin kendisi olurdu.
+            TickRefWatch();
+
             if (!showPanel) { if (_panel != null) _panel.gameObject.SetActive(false); return; }
             if (_panel == null)
             {
@@ -2219,13 +2282,20 @@ namespace VRMultiplayer
             // Cihazda yasandi: oyuncu tag 2'ye bakti, hicbir sey olmadi sandi.
             if (!learnMode)
             {
+                // Yaw referansi uyarisi OYUN MODUNDA DA gorunur: gizli kalmasi tam olarak
+                // sorunun kendisiydi. Tek satir ve yalnizca gercekten bozukken cikiyor.
+                string refUyari = YawReferenceWarning();
+                string refSatir = refUyari != null ? refUyari + "\n" : "";
+
                 if (!seen)
                     // Harita yeni degistiyse SEBEBI de yaz: "tag gorunmuyor" tek basina
                     // "bekle" gibi okunuyor, oysa oyuncunun YAPMASI gereken bir sey var.
-                    return (_layoutStale ? "YENI HARITA — bir TAG'E BAK\n" : "")
+                    return refSatir
+                         + (_layoutStale ? "YENI HARITA — bir TAG'E BAK\n" : "")
                          + "Tag GORUNMUYOR" + (cameraRunning ? "" : "\nKAMERA YOK (izin?)");
 
-                var q = new System.Text.StringBuilder($"Tag {_lastId} GORUNDU   {_lastDistance:0.00} m\n");
+                var q = new System.Text.StringBuilder(
+                    refSatir + $"Tag {_lastId} GORUNDU   {_lastDistance:0.00} m\n");
 
                 // DURUM SATIRI, GORULEN TAG'E AIT OLMALI.
                 //
@@ -2258,6 +2328,9 @@ namespace VRMultiplayer
                 ? $"Tag {_lastId}   {_lastDistance:0.00} m   {_jitterMm:0.0} mm   {_detectHz:0.0} Hz\n"
                 : "Tag GORUNMUYOR   " +
                   (_lastTagTime > 0f ? $"{Time.time - _lastTagTime:0} sn once\n" : "hic gorulmedi\n"));
+
+            string refUyariTeshis = YawReferenceWarning();
+            if (refUyariTeshis != null) p.Append(refUyariTeshis + "\n");
 
             if (!cameraRunning) p.Append("KAMERA YOK (izin?)\n");
             if (showPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
