@@ -994,10 +994,15 @@ namespace VRMultiplayer
             // yon GERCEKTEN kaybolabilir ve o zaman duzeltecek baska bir sey yok. Kaybi
             // gurultuden ayiran sey buyukluk -- gercek kayip 10 derece mertebesindedir,
             // gurultu tabaninin cok uzaginda. Esik oraya konuldu.
-            bool yawRecovery = YawRecoveryAccepted(yawDev, entry.id);
-            bool yawCounts = !yawFromReferenceOnly
-                             || entry.id == offsetReferenceTagId
-                             || yawRecovery;
+            // Kurtarmanin karari yalnizca su iki durumda bir sey DEGISTIRIR:
+            //   referans olmayan tag -> yaw'i zaten hic duzeltemezdi
+            //   referans ama UZAK    -> mesafe kapisi kapatirdi
+            // Digerlerinde referans yolu yaw'i nasilsa uyguluyor; log'un bunu "reddedildi"
+            // diye yazmasi yaniltiyordu (bkz. YawRecoveryAccepted'in etkili parametresi).
+            bool refTag = !yawFromReferenceOnly || entry.id == offsetReferenceTagId;
+            bool uzak = yawCorrectionMaxDistance > 0f && distance > yawCorrectionMaxDistance;
+            bool yawRecovery = YawRecoveryAccepted(yawDev, entry.id, !refTag || uzak);
+            bool yawCounts = refTag || yawRecovery;
 
             // REFERANS TAG'DE BILE yaw yalnizca YAKINDAN duzeltilir. Duzlemsel poz kestiriminde
             // duzlem disi acinin hatasi, tag'in goruntudeki buyuklugu kucüldükce hizla artar;
@@ -1052,7 +1057,17 @@ namespace VRMultiplayer
         /// Bu sapma icin kurtarma kapisi acilsin mi? Sayaci da bu metot yonetiyor — kapiyi
         /// cagiran yerde tutmak, normal okumalarda sifirlamayi unutturuyordu.
         /// </summary>
-        bool YawRecoveryAccepted(float yawDev, int tagId)
+        /// <param name="etkili">
+        /// Bu kapinin karari yaw'in uygulanip uygulanmayacagini GERCEKTEN degistiriyor mu.
+        ///
+        /// NEDEN GEREKLI: referans tag zaten yaw'i duzeltiyor (yawCounts'un ilk kosulu), yani
+        /// onda kurtarmanin reddedilmesi hicbir seyi engellemiyor. Ilk surumde kapi yine de
+        /// "YAW REDDEDILDI" yaziyordu ve log yalan soyluyordu — cihazda goruldu:
+        ///   [24,0] YAW REDDEDILDI tag 0  97,9 derece
+        ///   [24,0] SNAP tag 0 ... yaw -97,91          <- "(uygulanmadi)" YOK, yani UYGULANDI
+        /// Sayaç yine de islenmeli (dizi surekliligi bozulmasin), yalnizca YAZILMAMALI.
+        /// </param>
+        bool YawRecoveryAccepted(float yawDev, int tagId, bool etkili)
         {
             // Kurtarma gerekmiyor: dizi varsa bozulur, cunku arada normal bir okuma gecti.
             if (yawDev <= yawRecoveryDegrees) { _bigYawRun = 0; return false; }
@@ -1068,16 +1083,20 @@ namespace VRMultiplayer
 
             if (_bigYawRun >= yawRecoveryConfirmations)
             {
-                WriteDiag($"YAW TEYITLI  tag {tagId}  {yawDev:0.0} derece  " +
-                          $"({_bigYawRun} ardisik) — gercek kayip sayildi");
+                if (etkili)
+                    WriteDiag($"YAW TEYITLI  tag {tagId}  {yawDev:0.0} derece  " +
+                              $"({_bigYawRun} ardisik) — gercek kayip sayildi");
                 _bigYawRun = 0;
                 return true;
             }
 
-            // REDDEDILEN HER OKUMA YAZILIR. Bu satirlarin SAYISI, sorunun gercekten burada
-            // olup olmadiginin cevabi: sifirsa flip baska yerden geliyor demektir.
-            WriteDiag($"YAW REDDEDILDI  tag {tagId}  {yawDev:0.0} derece  " +
-                      $"(bant ustu, {_bigYawRun}/{yawRecoveryConfirmations} teyit)");
+            // REDDEDILEN HER OKUMA YAZILIR — ama YALNIZCA red bir sey degistiriyorsa.
+            // Bu satirlarin SAYISI, sorunun gercekten burada olup olmadiginin cevabi:
+            // sifirsa flip baska yerden geliyor demektir. Etkisiz redleri de yazmak o sayiyi
+            // sisirir ve "engellendi" diye okunur, oysa yaw referans yolundan uygulanmistir.
+            if (etkili)
+                WriteDiag($"YAW REDDEDILDI  tag {tagId}  {yawDev:0.0} derece  " +
+                          $"(bant ustu, {_bigYawRun}/{yawRecoveryConfirmations} teyit)");
             return false;
         }
 
