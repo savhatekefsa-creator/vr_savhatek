@@ -1102,8 +1102,12 @@ namespace VRMultiplayer.Constructor
 
             // Hayalet KONULACAK yukseklikte durur. Sabit 0 verilseydi kat secen oyuncu propun
             // nereye gidecegini ancak birakinca ogrenirdi.
-            Vector3 target = Session.Grid.RectCenter(_rect, _placeLevel, Session.Layout.levelHeight)
-                             - MapBuilder.PivotOffset(_ghostDef, ghostScale, yaw);
+            Vector3 center = Session.Grid.RectCenter(_rect, _placeLevel, Session.Layout.levelHeight);
+            Vector3 target = center - MapBuilder.PivotOffset(_ghostDef, ghostScale, yaw);
+
+            // Plakaysa ALACAGI TAG ID'sini goster. Iki daldan da once cagriliyor: asagida
+            // ilk kare icin erken cikis var.
+            UpdateTagLabel(center);
 
             if (!_ghostShownOnce)
             {
@@ -1126,6 +1130,7 @@ namespace VRMultiplayer.Constructor
         {
             if (!show) { _ghostShownOnce = false; }
             if (_ghost != null) _ghost.SetActive(show);
+            if (!show && _tagLabel != null) _tagLabel.gameObject.SetActive(false);
         }
 
         void DestroyGhost()
@@ -1136,6 +1141,62 @@ namespace VRMultiplayer.Constructor
             _ghostPrefab = null;
             _ghostRenderers = null;
             _validSets = _invalidSets = null;
+        }
+
+        // ------------------------------------------------------------- tag id etiketi
+
+        TextMesh _tagLabel;
+
+        /// <summary>
+        /// Plaka hayaletinin ustunde ALACAGI TAG ID'sini yazar.
+        ///
+        /// NEDEN GEREKLI: tag ID'si plakanin KOYULMA SIRASINDAN geliyor (TagCapture.Capture,
+        /// instanceId sirasi), kagidin uzerindeki basili ID ise degismez. Ikisi tutmazsa
+        /// kalibrasyon tag'i yanlis yerde arar ve hata tam olarak iki tag'in ARASINDAKI
+        /// mesafe kadar olur -- OFIS2'de 2,6 m. Buyuk mekanda komsu iki tag karisirsa hata
+        /// 30-40 cm'e duser ve "biraz kaymis" diye gecistirilir; sessiz kalan tek hata turu bu.
+        ///
+        /// Sirayi dogrulanabilir kilmanin en ucuz yolu, numarayi KOYARKEN gostermek: kagidi
+        /// asan kisi hangi numarayi asacagini plakadan okur.
+        ///
+        /// HAYALETIN COCUGU DEGIL: plaka olcegi (0.14, 0.14, 0.01) tekduze degil, altina
+        /// konan yazi dondurulunce kayardi (shear). Kardes olarak ayni uzaya baglaniyor.
+        /// </summary>
+        void UpdateTagLabel(Vector3 centerLocal)
+        {
+            bool plaka = _ghostDef != null && _ghostDef.id == TagCapture.PlateId;
+            if (!plaka || Session == null || Session.Layout == null)
+            {
+                if (_tagLabel != null) _tagLabel.gameObject.SetActive(false);
+                return;
+            }
+
+            if (_tagLabel == null)
+            {
+                // Sari: yerlesim isaretcilerinde "dogrulama bekliyor" rengiyle ayni dil.
+                _tagLabel = UITheme.MakeText(null, "", new Color(1f, 0.85f, 0.15f), 0.07f);
+                _tagLabel.gameObject.name = "~TagIdEtiketi";
+            }
+
+            var space = Space;
+            if (_tagLabel.transform.parent != space) _tagLabel.transform.SetParent(space, false);
+
+            // Bir sonraki plaka, mevcut plaka sayisindan SONRAKI ID'yi alir -- Capture
+            // ID'leri FirstTagId'den baslayip instanceId sirasina gore dagitiyor.
+            string s = "TAG " + (TagCapture.FirstTagId + TagCapture.PlateCount(Session.Layout));
+            if (_tagLabel.text != s) _tagLabel.text = s;
+
+            _tagLabel.gameObject.SetActive(true);
+            _tagLabel.transform.localPosition = centerLocal + Vector3.up * 0.16f;
+
+            // Kafaya donuk: plaka hangi acida durursa dursun numara okunabilsin. Yalnizca
+            // yatayda donuyor, yoksa yukaridan bakinca yazi yatardi.
+            var head = XRRigReference.HeadOrCamera;
+            if (head == null) return;
+            Vector3 bakis = _tagLabel.transform.position - head.position;
+            bakis.y = 0f;
+            if (bakis.sqrMagnitude > 1e-6f)
+                _tagLabel.transform.rotation = Quaternion.LookRotation(bakis.normalized, Vector3.up);
         }
 
         // ------------------------------------------------------------- pointer beam

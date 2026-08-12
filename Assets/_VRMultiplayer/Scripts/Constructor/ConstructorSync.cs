@@ -179,6 +179,30 @@ namespace VRMultiplayer.Constructor
             return null;
         }
 
+        /// <summary>
+        /// Sahibi SUNUCU OLMAYAN ilk tasiyici — <see cref="SendLayout"/> icin.
+        ///
+        /// NEDEN AYRI: SendLayout ilk satirinda "OwnerClientId == ServerClientId" ise hicbir
+        /// sey gondermeden cikiyor (sunucunun kendi oyuncu objesine harita yollamak anlamsiz).
+        /// <see cref="AnySpawned"/> ise listedeki ILK objeyi doner ve host'un kendi oyuncu
+        /// objesini elemez. Dedicated server kurulumunda kaza eseri dogru calisiyordu —
+        /// orada sunucunun oyuncu objesi hic yok — ama HOST+OYUNCU kurulumunda harita
+        /// degisikligi istemcilere HIC ulasmazdi ve bunun bir belirtisi olmazdi.
+        ///
+        /// Hangi obje tasidiginin alicilara etkisi yok: parcalar
+        /// <see cref="LayoutChunkClientRpc"/> ile gidiyor ve o SendTo.NotServer.
+        /// </summary>
+        static ConstructorSync AnyClientOwned()
+        {
+            for (int i = 0; i < Spawned.Count; i++)
+            {
+                var s = Spawned[i];
+                if (s != null && s.IsSpawned && s.OwnerClientId != NetworkManager.ServerClientId)
+                    return s;
+            }
+            return null;
+        }
+
         /// <param name="preferredId">
         /// Geri alma yolunda propun ESKI kimligi; 0 = yeni kimlik ver. Sunucu bunu dogrular
         /// (bkz. <see cref="ConstructorSession.ResolveInstanceId"/>) — bayat bir istek yasayan
@@ -599,7 +623,10 @@ namespace VRMultiplayer.Constructor
             TagCapture.Enable(s.Layout, out int _);
             ApplyTagsLocally(s.Layout);
 
-            var sync = AnySpawned();
+            // AnySpawned DEGIL: bkz. AnyClientOwned. Host+oyuncu kurulumunda AnySpawned
+            // host'un kendi objesini dondurebilir ve SendLayout sessizce hicbir sey yollamaz.
+            // Bagli istemci yoksa null doner ve yayin atlanir -- haber verilecek kimse yok.
+            var sync = AnyClientOwned();
             if (sync != null) sync.StartCoroutine(sync.SendLayout(true));
 
             ok = true;
