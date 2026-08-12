@@ -1,0 +1,117 @@
+# Birinci şahıs eli — devir belgesi
+
+**Dal:** `silah-d` (push edilmedi). **Son commit:** `112f03e` + bu belgeyle gelen ince-ayar refaktörü.
+**Cihaz:** Quest 3, kablo bağlı. Unity 6.3 (6000.3.18f1), URP, Linear renk uzayı, Netcode for GameObjects.
+
+---
+
+## 1. SIRADAKİ İŞ — ince ayar (kullanıcı bunu isteyecek)
+
+Kullanıcı elin duruşunu "X'te şu kadar, Y'de şu kadar" diye ayarlamak istiyor. **Tek dokunuş noktası** `FirstPersonHandView.cs` başındaki **altı sayı**:
+
+```csharp
+const float OffsetForward = 0f;   // metre, + ileri (parmakların gösterdiği yön)
+const float OffsetUp      = 0f;   // metre, + yukarı (başparmağın olduğu taraf)
+const float OffsetInward  = 0f;   // metre, + gövde ortasına doğru
+
+const float TweakYaw   = 0f;      // derece, + eli yukarı eksende dışa çevirir
+const float TweakPitch = 0f;      // derece, + parmak uçlarını yukarı kaldırır
+const float TweakRoll  = 0f;      // derece, + avuç içini aşağı döndürür
+```
+
+**Bunlar kumandanın ham eksenleri DEĞİL, kullanıcının gördüğü yönler.** Ham grip eksenleri sezgisel değil (cihazda ölçüldü: grip **+Z ≈ dünya yukarısı**, **+Y ≈ dünya gerisi**, **+X ≈ dünya sağı**); çevrim kodun içinde yapılıyor.
+
+Hepsi **SAĞ ELE** göre yazılır; sol el `WeaponGripMath.MirrorX` ile aynalanır. **Sol el için ayrı sayı YOK** — simetri ayarın değil yapının garantisi.
+
+`BaseWristEuler = (0, 220.3, 209.9)` **hesaplanmış** temel dönüş, ona dokunma; ince ayar `Tweak*` ile yapılır.
+
+**Her değişiklikten sonra ayna testi koşulmalı** (aşağıdaki §5).
+
+---
+
+## 2. Mimari — neden böyle
+
+Birinci şahıs eli avatarın iskeletinden **tamamen ayrık**. `FirstPersonHandView` (order 120) eli doğrudan kumanda taşıyıcısının altına parent'lar:
+
+```
+kumanda taşıyıcısı (NetworkVRPlayer.leftHand/rightHand)
+│   DÜZGÜN OLMAYAN ölçek (0.08, 0.045, 0.13) — DOKUNMA
+└── FP_HandView          ölçeği tersleyen düğüm; dönüşü HEP identity
+    ├── Pose             silaha kaynaklanınca sürülen düğüm
+    │   └── Hand         Meta XR el modeli (Generic rig: b_l_* / b_r_*)
+    │                    + FirstPersonFingerCurl
+    └── KumandaNoktasi   kumandanın gerçek yerini gösteren beyaz nokta
+```
+
+**Neden üç katlı:** ters ölçek ile serbest dönüş *aynı düğümde* olursa `S·R·S⁻¹` ortonormal olmaz ve **mesh makaslanır**. Ters ölçek düğümünün dönüşü identity kaldığı sürece `S·S⁻¹` sadeleşir ve alttaki `Pose` serbestçe döndürülebilir. Ölçüldü: rastgele dönüşlerde dik açıdan sapma ~1e-7.
+
+**Taşıyıcının ölçeğini prefabta düzeltme:** `HandGrabber` silah tutuş offsetlerini `anchor.InverseTransformPoint` ile çözüyor — ölçek kalibrasyonun içinde.
+
+**Neden avatardan ayrık:** kullanıcının mutlak kuralı — "kumanda neredeyse EL ORADA olmak zorunda". Kol IK'si bunu yapısal olarak veremez (kol ancak boyu kadar uzanır). Ayrıklık sayesinde garanti koddan değil parent-child ilişkisinden gelir. Ölçüldü: boş elde sapma 0.3–2.0 m'de **tam 0.0000 mm / 0.0000°**.
+
+---
+
+## 3. Davranış kuralları (cihazda doğrulanmış kararlar — yeniden sorma)
+
+- **Boş el:** kumandaya birebir yapışık, gecikme/yumuşatma YOK.
+- **Silah tutarken:** yalnız **ANA EL** silahın kabza ankrajına tam güçle oturur (`WeaponHandWeld.TryGetHandAnchor`). Ölçüldü: 12 silahta el↔kumanda 0–7 mm.
+- **Destek eli:** V-Speedway modeli — silaha kaynaklanır, kumandanın gerçek yeri **beyaz noktayla** gösterilir (sapma <3 cm görünmez, sonra opaklık açılır), mesafe aşılınca **kopar**.
+- **Kol (uzak oyuncu):** UZAYAMAZ. `ArmReach` bileği omuzdan `armLen*0.98`'e kelepçeler; kol düz kalıp hedefe *doğru* bakar. Dönüş kelepçelenmez.
+- **REDDEDİLMİŞ, tekrarlama:** sapmayla weld ağırlığını soldurma (`6eb5795`), kayan destek rayı (`196a637`), avatar rig'inin parmaklarını kısaltma (üçüncü şahıs eldivenini bozuyor).
+
+---
+
+## 4. TUZAKLAR — hepsi bu oturumda canlı yaşandı
+
+1. **El-lilik (ÜÇ KEZ patladı).** `Cross(parmakYönü, index−pinky)` **sağ avuçtan dışarı, sol elin SIRTINDAN** dışarı bakar. İki eli aynı eksene zorlamak birini 180° çevirir. Dahası: `Quaternion.LookRotation` **ayna-eşdeğer değildir** — aynalanmış iki girdiden AYNI dönüşü üretir, yani el-liliği girdilerden ummak işe yaramaz, **açıkça verilmeli**. Doğrusunu spec sabitliyor: *avuç normali sol avuçtan dışarı, SAĞ avuçtan içeri* → sağ avuç −x.
+2. **Renk uzayı.** Proje **Linear**. `SetColor`'a gamma değeri vermek rengi iki kat açar, `.linear` vermek fazla koyultur. Çözüm tahmin etmemek: küçük **sRGB doku + beyaz `_BaseColor`** (askerin malzemesiyle aynı yol).
+3. **`Object.Destroy` edit modunda ertelenir ve HİÇ çalışmaz.** `CreatePrimitive`'in collider'ı hayatta kalır. Moda göre `Destroy`/`DestroyImmediate`.
+4. **Canlı ölçüm geri besleme kurar.** Kol boyunu her karede ölçmek, weld'in kendi yazdığı bileği geri okur. Boy **bir kez**, yerel uzayda ölçülür, kullanım anında `lossyScale` ile çarpılır.
+5. **Yumuşatmanın içinden ölçme.** `LateUpdate` değerleri ağdaki gerçek değere (editörde 0) geri çeker; elle yazdığın değer yok olur. `FirstPersonFingerCurl.Apply(grip, trigger)` bu yüzden ayrı durur — **ölçüm onu çağırmalı**.
+6. **Render açısı yanıltır.** Bu oturumda üst üste yanlış teşhis kondu (parmaklar kameraya kıvrılınca "düz" görünüyor; el kadraj dışı kalınca "kayıp"). **Sayı > piksel.** Şüphedeyken ölç.
+7. **`Resources/` içindeki her şey build'e girer**, kullanılmasa bile.
+8. **GPU sızıntısı Unity'yi çökertir.** Render döngüsünde her karede Mesh/RenderTexture yaratmak D3D12 buffer hatası verdi. Tek RT + her karede mesh imhası.
+
+---
+
+## 5. Doğrulama tarifleri
+
+**Ayna testi (duruşa dokunulduysa ZORUNLU):** sol elin çerçevesini x'te aynala, sağla karşılaştır → parmak/başparmak/avuç üçünde de **≤1°** (bugün 0.00°). Ayrıca avuç `x` işaretleri **zıt** olmalı.
+
+**Kıvrım:** `Apply(grip, trigger)` çağır, `b_?_middle3` ↔ `b_?_wrist` mesafesini ölç. grip 0→1'de **182 → 123 mm**. Tetik 0→1'de **yalnız** işaret parmağı (160→115 mm).
+
+**Başparmak:** ucun avuç düzlemine işaretli uzaklığı her grip değerinde **≥12 mm** (düzeltme öncesi 2 mm'ye iniyordu).
+
+**Cihazdan sayı çekme:**
+```
+adb logcat -d -s Unity:I     →  [FPEl] ve [FPTutus] satırlarını ayıkla
+```
+adb PATH'te değil: `C:\Program Files\Unity\Hub\Editor\6000.3.18f1\Editor\Data\PlaybackEngines\AndroidPlayer\SDK\platform-tools\adb.exe`. Kabukta takılabiliyor → `Start-Job` + `Wait-Job -Timeout`. Log tamponu 16 MB'a çıkarıldı.
+
+**Ekran yakalama:** `GripOlcum/quest_yakala.ps1` — kareyi çeker, **tek göze kırpar ve küçültür** (ham kare 4128×2208, çift gözde el seçilmiyor). Çok kare varsa pafta yap.
+
+**Editör ölçüm deseni:** prefabı `Instantiate` → `FirstPersonHandView.Attach(lc, rc, avatar)` (reflection ile) → ölç → `DestroyImmediate`. Oynatma modu gerekmez.
+
+---
+
+## 6. Açık işler
+
+| iş | durum |
+|---|---|
+| İnce ayar (§1) | **sıradaki** |
+| Cihazda canlı ayar aracı | planlandı, yazılmadı; gerekirse `WeaponGripTuner` deseni |
+| Tutunma kapısı / kopma eşiği | ~45 cm ve silahın *herhangi* parçasına bakıyor; kundak ankrajına taşınacak. `[FPTutus]` verisi bekliyor |
+| Silah başına parmak kıvrımı | **8 tüfekte orta/yüzük/serçe = 0.00** (el kapanmıyor). Silah başına 5 sayı, rig'den bağımsız |
+| Silah filtreleme (ağırlık hissi) | ertelendi — H3VR "Hand Filtering"; **ele değil SİLAHA** uygulanacak; `aimHalfLifeMs` ailesi zaten var |
+| Manşet/kol | bilek açık tüp; `MaterialDoubleSided` uygulandı ama kol yok |
+| Uzak oyuncu eldiveni | hâlâ askerin kendi mesh'i (kısa parmak + başparmak dibi çentiği kabul edildi) |
+
+---
+
+## 7. Ellerle ilgili sayısal künye
+
+- Meta XR Core SDK 205.0.0, `OculusHand_L/R` — lisans: Oculus SDK License, **Meta onaylı cihazlar için serbest** (hedef Quest 3). İki el **4.628 üçgen**.
+- El ölçeği `HandScale = 1.10` (anatomik boy zaten doğruydu; VR'da küçük algılandığı için).
+- Askerî palet, askerin `T_Soldier_Glove_BaseColor` dokusundan örneklendi: gövde `#564E3C` (%54), uç boğumlar `#352F22`. İki alt-mesh (1910 gövde / 404 uç üçgen), ayrım baskın kemikten.
+- Kıvrım açıları: parmak 55/80/55, başparmak 30/30/24. İşaret parmağı `max(grip, tetik)`.
+- Kıvrım kuralı **tek yerde**: `FingerCurlMath` — avatarın `ProceduralFingerPoser`'ı da oradan kullanıyor. Değiştirirsen iki el birden değişir.

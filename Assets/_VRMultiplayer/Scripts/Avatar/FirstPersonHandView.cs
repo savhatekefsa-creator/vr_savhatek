@@ -57,14 +57,47 @@ namespace VRMultiplayer
         // kumandanin FIZIKSEL sekline ve gercek elin sapi nasil kavradigina bagli.
         // O yuzden bu iki sayi cihazda ayarlanip buraya islenir.
         // YALNIZ SAG EL: sol el aynalanarak turetilir (bkz. BuildHandModel).
-        // Cihazdan turetildi. Kullanicinin iki gozlemi kumandanin gercek eksen
-        // haritasini verdi: parmaklar grip +Z'deyken YUKARI, grip +Y'deyken KULLANICIYA
-        // dogru gorunuyordu. Yani grip +Z ~ dunya yukarisi, grip +Y ~ dunya gerisi;
-        // dolayisiyla parmaklar grip -Y'ye, basparmak grip +Z'ye gitmeli.
-        // Deger tahmin degil, o hedeften HESAPLANDI (dogrulandi: parmak -> (0,-1,0),
-        // basparmak -> (0,0,1)).
-        static readonly Vector3 WristOffsetEuler = new Vector3(0f, 220.3f, 209.9f);
-        static readonly Vector3 WristOffsetPosition = Vector3.zero;
+        // ===================== INCE AYAR — TEK DOKUNUS NOKTASI =====================
+        // Asagidaki ALTI sayi disinda elin durusuna dokunmaya gerek yok.
+        //
+        // Eksenler KUMANDANIN ham eksenleri DEGIL, senin GORDUGUN yonler. Ham grip
+        // eksenleri sezgisel degil (cihazda olculdu: grip +Z ~ dunya yukarisi,
+        // grip +Y ~ dunya gerisi, grip +X ~ dunya sagi), o yuzden cevrim burada
+        // yapiliyor ve disaridan "ileri / yukari / ice" diye konusuluyor.
+        //
+        // Hepsi SAG ELE gore. Sol el WeaponGripMath.MirrorX ile aynalanir - ayri
+        // sayi YOK, dolayisiyla iki el asla ayrisamaz.
+        // Kumanda notr tutulurken: parmaklar ILERI, basparmak YUKARI, avuc ICE.
+
+        const float OffsetForward = 0f;   // metre, + ileri (parmaklarin gosterdigi yon)
+        const float OffsetUp      = 0f;   // metre, + yukari (basparmagin oldugu taraf)
+        const float OffsetInward  = 0f;   // metre, + govde ortasina dogru
+
+        const float TweakYaw   = 0f;      // derece, + eli yukari eksende disa cevirir
+        const float TweakPitch = 0f;      // derece, + parmak uclarini yukari kaldirir
+        const float TweakRoll  = 0f;      // derece, + avuc icini asagi dondurur
+
+        // TEMEL DONUS - buna dokunma, cihaz gozlemlerinden HESAPLANDI (tahmin degil):
+        // parmaklar tam (0,-1,0)'a, basparmak (0,0,1)'e gidiyor. Ince ayar icin
+        // yukaridaki Tweak* degerlerini kullan.
+        static readonly Vector3 BaseWristEuler = new Vector3(0f, 220.3f, 209.9f);
+
+        // Gorunen yonlerden kumandanin ham eksenlerine cevrim.
+        static Vector3 WristOffsetPosition =>
+            new Vector3(-OffsetInward, -OffsetForward, OffsetUp);
+
+        static Vector3 WristOffsetEuler
+        {
+            get
+            {
+                // Ince ayar, gorunen eksenler etrafinda: yukari = grip +Z,
+                // sag = grip +X, ileri = grip -Y.
+                Quaternion tweak = Quaternion.AngleAxis(TweakYaw, Vector3.forward)
+                                 * Quaternion.AngleAxis(TweakPitch, Vector3.right)
+                                 * Quaternion.AngleAxis(TweakRoll, Vector3.down);
+                return (tweak * Quaternion.Euler(BaseWristEuler)).eulerAngles;
+            }
+        }
 
         const float DotDiameter = 0.02f;
         const float DotFadeStart = 0.03f;
