@@ -34,6 +34,14 @@ namespace VRMultiplayer
     public class FirstPersonHandView : MonoBehaviour
     {
         public const string ObjectName = "FP_HandView";
+        public const string DotName = "KumandaNoktasi";
+
+        // Beyaz nokta: sapma bu degerin altindayken hic gorunmez (normal nisan alirken
+        // gorus temiz kalsin), ustunde opaklik dogrusal olarak 1'e cikar. Ust sinir
+        // simdilik sabit; cihaz olcumunden sonra profildeki kopma mesafesine baglanacak.
+        const float DotDiameter = 0.02f;
+        const float DotFadeStart = 0.03f;
+        const float DotFadeEnd = 0.25f;
 
         // OpenXR grip pose zaten avucun icinde oturur, o yuzden tasiyiciya gore
         // kaydirma sifir. Elin silaha gore yerini ayarlamak gerekirse tek dokunus
@@ -48,6 +56,8 @@ namespace VRMultiplayer
 
         Transform _carrier;      // kumanda tasiyicisi
         Transform _pose;         // surulen dugum
+        MeshRenderer _dot;       // kumandanin gercek yerini gosteren beyaz nokta
+        MaterialPropertyBlock _dotMpb;
         GameObject _avatar;      // WeaponHandWeld calisma aninda buraya ekleniyor
         bool _left;
         WeaponHandWeld _weld;
@@ -92,6 +102,27 @@ namespace VRMultiplayer
             var pose = new GameObject("Pose");
             pose.transform.SetParent(root.transform, false);
 
+            // Kumandanin GERCEK yeri. Pose'un KARDESI olmali: Pose silaha kayiyor,
+            // nokta kumandada kalmali. Root zaten tam kumandanin uzerinde ve donusu
+            // identity oldugu icin nokta hicbir sey yazilmadan yerinde durur.
+            var dot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            dot.name = DotName;
+            var dcol = dot.GetComponent<Collider>();
+            if (dcol != null)
+            {
+                if (Application.isPlaying) Object.Destroy(dcol);
+                else Object.DestroyImmediate(dcol);
+            }
+            dot.transform.SetParent(root.transform, false);
+            dot.transform.localPosition = Vector3.zero;
+            dot.transform.localRotation = Quaternion.identity;
+            dot.transform.localScale = Vector3.one * DotDiameter;
+            var dmr = dot.GetComponent<MeshRenderer>();
+            dmr.sharedMaterial = GhostMaterial();
+            dmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            dmr.receiveShadows = false;
+            dmr.enabled = false;   // sapma olmadan gorunmez
+
             float side = left ? 1f : -1f;   // sag elin basparmagi -x'te (govde ortasina dogru)
             Piece(pose, "Palm", new Vector3(0f, 0f, 0.01f), new Vector3(0.075f, 0.028f, 0.095f), new Color(0.62f, 0.60f, 0.58f));
             Piece(pose, "Thumb", new Vector3(side * 0.042f, 0.004f, 0.028f), new Vector3(0.024f, 0.022f, 0.052f), new Color(0.85f, 0.45f, 0.15f));
@@ -100,8 +131,27 @@ namespace VRMultiplayer
             var view = root.AddComponent<FirstPersonHandView>();
             view._carrier = carrier;
             view._pose = pose.transform;
+            view._dot = dmr;
             view._avatar = avatar;
             view._left = left;
+        }
+
+        // Saydam varyant KAYNAK malzeme basina bir kez uretilir (MaterialGhost) ve iki
+        // el paylasir. Opaklik el basina degistigi icin malzeme kopyalanmaz -
+        // MaterialPropertyBlock kullanilir; malzeme ZATEN saydam oldugundan MPB'nin
+        // yapamadigi sey (render modu degistirmek) gerekmiyor.
+        static Material _dotSource, _dotGhost;
+
+        static Material GhostMaterial()
+        {
+            if (_dotGhost != null) return _dotGhost;
+            if (_dotSource == null)
+            {
+                _dotSource = MakeMaterial(Color.white);
+                _dotSource.name = "M_KumandaNoktasi";
+            }
+            _dotGhost = MaterialGhost.Of(_dotSource) ?? _dotSource;
+            return _dotGhost;
         }
 
         void LateUpdate()
@@ -113,22 +163,15 @@ namespace VRMultiplayer
             if (_weld == null && _avatar != null)
                 _weld = _avatar.GetComponentInChildren<WeaponHandWeld>();
 
-            // ANA EL silah tutarken silahin kabza ankrajina oturur. Silah zaten ana
-            // kumandanin ucunda oldugu icin bu, kumandadan sapma DEMEK DEGIL -
-            // cihazda olculdu: her silahta el<->kumanda 0-7 mm.
+            // Silah tutarken el, silahin uzerindeki ankraja TAM GUCLE oturur ve orada
+            // kalir - kumanda geri cekilse bile. Kumandanin gercek yeri beyaz noktayla
+            // gosterilir, belli mesafeyi asinca tutus KOPAR (HandGrabber).
             //
-            // DESTEK ELI kasten haric: profillerdeki destek rayi NOKTA-ray
-            // (baslangic == bitis), yani el silah uzerinde tek bir sabit noktaya
-            // cakiliyordu. Cihaz olcumu bunun bedelini gosterdi - gorsel el,
-            // oyuncunun gercek elinden 12 silahta 81-212 mm uzaga isinlaniyor ve
-            // 40-159 derece donuyordu. Kullanicinin mutlak kurali ("kumanda
-            // neredeyse EL ORADA") bunu yener: destek eli kumandada kalir. Iki elle
-            // tutarken oyuncunun eli zaten kundagin uzerindedir, dolayisiyla dogal
-            // gorunur. Avatarin (uzak oyuncularin gordugu) destek eli WeaponHandWeld
-            // ile silaha kaynakli kalmaya devam eder - orasi degismedi.
-            bool welded = _weld != null
-                       && _weld.TryGetHandAnchor(_left, out _lastAnchor, out bool isSupport)
-                       && !isSupport;
+            // Bu, "el her zaman kumandada" kuralinin bilincli istisnasi: asil ihtiyac
+            // elin kumandada olmasi degil, oyuncunun gercek elini KAYBETMEMESIYDI -
+            // onu beyaz nokta karsiliyor. Agirlik SOLMAZ; kopana kadar yapisik kalir
+            // (sapmayla soldurma cihazda reddedilmisti, tekrarlanmiyor).
+            bool welded = _weld != null && _weld.TryGetHandAnchor(_left, out _lastAnchor, out _);
 
             // DONUS de silaha gore olmali: Quest'in grip pose ileri ekseni nisan
             // hattindan ~56 derece asagida (olculmus kalibrasyon), yani ham kumanda
@@ -158,8 +201,14 @@ namespace VRMultiplayer
                 // Bos el: tasiyiciya BIREBIR yapisik, ara islem yok.
                 _pose.localPosition = Vector3.zero;
                 _pose.localRotation = Quaternion.identity;
+                UpdateDot(0f);
                 return;
             }
+
+            // Sapma: elin oturdugu ankraj ile kumandanin GERCEK yeri arasindaki mesafe.
+            // Nokta bunu gorunur kilar - oyuncu elinin nerede oldugunu kaybetmesin ve
+            // kopmanin yaklastigini gorsun.
+            UpdateDot(Vector3.Distance(_carrier.position, _lastAnchor));
 
             // Duzeltme de agirlikla harmanlanir: agirlik 0'a dusunce donus tam
             // olarak kumandanin donusudur.
@@ -168,6 +217,33 @@ namespace VRMultiplayer
                 Quaternion.Slerp(_carrier.rotation, _gripDelta * _carrier.rotation, _weight));
 
             LogDiagnostic(welded);
+        }
+
+        /// <summary>
+        /// Beyaz noktayi sapmaya gore surer. Nokta zaten kumandanin uzerinde duruyor
+        /// (root'un cocugu, yerel konumu sifir) - burada yalnizca gorunurlugu ayarlanir.
+        /// Opaklik icin malzeme KOPYALANMAZ: paylasimli saydam varyant + property block.
+        /// </summary>
+        void UpdateDot(float deviation)
+        {
+            if (_dot == null) return;
+
+            float a = Mathf.InverseLerp(DotFadeStart, DotFadeEnd, deviation);
+            if (a <= 0f)
+            {
+                if (_dot.enabled) _dot.enabled = false;
+                return;
+            }
+
+            if (!_dot.enabled) _dot.enabled = true;
+            if (_dotMpb == null) _dotMpb = new MaterialPropertyBlock();
+            _dot.GetPropertyBlock(_dotMpb);
+            // Kopmaya yaklastikca beyazdan uyari tonuna kayar.
+            Color c = Color.Lerp(Color.white, new Color(1f, 0.55f, 0.25f), a);
+            c.a = Mathf.Lerp(0.25f, 0.95f, a);
+            _dotMpb.SetColor("_BaseColor", c);
+            _dotMpb.SetColor("_Color", c);
+            _dot.SetPropertyBlock(_dotMpb);
         }
 
         // TESHIS: cihazda "el silaha oturmuyor" derdini pikselden degil SAYIDAN

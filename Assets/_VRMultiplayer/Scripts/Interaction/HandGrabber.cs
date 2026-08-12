@@ -105,6 +105,24 @@ namespace VRMultiplayer
         static float NearestColliderDistance(GrabbableObject weapon, Vector3 point, bool useBounds)
             => NearestColliderDistance(weapon.GetComponentsInChildren<Collider>(), point, useBounds);
 
+        /// <summary>
+        /// Bu destek elinin kumandasi ile silahin YAZILI kundak ankraji arasindaki mesafe.
+        /// Tutunma/kopma esiklerinin tasinmasi planlanan olcu bu; simdilik yalnizca
+        /// teshis icin yaziliyor. Ankraj yoksa -1.
+        ///
+        /// Ayna: profiller ana el SAG olacak sekilde yazilmis; silah sol elde tutuluyorsa
+        /// ankraj X'te aynalanir (WeaponGrip ile ayni kural).
+        /// </summary>
+        static float SupportAnchorDistance(HandState h)
+        {
+            if (h == null || h.anchor == null || h.supporting == null) return -1f;
+            var grip = h.supportGrip;
+            if (grip == null || grip.Profile == null) return -1f;
+            Vector3 local = grip.Profile.supportRailLocalStart;
+            if (h.supporting.HolderHand == 0) local = Weapons.WeaponGripMath.MirrorX(local);
+            return Vector3.Distance(h.supporting.transform.TransformPoint(local), h.anchor.position);
+        }
+
         // Asil govde cache'lenmis diziyle calisir: destek eli tutarken kosan birakma kontrolu
         // her cagride GetComponentsInChildren ile heap alloc yapmasin (iki elle nisan Quest'te
         // varsayilan catisma durusu — kare basi alloc surekli GC baskisiydi). Silah despawn
@@ -425,6 +443,15 @@ namespace VRMultiplayer
                     // Break threshold is at least the grab reach so grabbing can't instantly undo.
                     if (d > Mathf.Max(p.supportBreakDistance, grabRadius * 1.5f))
                     {
+                        // TESHIS: kopma anini ve IKI olcuyu birden yaz - collider mesafesi
+                        // (esigin bugun kullandigi) ve kundak ankrajina mesafe (esigin
+                        // tasinmasi planlanan yer). Ikisinin farki, esigi veriden secmek
+                        // icin gereken sey.
+                        Debug.Log(string.Format(
+                            "[FPTutus] KOPTU {0} silah={1} collider={2:0}mm ankraj={3:0}mm esik={4:0}mm",
+                            h.index == 0 ? "SOL" : "SAG", h.supporting.name, d * 1000f,
+                            SupportAnchorDistance(h) * 1000f,
+                            Mathf.Max(p.supportBreakDistance, grabRadius * 1.5f) * 1000f));
                         h.supporting = null;
                         h.supportGrip = null;
                         h.supportCols = null;
@@ -702,6 +729,14 @@ namespace VRMultiplayer
                 {
                     h.supporting = o.held;
                     h.supportGrip = o.grip; // null for legacy weapons — rail logic then stays off
+                    // TESHIS: tutunma anindaki iki olcu. Kapiyi kundak ankrajina tasimadan
+                    // once, oyuncunun eli gercekte ankraja NE KADAR yakin oluyor onu
+                    // bilmemiz lazim - yarigapi tahminle secersek, ankraj noktasi kotu
+                    // yazilmis silahlar iki elle hic tutulamaz hale gelebilir.
+                    Debug.Log(string.Format(
+                        "[FPTutus] TUTUNDU {0} silah={1} collider={2:0}mm ankraj={3:0}mm kapi={4:0}mm",
+                        h.index == 0 ? "SOL" : "SAG", o.held.name, sd * 1000f,
+                        SupportAnchorDistance(h) * 1000f, grabRadius * 1.5f * 1000f));
                     // Collider listesi tutus boyunca degismez — birakma kontrolu icin bir kez
                     // cache'lenir (her kare GetComponentsInChildren alloc'u yerine).
                     h.supportCols = o.held.GetComponentsInChildren<Collider>();
