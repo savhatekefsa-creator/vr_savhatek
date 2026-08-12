@@ -2448,6 +2448,16 @@ namespace VRMultiplayer
                 string refUyari = YawReferenceWarning();
                 string refSatir = refUyari != null ? refUyari + "\n" : "";
 
+                // YON DOGRULANIYOR — teyit beklerken oyuncuya SEBEBINI soyle.
+                //
+                // Cihazda goruldu: 180 derecelik bir sapmada dunya 2,8 saniye donuk kaldi
+                // (konum hemen duzeldi, yaw teyit bekledi) ve ekranda bunu anlatan hicbir
+                // sey yoktu. Oyuncu icin bu "sistem bozuldu"dan ayirt edilemez. Sayilar
+                // TagDiag.log'a yaziliyor ama oyuncu log okumuyor.
+                string yawSatir = _bigYawRun > 0
+                    ? $"YON DOGRULANIYOR {_bigYawRun}/{yawRecoveryConfirmations}\n" : "";
+                refSatir += yawSatir;
+
                 if (!seen)
                     // Harita yeni degistiyse SEBEBI de yaz: "tag gorunmuyor" tek basina
                     // "bekle" gibi okunuyor, oysa oyuncunun YAPMASI gereken bir sey var.
@@ -2492,6 +2502,11 @@ namespace VRMultiplayer
 
             string refUyariTeshis = YawReferenceWarning();
             if (refUyariTeshis != null) p.Append(refUyariTeshis + "\n");
+
+            // Teyit bekleyen buyuk sapma: teshis panelinde SAYISIYLA birlikte.
+            if (_bigYawRun > 0)
+                p.Append($"YON DOGRULANIYOR {_bigYawRun}/{yawRecoveryConfirmations}  " +
+                         $"({_bigYawFirst:0.0} derece, tag {_bigYawTag})\n");
 
             if (!cameraRunning) p.Append("KAMERA YOK (izin?)\n");
             if (showPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
