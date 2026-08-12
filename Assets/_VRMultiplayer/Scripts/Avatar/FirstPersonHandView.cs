@@ -74,8 +74,17 @@ namespace VRMultiplayer
         const float OffsetInward  = 0f;   // metre, + govde ortasina dogru
 
         const float TweakYaw   = 0f;      // derece, + eli yukari eksende disa cevirir
-        const float TweakPitch = 0f;      // derece, + parmak uclarini yukari kaldirir
-        const float TweakRoll  = 0f;      // derece, + avuc icini asagi dondurur
+        const float TweakPitch = -10f;    // derece, + parmak uclarini ASAGI indirir
+                                          // (isaret olculdu, tahmin degil: Unity'de +X
+                                          // ekseninde arti donus burnu asagi egiyor.)
+                                          // Rest durusta orta parmak ucu 2.49 derece asagi
+                                          // bakiyordu; -2.5 onu tam duzluyor ama cihazda
+                                          // HALA asagi goruldu (sap elde zaten one-asagi
+                                          // egik duruyor), -10 ile ucu 6.8 derece yukarida.
+        const float TweakRoll  = 40f;     // derece, + avuc icini asagi dondurur
+                                          // Temel durusta avuc 40.3 derece YUKARI yatikti
+                                          // (olculdu); 40 ile 0.3 dereceye iner, yani avuc
+                                          // dupeduz ICE bakar. Cihazda 20 denendi, az geldi.
 
         // TEMEL DONUS - buna dokunma, cihaz gozlemlerinden HESAPLANDI (tahmin degil):
         // parmaklar tam (0,-1,0)'a, basparmak (0,0,1)'e gidiyor. Ince ayar icin

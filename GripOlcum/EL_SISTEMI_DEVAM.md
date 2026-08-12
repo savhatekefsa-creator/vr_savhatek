@@ -15,8 +15,8 @@ const float OffsetUp      = 0f;   // metre, + yukarı (başparmağın olduğu ta
 const float OffsetInward  = 0f;   // metre, + gövde ortasına doğru
 
 const float TweakYaw   = 0f;      // derece, + eli yukarı eksende dışa çevirir
-const float TweakPitch = 0f;      // derece, + parmak uçlarını yukarı kaldırır
-const float TweakRoll  = 0f;      // derece, + avuç içini aşağı döndürür
+const float TweakPitch = -10f;    // derece, + parmak uçlarını AŞAĞI indirir
+const float TweakRoll  = 40f;     // derece, + avuç içini aşağı döndürür
 ```
 
 **Bunlar kumandanın ham eksenleri DEĞİL, kullanıcının gördüğü yönler.** Ham grip eksenleri sezgisel değil (cihazda ölçüldü: grip **+Z ≈ dünya yukarısı**, **+Y ≈ dünya gerisi**, **+X ≈ dünya sağı**); çevrim kodun içinde yapılıyor.
@@ -26,6 +26,12 @@ Hepsi **SAĞ ELE** göre yazılır; sol el `WeaponGripMath.MirrorX` ile aynalan�
 `BaseWristEuler = (0, 220.3, 209.9)` **hesaplanmış** temel dönüş, ona dokunma; ince ayar `Tweak*` ile yapılır.
 
 **Her değişiklikten sonra ayna testi koşulmalı** (aşağıdaki §5).
+
+**İşaretler ölçüldü (2026-08-12), tahmin değil:** yaw `+` = dışa ✓, roll `+` = avuç içi aşağı ✓, **pitch `+` = parmak uçları AŞAĞI** — belgenin ilk hâlinde "yukarı kaldırır" yazıyordu, **yanlıştı** (Unity'de +X ekseni etrafında artı dönüş burnu aşağı eğer). Yeni bir tweak eklenirse işareti yazmadan önce ölç.
+
+**Parmak ucu açıları (rest duruş, + = aşağı):** temel hâlde orta parmak ucu 2.49° aşağıydı; `-2.5` onu düzledi ama **kullanıcı hâlâ aşağı gördü** — çünkü ölçüm *kumandaya göre*, kumandanın sapı elde zaten öne-aşağı eğik duruyor. `-10`'da orta parmak ucu 7.51° yukarıda (işaret 16.95 yukarı, serçe 9.92 aşağı, başparmak 50.61 yukarı). Ölçek birebir: her 1° eksi = 1° yukarı. **Cihaz kararı bekliyor.**
+
+**Ölçülmüş referans (2026-08-12):** temel duruşta (tüm Tweak = 0) sağ avucun normali **40.3° YUKARI** yatık. `TweakRoll` her derece için bunu birebir aşağı çeker: `+20` → 20.3°, `+40` → 0.3° (avuç düpedüz içe bakar). Yani 5°'lik denemeler bu yatıklığın yanında **gözle görülmez** — kullanıcı ilk denemede tweak'in yönünü değil bu 40°'yi fark etti. Cihazda 20 denendi, az geldi; **yerleşen değer `TweakRoll = 40`** (avuç yukarı açısı 0.3°, avuç normali tam `x = ∓1.000`).
 
 ---
 
