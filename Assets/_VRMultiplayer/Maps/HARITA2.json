@@ -2,12 +2,12 @@
     "version": 3,
     "name": "HARITA2",
     "createdBy": "HATICE",
-    "savedAt": "2026-08-10 16:09:32",
+    "savedAt": "2026-08-12 14:53:44",
     "libraryVersion": 7,
     "cellSize": 0.0625,
     "levelHeight": 0.5,
     "buildMargin": 25.0,
-    "inPool": true,
+    "inPool": false,
     "builtForRoom": {
         "version": 1,
         "capturedAt": "",
@@ -44,16 +44,7 @@
                 "z": 0.0
             },
             "yawDegrees": 180.0,
-            "useForCalibration": true
-        },
-        {
-            "id": 2,
-            "position": {
-                "x": -2.511815071105957,
-                "y": 1.4999090433120728,
-                "z": -0.5048270225524902
-            },
-            "yawDegrees": -88.18314361572266,
+            "sourceInstanceId": 0,
             "useForCalibration": true
         },
         {
@@ -61,9 +52,21 @@
             "position": {
                 "x": -2.53125,
                 "y": 1.5,
-                "z": -3.25
+                "z": -0.6875
             },
-            "yawDegrees": -89.723388671875,
+            "yawDegrees": -90.0,
+            "sourceInstanceId": 4294967295,
+            "useForCalibration": true
+        },
+        {
+            "id": 2,
+            "position": {
+                "x": -2.53125,
+                "y": 1.5,
+                "z": -3.3125
+            },
+            "yawDegrees": -90.0,
+            "sourceInstanceId": 4294967295,
             "useForCalibration": true
         }
     ],
