@@ -12,12 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 836b73326beb1724c8de15b779af465e, type: 3}
   m_Name: PropLibrary
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Constructor.PropLibrary
-  contentVersion: 17
+  contentVersion: 21
   schemaVersion: 1
   sourceFolders:
   - Assets/P A I N T B A L L S E R I ES MK/Content/Prefabs
   - Assets/Standout7
   - Assets/_VRMultiplayer/Resources/ConstructorProps
+  - Assets/_VRMultiplayer/Art/apocalypse/Prefabs
   palettes:
   - id: siper
     displayName: SIPER
@@ -27,6 +28,8 @@ MonoBehaviour:
     displayName: DOGUS
   - id: uzay
     displayName: UZAY
+  - id: kiyamet
+    displayName: KIYAMET
   props:
   - id: barrier_1
     displayName: Barrier_1
@@ -41,6 +44,19 @@ MonoBehaviour:
     hiddenInPalette: 1
     networked: 0
     height: 2.4080095
+  - id: blast_door_wall
+    displayName: Blast_Door_Wall
+    category: 1
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 6534936241040303489, guid: e929ed71d1ad7b243b34bbbbb9c0b9a3, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 2.5901594, y: 0.43363944}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 2
   - id: bunkers_1
     displayName: Bunkers_1
     category: 0
@@ -262,6 +278,32 @@ MonoBehaviour:
     hiddenInPalette: 1
     networked: 0
     height: 10
+  - id: gun_nest
+    displayName: Gun_Nest
+    category: 0
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 3163388362488339833, guid: 7dba9251f7252ff4397b5627205810f2, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 2.7718482, y: 2.2357316}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 1.0000001
+  - id: hazmat_crate
+    displayName: Hazmat_Crate
+    category: 0
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 8379632088094602340, guid: 0e7e16f7a8c93124c95ccbd6456113f0, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 0.8855041, y: 0.6008056}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.6
   - id: hill_01
     displayName: Hill_01
     category: 3
@@ -288,6 +330,19 @@ MonoBehaviour:
     hiddenInPalette: 1
     networked: 0
     height: 20
+  - id: jersey_barrier
+    displayName: Jersey_Barrier
+    category: 0
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 980724559597690349, guid: 7c4caa5ce734bb54d90661e653a83c26, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1.3674009, y: 0.47292966}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 1
   - id: metal_floor
     displayName: Metal_Floor
     category: 3
@@ -301,6 +356,19 @@ MonoBehaviour:
     hiddenInPalette: 1
     networked: 0
     height: 2.6198404
+  - id: military_jeep
+    displayName: Military_Jeep
+    category: 0
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 6784659190876473625, guid: 551e73fe08fe41149a53a73acb1dc8ec, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 3.3395286, y: 1.6215672}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 1.5000001
   - id: mushroom_01
     displayName: Mushroom_01
     category: 2
@@ -327,6 +395,19 @@ MonoBehaviour:
     hiddenInPalette: 1
     networked: 0
     height: 2.6198404
+  - id: power_pole
+    displayName: Power_Pole
+    category: 0
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 217380427826591957, guid: 737a780a5809b3f45b20e7e973f60c8e, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 10.416418, y: 6.4900513}
+    fitToFootprint: 0
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 3.0000005
   - id: rack_long_a
     displayName: Rack_Long_A
     category: 0
@@ -379,6 +460,19 @@ MonoBehaviour:
     hiddenInPalette: 0
     networked: 0
     height: 1.625
+  - id: radiation_drum
+    displayName: Radiation_Drum
+    category: 0
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 4037158953649533900, guid: 93c1d98027a5bf24e891ab9a4972daac, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 0.9980449, y: 0.9982191}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 1.5
   - id: rock_01
     displayName: Rock_01
     category: 0
@@ -444,6 +538,162 @@ MonoBehaviour:
     hiddenInPalette: 1
     networked: 0
     height: 2.198786
+  - id: ruined_wall
+    displayName: Ruined_Wall
+    category: 1
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 3618397276074734788, guid: 6108b8accd6de6a418a5b5e3c445e8f3, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 4.2618256, y: 0.7146949}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 3
+  - id: sandbag_barrier
+    displayName: Sandbag_Barrier
+    category: 0
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 1432805738008151433, guid: aeff57fd315e2174184bfd0e45fef68f, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 2.9853687, y: 2.712527}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 1.2000002
+  - id: scifi_barrier_corner
+    displayName: SciFi_Barrier_Corner
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 1643308432224931619, guid: f2b7bf88ed0049d4786bfb27e496779a, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 0.5, y: 0.5}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.875
+  - id: scifi_cargo_container
+    displayName: SciFi_Cargo_Container
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 1836036423837746511, guid: 255dadbe8db92a345b9167717f4db563, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 0.75, y: 0.5}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.75
+  - id: scifi_control_console
+    displayName: SciFi_Control_Console
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 345146471767728767, guid: 3121881175a76984daaa04c02ef36164, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1, y: 0.5}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.8985996
+  - id: scifi_cover_low
+    displayName: SciFi_Cover_Low
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 8792305659466635567, guid: 2752394fb9729284db8afab6c3e125e6, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1, y: 0.25}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 0.875
+  - id: scifi_power_core
+    displayName: SciFi_Power_Core
+    category: 0
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 1408084161108336099, guid: 9f614375a46755142a1e6004c364dd86, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 0.5, y: 0.5}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 1.25
+  - id: scifi_wall_door
+    displayName: SciFi_Wall_Door
+    category: 1
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 7399424144815105790, guid: be385b7e6d3a948439ce0e57fe07397b, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1.5, y: 0.25}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 2.2
+  - id: scifi_wall_solid
+    displayName: SciFi_Wall_Solid
+    category: 1
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 920992486517614723, guid: e7ba661651e00cc4ab60975d08c87ede, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1, y: 0.25}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 2.2
+  - id: scifi_wall_window
+    displayName: SciFi_Wall_Window
+    category: 1
+    paletteId: uzay
+    snap: 0
+    prefab: {fileID: 8801070746615242133, guid: e582e113194163642a195b1b929dc56e, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1, y: 0.25}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 2.2
+  - id: scorched_tree
+    displayName: Scorched_Tree
+    category: 2
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 3040369058426384191, guid: c17edbb29583ce44d984ccd587da7df4, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 3.7978444, y: 3.5417433}
+    fitToFootprint: 0
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 4.9999995
+  - id: shattered_window
+    displayName: Shattered_Window
+    category: 1
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 493330267367303753, guid: fed9dabdc5ef2af4fa135e4872f031d2, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1.2259376, y: 0.38973612}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 2
   - id: spawn_a
     displayName: Spawn_A
     category: 4
@@ -678,6 +928,19 @@ MonoBehaviour:
     hiddenInPalette: 0
     networked: 0
     height: 2.2
+  - id: watchtower_base
+    displayName: Watchtower_Base
+    category: 0
+    paletteId: kiyamet
+    snap: 0
+    prefab: {fileID: 8119383219768459712, guid: eed6e04a79193ab428e853b85a8951b6, type: 3}
+    resourcePath: 
+    sizeMeters: {x: 1.226563, y: 1.268682}
+    fitToFootprint: 1
+    freeRotation: 0
+    hiddenInPalette: 0
+    networked: 0
+    height: 3
   - id: wood_modular_5
     displayName: Wood_Modular_5
     category: 1
@@ -730,107 +993,3 @@ MonoBehaviour:
     hiddenInPalette: 0
     networked: 0
     height: 2.2630243
-  - id: scifi_wall_solid
-    displayName: Uzay Duvari
-    category: 1
-    paletteId: uzay
-    snap: 0
-    prefab: {fileID: 920992486517614723, guid: e7ba661651e00cc4ab60975d08c87ede, type: 3}
-    resourcePath: 
-    sizeMeters: {x: 1, y: 0.25}
-    fitToFootprint: 1
-    freeRotation: 0
-    hiddenInPalette: 0
-    networked: 0
-    height: 2.2
-  - id: scifi_wall_door
-    displayName: Uzay Kapisi
-    category: 1
-    paletteId: uzay
-    snap: 0
-    prefab: {fileID: 7399424144815105790, guid: be385b7e6d3a948439ce0e57fe07397b, type: 3}
-    resourcePath: 
-    sizeMeters: {x: 1.5, y: 0.25}
-    fitToFootprint: 1
-    freeRotation: 0
-    hiddenInPalette: 0
-    networked: 0
-    height: 2.2
-  - id: scifi_wall_window
-    displayName: Uzay Penceresi
-    category: 1
-    paletteId: uzay
-    snap: 0
-    prefab: {fileID: 8801070746615242133, guid: e582e113194163642a195b1b929dc56e, type: 3}
-    resourcePath: 
-    sizeMeters: {x: 1, y: 0.25}
-    fitToFootprint: 1
-    freeRotation: 0
-    hiddenInPalette: 0
-    networked: 0
-    height: 2.2
-  - id: scifi_cover_low
-    displayName: Enerji Siperi
-    category: 0
-    paletteId: uzay
-    snap: 0
-    prefab: {fileID: 8792305659466635567, guid: 2752394fb9729284db8afab6c3e125e6, type: 3}
-    resourcePath: 
-    sizeMeters: {x: 1, y: 0.25}
-    fitToFootprint: 1
-    freeRotation: 0
-    hiddenInPalette: 0
-    networked: 0
-    height: 0.875
-  - id: scifi_cargo_container
-    displayName: Kargo Kasasi
-    category: 0
-    paletteId: uzay
-    snap: 0
-    prefab: {fileID: 1836036423837746511, guid: 255dadbe8db92a345b9167717f4db563, type: 3}
-    resourcePath: 
-    sizeMeters: {x: 0.75, y: 0.5}
-    fitToFootprint: 1
-    freeRotation: 0
-    hiddenInPalette: 0
-    networked: 0
-    height: 0.75
-  - id: scifi_barrier_corner
-    displayName: Kose Barikati
-    category: 0
-    paletteId: uzay
-    snap: 0
-    prefab: {fileID: 1643308432224931619, guid: f2b7bf88ed0049d4786bfb27e496779a, type: 3}
-    resourcePath: 
-    sizeMeters: {x: 0.5, y: 0.5}
-    fitToFootprint: 1
-    freeRotation: 0
-    hiddenInPalette: 0
-    networked: 0
-    height: 0.875
-  - id: scifi_control_console
-    displayName: Kontrol Konsolu
-    category: 0
-    paletteId: uzay
-    snap: 0
-    prefab: {fileID: 345146471767728767, guid: 3121881175a76984daaa04c02ef36164, type: 3}
-    resourcePath: 
-    sizeMeters: {x: 1, y: 0.5}
-    fitToFootprint: 1
-    freeRotation: 0
-    hiddenInPalette: 0
-    networked: 0
-    height: 0.8985996
-  - id: scifi_power_core
-    displayName: Guc Reaktoru
-    category: 0
-    paletteId: uzay
-    snap: 0
-    prefab: {fileID: 1408084161108336099, guid: 9f614375a46755142a1e6004c364dd86, type: 3}
-    resourcePath: 
-    sizeMeters: {x: 0.5, y: 0.5}
-    fitToFootprint: 1
-    freeRotation: 0
-    hiddenInPalette: 0
-    networked: 0
-    height: 1.25
