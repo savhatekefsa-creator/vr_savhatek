@@ -57,7 +57,13 @@ namespace VRMultiplayer
         // kumandanin FIZIKSEL sekline ve gercek elin sapi nasil kavradigina bagli.
         // O yuzden bu iki sayi cihazda ayarlanip buraya islenir.
         // YALNIZ SAG EL: sol el aynalanarak turetilir (bkz. BuildHandModel).
-        static readonly Vector3 WristOffsetEuler = Vector3.zero;
+        // Cihazdan turetildi. Kullanicinin iki gozlemi kumandanin gercek eksen
+        // haritasini verdi: parmaklar grip +Z'deyken YUKARI, grip +Y'deyken KULLANICIYA
+        // dogru gorunuyordu. Yani grip +Z ~ dunya yukarisi, grip +Y ~ dunya gerisi;
+        // dolayisiyla parmaklar grip -Y'ye, basparmak grip +Z'ye gitmeli.
+        // Deger tahmin degil, o hedeften HESAPLANDI (dogrulandi: parmak -> (0,-1,0),
+        // basparmak -> (0,0,1)).
+        static readonly Vector3 WristOffsetEuler = new Vector3(0f, 220.3f, 209.9f);
         static readonly Vector3 WristOffsetPosition = Vector3.zero;
 
         const float DotDiameter = 0.02f;
