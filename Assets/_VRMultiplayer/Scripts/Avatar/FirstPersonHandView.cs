@@ -43,14 +43,14 @@ namespace VRMultiplayer
         // icin serbest, hedefimiz Quest). "L"/"R" sona eklenir.
         const string ModelPath = "FPHands/Meta/OculusHand_";
         const string GloveBodyMat = "FPHands/Meta/M_FPGlove_Govde";
-        const string GloveTipMat = "FPHands/Meta/M_FPGlove_Uc";
+        // M_FPGlove_Uc (uc bogum malzemesi) su an KULLANILMIYOR - bkz. BuildHandModel.
 
         // Meta'nin eli anatomik olarak GERCEK boyutta (bilek->uc ~190 mm, olcek 1.000);
         // ortada olcek hatasi yok. Ama VR'da gercek boyutlu el sik sik kucuk algilanir,
         // ustelik kolu/mansetı olmayan bir el daha da kucuk okunur. Cihazda ayarlanacak
         // tek dokunus noktasi burasi. Olcek "Hand" dugumune uygulanir - FP_HandView koku
         // ters-olcek dugumudur, oraya dokunmak makaslama kuralini bozar.
-        const float HandScale = 1.10f;
+        const float HandScale = 1.20f;
 
         // Elin kumandaya gore ince ayari. SIFIR = yalnizca OpenXR grip cerçevesi.
         // Spec dogru cerceveyi verir ama son 10-20 dereceyi veremez: dogru durus
@@ -427,14 +427,22 @@ namespace VRMultiplayer
                 go.transform.position += pose.position - wrist.position;
             }
 
-            // Askeri boyama: govde + uc bogumlar ayri alt-mesh (renkler askerin kendi
-            // eldiven dokusundan olculdu). Mesh FBX'inkiyle ayni vertex/bindpose setini
-            // tasiyor, yalnizca ucgenler iki gruba ayrildi.
-            var painted = Resources.Load<Mesh>(ModelPath.Replace("OculusHand_", "Glove_Meta_") + (left ? "L" : "R"));
+            // Askeri boyama: tek renk, askerin kendi eldiven dokusundan olculdu.
+            //
+            // BOYANMIS MESH KULLANILMIYOR (Glove_Meta_R/L). O mesh yalnizca ucgenleri
+            // iki alt-mesh'e ayirmak icin uretilmisti (uc bogumlar koyu olsun diye) ama
+            // basparmakta koyu, zikzak kenarli bir leke birakiyor. Olculdu: vertex,
+            // normal, tangent, kemik agirligi ve ucgen sarimi orijinalle BIREBIR ayni;
+            // leke iki alt-mesh'e AYNI malzeme verildiginde bile duruyor, Meta'nin
+            // orijinal mesh'inde ise hic yok. Uc bogum koyulugu kozmetikti, doku isi
+            // yapilinca dokudan gelecek - o zamana kadar orijinal mesh.
             var body = Resources.Load<Material>(GloveBodyMat);
-            var tip = Resources.Load<Material>(GloveTipMat);
-            if (painted != null) smr.sharedMesh = painted;
-            if (body != null && tip != null) smr.sharedMaterials = new[] { body, tip };
+            if (body != null)
+            {
+                var mats = new Material[smr.sharedMesh != null ? smr.sharedMesh.subMeshCount : 1];
+                for (int i = 0; i < mats.Length; i++) mats[i] = body;
+                smr.sharedMaterials = mats;
+            }
 
             smr.updateWhenOffscreen = true;   // el goruse yakin, hatali kirpilmasin
             smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;

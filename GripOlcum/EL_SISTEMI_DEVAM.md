@@ -86,7 +86,7 @@ kumanda taşıyıcısı (NetworkVRPlayer.leftHand/rightHand)
 
 **Kıvrım:** `Apply(grip, trigger)` çağır, `b_?_middle3` ↔ `b_?_wrist` mesafesini ölç. grip 0→1'de **182 → 123 mm**. Tetik 0→1'de **yalnız** işaret parmağı (160→115 mm).
 
-**Başparmak:** ucun avuç düzlemine işaretli uzaklığı her grip değerinde **≥12 mm** (düzeltme öncesi 2 mm'ye iniyordu).
+**Başparmak:** iki ölçüt birden. (1) Ucun avuç düzlemine işaretli uzaklığı her grip değerinde **≥12 mm** (düzeltme öncesi 2 mm'ye iniyordu; şu an tam kavramada 58.3 mm). (2) **Kavrama teması:** `r_thumb_finger_tip_marker` ↔ `r_index_fingernail_marker` mesafesi grip 0→1'de **133 → 60 → 1.1 mm**, yani tekdüze azalmalı. Eski kuralda grip 0.5'te 42 mm'ye inip 1.0'da 48 mm'ye geri açılıyordu — el kapandıkça uçlar uzaklaşıyordu, hatanın imzası buydu. İki elde de aynı sayı çıkmalı (aynalı yastık sapması 0.000 mm).
 
 **Cihazdan sayı çekme:**
 ```
@@ -117,7 +117,12 @@ adb PATH'te değil: `C:\Program Files\Unity\Hub\Editor\6000.3.18f1\Editor\Data\P
 ## 7. Ellerle ilgili sayısal künye
 
 - Meta XR Core SDK 205.0.0, `OculusHand_L/R` — lisans: Oculus SDK License, **Meta onaylı cihazlar için serbest** (hedef Quest 3). İki el **4.628 üçgen**.
-- El ölçeği `HandScale = 1.10` (anatomik boy zaten doğruydu; VR'da küçük algılandığı için).
-- Askerî palet, askerin `T_Soldier_Glove_BaseColor` dokusundan örneklendi: gövde `#564E3C` (%54), uç boğumlar `#352F22`. İki alt-mesh (1910 gövde / 404 uç üçgen), ayrım baskın kemikten.
-- Kıvrım açıları: parmak 55/80/55, başparmak 30/30/24. İşaret parmağı `max(grip, tetik)`.
+- El ölçeği `HandScale = 1.20` (anatomik boy zaten doğruydu; VR'da küçük algılandığı için — 1.10 da küçük geldi, 2026-08-12'de büyütüldü). Açık elde bilek→orta parmak ucu 228.3 mm.
+- Askerî palet, askerin `T_Soldier_Glove_BaseColor` dokusundan örneklendi: gövde `#564E3C` (%54), uç boğumlar `#352F22`.
+- **Boyanmış mesh (`Glove_Meta_R/L`) ARTIK KULLANILMIYOR (2026-08-12).** İki alt-mesh'e ayrılmış hâli (1910 gövde / 404 uç üçgen) başparmakta **koyu, zikzak kenarlı bir leke** bırakıyordu; kullanıcı bunu "başparmak bozuluyor" diye gördü ve suçu duruşta sandık. Ölçüldü: vertex, normal, tangent, kemik ağırlığı ve üçgen sarımı orijinalle **birebir aynı**, fark yalnızca alt-mesh ayrımı — ama leke iki alt-mesh'e **aynı** malzeme verildiğinde bile duruyor, Meta'nın orijinal `r_handMeshNode` mesh'inde ise hiç yok. Şimdilik orijinal mesh + tek malzeme kullanılıyor; uç boğum koyuluğu doku işi yapılınca dokudan gelecek. **Teşhis dersi:** duruşu suçlamadan önce başparmağı DİNLENMEDE bırakıp render al — leke orada da duruyordu, yani poz masumdu.
+- Kıvrım açıları: parmak 55/80/55. İşaret parmağı `max(grip, tetik)`.
+- **Başparmak (2026-08-12'de baştan yazıldı):** eski 30/30/24 gitti. Duruş, rig'in **kendi anatomik eksen işaretçilerinde** dört sabit açı: `cmc_fe = −73°`, `cmc_aa = +1°`, `mcp_fe = +82°`, `ip_fe = +45°`. `thumb3` hiç döndürülmez. Eksen = işaretçinin `right` vektörü (konvansiyon işaret parmağında doğrulandı: `index_mcp_fe_axis.right = [0.98, −0.02, −0.18]`).
+  - **Menteşeyi TÜRETME.** `Cross(uzanım, avuç normali)` başparmak için YANLIŞ: gerçek eksenler `cmc [0.04, 0.86, −0.51]`, `mcp [0.02, 0.50, −0.86]`, `ip [−0.10, 0.39, −0.92]` — hepsinin büyük −z bileşeni var, yani başparmak kendi düzleminde katlanır, avuç düzleminde değil. Türetilmiş eksenle parmak işarete **yanlış taraftan** yaklaşıyordu.
+  - **REDDEDİLMİŞ, tekrarlama:** (1) serbest CCD — eksen kısıtsız olduğu için burulma binip mesh'i yamultuyor; (2) menteşe kısıtlı CCD ama türetilmiş eksenlerle — burulma bitti, yön yanlış kaldı; (3) efektör `thumb3` + hedef `index_null` — sayı güzel (5.1 mm) ama tırnak son parçanın *başında* kalıyor, uç boşluğa uzanıyor.
+  - `ip` küçükken (13°) başparmak **düz** görünüyor. Büyütünce uç tırnaktan kaçar, cmc/mcp yeniden çözülmeli. Tarama: ip 13 → 7.4 mm, 25 → 2.9, **45 → 0.4**, 65 → 8.0 (uç tırnağı geçer).
 - Kıvrım kuralı **tek yerde**: `FingerCurlMath` — avatarın `ProceduralFingerPoser`'ı da oradan kullanıyor. Değiştirirsen iki el birden değişir.
