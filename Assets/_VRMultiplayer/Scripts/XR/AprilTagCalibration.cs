@@ -501,9 +501,12 @@ namespace VRMultiplayer
             // Yerlesim degisti: gorulen tag'lerin eski cerceveye gore biriktirdigi ornekler
             // artik baska bir dunyaya ait. Temizlenmezse ilk duzeltme iki cercevenin
             // ortalamasini uygular ve nereden geldigi anlasilmaz.
+            // Bu silme ADIM 4'TEN SONRA DA GEREKLI: rig-yerel saklama rig'in HAREKETINE karsi
+            // koruyor, YERLESIMIN degismesine karsi degil. Tag'in ilan edilen konumu degistiyse
+            // eski ornekler baska bir haritanin tag'ini olcmus demektir.
             _recentByTag.Clear();
-            _calibPos.Clear();
-            _calibYaw.Clear();
+            _calibLocal.Clear();
+            _calibYawLocal.Clear();
             _calibId = -1;
             _lastTagTime = -1f;
 
@@ -809,13 +812,46 @@ namespace VRMultiplayer
             TickPanel();
         }
 
-        // Kayan pencere: son yakin olcumler (ortalanir). Duzeltme uygulaninca temizlenir —
-        // cunku duzeltme rig'i oynatir, eski ornekler eski cerceveye aittir.
-        readonly List<Vector3> _calibPos = new List<Vector3>();
-        readonly List<float> _calibYaw = new List<float>();
+        // Kayan pencere: son yakin olcumler (ortalanir). RIG-YEREL saklanir — bkz. ToLocal.
+        readonly List<Vector3> _calibLocal = new List<Vector3>();
+        readonly List<float> _calibYawLocal = new List<float>();
         float _calibLastSampleAt = -999f;   // bkz. calibWindowMaxGap
         int _outlierRun;                    // ust uste kac aykiri ornek geldi
         int _calibId = -1;
+
+        // ---- RIG-YEREL SAKLAMA (Adim 4) ---------------------------------------------------
+        //
+        // NEDEN: olcum aslinda "tag, gozlugun TAKIP UZAYINDA su noktada" diyor. Bunu dunya
+        // uzayina ceviren sey rig transformu; yani dunya koordinati rig'in nerede oldugu
+        // varsayimini ICINDE tasiyor. Rig duzeltilince o varsayim degisiyor ve penceredeki
+        // eski ornekler artik var olmayan bir cerceveyi anlatiyor — bu yuzden her duzeltmeden
+        // sonra pencere SILINMEK ZORUNDAYDI.
+        //
+        // Silinince ne oluyordu: duzeltme -> 5 ornek daha bekle -> duzeltme. Bosta tespit
+        // ~1 Hz oldugu icin bu ~5 saniye. "5 saniye sabit bak" zorunlulugu kaldirilmamis,
+        // yer degistirmisti.
+        //
+        // Rig-yerel koordinat rig'in kendi hareketinden ETKILENMEZ: rig oynayinca ornek de
+        // onunla tasinir ve hala ayni fiziksel noktayi gosterir. Pencere yasamaya devam eder.
+        //
+        // ToWorld(ToLocal(p)) == p oldugu surece olcek onemsiz; rig olcegi 1 ama bagli
+        // degiliz — gidis donus ayni transformu kullaniyor.
+        Vector3 ToLocal(Vector3 world) => _rig != null ? _rig.InverseTransformPoint(world) : world;
+        Vector3 ToWorld(Vector3 local) => _rig != null ? _rig.TransformPoint(local) : local;
+
+        // Rig YALNIZCA Y ekseninde donduruluyor (ApplyCorrection: RotateAround(..., Vector3.up)),
+        // o yuzden yaw icin tek bir aci cikarmak/eklemek yeterli.
+        float RigYaw => _rig != null ? _rig.eulerAngles.y : 0f;
+
+        /// <summary>Rig'i cozer. ORNEKLEMEDEN ONCE cagrilmali: rig bilinmeden alinan bir ornek
+        /// dunya koordinatinda saklanip sonra yerel sanilirdi.</summary>
+        bool EnsureRig()
+        {
+            if (_rig != null) return true;
+            if (_cm == null) _cm = FindFirstObjectByType<CalibrationManager>();
+            _rig = _cm != null ? _cm.rig : null;
+            return _rig != null;
+        }
 
         /// <summary>
         /// Duzeltme icin gereken EN AZ ornek.
@@ -877,10 +913,16 @@ namespace VRMultiplayer
         /// </summary>
         void ContinuousCorrect(TagEntry entry, float distance, Vector3 worldPos, Quaternion worldRot)
         {
+            // Rig ORNEKLEMEDEN once cozulmeli: pencere rig-yerel saklaniyor, rig bilinmezken
+            // alinan bir ornek dunya koordinatinda girip sonra yerel sanilirdi.
+            if (!EnsureRig()) { _calibNote = "rig yok"; return; }
+
             if (distance > calibrateMaxDistance)
             {
                 _calibNote = $"yaklas ({distance:0.00} > {calibrateMaxDistance:0.00} m)";
-                _calibPos.Clear(); _calibYaw.Clear();
+                // PENCERE SILINMEZ. Ornekler rig-yerel, yani uzaklasmak onlari gecersiz
+                // kilmiyor; oyuncu geri yaklastiginda kaldigi yerden devam eder. Eskiden
+                // silinmesinin sebebi dunya-uzayi saklamaydi, o sebep kalkti.
                 _alignedNow = true;   // bu mesafede yapilacak is yok -> tespit hizlanmasin
                 return;
             }
@@ -891,7 +933,7 @@ namespace VRMultiplayer
             bool justSwitched = _calibId >= 0 && entry.id != _calibId;
             if (justSwitched)
             {
-                _calibPos.Clear(); _calibYaw.Clear();
+                _calibLocal.Clear(); _calibYawLocal.Clear();
                 _switchFrom = _calibId;
                 _switchPending = true;
             }
@@ -908,9 +950,23 @@ namespace VRMultiplayer
             // "HIZALI" yazdi. Duzeltme yapilmadigi icin pencere de temizlenmedi — kalici
             // kilitlenme. Tag'i gorus alanindan cikarip geri bakmak da ise yaramiyordu, cunku
             // bayat ornekler orada duruyordu.
-            if (_calibPos.Count > 0 && Time.time - _calibLastSampleAt > calibWindowMaxGap)
+            //
+            // ADIM 4'TEN SONRA DA DURUYOR. Rig-yerel saklama bu kapinin BIR sebebini ortadan
+            // kaldirdi (rig'in kendi hareketi), otekini KALDIRMADI: gozlugun takip uzayi
+            // zamanla kayiyor ve uyku sonrasi bambaska bir yere oturuyor. Yukaridaki olay tam
+            // olarak buydu. Silinme artik "her duzeltmeden sonra" degil "tag 2 saniye
+            // gorunmediginde" oluyor — kaldirmak istedigimiz bekleme bu degildi.
+            //
+            // TESHIS SATIRI ADIM 4 ICIN SART. Adim 4'un kabul olcutu "duzeltmeden sonra sayac
+            // 0/5'e dusmuyor". Sayac yine de duserse iki ihtimal var ve ayirt edilebilmeli:
+            // (a) rig-yerel saklama calismiyor, (b) bosta tespit 1 Hz ve bu kapi 2 sn — yani
+            // tek bir gecikmis kare pencereyi siliyor. (b) ise cozum esigi buyutmek, kodu geri
+            // almak degil. Log yazmadan bu ayrim turda yapilamaz.
+            if (_calibLocal.Count > 0 && Time.time - _calibLastSampleAt > calibWindowMaxGap)
             {
-                _calibPos.Clear(); _calibYaw.Clear();
+                WriteDiag($"PENCERE SILINDI  bosluk {Time.time - _calibLastSampleAt:0.0} sn " +
+                          $"> {calibWindowMaxGap:0.0}  ({_calibLocal.Count} ornek atildi)");
+                _calibLocal.Clear(); _calibYawLocal.Clear();
             }
             _calibLastSampleAt = Time.time;
 
@@ -923,23 +979,27 @@ namespace VRMultiplayer
             //
             // Tek bir aykiri ornek pencereyi bozmaz (bozuk bir tespit olabilir); UST USTE
             // gelirse dunya gercekten oynamis demektir ve pencere atilir.
-            if (_calibPos.Count > 0)
+            // Karsilastirma da YEREL uzayda: pencere yerel saklandigi icin dunya koordinatiyla
+            // kiyaslamak, arada bir duzeltme olduysa her ornegi aykiri gosterirdi.
+            Vector3 localPos = ToLocal(worldPos);
+
+            if (_calibLocal.Count > 0)
             {
                 Vector3 m = Vector3.zero;
-                foreach (var q in _calibPos) m += q;
-                m /= _calibPos.Count;
+                foreach (var q in _calibLocal) m += q;
+                m /= _calibLocal.Count;
 
-                if (Vector3.Distance(worldPos, m) > calibOutlierDistance)
+                if (Vector3.Distance(localPos, m) > calibOutlierDistance)
                 {
                     if (++_outlierRun >= 2)
                     {
-                        _calibPos.Clear(); _calibYaw.Clear();
+                        _calibLocal.Clear(); _calibYawLocal.Clear();
                         _outlierRun = 0;
                     }
                     else
                     {
                         // Tek seferlik sapma: orneği ATLA, pencereyi koru.
-                        _calibNote = $"olculuyor {ProgressBar(_calibPos.Count, CalibNeed)}";
+                        _calibNote = $"olculuyor {ProgressBar(_calibLocal.Count, CalibNeed)}";
                         return;
                     }
                 }
@@ -947,9 +1007,9 @@ namespace VRMultiplayer
             }
 
             // Kayan pencereye ekle, en fazla calibrateSampleCount tut.
-            _calibPos.Add(worldPos);
-            _calibYaw.Add(YawOf(worldRot));
-            while (_calibPos.Count > calibrateSampleCount) { _calibPos.RemoveAt(0); _calibYaw.RemoveAt(0); }
+            _calibLocal.Add(localPos);
+            _calibYawLocal.Add(YawOf(worldRot) - RigYaw);
+            while (_calibLocal.Count > calibrateSampleCount) { _calibLocal.RemoveAt(0); _calibYawLocal.RemoveAt(0); }
 
             // ILK hizalamada AZ ornek yeter, sonrakilerde cok.
             // Ilk duzeltme metre mertebesindedir — 3 mm'lik ornekleme hatasi yaninda gurultu
@@ -957,16 +1017,18 @@ namespace VRMultiplayer
             // cm mertebesine iner ve ortalama gercekten degerli olur; orada 5 ornek kalir.
             // Kotu bir ilk hizalama zaten kendini onarir: bir sonraki tespit duzeltir.
             int need = CalibNeed;
-            if (_calibPos.Count < need)
+            if (_calibLocal.Count < need)
             {
-                _calibNote = $"olculuyor {ProgressBar(_calibPos.Count, need)}";
+                _calibNote = $"olculuyor {ProgressBar(_calibLocal.Count, need)}";
                 return;
             }
 
-            // Ortalanmis olculen tag pozu.
-            Vector3 avgPos = Vector3.zero;
-            foreach (var p in _calibPos) avgPos += p;
-            avgPos /= _calibPos.Count;
+            // Ortalanmis olculen tag pozu. Ortalama YEREL alinir, sonra dunyaya cevrilir —
+            // asagisi (sapma, GECIS, ApplyCorrection) dunya uzayinda calisiyor.
+            Vector3 avgLocal = Vector3.zero;
+            foreach (var p in _calibLocal) avgLocal += p;
+            avgLocal /= _calibLocal.Count;
+            Vector3 avgPos = ToWorld(avgLocal);
 
             // KARARLILIK KAPISI — sayiyla degil, TUTARLILIKLA olculur.
             //
@@ -977,17 +1039,19 @@ namespace VRMultiplayer
             //
             // Ayrica mikro hareket artik sayaci SIFIRLAMIYOR — yalnizca sacilmayi buyutuyor,
             // yani kendi kendini duzelten yumusak bir ceza.
+            // Sacilma YEREL uzayda olculur. Rigid donusum mesafeleri korudugu icin sayi
+            // dunyadakiyle ayni; yerel kalmasinin sebebi karsilastirmanin ayni uzayda olmasi.
             float spread = 0f;
-            foreach (var p in _calibPos) spread = Mathf.Max(spread, Vector3.Distance(p, avgPos));
+            foreach (var p in _calibLocal) spread = Mathf.Max(spread, Vector3.Distance(p, avgLocal));
             if (spread > calibStabilitySpread)
             {
-                _calibNote = $"olculuyor {ProgressBar(_calibPos.Count, need)}  (sabitleniyor {spread * 100f:0.0} cm)";
+                _calibNote = $"olculuyor {ProgressBar(_calibLocal.Count, need)}  (sabitleniyor {spread * 100f:0.0} cm)";
                 return;
             }
             Vector2 dir = Vector2.zero;
-            foreach (var y in _calibYaw)
+            foreach (var y in _calibYawLocal)
                 dir += new Vector2(Mathf.Sin(y * Mathf.Deg2Rad), Mathf.Cos(y * Mathf.Deg2Rad));
-            float avgYaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
+            float avgYaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg + RigYaw;
 
             // Tag olmasi gereken yerden ne kadar sapmis?
             float dev = Vector3.Distance(avgPos, entry.position);
@@ -1066,8 +1130,15 @@ namespace VRMultiplayer
             _alignedNow = false;       // duzeltme gerekiyor -> tespit hizlansin
             ApplyCorrection(entry, avgPos, avgYaw, dev, yawCounts, distance);
 
-            // Rig oynadi: pencere artik eski cerceveye ait, temizle — yeni cercevede dolsun.
-            _calibPos.Clear(); _calibYaw.Clear();
+            // ADIM 4'UN ASIL SATIRI: pencere ARTIK TEMIZLENMIYOR.
+            //
+            // Eskiden burada Clear() vardi cunku ornekler dunya uzayindaydi ve rig oynayinca
+            // gecersizlesiyorlardi. Artik rig-yerel: rig oynadi, ornekler de onunla tasindi,
+            // hala ayni fiziksel noktayi gosteriyorlar. Bir sonraki tespit dolu bir pencereye
+            // dusuyor ve duzeltme aninda calisabiliyor.
+            //
+            // Kacak duzeltme korkusu yersiz: duzeltmeden sonra ToWorld(ornekler) tam olarak
+            // entry.position'a oturuyor, yani sapma ~0 ve olu bolge kapisi yukarida donuyor.
         }
 
         // ---- NORMAL KONVANSIYONU (Adim 1'in kalani) ---------------------------------------
