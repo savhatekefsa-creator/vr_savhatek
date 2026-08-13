@@ -221,8 +221,14 @@ namespace VRMultiplayer
                  "Esikler dogrulanmadan kapiyi devreye almak, DOGRU okumalari eleyip sorunu " +
                  "cozulmus GOSTERIR — en kotu hata turu bu, cunku sessizdir ve iyi gorunur.\n\n" +
                  "Kapatmadan once bakilacak sayi: log'daki 'ELENECEKTI' orani. Plan %20'nin " +
-                 "altini kabul ediyor; ustundeyse esikler yanlis, kod degil.")]
-        public bool poseGateLogOnly = true;
+                 "altini kabul ediyor; ustundeyse esikler yanlis, kod degil.\n\n" +
+                 "3b'DE KAPATILDI (2026-08-13). Olculen: normal oynanista %0 (198 tespit, " +
+                 "hicbiri elenmeyecekti), kasitli egik bakis turunda %1,0 (199 tespitin 2'si). " +
+                 "Elenen iki tespit de 'normal 89,4 derece egik' — yani tag'in neredeyse YATIK " +
+                 "gorundugu, tartismasiz bozuk bir cozum. Kapi sıradan egik bakisi yakalamiyor " +
+                 "cunku yakalayacak bir sey yok: kestirim 30-45 dereceden bile dogru cozumu " +
+                 "buluyor. Kazanc hassasiyet degil, nadir ama BUYUK bir sicramanin onlenmesi.")]
+        public bool poseGateLogOnly = false;
 
         [Tooltip("Tag'in NORMALI yataydan bu kadar sapabilir (derece). Ustu elenir.\n\n" +
                  "NEDEN ISE YARAR: kagitlar DUVARA duz yapistirilmis, yani normalleri yatay " +

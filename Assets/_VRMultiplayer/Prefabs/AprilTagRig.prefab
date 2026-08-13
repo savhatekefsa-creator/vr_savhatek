@@ -103,7 +103,7 @@ MonoBehaviour:
   yawRecoveryDegrees: 10
   yawRecoveryMaxDegrees: 35
   yawRecoveryConfirmations: 3
-  poseGateLogOnly: 1
+  poseGateLogOnly: 0
   maxNormalTiltDegrees: 20
   maxTagTiltDegrees: 25
   maxHeadSpeed: 0.15
