@@ -1043,8 +1043,12 @@ namespace VRMultiplayer.Constructor
 
             // Hayalet KONULACAK yukseklikte durur. Sabit 0 verilseydi kat secen oyuncu propun
             // nereye gidecegini ancak birakinca ogrenirdi.
-            Vector3 target = Session.Grid.RectCenter(_rect, _placeLevel, Session.Layout.levelHeight)
-                             - MapBuilder.PivotOffset(_ghostDef, ghostScale, yaw);
+            Vector3 center = Session.Grid.RectCenter(_rect, _placeLevel, Session.Layout.levelHeight);
+            Vector3 target = center - MapBuilder.PivotOffset(_ghostDef, ghostScale, yaw);
+
+            // Plakaysa ALACAGI TAG ID'sini goster. Iki daldan da once cagriliyor: asagida
+            // ilk kare icin erken cikis var.
+            UpdateTagLabel(center);
 
             if (!_ghostShownOnce)
             {
@@ -1067,6 +1071,7 @@ namespace VRMultiplayer.Constructor
         {
             if (!show) { _ghostShownOnce = false; }
             if (_ghost != null) _ghost.SetActive(show);
+            if (!show && _tagLabel != null) _tagLabel.gameObject.SetActive(false);
         }
 
         void DestroyGhost()
@@ -1077,6 +1082,88 @@ namespace VRMultiplayer.Constructor
             _ghostPrefab = null;
             _ghostRenderers = null;
             _validSets = _invalidSets = null;
+        }
+
+        // ------------------------------------------------------------- tag id etiketi
+
+        TextMesh _tagLabel;
+
+        /// <summary>
+        /// Plaka koymadan once cercevenin ne kadar taze olmasi gerektigi (sn).
+        ///
+        /// 15 sn OLCULMUS BIR SAYI DEGIL, bilincli bir tahmin: kucuk bir odada tag'den
+        /// tag'e yurumek bu mertebede suruyor ve bu surede biriken suruklenme birkac cm.
+        /// Sahada kagit-plaka farki hala buyukse ONCE bu sayiyi kucultun; kalibrasyonda
+        /// baska bir sey aramadan once en ucuz deney bu.
+        /// </summary>
+        const float FrameStaleSeconds = 15f;
+
+        /// <summary>
+        /// Plaka hayaletinin ustunde ALACAGI TAG ID'sini yazar.
+        ///
+        /// NEDEN GEREKLI: tag ID'si plakanin KOYULMA SIRASINDAN geliyor (TagCapture.Capture,
+        /// instanceId sirasi), kagidin uzerindeki basili ID ise degismez. Ikisi tutmazsa
+        /// kalibrasyon tag'i yanlis yerde arar ve hata tam olarak iki tag'in ARASINDAKI
+        /// mesafe kadar olur -- OFIS2'de 2,6 m. Buyuk mekanda komsu iki tag karisirsa hata
+        /// 30-40 cm'e duser ve "biraz kaymis" diye gecistirilir; sessiz kalan tek hata turu bu.
+        ///
+        /// Sirayi dogrulanabilir kilmanin en ucuz yolu, numarayi KOYARKEN gostermek: kagidi
+        /// asan kisi hangi numarayi asacagini plakadan okur.
+        ///
+        /// HAYALETIN COCUGU DEGIL: plaka olcegi (0.14, 0.14, 0.01) tekduze degil, altina
+        /// konan yazi dondurulunce kayardi (shear). Bagimsiz duruyor ve konumu dunya
+        /// uzayindan aliyor.
+        /// </summary>
+        void UpdateTagLabel(Vector3 centerLocal)
+        {
+            bool plaka = _ghostDef != null && _ghostDef.id == TagCapture.PlateId;
+            if (!plaka || Session == null || Session.Layout == null)
+            {
+                if (_tagLabel != null) _tagLabel.gameObject.SetActive(false);
+                return;
+            }
+
+            if (_tagLabel == null)
+            {
+                // Sari: yerlesim isaretcilerinde "dogrulama bekliyor" rengiyle ayni dil.
+                _tagLabel = UITheme.MakeText(null, "", new Color(1f, 0.85f, 0.15f), 0.07f);
+                _tagLabel.gameObject.name = "~TagIdEtiketi";
+            }
+
+            // EBEVEYNSIZ, yani dunya uzayinda. Bu satirlar main'de etiketi maket (dollhouse)
+            // uzayina bagliyordu; maket modu bu dalda kaldirildi (bkz. 326354b) ve harita artik
+            // dogrudan dunyada oruluyor. Asagidaki konum zaten RectCenter'dan, yani dunya
+            // koordinatinda geliyor — ebeveyn vermek onu ikinci kez donusturmek olurdu.
+
+            // Kurali TagCapture veriyor, burada TEKRARLANMIYOR: etiket "TAG 3" derken cevrim
+            // 4 verirse kagidi asan kisi yanlis numarayi asar ve hatanin kaynagi gorunmez olur.
+            string s = "TAG " + TagCapture.NextTagId(Session.Layout);
+
+            // CERCEVE TAZELIGI. Plaka konuldugu andaki cerceveyi miras aliyor; son
+            // duzeltmeden bu yana ne kadar cok zaman gectiyse suruklenme o kadar birikmis
+            // olur ve kagit plakadan o kadar kayar. Sahada gorulen "plaka yerinde durmuyor"
+            // bunun gorunur hali. Sayiyi burada gosteriyoruz cunku karar tam burada veriliyor.
+            float yas = AprilTagCalibration.FrameAgeSeconds;
+            if (yas < 0f) s += "\nKALIBRE DEGIL";
+            else if (yas > FrameStaleSeconds) s += $"\nTAG'E BAK ({yas:0} sn)";
+            if (_tagLabel.text != s) _tagLabel.text = s;
+
+            // Taze degilse SARI degil KIRMIZI: koymadan once bakilmasi gereken bir sey var.
+            var renk = (yas < 0f || yas > FrameStaleSeconds)
+                ? new Color(1f, 0.35f, 0.25f) : new Color(1f, 0.85f, 0.15f);
+            if (_tagLabel.color != renk) _tagLabel.color = renk;
+
+            _tagLabel.gameObject.SetActive(true);
+            _tagLabel.transform.localPosition = centerLocal + Vector3.up * 0.16f;
+
+            // Kafaya donuk: plaka hangi acida durursa dursun numara okunabilsin. Yalnizca
+            // yatayda donuyor, yoksa yukaridan bakinca yazi yatardi.
+            var head = XRRigReference.HeadOrCamera;
+            if (head == null) return;
+            Vector3 bakis = _tagLabel.transform.position - head.position;
+            bakis.y = 0f;
+            if (bakis.sqrMagnitude > 1e-6f)
+                _tagLabel.transform.rotation = Quaternion.LookRotation(bakis.normalized, Vector3.up);
         }
 
         // ------------------------------------------------------------- pointer beam
@@ -1488,6 +1575,16 @@ namespace VRMultiplayer.Constructor
         }
 
         // ------------------------------------------------------------- panel / hud
+
+        /// <summary>
+        /// Insa modunun kendi panelinde bir ipucu goster. Disaridan (akis ekranlarindan)
+        /// cagrilabilen tek yol.
+        ///
+        /// NEDEN GEREKLI: insa modu acikken CreativeFlowUI butun panellerini kapatiyor
+        /// (ekranin sahibi editor). Yani akisin bir sonraki adimi icin verilecek yonerge
+        /// ancak buradan gosterilebilir — Note ile gosterilse hicbir zaman gorunmezdi.
+        /// </summary>
+        public void ShowHint(string text, float seconds) => Show(text, seconds);
 
         void Show(string text, float hideAfter = -1f)
         {

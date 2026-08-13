@@ -35,8 +35,27 @@ namespace VRMultiplayer
                      "tag'in zeminden yuksekligi ve origin'e gore yeridir.")]
             public Vector3 position = new Vector3(0f, 1.0f, 0f);
 
-            [Tooltip("Tag'in baktigi yon — ortak cercevenin +Z'sine gore derece.")]
+            [Tooltip("Tag'in ekseninin yonu — ortak cercevenin +Z'sine gore derece.\n\n" +
+                     "DIKKAT, KAGIDIN BAKTIGI YON DEGIL: bu deger tam TERSINI, yani DUVARIN " +
+                     "ICINI gosteriyor. Tespit cozucusu tag'in +Z'sini kagidin ARKASINA " +
+                     "veriyor ve karsilastirma (satir 789) olculen yaw ile bu alani dogrudan " +
+                     "esitliyor, yani alan da ayni konvansiyonda olmak zorunda.\n\n" +
+                     "Dogrulandi 2026-08-11: cihazda plakanin BEYAZ (kagit) yuzu odaya " +
+                     "bakarken plakanin urettigi yaw 270,0 derece cikti; ayni noktada " +
+                     "kameranin olctugu yaw 270,3 derece. Ikisi de duvarin icini gosteriyor.\n\n" +
+                     "Duvara asili bir tag icin pratik kural: kagida bakarken okudugun yon " +
+                     "artı 180.")]
             public float yawDegrees;
+
+            [Tooltip("Bu tag'i ureten PLAKANIN kimligi (PlacedProp.instanceId). 0 = plakadan " +
+                     "gelmedi (tag 0/origin, kamerayla olculmus ya da elle yazilmis tag).\n\n" +
+                     "NEDEN VAR: tag ID'si eskiden plakalarin SIRASINDAN turetiliyordu, yani " +
+                     "ortadaki bir plakayi silmek sonraki TUM tag'lerin ID'sini kaydiriyordu. " +
+                     "Duvardaki kagitlarin uzerinde ise basili, degismez numaralar var — " +
+                     "kayma, kalibrasyonu sessizce yanlis tag'i aramaya gonderirdi.\n\n" +
+                     "Bu alan kimligi SIRAYA degil PLAKAYA baglar: plaka silinince yalnizca " +
+                     "onun tag'i duser, digerleri numarasini korur.")]
+            public uint sourceInstanceId;
 
             [Tooltip("Bu tag KALIBRASYONDA kullanilsin mi.\n\n" +
                      "KAPALIYKEN tag yine gorulur, olculur ve panelde gorunur — ama rig'i " +
@@ -270,6 +289,90 @@ namespace VRMultiplayer
         float _nextDetectAt;
         bool _alignedNow;   // son olcumde hiza olu bolge icinde miydi (tespit hizini belirler)
 
+        /// <summary>
+        /// Yerlesim degisti ama rig HENUZ yeni cerceveye oturmadi. Harita degisiminden
+        /// ilk basarili duzeltmeye kadar true. Bkz. <see cref="ApplyMapLayout"/>.
+        /// </summary>
+        bool _layoutStale;
+
+        // ---- YAW REFERANSI GOZCUSU --------------------------------------------------------
+        //
+        // yawFromReferenceOnly aciksa YONU yalnizca TEK bir tag duzeltiyor
+        // (offsetReferenceTagId, varsayilan 0; bkz. satir ~834'teki yawCounts). O tag'in
+        // kagidi yirtilir, onune dolap cekilir, ya da hicbir zaman
+        // yawCorrectionMaxDistance kadar yaklasilmazsa yaw duzeltmesi SESSIZCE durur.
+        //
+        // Sessiz olmasinin sebebi: KONUM duzelmeye devam ediyor (onu her tag yapiyor), yani
+        // panelde her sey yolunda gorunuyor. Sapma yawRecoveryDegrees'i (10 derece) bulana
+        // kadar hicbir belirti yok, ve 10 derece 4 metrede 70 cm demek.
+        //
+        // Gozcu "ne zamandir goremedim" sorusunu soruyor. Olculemeyen bir sey yoktu ortada —
+        // sorulmayan bir sey vardi.
+        const float RefStaleSeconds = 300f;   // 5 dakika
+
+        /// <summary>Bu yerlesimin ne zamandir yururlukte oldugu — "hic gorulmedi" suresini olcer.</summary>
+        float _layoutSince;
+
+        /// <summary>Uyari log'a bir kez yazilsin; her karede degil.</summary>
+        bool _refWarned;
+
+        // ---- CERCEVE TAZELIGI -------------------------------------------------------------
+        //
+        // Plaka yerlestirme, konuldugu ANDAKI cerceveyi miras aliyor: kaydedilen sey bir oda
+        // uzayi hucresi, kagit ise fiziksel duvarda. Ikisini birbirine baglayan tek sey o
+        // andaki kalibrasyon.
+        //
+        // Harita koku DUNYA uzayinda duruyor (MapBuilder.EnsureRoot), duzeltme ise RIG'i
+        // oynatiyor. Yani her duzeltme, konmus plakalari passthrough'taki gercek odaya gore
+        // KAYDIRIR. Sahada gorulen "tag 1 yerinde durmuyor" tam olarak budur ve bir hata
+        // degil: son duzeltmeden bu yana biriken suruklenmenin gorunur hale gelmesidir.
+        //
+        // Yazilimin yapabilecegi sey suruklenmeyi yok etmek degil -- o SLAM'in isi -- ne
+        // zaman guvenilir olmadigini SOYLEMEK. Plakayi taze cercevede koymak, yontemin
+        // gecerlilik sarti.
+        float _lastCorrectionAt = -1f;
+
+        /// <summary>
+        /// Son uygulanan duzeltmeden bu yana gecen sure (sn). Hic duzeltilmediyse -1.
+        /// Yerlestirme katmani bunu "plakayi simdi koymak guvenli mi" diye soruyor.
+        /// </summary>
+        public float SecondsSinceCorrection =>
+            _lastCorrectionAt < 0f ? -1f : Time.time - _lastCorrectionAt;
+
+        /// <summary>Kalibrasyon yoksa -1; bkz. <see cref="SecondsSinceCorrection"/>.</summary>
+        public static float FrameAgeSeconds =>
+            Instance != null ? Instance.SecondsSinceCorrection : -1f;
+
+        /// <summary>Yaw referansinda sorun varsa aciklamasi, yoksa null.</summary>
+        string YawReferenceWarning()
+        {
+            // Yaw'i her tag duzeltiyorsa tek nokta arizasi yok.
+            if (!yawFromReferenceOnly) return null;
+            if (!CalibrationManager.Calibrated) return null;
+
+            if (Find(offsetReferenceTagId) == null)
+                return $"YAW REFERANSI YOK — tag {offsetReferenceTagId} yerlesimde degil";
+
+            bool gorulmus = _seenTime.TryGetValue(offsetReferenceTagId, out float t);
+            float gecen = gorulmus ? Time.time - t : Time.time - _layoutSince;
+            if (gecen < RefStaleSeconds) return null;
+
+            return gorulmus
+                ? $"YAW REFERANSI (tag {offsetReferenceTagId}) {gecen / 60f:0} dk gorulmedi"
+                : $"YAW REFERANSI (tag {offsetReferenceTagId}) HIC gorulmedi — yon duzeltilmiyor";
+        }
+
+        /// <summary>Uyariyi log'a bir kez yazar; referans yeniden gorununce sifirlanir.</summary>
+        void TickRefWatch()
+        {
+            string uyari = YawReferenceWarning();
+            if (uyari == null) { _refWarned = false; return; }
+            if (_refWarned) return;
+            _refWarned = true;
+            WriteDiag("UYARI  " + uyari);
+            Debug.LogWarning("[AprilTagCalib] " + uyari);
+        }
+
         // Olcum (FAZ 0): son tespitler uzerinden menzil ve jitter
         // JITTER TAG BASINA tutulur.
         //
@@ -343,6 +446,23 @@ namespace VRMultiplayer
             _calibId = -1;
             _lastTagTime = -1f;
 
+            // CERCEVE BAYAT: rig hala ESKI haritanin cercevesinde duruyor. Yerlesimi
+            // degistirmek rig'i oynatmiyor, yani yeni harita oyuncunun etrafina yanlis
+            // cercevede kuruluyor — oyuncu duvarin icinde dogabilir.
+            //
+            // Kendiliginden toparlaniyordu ama YAVAS: tag daha hic gorulmedigi icin
+            // tagFresh false, dolayisiyla "busy" false kaliyor ve tespit BOSTA hizinda
+            // (1 Hz) suruyordu. Bayrak uc yeri birden duzeltiyor: tespit tam hizda kosar,
+            // ilk duzeltme yumusatilmadan ANINDA uygulanir ve panel oyuncuya tag'e bakmasini
+            // soyler. Ilk duzeltme uygulanunca dusuyor (bkz. ApplyCorrection).
+            _layoutStale = haritadan;
+
+            // Yeni yerlesim, yeni sayac: "referansi hic gormedim" suresi bu andan olculur.
+            // Eski yerlesimden kalan gorulme zamani yeni tag 0 icin bir sey soylemiyor.
+            _layoutSince = Time.time;
+            _seenTime.Remove(offsetReferenceTagId);
+            _refWarned = false;
+
             RebuildMarkers();
             Debug.Log(haritadan
                 ? $"[AprilTagCalib] Tag yerlesimi HARITADAN alindi ({fromMap.Length} tag)."
@@ -373,6 +493,7 @@ namespace VRMultiplayer
             }
 
             _bootLayout = tagLayout;
+            _layoutSince = Time.time;
 
             // Kalibrasyon, haritayi kuran oturumdan SONRA da uyanabilir (bilesen sirasi
             // garanti degil). Harita zaten acilmissa yerlesimini simdi al — yoksa bu oturum
@@ -446,7 +567,10 @@ namespace VRMultiplayer
             // false (tag daha hic gorulmedi), yani ilk tur idle hizinda geciyordu: 1 Hz =
             // oyuncunun tag'e bakip bosuna bekledigi 1 saniye. Tasarruf edilecek bir sey yok,
             // oyuncu zaten duvara bakmis bekliyor.
-            bool busy = (tagFresh && !_alignedNow) || !CalibrationManager.Calibrated;
+            // _layoutStale de "is var" sayilir: harita degistiginde tag daha hic gorulmedigi
+            // icin tagFresh false ve kapi kapali kalirdi -- tam da en hizli aramamiz gereken
+            // anda 1 Hz'de tarardik.
+            bool busy = (tagFresh && !_alignedNow) || !CalibrationManager.Calibrated || _layoutStale;
             float rate = busy ? detectionsPerSecond : idleDetectionsPerSecond;
             _nextDetectAt = Time.time + 1f / Mathf.Max(0.2f, rate);
 
@@ -894,7 +1018,12 @@ namespace VRMultiplayer
             //
             // Buyuk sapma yumusatilmaz: uyku sonrasi ya da takip kaybinda oyuncu dunyanin
             // HEMEN yerine oturmasini ister, saniyelerce suzulmesini degil.
-            bool snap = dev > snapThresholdMeters || Mathf.Abs(yawDelta) > snapThresholdDegrees;
+            // HARITA DEGISIMINDEN SONRAKI ILK DUZELTME HEP ANINDA. Baska bir mekanin
+            // cercevesine yumusak gecis diye bir sey yok: aradaki fark sapma degil, tamamen
+            // baska bir dunya. Sapma buyukse zaten snap olurdu; kucuk ciktiginda (iki harita
+            // benzer cercevede) suzulmek oyuncuyu saniyelerce yanlis yerde tutardi.
+            bool snap = _layoutStale
+                     || dev > snapThresholdMeters || Mathf.Abs(yawDelta) > snapThresholdDegrees;
             float rate = snap ? 1f : Mathf.Clamp01(smallCorrectionRate);
 
             // Duzeltmeler saniyede 3'e kadar tetiklenir; hepsini yazmak dosyayi bogar.
@@ -942,6 +1071,10 @@ namespace VRMultiplayer
             // anchor LateUpdate'te mutlak poz yazacak. Once ogretmezsek duzeltmemizi ezer,
             // ki iki sistemin eski kavgasi tam olarak buydu.
             TickAnchorHold();
+
+            // Rig yeni cerceveye oturdu: bayat isareti kalkar, tespit bosta hizina donebilir.
+            _layoutStale = false;
+            _lastCorrectionAt = Time.time;
 
             // Oyuncu bunu okuyacak: "duzeltildi" tek basina neyin duzeldigini soylemiyordu.
             _calibNote = $"KALIBRE EDILDI ({dev * 100f:0.0} cm duzeltildi)";
@@ -1126,7 +1259,54 @@ namespace VRMultiplayer
             ApplyLearned();
         }
 
-        /// <summary>Son GORULEN tag'in kalibrasyon iznini cevirir ve diske yazar.</summary>
+        /// <summary>
+        /// Yerlesimi DOGRU HEDEFE yazar: harita yerlesimi aktifse HARITAYA, degilse cihazin
+        /// TagLayout.json'una.
+        ///
+        /// NEDEN VAR: dort ogrenme yolu da dogrudan <see cref="TagLayoutStore.Save"/>
+        /// cagiriyordu, ama bir harita acikken <see cref="tagLayout"/> HARITANIN listesidir
+        /// (<see cref="ApplyMapLayout"/> onu oyle yapti). Sonuc iki hata birdendi:
+        ///
+        ///   1. Duzenleme CIHAZIN dosyasina yaziliyordu, yani onyukleme yerlesimi o mekanin
+        ///      tag'leriyle kirleniyordu. Baska bir mekanda acilista o kirlilik devreye
+        ///      giriyordu -- "yeni harita eski mekanin tag'leriyle kalibre olmaya calisiyor"
+        ///      vakasinin KAYNAGI buydu; onu tohumlama ile kapatmistik, burasi kok neden.
+        ///   2. HARITAYA hic yazilmiyordu. Olcum, ait oldugu kayitta gorunmuyordu; harita
+        ///      baska bir gozluge gidince duzenleme onunla birlikte gitmiyordu.
+        ///
+        /// Harita dosyasini HER ZAMAN yetki sahibi yazar (bkz.
+        /// <see cref="Constructor.ConstructorSync.ClientRequestSave"/>): gozlukte yazilan
+        /// kopyayi kimse okumaz ve ilk senkron ezer. Bellekteki duzenleme zaten uygulanmis
+        /// durumda -- tagLayout ile Layout.tags AYNI dizi -- burada yalnizca kalicilastiriliyor.
+        /// </summary>
+        bool PersistLayout()
+        {
+            if (!_fromMap) return TagLayoutStore.Save(tagLayout, layoutVersion);
+
+            if (Constructor.ConstructorSession.IsMapAuthority)
+            {
+                var s = Constructor.ConstructorSession.Instance;
+                if (s == null || s.Layout == null) return false;
+
+                // DIZIYI GERI BAGLA. Yeni tag eklenince "tagLayout = list.ToArray()" calisiyor
+                // (ApplyTouchDerived / ApplyLearned) ve haritanin dizisiyle paylasim KOPUYOR.
+                // Baglamazsak Save, yeni tag'i olmayan ESKI diziyi yazar ve olcum sessizce
+                // kaybolur -- duzenleme ekranda gorunur ama dosyaya hic gitmez.
+                s.Layout.tags = tagLayout;
+                return s.Save();
+            }
+
+            // ISTEMCI: harita SUNUCUNUN belleginde. Yalnizca "kaydet" demek, sunucunun
+            // DUZENLENMEMIS kopyasini yazdirirdi ve panel "kaydedildi" derken olcum kaybolurdu.
+            // O yuzden once tag'lerin kendisi gidiyor; sunucu uygulayip kaydediyor ve
+            // digerlerine yayiyor.
+            return Constructor.ConstructorSync.ClientRequestTagLayout(tagLayout);
+        }
+
+        /// <summary>Yazmanin nereye gittigi — panel ve log metinleri icin.</summary>
+        string PersistTarget => _fromMap ? "haritaya" : "cihaza";
+
+        /// <summary>Son GORULEN tag'in kalibrasyon iznini cevirir ve kalici hale getirir.</summary>
         void ToggleUseForSeenTag()
         {
             var entry = Find(_lastId);
@@ -1137,15 +1317,15 @@ namespace VRMultiplayer
             }
 
             entry.useForCalibration = !entry.useForCalibration;
-            bool saved = TagLayoutStore.Save(tagLayout, layoutVersion);
+            bool saved = PersistLayout();
             RebuildMarkers();
 
             _learnNote = $"tag {entry.id} kalibrasyon " +
                          (entry.useForCalibration ? "ACIK" : "KAPALI") +
-                         (saved ? "" : " — DISKE YAZILAMADI");
+                         (saved ? "" : $" — {PersistTarget.ToUpperInvariant()} YAZILAMADI");
 
             Debug.Log($"[AprilTagCalib] Tag {entry.id} useForCalibration = {entry.useForCalibration} " +
-                      $"({(saved ? "diske yazildi" : "DISKE YAZILAMADI")}).");
+                      $"({(saved ? $"{PersistTarget} yazildi" : $"{PersistTarget.ToUpperInvariant()} YAZILAMADI")}).");
 
             // Log'a da yazilir: acma/kapama olayi gorunmezse, "neden yazilmadi" sorusunu
             // cevaplamak icin tahmin yurutmek gerekiyordu.
@@ -1199,9 +1379,10 @@ namespace VRMultiplayer
                 // saniyede 12 dosya yazmasi demek olurdu.
                 if (_nudgeDirty)
                 {
-                    bool ok = TagLayoutStore.Save(tagLayout, layoutVersion);
+                    bool ok = PersistLayout();
                     _nudgeDirty = false;
-                    _learnNote = ok ? "ince ayar kaydedildi" : "ince ayar DISKE YAZILAMADI";
+                    _learnNote = ok ? $"ince ayar {PersistTarget} kaydedildi"
+                                    : $"ince ayar {PersistTarget.ToUpperInvariant()} YAZILAMADI";
                 }
                 _nudgePrev = Vector2.zero;
                 return;
@@ -1761,14 +1942,14 @@ namespace VRMultiplayer
             bool yawFromCam = _seenTime.TryGetValue(best, out float st) && Time.time - st < 3f;
             if (yawFromCam) entry.yawDegrees = _seenYaw[best];
 
-            bool saved = TagLayoutStore.Save(tagLayout, layoutVersion);
+            bool saved = PersistLayout();
             if (isNew) RebuildMarkers(); else SyncMarkerPoses();
             NoteWrite(best, pos, entry.yawDegrees);
 
             _learnNote = (isNew ? $"tag {best} KUMANDADAN olusturuldu"
                                 : $"tag {best} KUMANDADAN yazildi ({(pos - before).magnitude * 100f:0} cm oynadi)")
                        + (yawFromCam ? "" : "  [yaw YOK — tag'e bak]")
-                       + (saved ? "" : "  — DISKE YAZILAMADI");
+                       + (saved ? "" : $"  — {PersistTarget.ToUpperInvariant()} YAZILAMADI");
 
             Debug.Log($"[AprilTagCalib] Tag {best} konumu kumanda dokunusundan turetildi: " +
                       $"{before} -> {pos}, yaw {entry.yawDegrees:0.0} ({(yawFromCam ? "kameradan" : "eski")}). " +
@@ -1875,23 +2056,25 @@ namespace VRMultiplayer
             entry.yawDegrees = _learnedYaw;
             tagLayout = list.ToArray();
 
-            bool saved = TagLayoutStore.Save(tagLayout, layoutVersion);
+            bool saved = PersistLayout();
             RebuildMarkers();
             NoteWrite(_learnId, entry.position, entry.yawDegrees);
 
             float moved = (entry.position - before).magnitude;
             float yawMoved = Mathf.Abs(Mathf.DeltaAngle(beforeYaw, entry.yawDegrees));
+            string hedefBuyuk = PersistTarget.ToUpperInvariant();
 
             _learnNote = isNew
-                ? (saved ? $"TAG {_learnId} EKLENDI (kapali)" : $"TAG {_learnId} EKLENDI — DISKE YAZILAMADI")
+                ? (saved ? $"TAG {_learnId} EKLENDI (kapali)" : $"TAG {_learnId} EKLENDI — {hedefBuyuk} YAZILAMADI")
                 : (saved ? $"UYGULANDI ({moved * 100f:0} cm, {yawMoved:0.0} derece oynadi)"
-                         : "UYGULANDI — DISKE YAZILAMADI");
+                         : $"UYGULANDI — {hedefBuyuk} YAZILAMADI");
 
             Debug.Log($"[AprilTagCalib] Tag {_learnId} yerlesimi guncellendi.\n" +
                       $"  once : {before}  yaw {beforeYaw:0.0}\n" +
                       $"  simdi: {entry.position}  yaw {entry.yawDegrees:0.0}\n" +
                       $"  fark : {moved * 100f:0.0} cm, {yawMoved:0.0} derece\n" +
-                      $"  dosya: {TagLayoutStore.FilePath} ({(saved ? "yazildi" : "YAZILAMADI")})");
+                      $"  hedef: {PersistTarget} ({(saved ? "yazildi" : "YAZILAMADI")})" +
+                      (_fromMap ? "" : $"  {TagLayoutStore.FilePath}"));
 
             ResetLearn();
         }
@@ -2057,6 +2240,11 @@ namespace VRMultiplayer
 
         void TickPanel()
         {
+            // Gozcu PANELDEN BAGIMSIZ kosar: showPanel kapaliyken de log'a yazsin. Uyariyi
+            // yalnizca panele baglamak, paneli kapatan kurulumda sorunu tekrar gorunmez
+            // yapardi — kapatilan sey teshis, olen sey teshisin kendisi olurdu.
+            TickRefWatch();
+
             if (!showPanel) { if (_panel != null) _panel.gameObject.SetActive(false); return; }
             if (_panel == null)
             {
@@ -2132,10 +2320,20 @@ namespace VRMultiplayer
             // Cihazda yasandi: oyuncu tag 2'ye bakti, hicbir sey olmadi sandi.
             if (!learnMode)
             {
-                if (!seen)
-                    return "Tag GORUNMUYOR" + (cameraRunning ? "" : "\nKAMERA YOK (izin?)");
+                // Yaw referansi uyarisi OYUN MODUNDA DA gorunur: gizli kalmasi tam olarak
+                // sorunun kendisiydi. Tek satir ve yalnizca gercekten bozukken cikiyor.
+                string refUyari = YawReferenceWarning();
+                string refSatir = refUyari != null ? refUyari + "\n" : "";
 
-                var q = new System.Text.StringBuilder($"Tag {_lastId} GORUNDU   {_lastDistance:0.00} m\n");
+                if (!seen)
+                    // Harita yeni degistiyse SEBEBI de yaz: "tag gorunmuyor" tek basina
+                    // "bekle" gibi okunuyor, oysa oyuncunun YAPMASI gereken bir sey var.
+                    return refSatir
+                         + (_layoutStale ? "YENI HARITA — bir TAG'E BAK\n" : "")
+                         + "Tag GORUNMUYOR" + (cameraRunning ? "" : "\nKAMERA YOK (izin?)");
+
+                var q = new System.Text.StringBuilder(
+                    refSatir + $"Tag {_lastId} GORUNDU   {_lastDistance:0.00} m\n");
 
                 // DURUM SATIRI, GORULEN TAG'E AIT OLMALI.
                 //
@@ -2168,6 +2366,9 @@ namespace VRMultiplayer
                 ? $"Tag {_lastId}   {_lastDistance:0.00} m   {_jitterMm:0.0} mm   {_detectHz:0.0} Hz\n"
                 : "Tag GORUNMUYOR   " +
                   (_lastTagTime > 0f ? $"{Time.time - _lastTagTime:0} sn once\n" : "hic gorulmedi\n"));
+
+            string refUyariTeshis = YawReferenceWarning();
+            if (refUyariTeshis != null) p.Append(refUyariTeshis + "\n");
 
             if (!cameraRunning) p.Append("KAMERA YOK (izin?)\n");
             if (showPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
