@@ -116,7 +116,14 @@ namespace VRMultiplayer
                 return;
             }
 
-            EnsureCaptured();
+            // TEMASIZDAN TEMALIYA her gecisde yeniden yakala. Yakalama eskiden bir kez
+            // yapiliyordu ve bu, yedegi BAYATLATIYORDU: sahne arada baska bir yoldan
+            // degistiginde (editorde elle, ya da bir onceki geri-alma yarim kaldiginda)
+            // "orijinal" artik sahnenin o anki hali degildi, ve Restore sahneyi eski bir
+            // duruma geri yaziyordu. ActiveId bos oldugu her an sahne tanim geregi temasiz,
+            // yani o an yakalanan sey gercekten sahnenin kendi gorunumudur.
+            if (string.IsNullOrEmpty(ActiveId)) Capture();
+
             ApplySun(def);
             ApplySky(def);
             ApplyFog(def);
@@ -317,10 +324,27 @@ namespace VRMultiplayer
 
         // ------------------------------------------------------------- yakalama
 
-        static void EnsureCaptured()
+        /// <summary>
+        /// Yedegi ALIR — cagrildigi anda sahnede ne varsa "orijinal" odur.
+        ///
+        /// KOSULSUZ, bilerek. Bir zamanlar "yalnizca ilk seferde" idi ve tek bir bayat yedek,
+        /// sonraki her geri-almanin sahneyi yanlis bir duruma yazmasina yetiyordu. Cagiran
+        /// taraf bunu yalnizca <see cref="ActiveId"/> bosken cagiriyor; orada sahne tanim
+        /// geregi temasiz.
+        ///
+        /// KALAN TUZAK: editorde 49b ile 49c arasinda kod derlenirse statikler silinir,
+        /// sahne temali kalir ve bir sonraki yakalama o temali hali "orijinal" sayar. Calisma
+        /// zamaninda bu olamaz (oyun ortasinda domain reload yok, ResetStatics de basta
+        /// temizler). Editorde onlemi 49c'yi derlemeden ONCE calistirmak.
+        /// </summary>
+        static void Capture()
         {
-            if (_captured) return;
             _captured = true;
+
+            // Gunesin yedegi de tazelensin: CaptureSun ayni isik icin bir kez yakaliyor,
+            // ve o "bir kez" burada sifirlanmazsa render ayarlari tazelenirken gunes
+            // eski yedekte kalirdi — yariyi duzeltip yariyi bozan bir geri-alma.
+            _sun = null;
 
             _skybox0 = RenderSettings.skybox;
             _sun0Ref = RenderSettings.sun;
