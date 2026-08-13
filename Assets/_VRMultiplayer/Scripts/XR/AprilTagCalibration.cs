@@ -292,10 +292,19 @@ namespace VRMultiplayer
         public bool useAnchorHold = false;
 
         [Tooltip("Kayan pencere bu kadar sure ornek almadiysa TEMIZLENIR (sn).\n\n" +
-                 "Ornekler bir CERCEVEYE aittir; tag gorus alanindan cikip geri geldiginde ya " +
-                 "da gozluk uyuyup uyandiginda cerceve degismis olabilir. Bayat ornekler " +
-                 "ortalamaya karisip sapmayi seyreltir ve sistem hizasizken 'HIZALI' der.")]
-        public float calibWindowMaxGap = 2f;
+                 "Ornekler bir CERCEVEYE aittir; tag gorus alanindan cikip geri geldiginde " +
+                 "cerceve degismis olabilir. Bayat ornekler ortalamaya karisip sapmayi " +
+                 "seyreltir ve sistem hizasizken 'HIZALI' der.\n\n" +
+                 "2 -> 5 SN (2026-08-13, olculdu). Adim 4 turunda pencere 9 kez silindi ve " +
+                 "bosluklar 2,0 / 2,0 / 2,4 / 3,0 / 3,0 / 4,0 / 5,0 / 11,1 / 37,3 sn idi. " +
+                 "Bosta tespit 1 Hz oldugu icin TEK gecikmis kare 2 sn'yi asiyor: 2,0-3,0 sn " +
+                 "araligindaki uc silme sirasiyla 14, 13 ve 13 ornek atti — yani tag'e bakmaya " +
+                 "devam ederken dolu pencereler bosaltildi. Bu, Adim 4'un kaldirdigi beklemeyi " +
+                 "geri getiriyordu. 5 sn, olculen tum surekli-bakis boslukklarinin (max 3,0) " +
+                 "ustunde, gercek bakis kopmalarinin (11,1 / 37,3) altinda.\n\n" +
+                 "UYKU ARTIK BU ESIGE BAGLI DEGIL: pencere uyanista dogrudan temizleniyor " +
+                 "(OnApplicationPause). Esik yalnizca 'tag gorus alanindan cikti' durumu icin.")]
+        public float calibWindowMaxGap = 5f;
 
         [Tooltip("Kazanan tag'i degistirmek icin yeni tag'in bu kadar DAHA YAKIN olmasi gerekir (m).\n\n" +
                  "Tag degisimi kayan pencereyi temizliyor. Iki tag benzer mesafedeyse secim her " +
@@ -580,6 +589,26 @@ namespace VRMultiplayer
         {
             WriteDiag(paused ? "=== UYKU (uygulama duraklatildi) ==="
                              : "=== UYANDI — bundan sonraki ilk tag tespiti belirleyici ===");
+
+            // UYANISTA PENCERE TEMIZLENIR — DOGRUDAN isaret.
+            //
+            // Bayat pencerenin belgelenmis felaketi tam olarak uyku sonrasiydi: gozluk
+            // uyandiginda takip uzayi bambaska bir yere oturmustu, penceredeki 15 bayat ornek
+            // yeni olcumleri bastirdi, sapma olu bolgenin ALTINDA kaldi ve panel surekli
+            // "HIZALI" yazdi. Duzeltme yapilmadigi icin pencere de temizlenmedi — kalici
+            // kilitlenme. Aykiri eleme bunu yakalayamaz: esigi 15 cm, olay ise 1 cm'nin
+            // altinda kalan bir bastirma.
+            //
+            // Bu, calibWindowMaxGap'in asil korudugu durumdu ve zaman esigi onun DOLAYLI
+            // vekiliydi: "uzun sure ornek gelmediyse belki uyumustur". Uyku sinyalinin
+            // kendisi elimizde oldugu icin vekile gerek yok — esik artik yalnizca "tag gorus
+            // alanindan cikti" durumunu kaplıyor ve olculen degere gore gevsetilebiliyor.
+            if (!paused)
+            {
+                _calibLocal.Clear();
+                _calibYawLocal.Clear();
+                _calibId = -1;
+            }
         }
 
         void OnDestroy()

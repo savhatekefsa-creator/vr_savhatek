@@ -111,7 +111,7 @@ MonoBehaviour:
   assumedFrameLatency: 0.05
   motionErrorBudget: 0.02
   useAnchorHold: 0
-  calibWindowMaxGap: 2
+  calibWindowMaxGap: 5
   calibSwitchMargin: 0.3
   calibStabilitySpread: 0.02
   calibOutlierDistance: 0.15
