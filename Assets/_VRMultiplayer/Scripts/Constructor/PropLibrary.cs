@@ -145,9 +145,21 @@ namespace VRMultiplayer.Constructor
         /// because the grid is doing exactly what it was told.
         ///
         /// THE RULE IS THE PLACED PROP'S. Overlap is allowed when the piece BEING PLACED has this
-        /// on; what is already there does not get a vote. That keeps it predictable and keeps the
-        /// kit's guarantee intact — a modular wall still refuses to enter a sandbag pile, so the
-        /// pieces that tile flush go on tiling flush.
+        /// on; what is already there does not get a vote — which is what keeps the behaviour
+        /// predictable when a map mixes pieces that have it with pieces that do not.
+        ///
+        /// ON FOR EVERYTHING IN THE LIBRARY, INCLUDING NEW PROPS. It started as an escape hatch
+        /// for irregular art and became the default because the answer kept being "yes" — a
+        /// person building an arena is composing a scene, and every time the grid said no to a
+        /// placement that looked right, the grid was wrong. Turned on where props ENTER the
+        /// library (the folder scan and the drag-drop add), not on the field itself: menu 29's
+        /// self-check builds its own PropDef fixtures precisely to test the occupancy rule, and
+        /// they still need the strict behaviour to be testing anything.
+        ///
+        /// WHAT THE MODULAR KIT GIVES UP by having it on: the accidental-duplicate guard. Those
+        /// pieces already tile flush without help, so overlap buys them nothing, and the only
+        /// change is that two identical walls can now be stacked in the same cell without the
+        /// grid objecting. One tick in menu 31 puts the guard back per prop.
         ///
         /// WHAT IT COSTS, so it is a choice and not a surprise:
         ///  - the cell OWNER map holds one id per cell, so the newer prop wins the shared cells;
@@ -156,15 +168,14 @@ namespace VRMultiplayer.Constructor
         ///  - removing the older prop frees the shared cells even though the newer still stands
         ///    there. Reopening the map fixes it: <see cref="ConstructorSession.Adopt"/> rebuilds
         ///    occupancy from the layout.
-        ///  - two solid meshes really do intersect. That is the point here, and it is also why
-        ///    this stays OFF by default.
+        ///  - two solid meshes really do intersect. That is the point here.
         /// </remarks>
         [Tooltip("Acik: bu prop, baska bir propun tuttugu hucrelere de konabilir.\n\n" +
-                 "Sinir kutusu gercek govdesinden cok genis olan DUZENSIZ modeller icin " +
-                 "(kum torbasi, yikik duvar, agac): onlarda izgara kutuyu rezerve ettigi icin " +
-                 "yan yana konunca aralarinda bosluk kaliyor.\n\n" +
-                 "Modüler kit parcalarinda KAPALI kalmali — onlar zaten tam bitisiyor ve " +
-                 "kural onlarin bitismesini garanti eden sey.")]
+                 "Kutuphaneye giren HER prop bununla geliyor — tarama da surukle-birak da " +
+                 "acik olarak ekliyor.\n\n" +
+                 "Kapatirsan o prop dolu hucreye konamaz: yanlislikla ust uste yerlestirmeye " +
+                 "karsi koruma geri gelir, ama parcayi baska bir parcaya gecirmek de mumkun " +
+                 "olmaz.")]
         public bool allowOverlap;
 
         [Tooltip("Modelin yerel yuksekligi (m) — onizleme olceklemesi icin tarama araci doldurur.")]

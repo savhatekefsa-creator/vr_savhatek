@@ -257,6 +257,12 @@ namespace VRMultiplayer.EditorTools
                         sizeMeters = size,
                         height = height,
                         fitToFootprint = !isSpawn,
+                        // KUTUPHANEYE YENI GIREN PROP IC ICE KONABILIR (bkz.
+                        // PropDef.allowOverlap). Alanin kendi varsayilani false ve oyle
+                        // kaliyor: menu 29'un oz-denetim kurgulari da PropDef uretiyor ve
+                        // tam olarak doluluk kuralini sinadiklari icin onlarin kati
+                        // davranisa ihtiyaci var. Varsayilanin gevsedigi yer KUTUPHANE.
+                        allowOverlap = true,
                     };
                     added++;
                 }

@@ -380,6 +380,7 @@ namespace VRMultiplayer.EditorTools
                 snap = PropSnap.Floor,
                 sizeMeters = size,
                 height = height,
+                allowOverlap = true,   // taramayla ayni varsayilan (bkz. ConstructorSetup)
             };
 
             var list = new List<PropDef>(_lib.props) { def };

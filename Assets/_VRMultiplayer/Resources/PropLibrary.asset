@@ -43,7 +43,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.4080095
   - id: blast_door_wall
     displayName: Blast_Door_Wall
@@ -71,7 +71,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.8389467
   - id: bunkers_1_variant
     displayName: Bunkers_1 Variant
@@ -85,7 +85,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.8389467
   - id: bunkers_2
     displayName: Bunkers_2
@@ -99,7 +99,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.3034182
   - id: bunkers_2_variant
     displayName: Bunkers_2 Variant
@@ -113,7 +113,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.3034182
   - id: burning_barrel
     displayName: Burning_Barrel
@@ -141,7 +141,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.4981851
   - id: bush_02
     displayName: Bush_02
@@ -155,7 +155,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.1579773
   - id: bush_03
     displayName: Bush_03
@@ -169,7 +169,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.0482327
   - id: flower_01
     displayName: Flower_01
@@ -183,7 +183,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.3172927
   - id: flower_02
     displayName: Flower_02
@@ -197,7 +197,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.3180203
   - id: glass_shards
     displayName: Glass_Shards
@@ -225,7 +225,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.59116405
   - id: grass_02
     displayName: Grass_02
@@ -239,7 +239,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.0563245
   - id: grass_03
     displayName: Grass_03
@@ -253,7 +253,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.38075826
   - id: ground_01
     displayName: Ground_01
@@ -267,7 +267,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 10
   - id: ground_trail_01
     displayName: Ground_Trail_01
@@ -281,7 +281,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 10
   - id: ground_trail_02
     displayName: Ground_Trail_02
@@ -295,7 +295,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 10
   - id: ground_trail_03
     displayName: Ground_Trail_03
@@ -309,7 +309,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 10
   - id: ground_trail_04
     displayName: Ground_Trail_04
@@ -323,7 +323,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 10
   - id: gun_nest
     displayName: Gun_Nest
@@ -365,7 +365,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 20
   - id: hill_02
     displayName: Hill_02
@@ -379,7 +379,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 20
   - id: jersey_barrier
     displayName: Jersey_Barrier
@@ -407,7 +407,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.6198404
   - id: military_jeep
     displayName: Military_Jeep
@@ -435,7 +435,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.41227984
   - id: paintball_maker
     displayName: Paintball_Maker
@@ -449,7 +449,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.6198404
   - id: power_pole
     displayName: Power_Pole
@@ -477,7 +477,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.4
   - id: rack_long_b
     displayName: Rack_Long_B
@@ -491,7 +491,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.4
   - id: rack_sidearm
     displayName: Rack_Sidearm
@@ -505,7 +505,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.62
   - id: rack_wall
     displayName: Rack_Wall
@@ -519,7 +519,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.625
   - id: radiation_drum
     displayName: Radiation_Drum
@@ -547,7 +547,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.22642289
   - id: rock_02
     displayName: Rock_02
@@ -561,7 +561,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.35175338
   - id: rock_03
     displayName: Rock_03
@@ -575,7 +575,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.29288626
   - id: rock_cluster_01
     displayName: Rock_Cluster_01
@@ -589,7 +589,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.32005703
   - id: rock_large_01
     displayName: Rock_Large_01
@@ -603,7 +603,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.198786
   - id: rubble_patch
     displayName: Rubble_Patch
@@ -659,7 +659,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.875
   - id: scifi_cargo_container
     displayName: SciFi_Cargo_Container
@@ -673,7 +673,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.75
   - id: scifi_control_console
     displayName: SciFi_Control_Console
@@ -687,7 +687,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.8985996
   - id: scifi_cover_low
     displayName: SciFi_Cover_Low
@@ -701,7 +701,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.875
   - id: scifi_power_core
     displayName: SciFi_Power_Core
@@ -715,7 +715,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.25
   - id: scifi_wall_door
     displayName: SciFi_Wall_Door
@@ -729,7 +729,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.2
   - id: scifi_wall_solid
     displayName: SciFi_Wall_Solid
@@ -743,7 +743,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.2
   - id: scifi_wall_window
     displayName: SciFi_Wall_Window
@@ -757,7 +757,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.2
   - id: scorch_mark
     displayName: Scorch_Mark
@@ -813,7 +813,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.05
   - id: spawn_b
     displayName: Spawn_B
@@ -827,7 +827,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.05
   - id: table_low
     displayName: Table_Low
@@ -841,7 +841,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.75
   - id: tagisaret
     displayName: TagIsaret
@@ -855,7 +855,7 @@ MonoBehaviour:
     freeRotation: 1
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 0.14
   - id: tree_dead_01
     displayName: Tree_Dead_01
@@ -869,7 +869,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 4.300281
   - id: tree_dead_02
     displayName: Tree_Dead_02
@@ -883,7 +883,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 8.300786
   - id: tree_dead_03
     displayName: Tree_Dead_03
@@ -897,7 +897,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 6.0955873
   - id: tree_oak_01
     displayName: Tree_Oak_01
@@ -911,7 +911,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 4.2427473
   - id: tree_oak_02
     displayName: Tree_Oak_02
@@ -925,7 +925,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 8.233517
   - id: tree_oak_03
     displayName: Tree_Oak_03
@@ -939,7 +939,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 6.2554793
   - id: tree_pine_01
     displayName: Tree_Pine_01
@@ -953,7 +953,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 4.1563478
   - id: tree_pine_02
     displayName: Tree_Pine_02
@@ -967,7 +967,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 8.119053
   - id: tree_pine_03
     displayName: Tree_Pine_03
@@ -981,7 +981,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 6.316282
   - id: tree_trunk_01
     displayName: Tree_Trunk_01
@@ -995,7 +995,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.042295
   - id: tree_trunk_02
     displayName: Tree_Trunk_02
@@ -1009,7 +1009,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 4.0241737
   - id: tree_trunk_03
     displayName: Tree_Trunk_03
@@ -1023,7 +1023,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 1
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 4.0393896
   - id: wall_door
     displayName: Wall_Door
@@ -1037,7 +1037,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.2
   - id: wall_solid
     displayName: Wall_Solid
@@ -1051,7 +1051,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.2
   - id: watchtower_base
     displayName: Watchtower_Base
@@ -1079,7 +1079,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.4080095
   - id: wood_modular_6
     displayName: Wood_Modular_6
@@ -1093,7 +1093,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.123368
   - id: wood_modular_7
     displayName: Wood_Modular_7
@@ -1107,7 +1107,7 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 1.123368
   - id: wood_modular_8
     displayName: Wood_Modular_8
@@ -1121,5 +1121,5 @@ MonoBehaviour:
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    allowOverlap: 0
+    allowOverlap: 1
     height: 2.2630243
