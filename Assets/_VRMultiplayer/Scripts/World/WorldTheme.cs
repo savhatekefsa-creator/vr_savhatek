@@ -270,7 +270,16 @@ namespace VRMultiplayer
             var names = ThemeLibrary.Instance.floorObjectNames;
             if (names == null || names.Length == 0) return;
 
-            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            // PASIF NESNELER DE TARANIR — bu, zeminin gozlukte hic boyanmamasinin sebebiydi.
+            // Gozluk istemciyken sira soyle isliyor: once insa moduna giriliyor, orada
+            // ConstructorPassthrough gercek odayi gostermek icin sanal KOK nesneleri
+            // SetActive(false) yapiyor (Ground dahil), harita ve temasi ise ag uzerinden
+            // BUNDAN SONRA geliyor. Varsayilan arama pasifleri atladigi icin boyanacak
+            // zemin bulunamiyor, sessizce gecip gidiyordu — gokyuzu/sis/isik global ayar
+            // oldugu icin degisiyor, zemin degismiyordu. Simdi pasifken boyaniyor ve
+            // passthrough nesneyi geri actiginda zaten temali geliyor.
+            foreach (var r in Object.FindObjectsByType<Renderer>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (!IsFloorName(names, r.gameObject.name)) continue;
 
@@ -292,10 +301,30 @@ namespace VRMultiplayer
             _painted.Clear();
         }
 
+        /// <summary>
+        /// Ad eslesmesi: birebir, ya da listelenen adin ardindan SAYI gelmesi.
+        ///
+        /// Sayi kuyrugu oda taramasinin kendi adlandirmasi: ikinci oda kurulunca zemin
+        /// "Zemin2" oluyor (Editor/RoomScanSetup, <c>"Zemin" + suffix</c>). Yalnizca birebir
+        /// eslesme aransa iki odali bir kurulumda ikinci odanin zemini temasiz kalirdi — ve
+        /// bunun belirtisi "odanin yarisi boyandi" gibi, sebebi hic akla gelmeyecek bir sey
+        /// olurdu.
+        /// </summary>
         static bool IsFloorName(string[] names, string candidate)
         {
+            if (string.IsNullOrEmpty(candidate)) return false;
+
             foreach (var n in names)
+            {
+                if (string.IsNullOrEmpty(n)) continue;
                 if (n == candidate) return true;
+                if (candidate.Length <= n.Length || !candidate.StartsWith(n)) continue;
+
+                bool allDigits = true;
+                for (int i = n.Length; i < candidate.Length; i++)
+                    if (!char.IsDigit(candidate[i])) { allDigits = false; break; }
+                if (allDigits) return true;
+            }
             return false;
         }
 
