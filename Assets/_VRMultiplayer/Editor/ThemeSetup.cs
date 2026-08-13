@@ -15,6 +15,7 @@ namespace VRMultiplayer.EditorTools
     ///   49b. Temayi Onizle                  — temayi SAHNEYE uygular, gozluge girmeden bak
     ///   49c. Onizlemeyi Kaldir              — sahnenin kendi gorunumune don
     ///   49d. Secili Haritaya Tema Ata       — Maps/*.json icine themeId yazar
+    ///   49e. Secili Haritanin Temasini Kaldir — ayni yazma, bos themeId ile
     ///
     /// Menuler ConstructorSetup ile ayni sozlesmede: is yapan <c>RunX()</c> bir RAPOR METNI
     /// dondurur, diyalogu yalnizca menu acar. Boylece ayni islem otomasyondan (MCP) modal
@@ -481,8 +482,15 @@ namespace VRMultiplayer.EditorTools
         public static void AssignToMapMenu() =>
             EditorUtility.DisplayDialog("VR Multiplayer", AssignToSelectedMap(KiyametId), "Tamam");
 
+        [MenuItem("Tools/VR Multiplayer/49e. Secili Haritanin Temasini Kaldir")]
+        public static void ClearMapThemeMenu() =>
+            EditorUtility.DisplayDialog("VR Multiplayer", AssignToSelectedMap(""), "Tamam");
+
         /// <summary>
-        /// Stamps <see cref="MapLayout.themeId"/> into the selected map file.
+        /// Stamps <see cref="MapLayout.themeId"/> into the selected map file. An EMPTY id clears
+        /// it, which is what menu 49e is: "empty" already means "no theme chosen" in the layout
+        /// (see <see cref="MapLayout.themeId"/>), so removing a theme is the same write as
+        /// assigning one and does not need a second code path.
         ///
         /// GOES THROUGH FromJson/ToJson INSTEAD OF EDITING TEXT: loading migrates the file to
         /// the current schema on the way in, so a v2 map picks up its rotation fix here too and
@@ -491,6 +499,8 @@ namespace VRMultiplayer.EditorTools
         /// </summary>
         public static string AssignToSelectedMap(string themeId)
         {
+            themeId = themeId ?? "";
+
             var obj = Selection.activeObject;
             string path = obj != null ? AssetDatabase.GetAssetPath(obj) : "";
 
@@ -506,17 +516,31 @@ namespace VRMultiplayer.EditorTools
             if (layout == null) return $"'{path}' okunamadi — gecerli bir harita degil.";
 
             var lib = ThemeLibrary.Instance;
-            if (lib.ById(themeId) == null)
+            // Kaldirma isteginde kutuphaneye BAKILMAZ: silinmis bir temayi tasiyan haritayi
+            // temizlemek tam da bu menunun isi, ve "once menu 49 calistir" demek onu
+            // kurtarilamaz hale getirirdi.
+            if (themeId != "" && lib.ById(themeId) == null)
                 return $"'{themeId}' temasi kutuphanede yok.\n\nOnce menu 49 calistir.";
 
             string before = layout.themeId ?? "";
+            if (before == themeId)
+            {
+                // Dosyayi gereksiz yere yeniden yazma: ayni degeri geri yazmak surum
+                // dam gasini ve bicimlendirmeyi degistirip bos bir git farki uretirdi.
+                return $"'{layout.name}' zaten " +
+                       (themeId == "" ? "TEMASIZ." : $"'{lib.NameOf(themeId)}' temasinda.");
+            }
+
             layout.themeId = themeId;
             File.WriteAllText(path, layout.ToJson());
             AssetDatabase.Refresh();
 
+            string now = themeId == "" ? "TEMASIZ" : lib.NameOf(themeId);
             return $"'{layout.name}' haritasinin temasi: " +
-                   $"{(before == "" ? "TEMASIZ" : before)} -> {lib.NameOf(themeId)}\n\n" +
-                   "Haritayi acan her istemci bu gorunumde acar.";
+                   $"{(before == "" ? "TEMASIZ" : lib.NameOf(before))} -> {now}\n\n" +
+                   (themeId == ""
+                       ? "Harita artik sahnenin kendi gorunumunde acilir."
+                       : "Haritayi acan her istemci bu gorunumde acar.");
         }
 
         static IEnumerable<string> MapNames()
