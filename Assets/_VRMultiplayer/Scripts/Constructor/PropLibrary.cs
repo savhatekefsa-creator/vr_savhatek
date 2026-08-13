@@ -132,6 +132,41 @@ namespace VRMultiplayer.Constructor
                  "Kapali: duz mesh, ag maliyeti sifir. Cogu prop kapali olmali.")]
         public bool networked;
 
+        /// <summary>
+        /// Lets this prop be placed into cells another prop already holds.
+        /// </summary>
+        /// <remarks>
+        /// WHY THIS EXISTS: the grid's no-overlap rule assumes a MODULAR KIT — pieces authored
+        /// with flat ends on cell multiples, which tile flush because their bounding box IS their
+        /// geometry. The SciFi and wood sets are like that. Scanned/generated art is not: a
+        /// sandbag emplacement is a curve inside its box, a ruined wall has broken ends, a dead
+        /// tree is mostly air. Their footprints reserve the BOX, so two of them side by side sit
+        /// as far apart as their empty corners are wide — and no amount of nudging closes it,
+        /// because the grid is doing exactly what it was told.
+        ///
+        /// THE RULE IS THE PLACED PROP'S. Overlap is allowed when the piece BEING PLACED has this
+        /// on; what is already there does not get a vote. That keeps it predictable and keeps the
+        /// kit's guarantee intact — a modular wall still refuses to enter a sandbag pile, so the
+        /// pieces that tile flush go on tiling flush.
+        ///
+        /// WHAT IT COSTS, so it is a choice and not a surprise:
+        ///  - the cell OWNER map holds one id per cell, so the newer prop wins the shared cells;
+        ///    aiming at those to delete picks the newer one. The older is still reachable through
+        ///    any cell it kept to itself.
+        ///  - removing the older prop frees the shared cells even though the newer still stands
+        ///    there. Reopening the map fixes it: <see cref="ConstructorSession.Adopt"/> rebuilds
+        ///    occupancy from the layout.
+        ///  - two solid meshes really do intersect. That is the point here, and it is also why
+        ///    this stays OFF by default.
+        /// </remarks>
+        [Tooltip("Acik: bu prop, baska bir propun tuttugu hucrelere de konabilir.\n\n" +
+                 "Sinir kutusu gercek govdesinden cok genis olan DUZENSIZ modeller icin " +
+                 "(kum torbasi, yikik duvar, agac): onlarda izgara kutuyu rezerve ettigi icin " +
+                 "yan yana konunca aralarinda bosluk kaliyor.\n\n" +
+                 "Modüler kit parcalarinda KAPALI kalmali — onlar zaten tam bitisiyor ve " +
+                 "kural onlarin bitismesini garanti eden sey.")]
+        public bool allowOverlap;
+
         [Tooltip("Modelin yerel yuksekligi (m) — onizleme olceklemesi icin tarama araci doldurur.")]
         public float height = 1f;
 

@@ -498,6 +498,12 @@ namespace VRMultiplayer.EditorTools
                     bool fit = GUILayout.Toggle(p.fitToFootprint, "fit", "Button", GUILayout.Width(40f));
                     if (fit != p.fitToFootprint) { p.fitToFootprint = fit; Save(); }
 
+                    bool ovl = GUILayout.Toggle(p.allowOverlap,
+                        new GUIContent("ic ice", "Acik: bu prop baska proplarin uzerine binebilir. " +
+                            "Sinir kutusu govdesinden genis olan duzensiz modeller icin."),
+                        "Button", GUILayout.Width(48f));
+                    if (ovl != p.allowOverlap) { p.allowOverlap = ovl; Save(); }
+
                     if (GUILayout.Button("Sec", GUILayout.Width(38f)) && p.prefab != null)
                         EditorGUIUtility.PingObject(p.prefab);
 

@@ -530,6 +530,12 @@ namespace VRMultiplayer.Constructor
             int want = LevelMask(level, span);
             var s = ShapeOf(def, minCell, rot, scalePct);
 
+            // Ust uste binmeye izin veren proplarda YALNIZCA doluluk testi atlanir
+            // (bkz. PropDef.allowOverlap). Sinir, oda disi ve mobilya testleri KALIR:
+            // bu bayrak "parcalar birbirine girebilsin" demek, "duvarin disina insa
+            // edilebilsin" demek degil.
+            bool ignoreOccupancy = def != null && def.allowOverlap;
+
             for (int cz = s.rect.yMin; cz < s.rect.yMax; cz++)
                 for (int cx = s.rect.xMin; cx < s.rect.xMax; cx++)
                 {
@@ -538,7 +544,7 @@ namespace VRMultiplayer.Constructor
 
                     int i = cz * Cols + cx;
                     if (!IsBuildable(_base[i])) return false;      // oda disi / mobilya
-                    if ((_levels[i] & want) != 0) return false;    // o katlar dolu
+                    if (!ignoreOccupancy && (_levels[i] & want) != 0) return false;   // o katlar dolu
                 }
             return true;
         }
