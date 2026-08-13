@@ -250,7 +250,39 @@ namespace VRMultiplayer.UI
             EnterEditor();
         }
 
+        /// <summary>
+        /// "YENI" secildi: once DUNYA sorulur, sonra harita acilir.
+        ///
+        /// SORU HARITADAN ONCE. Tema, olusturma isteginin bir parcasi olarak gidiyor
+        /// (<see cref="ConstructorSync.ClientRequestNewMap"/>); once acip sonra sormak,
+        /// oyuncuyu bir kac saniyeligine yanlis dunyada birakmak ve gozluk istemciyken
+        /// sunucunun yayini ile yaris etmek demekti.
+        ///
+        /// KUTUPHANE BOSSA HIC SORULMAZ: cevabi olmayan bir soru, akisa eklenmis bir tik
+        /// sesinden baska bir sey degil.
+        /// </summary>
         void StartNewMap()
+        {
+            var themes = ThemeLibrary.Instance;
+            if (themes.Count == 0) { CreateNewMap(""); return; }
+
+            // ONAY PANELI IKI SECENEK TASIYOR. Bugun kutuphanede tek tema var ve soru
+            // "o dunya mi, duz mu" olarak tam oturuyor. Ikinci tema geldiginde bu panel
+            // yetmez — sessizce ilkini secmek yerine burada yuksek sesle sikayet ediyoruz.
+            if (themes.Count > 1)
+                Debug.LogWarning($"[CreativeFlow] Kutuphanede {themes.Count} tema var ama yeni " +
+                                 "harita sorusu iki secenek gosterebiliyor; yalnizca ilki " +
+                                 "sunuluyor. Liste paneli gerekiyor.");
+
+            var pick = themes.themes[0];
+            string label = string.IsNullOrEmpty(pick.displayName) ? pick.id : pick.displayName;
+
+            OpenConfirm("YENİ HARİTA", "Hangi dünyada kurulsun?",
+                label, "NORMAL", UITheme.AccentCyan,
+                yes => CreateNewMap(yes ? pick.id : ""));
+        }
+
+        void CreateNewMap(string themeId)
         {
             var s = ConstructorSession.Instance;
             if (s == null) return;
@@ -260,7 +292,7 @@ namespace VRMultiplayer.UI
             // turden bir uyusmazlik.
             if (!ConstructorSession.IsMapAuthority)
             {
-                if (!ConstructorSync.ClientRequestNewMap())
+                if (!ConstructorSync.ClientRequestNewMap(themeId))
                 {
                     StartCoroutine(Note("SUNUCUYA BAĞLI DEĞİL\n\nHaritalar PC'de tutuluyor.", 5f));
                     return;
@@ -276,6 +308,11 @@ namespace VRMultiplayer.UI
                 StartCoroutine(Note("YENİ HARİTA AÇILAMADI\n\nConsole'a bak.", 4f));
                 return;
             }
+
+            // Yetkili taraf: OpenNew duzeni temasiz kurdu, temayi hemen ustune yaziyoruz.
+            // SetTheme haritayi da isaretliyor, yani secim kayitla birlikte kaliciasiyor.
+            if (!string.IsNullOrEmpty(themeId)) s.SetTheme(themeId);
+
             EnterEditor();
         }
 

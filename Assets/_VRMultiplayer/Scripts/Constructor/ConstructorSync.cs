@@ -437,11 +437,20 @@ namespace VRMultiplayer.Constructor
             return true;
         }
 
-        public static bool ClientRequestNewMap()
+        /// <summary>
+        /// Istemci: "bana yeni bos harita ac" — istenen dunya gorunumuyle birlikte.
+        ///
+        /// TEMA ISTEGIN ICINDE GIDIYOR, ayri bir cagri olarak DEGIL. Ayri gonderilseydi
+        /// yaris olurdu: harita sunucuda acilana kadar istemcinin elinde yazacagi bir
+        /// duzen yok, ve sunucu yeni duzeni yayinladigi anda temasiz hali istemcinin
+        /// yazdiginin uzerine binerdi. Sunucu haritayi acip temayi isaretleyip ONDAN SONRA
+        /// yayinlayinca boyle bir ara durum hic olusmuyor.
+        /// </summary>
+        public static bool ClientRequestNewMap(string themeId = "")
         {
             var sync = LocalOwned();
             if (sync == null) return false;
-            sync.NewMapServerRpc();
+            sync.NewMapServerRpc(themeId ?? "");
             return true;
         }
 
@@ -460,7 +469,7 @@ namespace VRMultiplayer.Constructor
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        void NewMapServerRpc(RpcParams p = default)
+        void NewMapServerRpc(string themeId, RpcParams p = default)
         {
             if (p.Receive.SenderClientId != OwnerClientId) return;
             if (Session == null) return;
@@ -470,6 +479,12 @@ namespace VRMultiplayer.Constructor
                 SessionErrorOwnerRpc("Yeni harita acilamadi.");
                 return;
             }
+
+            // Temayi YAYINDAN ONCE isaretle: boylece gorunum duzenin bir parcasi olarak
+            // gidiyor ve her peer haritayi zaten dogru dunyada kuruyor. Sonradan ayrica
+            // duyurmaya gerek yok.
+            if (!string.IsNullOrEmpty(themeId)) Session.SetTheme(themeId);
+
             StartCoroutine(SendLayout(true));
         }
 
