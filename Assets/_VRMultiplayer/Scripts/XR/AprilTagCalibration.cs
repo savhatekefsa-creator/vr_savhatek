@@ -215,6 +215,33 @@ namespace VRMultiplayer
                  "kabulun bedeli 5 metrelik bir sicramaydi.")]
         [Range(2, 6)] public int yawRecoveryConfirmations = 3;
 
+        [Header("Poz gecerlilik kapisi (Adim 3)")]
+        [Tooltip("SADECE LOG (3a) mi, yoksa gercekten ELESIN mi (3b).\n\n" +
+                 "ACIK = hicbir tespit elenmez, yalnizca 'elenecekti' diye log'a yazilir.\n" +
+                 "Esikler dogrulanmadan kapiyi devreye almak, DOGRU okumalari eleyip sorunu " +
+                 "cozulmus GOSTERIR — en kotu hata turu bu, cunku sessizdir ve iyi gorunur.\n\n" +
+                 "Kapatmadan once bakilacak sayi: log'daki 'ELENECEKTI' orani. Plan %20'nin " +
+                 "altini kabul ediyor; ustundeyse esikler yanlis, kod degil.")]
+        public bool poseGateLogOnly = true;
+
+        [Tooltip("Tag'in NORMALI yataydan bu kadar sapabilir (derece). Ustu elenir.\n\n" +
+                 "NEDEN ISE YARAR: kagitlar DUVARA duz yapistirilmis, yani normalleri yatay " +
+                 "olmak ZORUNDA. Duzlemsel poz belirsizliginin yanlis cozumu tag'i one/arkaya " +
+                 "yatirir ve normali yataydan koparir. Yerçekimi yonu IMU'dan geliyor ve tag " +
+                 "tespitinin hicbir hatasini paylasmiyor — ortalamayla gecmeyen sistematik " +
+                 "hatayi eleyebilen elimizdeki TEK bagimsiz kapi bu.\n\n" +
+                 "OLCULDU (2026-08-13, EV): egik bakista tag'ler arasi uyusmazlik 10,2 cm, " +
+                 "karsidan bakista 2,4 cm. Elemek istedigimiz sey tam olarak o egik okumalar.")]
+        [Range(5f, 45f)] public float maxNormalTiltDegrees = 20f;
+
+        [Tooltip("Tag'in KENDI dikeyi (yukari ekseni) dunya dikeyinden bu kadar sapabilir " +
+                 "(derece). Ustu elenir.\n\n" +
+                 "Normal yataylığından AYRI bir sinama: kagit duvarda dik durur, yani yalnizca " +
+                 "normali degil KENDI ekseni de dunya dikeyiyle hizalidir. Yanlis cozum ikisini " +
+                 "birden bozar ama farkli miktarlarda; iki bagimsiz olcu tek olcuden daha zor " +
+                 "kandirilir.")]
+        [Range(5f, 45f)] public float maxTagTiltDegrees = 25f;
+
         [Header("Hareket kapisi")]
         [Tooltip("Kafa bu hizdan hizli hareket ederken tespitler kalibrasyona ve olcume " +
                  "KATILMAZ (m/sn). 0 = kapali.\n\n" +
@@ -717,6 +744,14 @@ namespace VRMultiplayer
                 // Esik MESAFEYE gore: uzaktaki tag ayni donme hizindan cok daha fazla etkilenir.
                 if (!MotionOk(dist)) continue;
 
+                // NORMAL KONVANSIYONU: hareket kapisindan SONRA oylanir — kafa hareket
+                // ederken cikan poz sistematik olarak kaymis, oyu kirletir.
+                ProbeNormalSign(worldRot, worldPos, camPose.position);
+
+                // POZ GECERLILIK KAPISI (Adim 3). 3a'da yalnizca raporluyor, hicbir sey
+                // elemiyor; 3b'de poseGateLogOnly kapatilinca burasi 'continue' eder.
+                if (!PoseGate(tag.ID, worldRot, worldPos, camPose.position, dist)) continue;
+
                 if (learnMode)
                     Learn(tag.ID, dist, worldPos, worldRot);
 
@@ -1027,6 +1062,113 @@ namespace VRMultiplayer
 
             // Rig oynadi: pencere artik eski cerceveye ait, temizle — yeni cercevede dolsun.
             _calibPos.Clear(); _calibYaw.Clear();
+        }
+
+        // ---- NORMAL KONVANSIYONU (Adim 1'in kalani) ---------------------------------------
+        //
+        // Tespit pozunun +Z'si tag'in ONUNE mi ARKASINA mi bakiyor? Uc donusum ust uste
+        // biniyor (native cozucu, PoseEstimationJob'un Y flip'i, PassthroughCameraUtils'in
+        // 180 derece X donusu) ve bileske kagit uzerinde cikarilamadi.
+        //
+        // FIZIK CEVABI ZATEN VERIYOR: opak bir tag'i ancak ON yuzunden gorebilirsiniz. Dogru
+        // isaret, dot(normal, tag->kamera) > 0 verendir. Oylama ilk ~20 tespitte kesinlesir.
+        //
+        // YAW tarafi 2026-08-11'de ayrica olculdu ve yawDegrees'in duvarin ICINI gosterdigi
+        // bulundu; bu oylama onu DOGRULAMALI (isaret negatif cikmali). Cikmazsa ikisinden biri
+        // yanlis demektir ve Adim 3'un yuz yonu sinamasi guvenilmez olur.
+        int _normalSign;        // 0 = bilinmiyor, +1 / -1 = karar
+        int _votesPlus, _votesMinus;
+        const int NormalVotesNeeded = 20;
+
+        /// <summary>Tag pozunun normali (yuzey ekseni) — dunya uzayinda.</summary>
+        static Vector3 TagNormal(Quaternion worldRot) => worldRot * Vector3.forward;
+
+        void ProbeNormalSign(Quaternion worldRot, Vector3 worldPos, Vector3 camPos)
+        {
+            if (_normalSign != 0) return;
+
+            Vector3 tagToCam = camPos - worldPos;
+            if (tagToCam.sqrMagnitude < 1e-6f) return;
+
+            if (Vector3.Dot(TagNormal(worldRot), tagToCam.normalized) > 0f) _votesPlus++;
+            else _votesMinus++;
+
+            int toplam = _votesPlus + _votesMinus;
+            if (toplam < NormalVotesNeeded) return;
+
+            _normalSign = _votesPlus > _votesMinus ? +1 : -1;
+            WriteDiag($"NORMAL KONVANSIYONU: tag ekseni {(_normalSign > 0 ? "+Z kameraya" : "+Z duvara")} " +
+                      $"bakiyor  ({Mathf.Max(_votesPlus, _votesMinus)}/{toplam} oy)");
+            Debug.Log($"[AprilTagCalib] Normal konvansiyonu: isaret {_normalSign:+0;-0} " +
+                      $"({_votesPlus} arti / {_votesMinus} eksi). " +
+                      "Beklenen -1 (yaw olcumu duvarin icini gosteriyordu).");
+        }
+
+        // ---- POZ GECERLILIK KAPISI (Adim 3) -----------------------------------------------
+        //
+        // KONUMU DEGIL DONMEYI siniyor. Konum zaten guvenilir (1 m'de 3 mm); elenemeyen sey
+        // donmeydi. Uc bagimsiz sinama, hepsi FIZIKSEL bir gercege dayaniyor:
+        //   1. Yuz yonu     -> opak kagidi ancak on yuzunden gorebilirsin
+        //   2. Normal yatay -> kagit DUVARDA, normali yatay olmak zorunda
+        //   3. Tag dik      -> kagit duvarda DIK duruyor, kendi ekseni de dunya dikeyiyle hizali
+        //
+        // Ucu de yerçekimine dayaniyor ve yerçekimi IMU'dan geliyor: tag tespitinin hicbir
+        // hatasini paylasmiyor. Ortalamayla gecmeyen sistematik hatayi eleyebilen tek
+        // bagimsiz kapi bu.
+        int _poseChecked, _poseWouldReject;
+
+        bool PoseValid(Quaternion worldRot, Vector3 worldPos, Vector3 camPos, out string neden)
+        {
+            neden = null;
+            Vector3 normal = TagNormal(worldRot);
+
+            // 1) YUZ YONU. Isaret henuz oylanmadiysa bu sinama ATLANIR — bilinmeyen bir
+            //    isaretle elemek, dogru okumalari elemenin en kolay yolu olurdu.
+            if (_normalSign != 0)
+            {
+                Vector3 tagToCam = camPos - worldPos;
+                if (tagToCam.sqrMagnitude > 1e-6f)
+                {
+                    float d = Vector3.Dot(normal, tagToCam.normalized) * _normalSign;
+                    if (d <= 0f) { neden = $"yuz yonu ters (dot {d:0.00})"; return false; }
+                }
+            }
+
+            // 2) NORMAL YATAYLIGI. |normal.y| = sin(yataydan sapma).
+            float normalTilt = Mathf.Asin(Mathf.Clamp01(Mathf.Abs(normal.y))) * Mathf.Rad2Deg;
+            if (normalTilt > maxNormalTiltDegrees)
+            {
+                neden = $"normal {normalTilt:0.0} derece egik (sinir {maxNormalTiltDegrees:0})";
+                return false;
+            }
+
+            // 3) TAG DIKEYLIGI. Tag'in kendi yukari ekseni dunya dikeyinden ne kadar sapmis.
+            float tagTilt = Vector3.Angle(worldRot * Vector3.up, Vector3.up);
+            if (tagTilt > 90f) tagTilt = 180f - tagTilt;   // bas asagi da olsa EGIKLIK olcuyoruz
+            if (tagTilt > maxTagTiltDegrees)
+            {
+                neden = $"tag {tagTilt:0.0} derece yatik (sinir {maxTagTiltDegrees:0})";
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Kapiyi calistirir ve 3a'da yalnizca RAPORLAR. Donen deger "bu tespit kullanilsin mi";
+        /// <see cref="poseGateLogOnly"/> aciksa her zaman true doner.
+        /// </summary>
+        bool PoseGate(int tagId, Quaternion worldRot, Vector3 worldPos, Vector3 camPos, float dist)
+        {
+            _poseChecked++;
+            if (PoseValid(worldRot, worldPos, camPos, out string neden)) return true;
+
+            _poseWouldReject++;
+            // Her red YAZILIR: oran bu satirlardan cikacak ve 3b'ye gecip gecmeyecegimize
+            // o oran karar verecek.
+            WriteDiag($"POZ {(poseGateLogOnly ? "ELENECEKTI" : "ELENDI")}  tag {tagId}  {neden}" +
+                      $"  d {dist:0.00} m  ({_poseWouldReject}/{_poseChecked} = " +
+                      $"%{100f * _poseWouldReject / Mathf.Max(1, _poseChecked):0.0})");
+            return poseGateLogOnly;
         }
 
         // ---- YAW KURTARMA BANDI -----------------------------------------------------------
