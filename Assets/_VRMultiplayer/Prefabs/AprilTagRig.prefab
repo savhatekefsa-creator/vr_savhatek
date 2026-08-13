@@ -80,6 +80,7 @@ MonoBehaviour:
   - id: 0
     position: {x: 0, y: 1.5, z: 0}
     yawDegrees: 180
+    sourceInstanceId: 0
     useForCalibration: 1
   layoutVersion: 5
   detectionsPerSecond: 3
@@ -100,6 +101,8 @@ MonoBehaviour:
   yawFromReferenceOnly: 1
   yawCorrectionMaxDistance: 1.5
   yawRecoveryDegrees: 10
+  yawRecoveryMaxDegrees: 35
+  yawRecoveryConfirmations: 3
   maxHeadSpeed: 0.15
   maxHeadAngularSpeed: 15
   assumedFrameLatency: 0.05
