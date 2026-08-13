@@ -9,6 +9,18 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 15e892645d6cc874a8a5b2dca48e97d4, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.62
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 15e892645d6cc874a8a5b2dca48e97d4, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.62
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 15e892645d6cc874a8a5b2dca48e97d4, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.62
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 15e892645d6cc874a8a5b2dca48e97d4, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0
       objectReference: {fileID: 0}
@@ -55,30 +67,5 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 15e892645d6cc874a8a5b2dca48e97d4, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 497430181401680237}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 15e892645d6cc874a8a5b2dca48e97d4, type: 3}
---- !u!1 &4037158953649533900 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 15e892645d6cc874a8a5b2dca48e97d4, type: 3}
-  m_PrefabInstance: {fileID: 3803210154919087773}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &497430181401680237
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4037158953649533900}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b05412dc84929564a89c0cb1302e9673, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.GeigerTicker
-  maxDistance: 7
-  minInterval: 0.09
-  maxInterval: 1.5
-  volume: 0.5
-  clipPath: WeaponSounds/geiger_tick

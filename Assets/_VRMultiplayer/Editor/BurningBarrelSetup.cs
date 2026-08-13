@@ -148,7 +148,12 @@ namespace VRMultiplayer.EditorTools
 
             // Varilin USTUNU olcup alevi oraya koyuyoruz. Sabit bir yukseklik yazmak,
             // model degistiginde alevin havada ya da varilin icinde kalmasi demekti.
-            float top = PropDef.MeasureLocalBounds(drum).max.y;
+            //
+            // KOK OLCEGIYLE CARPILIYOR: MeasureLocalBounds kokun kendi localScale'ini
+            // DISARIDA birakir (bkz. PropDef). Varil 0.62'ye kucultuldugunde bu carpim
+            // atlandi ve alev varilin 40 cm ustunde havada asili kaldi.
+            float top = PropDef.MeasureLocalBounds(drum).max.y *
+                        Mathf.Abs(drum.transform.localScale.y);
 
             var root = new GameObject(PrefabName);
             try
@@ -157,8 +162,11 @@ namespace VRMultiplayer.EditorTools
                 body.name = "Barrel";
                 body.transform.localPosition = Vector3.zero;
 
-                BuildFlame(root.transform, flameMat, top);
-                BuildLight(root.transform, top);
+                // Alev varille birlikte kuculmeli: sabit boyutlu zerreler 0.62'ye inmis bir
+                // varilin uzerinde varilden GENIS bir ates yapardi.
+                float s = Mathf.Abs(drum.transform.localScale.y);
+                BuildFlame(root.transform, flameMat, top, s);
+                BuildLight(root.transform, top, s);
 
                 PrefabUtility.SaveAsPrefabAsset(root, path);
                 return $"Prefab uretildi (alev + titreyen isik, varil ustu {top:0.00} m).";
@@ -166,13 +174,13 @@ namespace VRMultiplayer.EditorTools
             finally { Object.DestroyImmediate(root); }
         }
 
-        static void BuildFlame(Transform parent, Material mat, float top)
+        static void BuildFlame(Transform parent, Material mat, float top, float s)
         {
             var go = new GameObject("Flame");
             go.transform.SetParent(parent, false);
             // Agzin biraz ICINDE: alevin tabani kenar tarafindan gizlensin, boylece
             // varilin uzerinde duran degil, icinden cikan bir ates olsun.
-            go.transform.localPosition = new Vector3(0f, top - 0.14f, 0f);
+            go.transform.localPosition = new Vector3(0f, top - 0.09f * s, 0f);
 
             var ps = go.AddComponent<ParticleSystem>();
             ps.Stop();
@@ -186,8 +194,8 @@ namespace VRMultiplayer.EditorTools
             var main = ps.main;
             main.loop = true;
             main.startLifetime = new ParticleSystem.MinMaxCurve(0.30f, 0.55f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.20f, 0.48f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.30f, 0.52f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.20f * s, 0.48f * s);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.30f * s, 0.52f * s);
             main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
             main.gravityModifier = -0.02f;                 // sicak hava yukselir
             main.maxParticles = 60;
@@ -201,7 +209,7 @@ namespace VRMultiplayer.EditorTools
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Circle;
-            shape.radius = 0.20f;
+            shape.radius = 0.20f * s;
             shape.radiusThickness = 1f;                    // agzin her yerinden, halka degil
 
             // SICAK -> SOGUK. Alevin ic mantigi bu: en genc zerre en sicak (beyaza yakin
@@ -239,16 +247,18 @@ namespace VRMultiplayer.EditorTools
             r.sortingFudge = -2f;   // varilin agzindan tasan zerreler govdenin onunde cizilsin
         }
 
-        static void BuildLight(Transform parent, float top)
+        static void BuildLight(Transform parent, float top, float s)
         {
             var go = new GameObject("FireLight");
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(0f, top + 0.18f, 0f);
+            go.transform.localPosition = new Vector3(0f, top + 0.18f * s, 0f);
 
             var l = go.AddComponent<Light>();
             l.type = LightType.Point;
             l.color = new Color(1f, 0.63f, 0.28f);
-            l.range = 4.5f;
+            // Menzil alevle birlikte kuculmuyor: kucuk bir ates de odayi aydinlatir, ve
+            // isik zaten bu propun asil isi.
+            l.range = 3.8f;
             l.intensity = 2.2f;
             // GOLGE YOK. Mobil URP'de ek isiklarin golgesi zaten kapali (bkz. Mobile_RPAsset)
             // ve acik olsa da butce golge veren TEK isik icin ayrilmis durumda: temanin gunesi.

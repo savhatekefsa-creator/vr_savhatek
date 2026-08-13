@@ -51,12 +51,12 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 6534936241040303489, guid: e929ed71d1ad7b243b34bbbbb9c0b9a3, type: 3}
     resourcePath: 
-    sizeMeters: {x: 2.5901594, y: 0.43363944}
+    sizeMeters: {x: 1.9944227, y: 0.33390236}
     fitToFootprint: 1
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    height: 2
+    height: 1.54
   - id: bunkers_1
     displayName: Bunkers_1
     category: 0
@@ -114,14 +114,14 @@ MonoBehaviour:
     category: 0
     paletteId: kiyamet
     snap: 0
-    prefab: {fileID: 6675442859387585979, guid: de5e35d420524da45b62c34ef8d16f88, type: 3}
+    prefab: {fileID: 7137454181553413831, guid: de5e35d420524da45b62c34ef8d16f88, type: 3}
     resourcePath: 
-    sizeMeters: {x: 0.9980449, y: 0.99821913}
+    sizeMeters: {x: 0.6187879, y: 0.6188959}
     fitToFootprint: 1
     freeRotation: 1
     hiddenInPalette: 0
     networked: 0
-    height: 1.5
+    height: 0.93
   - id: bush_01
     displayName: Bush_01
     category: 2
@@ -311,12 +311,12 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 3163388362488339833, guid: 7dba9251f7252ff4397b5627205810f2, type: 3}
     resourcePath: 
-    sizeMeters: {x: 2.7718482, y: 2.2357316}
+    sizeMeters: {x: 1.496798, y: 1.2072951}
     fitToFootprint: 1
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    height: 1.0000001
+    height: 0.5400001
   - id: hazmat_crate
     displayName: Hazmat_Crate
     category: 0
@@ -389,12 +389,12 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 6784659190876473625, guid: 551e73fe08fe41149a53a73acb1dc8ec, type: 3}
     resourcePath: 
-    sizeMeters: {x: 3.3395286, y: 1.6215672}
+    sizeMeters: {x: 2.5046463, y: 1.2161754}
     fitToFootprint: 1
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    height: 1.5000001
+    height: 1.125
   - id: mushroom_01
     displayName: Mushroom_01
     category: 2
@@ -428,12 +428,12 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 217380427826591957, guid: 737a780a5809b3f45b20e7e973f60c8e, type: 3}
     resourcePath: 
-    sizeMeters: {x: 0.6, y: 0.6}
+    sizeMeters: {x: 0.45, y: 0.45}
     fitToFootprint: 0
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    height: 3.0000005
+    height: 2.1900005
   - id: rack_long_a
     displayName: Rack_Long_A
     category: 0
@@ -493,12 +493,12 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 4037158953649533900, guid: 93c1d98027a5bf24e891ab9a4972daac, type: 3}
     resourcePath: 
-    sizeMeters: {x: 0.9980449, y: 0.9982191}
+    sizeMeters: {x: 0.6187878, y: 0.6188958}
     fitToFootprint: 1
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    height: 1.5
+    height: 0.93
   - id: rock_01
     displayName: Rock_01
     category: 0
@@ -584,12 +584,12 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 3618397276074734788, guid: 6108b8accd6de6a418a5b5e3c445e8f3, type: 3}
     resourcePath: 
-    sizeMeters: {x: 4.2618256, y: 0.7146949}
+    sizeMeters: {x: 2.003058, y: 0.33590662}
     fitToFootprint: 1
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    height: 3
+    height: 1.41
   - id: sandbag_barrier
     displayName: Sandbag_Barrier
     category: 0
@@ -597,12 +597,12 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 1432805738008151433, guid: aeff57fd315e2174184bfd0e45fef68f, type: 3}
     resourcePath: 
-    sizeMeters: {x: 2.9853687, y: 2.712527}
+    sizeMeters: {x: 1.4926844, y: 1.3562635}
     fitToFootprint: 1
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    height: 1.2000002
+    height: 0.6000001
   - id: scifi_barrier_corner
     displayName: SciFi_Barrier_Corner
     category: 0
@@ -727,12 +727,12 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 3040369058426384191, guid: c17edbb29583ce44d984ccd587da7df4, type: 3}
     resourcePath: 
-    sizeMeters: {x: 3.7978444, y: 3.5417433}
+    sizeMeters: {x: 0.6, y: 0.6}
     fitToFootprint: 0
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    height: 4.9999995
+    height: 2
   - id: shattered_window
     displayName: Shattered_Window
     category: 1
@@ -987,12 +987,12 @@ MonoBehaviour:
     snap: 0
     prefab: {fileID: 8119383219768459712, guid: eed6e04a79193ab428e853b85a8951b6, type: 3}
     resourcePath: 
-    sizeMeters: {x: 1.226563, y: 1.268682}
+    sizeMeters: {x: 0.895391, y: 0.92613786}
     fitToFootprint: 1
     freeRotation: 0
     hiddenInPalette: 0
     networked: 0
-    height: 3
+    height: 2.19
   - id: wood_modular_5
     displayName: Wood_Modular_5
     category: 1

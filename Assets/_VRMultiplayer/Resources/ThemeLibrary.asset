@@ -17,7 +17,7 @@ MonoBehaviour:
     displayName: KIYAMET
     skyboxPath: Themes/Sky_Kiyamet
     floorMaterialPath: Themes/M_Kiyamet_Floor
-    ambiencePath: Themes/Ambience_Kiyamet
+    ambiencePath: 
     ambienceVolume: 0.35
     ambientMoteRate: 14
     ambientMoteColor: {r: 0.55, g: 0.47, b: 0.38, a: 0.5}
