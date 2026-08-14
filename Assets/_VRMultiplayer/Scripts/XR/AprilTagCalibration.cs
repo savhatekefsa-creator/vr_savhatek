@@ -347,12 +347,31 @@ namespace VRMultiplayer
                  "Cihazda goruldu: sayac 4'e kadar cikip sifirlaniyordu.")]
         public float calibSwitchMargin = 0.3f;
 
-        [Tooltip("Duzeltmeden once pencerenin ne kadar SIKI olmasi gerektigi (m).\n\n" +
+        [Tooltip("Duzeltmeden once pencerenin ne kadar SIKI olmasi gerektigi — 1 METREDE (m).\n\n" +
                  "Ornek SAYISI tek basina bir sey soylemez: ornekler birbirini tutmuyorsa " +
                  "ortalamalari da tutmaz. Bu kapi sabit bekleme suresinden hem daha hizli " +
                  "(ornekler kararliysa hemen gecer) hem daha guvenli (kararsizsa sayac dolsa " +
-                 "bile bekler). Mikro hareket sayaci sifirlamaz, yalnizca sacilmayi buyutur.")]
+                 "bile bekler). Mikro hareket sayaci sifirlamaz, yalnizca sacilmayi buyutur.\n\n" +
+                 "MESAFEYLE OLCEKLENIR (bkz. calibStabilityScalesWithDistance). Bu deger artik " +
+                 "mutlak sinir degil, 1 metredeki sinir.")]
         public float calibStabilitySpread = 0.02f;
+
+        [Tooltip("Kararlilik esigini mesafenin KARESIYLE olcekle.\n\n" +
+                 "NEDEN: gurultu mesafeyle buyuyor (olculdu: 1 m'de 3 mm, 2 m'de 15 mm) ama esik " +
+                 "SABITTI. Sonuc, dogrulukla ilgisi olmayan bir mesafe duvari: 1,7 m'de 15 " +
+                 "ornegin beklenen max sapmasi ~2,6 cm, esik 2 cm — yani kapi TASARIM GEREGI " +
+                 "kapaniyordu.\n\n" +
+                 "CIHAZDA OLCULDU (2026-08-14, Adim 5 turu): tag 0'a 1,5-1,8 m'den bakilan ilk " +
+                 "110 saniyede kapi ALTI kez tuttu (sacilma 2,8-4,6 cm), hic duzeltme yapilmadi " +
+                 "ve biriken hizasizlik ilk gecislerde 8-12 cm olarak cikti. Ayni turun ikinci " +
+                 "yarisinda (daha yakin bakis) GECIS medyani 2,75 cm'e dustu.\n\n" +
+                 "US 2, cunku olculen sey STANDART SAPMA: sigma ~ d^2. Ornek agirligi 1/d^4 " +
+                 "kullaniyor cunku o VARYANS ile calisiyor — ayni model, ayni us ailesi.\n\n" +
+                 "Gozlenen sekiz KARARSIZ olayina karsi denendi: 1,5-1,8 m'dekilerin besi geciyor " +
+                 "(esik 4,5-6,3 cm), 0,68 m'deki 3,2 cm'lik sacilma hala eleniyor (esik 0,9 cm) " +
+                 "— o mesafede 3,2 cm gercekten anormal.\n\n" +
+                 "Kapatirsan eski sabit esige donulur.")]
+        public bool calibStabilityScalesWithDistance = true;
 
         [Tooltip("Pencere ortalamasindan bu kadar uzak bir olcum AYKIRI sayilir (m).\n\n" +
                  "Cerceve degistiginin gercek isareti, yeni olcumun penceredekilerle taban " +
@@ -1187,7 +1206,19 @@ namespace VRMultiplayer
 
             float spread = 0f;
             foreach (var p in _calibLocal) spread = Mathf.Max(spread, Vector3.Distance(p, plainMean));
-            if (spread > calibStabilitySpread)
+
+            // ESIK MESAFEYLE OLCEKLENIR — sacilma standart sapma oldugu icin us 2 (bkz. alanin
+            // yorumu). Simdiki mesafe kullaniliyor: pencere son birkac saniyeye ait, oyuncu
+            // isinlanmiyor. Karisik mesafeli bir pencerede en buyuk mesafe esigi gevsetiyor,
+            // ki bu da dogru — o pencere gercekten daha genis sacilir.
+            float spreadLimit = calibStabilitySpread;
+            if (calibStabilityScalesWithDistance)
+            {
+                float dn = Mathf.Max(WeightMinDistance, distance) / WeightRefDistance;
+                spreadLimit *= dn * dn;
+            }
+
+            if (spread > spreadLimit)
             {
                 // SAYI DOLDUKTAN SONRA ILERLEME CUBUGU YAZILMAZ.
                 //
@@ -1198,7 +1229,7 @@ namespace VRMultiplayer
                 // 15'e kadar dolabiliyor.
                 _calibNote = _calibLocal.Count < need
                     ? $"olculuyor {ProgressBar(_calibLocal.Count, need)}  (sabitleniyor {spread * 100f:0.0} cm)"
-                    : $"KARARSIZ  sacilma {spread * 100f:0.0} cm > {calibStabilitySpread * 100f:0.0}  ({_calibLocal.Count} ornek)";
+                    : $"KARARSIZ  sacilma {spread * 100f:0.0} cm > {spreadLimit * 100f:0.0}  ({_calibLocal.Count} ornek)";
 
                 // DISKE de yaz — ama yalnizca pencere DOLUYKEN ve seyrek. Dolu pencerede
                 // kapinin tutmasi, Adim 4'un olcmedigimiz yan etkisi: 15 ornek artik daha uzun
@@ -1208,7 +1239,7 @@ namespace VRMultiplayer
                 {
                     _nextSpreadDiagAt = Time.time + 5f;
                     WriteDiag($"KARARSIZ  tag {entry.id}  sacilma {spread * 100f:0.0} cm > " +
-                              $"{calibStabilitySpread * 100f:0.0}  ({_calibLocal.Count} ornek)  d {distance:0.00} m");
+                              $"{spreadLimit * 100f:0.0}  ({_calibLocal.Count} ornek)  d {distance:0.00} m");
                 }
                 return;
             }
