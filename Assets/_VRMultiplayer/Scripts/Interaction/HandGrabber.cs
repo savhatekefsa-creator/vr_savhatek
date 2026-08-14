@@ -553,8 +553,13 @@ namespace VRMultiplayer
             // The barrel direction the grip hand ALONE would produce — the two-hand aim only
             // REFINES this, it never swings the muzzle wildly (e.g. back toward the player).
             Vector3 oneHandBarrel = oneHandRot * barrelLocal;
+            // Profil basina destek-eli yetkisi: tabancada destek eli namluyu YONETMEMELI
+            // (cihazda "sol el tabancayi cok fazla kontrol ediyor" diye goruldu), tufekte
+            // tam sanal dipcik kalmali. 0 = destek eli nisana hic karismaz; gorsel tutunma
+            // (weld) ve geri tepme sonumu etkilenmez.
+            float supportAuthority = Mathf.Clamp01(profile.twoHandAimWeight);
             Quaternion weaponRot;
-            if (hasSupport)
+            if (hasSupport && supportAuthority > 0f)
             {
                 if (h.aimDir.sqrMagnitude < 1e-6f)
                     h.aimDir = oneHandBarrel; // engage seed = current one-hand barrel -> no pop
@@ -574,6 +579,9 @@ namespace VRMultiplayer
                 // Minimal rotation from the one-hand pose that puts the barrel on the aim line —
                 // roll stays 1:1 with the grip hand, no up-vector guessing.
                 weaponRot = Quaternion.FromToRotation(oneHandBarrel, h.aimDir) * oneHandRot;
+                // Kismi yetki: iki-el cozumu ile tek-el cozumu arasinda harman.
+                if (supportAuthority < 1f)
+                    weaponRot = Quaternion.Slerp(oneHandRot, weaponRot, supportAuthority);
             }
             else if (h.aimDir.sqrMagnitude > 1e-6f)
             {

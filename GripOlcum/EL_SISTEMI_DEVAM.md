@@ -69,6 +69,10 @@ kumanda taşıyıcısı (NetworkVRPlayer.leftHand/rightHand)
 
 ## 4. TUZAKLAR — hepsi bu oturumda canlı yaşandı
 
+00. **Model hizasını DÜNYA uzayında hesaplama (2026-08-13, İŞ KAYBETTİRDİ).** `BuildHandModel` elin iç hizasını dünya-uzayı vektörlerle kuruyordu; sonuç, kurulum anındaki TAŞIYICININ dönüşüne bire bir bağımlıydı (ölçüldü: taşıyıcıyı 90° çevir → el 90° farklı oturur). Oyunda taşıyıcı spawn'da ~identity olduğu için yıllarca fark edilmedi; Silah Atölyesi elleri TEZGÂHA DÖNÜK silahın altına kurunca el, kullanıcının o an baktığı yöne göre hizalandı — kullanıcı tutuşu kusursuz ayarladı, oyunda el ters çıktı (başparmak aşağı). Üstelik "ELLERİ KOY"a her basışta yeniden kuruluyordu: farklı yöne bakarak bassan farklı taban. **Çözüm: hiza artık `Pose`'un yerel uzayında hesaplanıyor** — taşıyıcıdan bağımsız, atölye ile oyun birebir (doğrulandı: yaw90/yaw180/eğik hepsi 0.00°, ayna 0.00°, parmak yönü tam (0,−1,0)). **Kural: bir modelin ebeveynine göre hizasını kurarken dünya vektörü kullanma; ebeveynin yerel uzayında hesapla.**
+
+0. **Araç gizli duruma bağlı kayıt yapmasın (2026-08-13, İŞ KAYBETTİRDİ).** Silah Atölyesi'nin KAYDET düğmesi yalnızca "o an düzenlenen" eli yazıyordu. Kullanıcı sağ eli uzun uzun ayarladı, panel SOL'dayken kaydetti, sağ elin ayarı dosyaya hiç girmedi. Kayıt artık iki eli birden yazıyor. **Kural: kaydetmenin görünmeyen bir kipi olmamalı** — tek düğme, her şeyi yazar. Kurtarma yolu (uygulama hâlâ açıksa): profil değişikliği çalışan uygulamanın belleğinde yaşıyor, diğer ele geçip tekrar kaydetmek yeterli; uygulamayı kapatmak veya yeni build almak siler.
+
 1. **El-lilik (ÜÇ KEZ patladı).** `Cross(parmakYönü, index−pinky)` **sağ avuçtan dışarı, sol elin SIRTINDAN** dışarı bakar. İki eli aynı eksene zorlamak birini 180° çevirir. Dahası: `Quaternion.LookRotation` **ayna-eşdeğer değildir** — aynalanmış iki girdiden AYNI dönüşü üretir, yani el-liliği girdilerden ummak işe yaramaz, **açıkça verilmeli**. Doğrusunu spec sabitliyor: *avuç normali sol avuçtan dışarı, SAĞ avuçtan içeri* → sağ avuç −x.
 2. **Renk uzayı.** Proje **Linear**. `SetColor`'a gamma değeri vermek rengi iki kat açar, `.linear` vermek fazla koyultur. Çözüm tahmin etmemek: küçük **sRGB doku + beyaz `_BaseColor`** (askerin malzemesiyle aynı yol).
 3. **`Object.Destroy` edit modunda ertelenir ve HİÇ çalışmaz.** `CreatePrimitive`'in collider'ı hayatta kalır. Moda göre `Destroy`/`DestroyImmediate`.
@@ -104,10 +108,13 @@ adb PATH'te değil: `C:\Program Files\Unity\Hub\Editor\6000.3.18f1\Editor\Data\P
 
 | iş | durum |
 |---|---|
-| İnce ayar (§1) | **sıradaki** |
-| Cihazda canlı ayar aracı | planlandı, yazılmadı; gerekirse `WeaponGripTuner` deseni |
+| **Silah tutuşları — Silah Atölyesi ile** | **AKTİF.** Bitenler: Dmr1, Pistol 2/3/4 (+ oyunda olmayan Weapon_Pistol). Kalan: HK416, Rifle 1/2/3, Smg 1/2/3, Shotgun 1/2, Sniper 1, Paintball, Grenade 1/2/3 |
+| **Tetik parçasının hareketi** | **SIRADAKİ İŞ (tutuşlar bitince).** Bugün silahın tetiği SABİT; yalnız parmak kıvrılıyor, parmak tetiğin içinden geçebiliyor. Yapılacak: `WeaponFx.MechSpecs` tablosuna (sürgü tablosuyla aynı desen, aynı dosya) `triggerName` + dönüş ekseni + açı (~15°) eklemek; ağdaki tetik değeri parmağı zaten sürdüğü için aynı değerden tetik parçası da sürülür, senkron bedava gelir. Silah başına tek isim + tek açı. **Şarjör hareketi ayrı ve daha büyük iş** — mevcut yeniden doldurma "salla" mekaniği (`reloadFlickSpeed/Travel`), şarjör düşürme/takma tasarımıyla çelişiyor; önce hangi model isteniyor kararı gerekir |
+| İnce ayar (§1) | bitti (roll 40 / pitch −10) |
+| Cihazda canlı ayar aracı | **YAPILDI**: oyun içi Silah Atölyesi paneli (menü 53 sahneye ekler; kayıt `atolye.md` → menü 52) |
 | Tutunma kapısı / kopma eşiği | ~45 cm ve silahın *herhangi* parçasına bakıyor; kundak ankrajına taşınacak. `[FPTutus]` verisi bekliyor |
-| Silah başına parmak kıvrımı | **8 tüfekte orta/yüzük/serçe = 0.00** (el kapanmıyor). Silah başına 5 sayı, rig'den bağımsız |
+| Silah başına parmak kıvrımı | **ÇÖZÜLDÜ**: profilde `fpCurls` (5 sayı, el başına), atölyede elle yazılıyor, avatardan çevrim yok |
+| Silah mekanizması — mevcut durum | Sürgü/kovan VAR (`WeaponFx.MechSpecs`, silah başına açık tablo): Pistol 2/3/4, Rifle 2/3, Smg 1/3, Sniper 1, Shotgun 2, Dmr1. Tabloda olmayan (Paintball, bombalar, Rifle 1) ve tek-mesh modeller (HK416, Smg 2) mekanizmasız. **Tetik ve şarjör hiç yok** |
 | Silah filtreleme (ağırlık hissi) | ertelendi — H3VR "Hand Filtering"; **ele değil SİLAHA** uygulanacak; `aimHalfLifeMs` ailesi zaten var |
 | Manşet/kol | bilek açık tüp; `MaterialDoubleSided` uygulandı ama kol yok |
 | Uzak oyuncu eldiveni | hâlâ askerin kendi mesh'i (kısa parmak + başparmak dibi çentiği kabul edildi) |

@@ -162,14 +162,48 @@ namespace VRMultiplayer.Weapons
         /// donus donusturmesi gerekmez.
         /// </summary>
         public bool TryGetHandAnchor(bool left, out Vector3 pos, out bool isSupport)
+            => TryGetHandAnchor(left, out pos, out _, out isSupport);
+
+        /// <summary>
+        /// Cipanin konumu VE yonelimi. Birinci sahis eli yonelime de ihtiyac duyuyor:
+        /// eli SILAHIN cercevesine gore yerlestiriyor, kumandanin cercevesine gore degil.
+        /// Boylece elin kabzadaki yeri authored bir veri oluyor (fpWristLocal*) ve
+        /// avatarin bilek konvansiyonuna bagimlilik kalkiyor.
+        /// </summary>
+        public bool TryGetHandAnchor(bool left, out Vector3 pos, out Quaternion rot, out bool isSupport)
         {
-            pos = Vector3.zero; isSupport = false;
+            pos = Vector3.zero; rot = Quaternion.identity; isSupport = false;
             ref HandWeld w = ref (left ? ref _left : ref _right);
             if (!w.active || w.fadingOut) return false;
             if (w.weapon == null || w.profile == null) return false;
             isSupport = w.isSupport;
-            ComputeAnchor(ref w, left, out pos, out _);
+            ComputeAnchor(ref w, left, out pos, out rot);
             return true;
+        }
+
+        /// <summary>
+        /// Bu elin su an hangi profille, hangi rolde kaynakli oldugu. Birinci sahis eli
+        /// parmak pozunu buradan aliyor - authored tutus pozu tek kaynak olsun diye
+        /// (avatarin elleri de ayni profili kullaniyor, bkz. ProceduralFingerPoser).
+        /// </summary>
+        public bool TryGetHandProfile(bool left, out WeaponGripProfile profile, out bool isSupport)
+            => TryGetHandProfile(left, out profile, out isSupport, out _);
+
+        /// <summary>
+        /// Profil + rol + AYNALANMIS MI. Aynalama, silah ters elle (ana el SOL) tutuldugunda
+        /// devreye girer: profildeki degerler sag-el yazimidir, weld hepsini MirrorX'ten
+        /// gecirir. Birinci sahis elinin kendi offsetleri (fpWristLocal*) de ayni islemden
+        /// gecmeli - gecmezse aynalanmis bir cipaya aynalanmamis bir offset biner ve el
+        /// ters durur (cihazda goruldu: basparmak asagi bakiyor).
+        /// </summary>
+        public bool TryGetHandProfile(bool left, out WeaponGripProfile profile, out bool isSupport,
+                                      out bool mirrored)
+        {
+            ref HandWeld w = ref (left ? ref _left : ref _right);
+            profile = w.profile;
+            isSupport = w.isSupport;
+            mirrored = w.mirrored;
+            return w.active && !w.fadingOut && profile != null;
         }
 
         /// <summary>Bu elin su an kaynakli oldugu silah (teshis icin).</summary>

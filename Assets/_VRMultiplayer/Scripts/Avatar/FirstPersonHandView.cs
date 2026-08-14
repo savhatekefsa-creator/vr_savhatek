@@ -50,7 +50,17 @@ namespace VRMultiplayer
         // ustelik kolu/mansetı olmayan bir el daha da kucuk okunur. Cihazda ayarlanacak
         // tek dokunus noktasi burasi. Olcek "Hand" dugumune uygulanir - FP_HandView koku
         // ters-olcek dugumudur, oraya dokunmak makaslama kuralini bozar.
-        const float HandScale = 1.20f;
+        // DENEME 2026-08-13: 1.20 -> 1.10. Sebebi olculdu: Meta'nin eli anatomik olarak
+        // ZATEN dogru boyutta (bilek->orta uc 190 mm = gercek yetiskin eli), 1.20 onu
+        // 228 mm'ye cikariyordu (%20 buyuk) ve silahlar buna gore kucuk okunuyordu -
+        // oysa silahlarin coğunun boyu dogru (Rifle 1 %100, Smg 1 %102, tabancalar %107).
+        // 1.10 -> el 209 mm.
+        //
+        // ONCEKI DEGERLER, geri donmek gerekirse: 1.00 (ham model, VR'da kucuk algilandi),
+        // 1.10 (ilk ayar), 1.20 (kullanici "hala kucuk" dedi, 2026-08-12).
+        // Tutus verisini ETKILEMEZ: bilek offseti ve parmak kivrimlari olcekten bagimsiz;
+        // yalnizca parmaklarin kabzayi sarma sikiligi bir tik degisir.
+        const float HandScale = 1.10f;
 
         // Elin kumandaya gore ince ayari. SIFIR = yalnizca OpenXR grip cerçevesi.
         // Spec dogru cerceveyi verir ama son 10-20 dereceyi veremez: dogru durus
@@ -91,22 +101,30 @@ namespace VRMultiplayer
         // yukaridaki Tweak* degerlerini kullan.
         static readonly Vector3 BaseWristEuler = new Vector3(0f, 220.3f, 209.9f);
 
+        // ============================================================================
+        // INCE AYAR YALNIZCA KUMANDAYA GORE DURAN ELE UYGULANIR.
+        //
+        // Bu ayirim sart, cihazda bedeli goruldu: Tweak* elin KUMANDAYA gore
+        // duzeltmesidir, ama el modelinin uzerine gomulunce silah tutulurken de
+        // yasiyordu. Weld bilegi kabzanin ankrajina koyuyor, el o bilegin etrafinda
+        // 41 derece donmus kaliyor - olculdu: parmak bogumlari 79 mm, parmak uclari
+        // 157 mm, basparmak ucu 114 mm kayiyor. Cihazda "el kabzanin saginda kaliyor,
+        // silaha degmiyor" diye goruldu.
+        //
+        // Cozum: ince ayar Pose dugumune tasindi. Bos elde Pose'a yaziliyor; silah
+        // tutulurken Pose'u weld suruyor, dolayisiyla ayar KENDILIGINDEN devre disi
+        // kaliyor. El modelinin uzerinde yalnizca TEMEL cerceve hizasi kaliyor.
+        // ============================================================================
+
         // Gorunen yonlerden kumandanin ham eksenlerine cevrim.
         static Vector3 WristOffsetPosition =>
             new Vector3(-OffsetInward, -OffsetForward, OffsetUp);
 
-        static Vector3 WristOffsetEuler
-        {
-            get
-            {
-                // Ince ayar, gorunen eksenler etrafinda: yukari = grip +Z,
-                // sag = grip +X, ileri = grip -Y.
-                Quaternion tweak = Quaternion.AngleAxis(TweakYaw, Vector3.forward)
-                                 * Quaternion.AngleAxis(TweakPitch, Vector3.right)
-                                 * Quaternion.AngleAxis(TweakRoll, Vector3.down);
-                return (tweak * Quaternion.Euler(BaseWristEuler)).eulerAngles;
-            }
-        }
+        /// <summary>Yalnizca ince ayar donusu (temel cerceve hizasi HARIC).</summary>
+        static Quaternion TweakRotation =>
+            Quaternion.AngleAxis(TweakYaw, Vector3.forward)
+            * Quaternion.AngleAxis(TweakPitch, Vector3.right)
+            * Quaternion.AngleAxis(TweakRoll, Vector3.down);
 
         const float DotDiameter = 0.02f;
         const float DotFadeStart = 0.03f;
@@ -130,10 +148,9 @@ namespace VRMultiplayer
         GameObject _avatar;      // WeaponHandWeld calisma aninda buraya ekleniyor
         bool _left;
         WeaponHandWeld _weld;
-        AvatarIKController _ik;
+        FirstPersonFingerCurl _curl;   // silah pozunu buraya bildiriyoruz
         float _weight;                                    // 0 = kumanda, 1 = silah ankraji
         Vector3 _lastAnchor;
-        Quaternion _gripDelta = Quaternion.identity;      // tutusun ele verdigi donus duzeltmesi
 
         /// <summary>
         /// Iki kumanda tasiyicisinin altina el gorselini kurar. Yalnizca SAHIP
@@ -239,21 +256,49 @@ namespace VRMultiplayer
             // (sapmayla soldurma cihazda reddedilmisti, tekrarlanmiyor).
             bool welded = _weld != null && _weld.TryGetHandAnchor(_left, out _lastAnchor, out _);
 
-            // DONUS de silaha gore olmali: Quest'in grip pose ileri ekseni nisan
-            // hattindan ~56 derece asagida (olculmus kalibrasyon), yani ham kumanda
-            // donusu kullanilirsa avuc ve basparmak silahi SARMAZ.
-            //
-            // Bilek hedefinin donusunu dogrudan alamayiz - o, avatarin bilek kemigi
-            // konvansiyonunda. Bunun yerine FARKI aliyoruz: weld'in bileğe verdigi
-            // donus ile ayni bilegin silahsiz (yalnizca kumandadan) alacagi donus
-            // arasindaki delta. Delta dunya uzayinda bir duzeltmedir, iki taraf da
-            // ayni kemik cercevesinde oldugu icin konvansiyon sadelesir. Onu
-            // kumandanin donusune uygulayinca gorsel dogru sarilir.
+            // Parmak pozu silahin profilinden gelsin: authored tutus pozu TEK KAYNAK,
+            // avatarin elleri de ayni profili kullaniyor. Profil cevrilmis poz tasimiyorsa
+            // surucu kendi prosedurel kivrimina devam eder.
+            if (_curl == null && _pose != null) _curl = _pose.GetComponentInChildren<FirstPersonFingerCurl>(true);
+            if (_curl != null)
+            {
+                WeaponGripProfile heldProfile;
+                bool heldSupport;
+                if (welded && _weld.TryGetHandProfile(_left, out heldProfile, out heldSupport))
+                    _curl.SetWeaponPose(heldProfile, heldSupport);
+                else
+                    _curl.ClearWeaponPose();
+            }
+
+            // ELIN SILAHTAKI YERI AUTHORED VERI. Onceden avatarin bilek hedefi ile
+            // kumandadan gelen bilek donusu arasindaki FARK aliniyor ve kumandanin
+            // donusune uygulaniyordu; bu, FP elini avatarin bilek konvansiyonuna
+            // baglıyordu ve cihazda el kabzanin yanina dusuyordu. Artik el dogrudan
+            // SILAHIN cipa cercevesine oturuyor, uzerine profildeki fpWristLocal*
+            // offseti biniyor - o offset de oyun icindeki Silah Atolyesi'nde GORULEREK
+            // ayarlaniyor. Boylece atolyede gordugun poz ile oyundaki poz ayni yoldan
+            // uretiliyor, arada cevrim yok.
+            Quaternion anchorRot = Quaternion.identity;
+            Vector3 fpWristPos = Vector3.zero;
+            Quaternion fpWristRot = Quaternion.identity;
             if (welded)
             {
-                if (_ik == null && _avatar != null) _ik = _avatar.GetComponentInChildren<AvatarIKController>();
-                if (_ik != null && _weld.TryGetWristTarget(_left, out _, out Quaternion wristRot))
-                    _gripDelta = wristRot * Quaternion.Inverse(_ik.ControllerWristRotation(_left));
+                _weld.TryGetHandAnchor(_left, out _lastAnchor, out anchorRot, out bool sup);
+                WeaponGripProfile prof;
+                bool supportRole, mirrored;
+                if (_weld.TryGetHandProfile(_left, out prof, out supportRole, out mirrored) && prof != null)
+                {
+                    var hp = supportRole ? prof.supportHand : prof.mainHand;
+                    fpWristPos = hp.fpWristLocalPosition;
+                    fpWristRot = hp.FpWristRotation;
+                    // Silah ters elle tutuluyorsa cipa aynalanmis geliyor; offset de
+                    // aynalanmali, yoksa el ters durur.
+                    if (mirrored)
+                    {
+                        fpWristPos = WeaponGripMath.MirrorX(fpWristPos);
+                        fpWristRot = WeaponGripMath.MirrorX(fpWristRot);
+                    }
+                }
             }
 
             float target = welded ? 1f : 0f;
@@ -262,11 +307,21 @@ namespace VRMultiplayer
             else
                 _weight = target;   // editor/olcum: geciste takilip kalmayalim
 
+            // Ince ayar BOS ELIN duzeltmesi: Pose'a yaziliyor, silah tutulurken asagida
+            // Pose'u weld surdugu icin kendiliginden devre disi kaliyor.
+            Quaternion freeRot = TweakRotation;
+            Vector3 freePos = WristOffsetPosition;
+            if (_left)
+            {
+                freeRot = Weapons.WeaponGripMath.MirrorX(freeRot);
+                freePos = Weapons.WeaponGripMath.MirrorX(freePos);
+            }
+
             if (_weight <= 0f)
             {
-                // Bos el: tasiyiciya BIREBIR yapisik, ara islem yok.
-                _pose.localPosition = Vector3.zero;
-                _pose.localRotation = Quaternion.identity;
+                // Bos el: tasiyiciya BIREBIR yapisik, yalnizca ince ayar var.
+                _pose.localPosition = freePos;
+                _pose.localRotation = freeRot;
                 UpdateDot(0f);
                 return;
             }
@@ -276,11 +331,15 @@ namespace VRMultiplayer
             // kopmanin yaklastigini gorsun.
             UpdateDot(Vector3.Distance(_carrier.position, _lastAnchor));
 
-            // Duzeltme de agirlikla harmanlanir: agirlik 0'a dusunce donus tam
-            // olarak kumandanin donusudur.
+            // Silah tarafi: cipa + authored FP bilek offseti. Bos-el tarafi: kumanda +
+            // ince ayar. Ikisi agirlikla harmanlanir, gecis yumusak.
+            Vector3 weldPos = _lastAnchor + anchorRot * fpWristPos;
+            Quaternion weldRot = anchorRot * fpWristRot;
             _pose.SetPositionAndRotation(
-                Vector3.Lerp(_carrier.position, _lastAnchor, _weight),
-                Quaternion.Slerp(_carrier.rotation, _gripDelta * _carrier.rotation, _weight));
+                // Offset metre cinsinden: tasiyicinin DUZGUN OLMAYAN olcegi degil,
+                // onu tersleyen kok dugum uzerinden dunyaya cevriliyor.
+                Vector3.Lerp(_pose.parent.TransformPoint(freePos), weldPos, _weight),
+                Quaternion.Slerp(_carrier.rotation * freeRot, weldRot, _weight));
 
             LogDiagnostic(welded);
         }
@@ -326,7 +385,16 @@ namespace VRMultiplayer
 
             float toAnchor = Vector3.Distance(_pose.position, _lastAnchor) * 1000f;
             float toCarrier = Vector3.Distance(_pose.position, _carrier.position) * 1000f;
-            float gripAngle = Quaternion.Angle(Quaternion.identity, _gripDelta);
+            // Elin cipadan authored offseti + ROL ve AYNALAMA - "el ters duruyor" turu
+            // sikayetlerde once bunlara bakilir, ikisi de gozle secilemiyor.
+            float gripAngle = 0f;
+            string role = "-";
+            if (_weld != null && _weld.TryGetHandProfile(_left, out var dp, out bool ds, out bool dm) && dp != null)
+            {
+                gripAngle = Quaternion.Angle(Quaternion.identity,
+                    (ds ? dp.supportHand : dp.mainHand).FpWristRotation);
+                role = (ds ? "destek" : "ana") + (dm ? "/AYNALI" : "");
+            }
             string wname = "-";
             Vector3 wpos = Vector3.zero;
             if (_weld != null && _weld.TryGetHeldWeapon(_left, out Transform wt) && wt != null)
@@ -335,10 +403,10 @@ namespace VRMultiplayer
                 wpos = wt.position;
             }
             Debug.Log(string.Format(
-                "[FPEl] {0} agirlik={1:0.00} el->ankraj={2:0.0}mm el->kumanda={3:0.0}mm " +
+                "[FPEl] {0} rol={7} agirlik={1:0.00} el->ankraj={2:0.0}mm el->kumanda={3:0.0}mm " +
                 "tutus_duzeltme={4:0.0}deg silah={5} silah->ankraj={6:0.0}mm",
                 _left ? "SOL" : "SAG", _weight, toAnchor, toCarrier, gripAngle, wname,
-                Vector3.Distance(wpos, _lastAnchor) * 1000f));
+                Vector3.Distance(wpos, _lastAnchor) * 1000f, role));
         }
 
         /// <summary>
@@ -397,34 +465,41 @@ namespace VRMultiplayer
                 // yasandi. Isaretin dogrulugu OpenXR'in kuraliyla sabitleniyor:
                 // "avuc normali sol avuctan disari, SAG avuctan iceri", yani sag el
                 // avucu -x'e bakmali. Olculdu: ayna testi uc eksende de 0.00 derece.
-                Vector3 fingers = (mid.position - wrist.position).normalized;
-                Vector3 rawCross = Vector3.Cross(fingers, (idx.position - pky.position).normalized).normalized;
+                //
+                // BUTUN HESAP POSE'UN YEREL UZAYINDA. Ilk surum dunya uzayinda
+                // hesapliyordu ve elin ic hizasi KURULUM ANINDAKI TASIYICI DONUSUNE
+                // bagli cikiyordu (olculdu: tasiyiciyi 90 cevir, el 90 farkli otur).
+                // Oyunda tasiyici spawn'da ~identity oldugu icin fark edilmedi; Silah
+                // Atolyesi elleri TEZGAHA DONUK silahin altina kurunca el, kullanicinin
+                // o an baktigi yone gore hizalandi ve oyunda ters durdu - kullanicinin
+                // butun titiz ayari bosa gitti. Yerel uzayda hesap, tasiyici donusunden
+                // bagimsizdir ve identity-tasiyici sonucunu her yerde birebir uretir.
+                System.Func<Vector3, Vector3> toLocal = wp => pose.InverseTransformPoint(wp);
+                Vector3 wristL = toLocal(wrist.position);
+                Vector3 fingers = (toLocal(mid.position) - wristL).normalized;
+                Vector3 rawCross = Vector3.Cross(fingers, (toLocal(idx.position) - toLocal(pky.position)).normalized).normalized;
                 Vector3 palmOut = left ? -rawCross : rawCross;
                 Vector3 tube = Vector3.Cross(fingers, palmOut).normalized;
                 if (left) tube = -tube;
-                Vector3 thumbDir = (thumb.position - wrist.position).normalized;
+                Vector3 thumbDir = (toLocal(thumb.position) - wristL).normalized;
                 Vector3 up = (thumbDir - tube * Vector3.Dot(thumbDir, tube)).normalized;
                 if (up.sqrMagnitude > 1e-6f)
                 {
-                    go.transform.rotation = Quaternion.Inverse(Quaternion.LookRotation(tube, up)) * go.transform.rotation;
+                    // TEMEL cerceve hizasi. INCE AYAR BURAYA GIRMEZ - o Pose dugumune
+                    // uygulaniyor ki silah tutulurken devre disi kalsin (bkz. sinif basi:
+                    // ayarin silah pozuna sizmasi cihazda eli kabzanin 8-16 cm yanina
+                    // atiyordu). Yalniz SAG EL icin yazilir, sol el aynalanir.
+                    Quaternion offRot = Quaternion.Euler(BaseWristEuler);
+                    if (left) offRot = Weapons.WeaponGripMath.MirrorX(offRot);
 
-                    // Yazili duzeltme: cihazda ayarlanip buraya islenir. YALNIZ SAG EL
-                    // icin yazilir, sol el aynalanarak turetilir - silah profillerinde
-                    // de gecerli olan kural (bkz. WeaponGripTuner). Boylece simetri
-                    // ayarin degil YAPININ garantisi olur; sol el icin ayri bir sayi yok.
-                    Quaternion offRot = Quaternion.Euler(WristOffsetEuler);
-                    Vector3 offPos = WristOffsetPosition;
-                    if (left)
-                    {
-                        offRot = Weapons.WeaponGripMath.MirrorX(offRot);
-                        offPos = Weapons.WeaponGripMath.MirrorX(offPos);
-                    }
-                    go.transform.localRotation = offRot * go.transform.localRotation;
-                    go.transform.localPosition += offPos;
+                    go.transform.localRotation = offRot
+                        * Quaternion.Inverse(Quaternion.LookRotation(tube, up))
+                        * go.transform.localRotation;
                 }
 
                 // Bilek tam Pose orijinine gelsin (modelin kokunde olmayabilir).
-                go.transform.position += pose.position - wrist.position;
+                // Donus degistikten SONRA olculur - bilek donusle birlikte tasindi.
+                go.transform.localPosition -= toLocal(wrist.position);
             }
 
             // Askeri boyama: tek renk, askerin kendi eldiven dokusundan olculdu.

@@ -1,16 +1,23 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer
 {
     /// <summary>
-    /// Birinci sahis elinin parmaklarini agdaki grip/tetik degerlerinden kivirir.
+    /// Birinci sahis elinin parmaklarini kivirir. Iki kaynak var:
     ///
-    /// Avatarin ellerini <see cref="ProceduralFingerPoser"/> kiviriyor ama o humanoid
-    /// iskelete bagli (Animator + HumanBodyBones). Birinci sahis eli Meta'nin KENDI
-    /// Generic rig'ini kullaniyor (b_r_index1...), o yuzden kemikleri isimle cozen ayri
-    /// bir surucu gerekiyor. Kivrim KURALI paylasimli: <see cref="FingerCurlMath"/> -
-    /// iki el ayni matematikle kivrilsin, kural tek yerde dursun.
+    /// 1. SILAH TUTARKEN: silahin profilindeki AUTHORED tutus pozu (tek kaynak - avatarin
+    ///    elleri de ayni profili kullaniyor, bkz. <see cref="ProceduralFingerPoser"/>).
+    ///    Poz avatarin humanoid kemiklerinde yazildigi icin dogrudan tasinamaz; editorde
+    ///    mentese acisina cevrilip profile yazilir (menu 50, FpGripPoseBake) ve burada
+    ///    FP rig'inin kendi eksenlerine uygulanir.
+    /// 2. BOS EL (veya poz cevrilmemis silah): agdaki grip/tetik degerlerinden prosedurel
+    ///    kivrim. Kural paylasimli: <see cref="FingerCurlMath"/>.
+    ///
+    /// Avatarin ellerini ayri bir surucu kiviriyor cunku o humanoid iskelete bagli
+    /// (Animator + HumanBodyBones); FP eli Meta'nin Generic rig'ini kullaniyor
+    /// (b_r_index1...), kemikleri isimle cozmek gerekiyor.
     ///
     /// Grip -> dort parmak + basparmak. Tetik -> YALNIZ isaret parmagi. Boylece silaha
     /// dokunmadan da tetik parmagi ayri oynar.
@@ -69,9 +76,33 @@ namespace VRMultiplayer
             public Quaternion open, closed;
             public bool useTrigger;
             public bool thumb;
+            /// <summary>0 bas, 1 isaret, 2 orta, 3 yuzuk, 4 serce. Parmak BASINA kivrim
+            /// (atolyede elle yazilan fpCurls) bunu kullaniyor.</summary>
+            public int finger;
         }
 
         readonly List<Phalanx> _phalanges = new List<Phalanx>();
+
+        // ---- Silah tutus pozu (authored) ----
+        // 15 eklem, HandPoseBones sirasinda. Humanoid basparmak 3 bogum, Meta'da 4 var
+        // (thumb0 = avuc ici kok): Proximal->thumb0, Intermediate->thumb1, Distal->thumb2.
+        // Meta thumb3 dondurulmez. Sira FpGripPoseBake ile AYNI olmali.
+        static readonly string[] PoseBone =
+        {
+            "thumb0", "thumb1", "thumb2",
+            "index1", "index2", "index3",
+            "middle1", "middle2", "middle3",
+            "ring1", "ring2", "ring3",
+            "pinky1", "pinky2", "pinky3",
+        };
+        Transform[] _poseBone;
+        Quaternion[] _poseRest;
+        WeaponGripProfile _weaponProfile;
+        bool _weaponSupport;
+        float _weaponWeight;
+        // Silaha yapisma/birakma tek karede olursa parmaklar ziplar - weld ile ayni harman.
+        const float WeaponBlendSeconds = 0.12f;
+
         float _thumbLimit = 1f;          // guvenlik kilidi (bkz. LimitThumb)
         Transform _thumbTip;
         Vector3 _palmPoint, _palmNormal;
@@ -109,10 +140,10 @@ namespace VRMultiplayer
             _palmNormal = curlPlane;
 
             // Dort parmak: kendi duzleminde katlanir. Isaret parmagi TETIGI izler.
-            AddFinger(map, p + "index", wrist.position, curlPlane, true, proximalCurl, intermediateCurl, distalCurl);
-            AddFinger(map, p + "middle", wrist.position, curlPlane, false, proximalCurl, intermediateCurl, distalCurl);
-            AddFinger(map, p + "ring", wrist.position, curlPlane, false, proximalCurl, intermediateCurl, distalCurl);
-            AddFinger(map, p + "pinky", wrist.position, curlPlane, false, proximalCurl, intermediateCurl, distalCurl);
+            AddFinger(map, p + "index", wrist.position, curlPlane, true, proximalCurl, intermediateCurl, distalCurl, false, 1);
+            AddFinger(map, p + "middle", wrist.position, curlPlane, false, proximalCurl, intermediateCurl, distalCurl, false, 2);
+            AddFinger(map, p + "ring", wrist.position, curlPlane, false, proximalCurl, intermediateCurl, distalCurl, false, 3);
+            AddFinger(map, p + "pinky", wrist.position, curlPlane, false, proximalCurl, intermediateCurl, distalCurl, false, 4);
 
             // Basparmak: rig'in anatomik eksenlerinde sabit acilarla. Eksen isaretcileri
             // yoksa eski sabit-acili kurala dusulur (duzlem YOK, avuc uzerinden capraz).
@@ -123,12 +154,115 @@ namespace VRMultiplayer
                 if (map.TryGetValue(p + "index2", out idx2)) fallback = Vector3.Lerp(fallback, idx2.position, 0.5f);
                 fallback += curlPlane * 0.015f;
                 AddFinger(map, p + "thumb", fallback, null, false,
-                          thumbCurlDegrees, thumbCurlDegrees, thumbCurlDegrees * 0.8f, true);
+                          thumbCurlDegrees, thumbCurlDegrees, thumbCurlDegrees * 0.8f, true, 0);
             }
 
             map.TryGetValue(p + "thumb3", out _thumbTip);
             LimitThumb();
+            BuildPoseJoints(map, p);
             return _phalanges.Count > 0;
+        }
+
+        /// <summary>
+        /// Authored silah pozunun uygulanacagi 15 eklemi ve DINLENME rotasyonlarini toplar.
+        /// Profildeki deger bu dinlenmeden SAPMA olarak saklandigi icin burada eksen hesabi
+        /// yok - cevrim editorde yapildi (FpGripPoseBake), runtime yalnizca `rest * sapma`
+        /// yaziyor. Dinlenme kurulumda okunur; poz surulduktan sonra okunursa poz pozun
+        /// uzerine biner.
+        /// </summary>
+        void BuildPoseJoints(Dictionary<string, Transform> map, string p)
+        {
+            _poseBone = new Transform[HandPoseBones.JointCount];
+            _poseRest = new Quaternion[HandPoseBones.JointCount];
+            for (int j = 0; j < HandPoseBones.JointCount; j++)
+            {
+                Transform bone;
+                if (!map.TryGetValue(p + PoseBone[j], out bone) || bone == null) continue;
+                _poseBone[j] = bone;
+                _poseRest[j] = bone.localRotation;
+            }
+        }
+
+        /// <summary>Silah tutuldugunda cagrilir; profil authored poz tasiyorsa parmaklar
+        /// ona gecer. Profil null ise prosedurel kivrima donulur.</summary>
+        public void SetWeaponPose(WeaponGripProfile profile, bool isSupport)
+        {
+            _weaponProfile = profile;
+            _weaponSupport = isSupport;
+        }
+
+        public void ClearWeaponPose() => _weaponProfile = null;
+
+        /// <summary>
+        /// PARMAK BASINA kivrim (0..1; bas, isaret, orta, yuzuk, serce). Atolyede elle
+        /// yazilan degerlerin yolu: cevrim yok, rig'in kendi mentese kurali uygulanir -
+        /// yani ekranda gordugun sey yazdigin seyin ta kendisi.
+        /// </summary>
+        public void ApplyFingerCurls(float[] curls, float weight)
+        {
+            if (curls == null || curls.Length < 5 || weight <= 0f) return;
+            for (int i = 0; i < _phalanges.Count; i++)
+            {
+                var ph = _phalanges[i];
+                float k = Mathf.Clamp01(curls[Mathf.Clamp(ph.finger, 0, 4)]);
+                if (ph.thumb) k *= _thumbLimit;
+                Quaternion target = Quaternion.Slerp(ph.open, ph.closed, k);
+                ph.t.localRotation = weight >= 1f
+                    ? target
+                    : Quaternion.Slerp(ph.t.localRotation, target, weight);
+            }
+        }
+
+        /// <summary>Butun parmaklari DUZ (dinlenme) pozuna alir - atolyede ayara buradan
+        /// baslaniyor: kivrilmis bir elde neyin dogru neyin yanlis oldugu secilemiyor.</summary>
+        public void ApplyFlat()
+        {
+            for (int i = 0; i < _phalanges.Count; i++) _phalanges[i].t.localRotation = _phalanges[i].open;
+        }
+
+        /// <summary>Su an tutulan silahin BU ELE ait el pozu (yoksa null).</summary>
+        WeaponGripProfile.HandPose? ActiveHandPose()
+        {
+            if (_weaponProfile == null || _poseBone == null) return null;
+            return _weaponSupport ? _weaponProfile.supportHand : _weaponProfile.mainHand;
+        }
+
+        /// <summary>Bu el icin cevrilmis authored poz var mi (yoksa prosedurel kivrim surer).</summary>
+        bool TryGetFpPose(out WeaponGripProfile.FingerPose fp, out bool indexFollowsTrigger)
+        {
+            fp = default;
+            indexFollowsTrigger = false;
+            if (_weaponProfile == null || _poseBone == null) return false;
+            var pose = _weaponSupport ? _weaponProfile.supportHand : _weaponProfile.mainHand;
+            fp = pose.Fingers(_left);
+            indexFollowsTrigger = pose.indexFollowsTrigger;
+            return fp.HasFpJoints;
+        }
+
+        /// <summary>
+        /// Authored pozu uygular. Prosedurel kivrimin UZERINE harmanlanir: gecis aninda
+        /// parmaklar bulundugu yerden pozuna kayar, ziplama olmaz. Okuma ayni karede
+        /// yazilan degerden yapiliyor - kareler arasi geri besleme yok.
+        /// </summary>
+        public void ApplyWeaponPose(float trigger, float weight)
+        {
+            WeaponGripProfile.FingerPose fp;
+            bool follows;
+            if (weight <= 0f || !TryGetFpPose(out fp, out follows)) return;
+
+            bool pulled = follows && fp.HasFpIndexPulled;
+            for (int j = 0; j < HandPoseBones.JointCount; j++)
+            {
+                var bone = _poseBone[j];
+                if (bone == null) continue;
+
+                Quaternion delta = fp.fpJoints[j];
+                if (pulled && HandPoseBones.IsIndex(j))
+                    delta = Quaternion.Slerp(delta, fp.fpIndexPulledJoints[j - HandPoseBones.IndexFirst], Mathf.Clamp01(trigger));
+
+                Quaternion target = _poseRest[j] * delta;
+                bone.localRotation = Quaternion.Slerp(bone.localRotation, target, weight);
+            }
         }
 
         /// <summary>
@@ -212,12 +346,12 @@ namespace VRMultiplayer
                 if (local.sqrMagnitude < 1e-8f) continue;
                 closed = closed * Quaternion.AngleAxis(degrees[i], local);
             }
-            _phalanges.Add(new Phalanx { t = bone, open = rest, closed = closed, useTrigger = false, thumb = true });
+            _phalanges.Add(new Phalanx { t = bone, open = rest, closed = closed, useTrigger = false, thumb = true, finger = 0 });
         }
 
         void AddFinger(Dictionary<string, Transform> map, string prefix, Vector3 target,
                        Vector3? plane, bool useTrigger, float c1, float c2, float c3,
-                       bool thumb = false)
+                       bool thumb, int finger)
         {
             Transform j1, j2, j3;
             map.TryGetValue(prefix + "1", out j1);
@@ -227,22 +361,22 @@ namespace VRMultiplayer
 
             // Uzanim yonu bir sonraki eklemden gelir; son bogumda onceki yon surdurulur.
             Vector3 e1 = j2 != null ? (j2.position - j1.position) : j1.forward;
-            Add(j1, e1, target, plane, c1, useTrigger, thumb);
+            Add(j1, e1, target, plane, c1, useTrigger, thumb, finger);
             if (j2 == null) return;
             Vector3 e2 = j3 != null ? (j3.position - j2.position) : e1;
-            Add(j2, e2, target, plane, c2, useTrigger, thumb);
-            if (j3 != null) Add(j3, e2, target, plane, c3, useTrigger, thumb);
+            Add(j2, e2, target, plane, c2, useTrigger, thumb, finger);
+            if (j3 != null) Add(j3, e2, target, plane, c3, useTrigger, thumb, finger);
         }
 
         void Add(Transform bone, Vector3 ext, Vector3 target, Vector3? plane, float deg,
-                 bool useTrigger, bool thumb)
+                 bool useTrigger, bool thumb, int finger)
         {
             // Acik el = modelin KENDI dinlenme pozu. Meta'nin eli duz elle geliyor, yani
             // burada animatorun pozunu ayiklamak gerekmiyor (avatarda gerekiyordu).
             if (!FingerCurlMath.Solve(bone, ext, target, plane, deg, bone.localRotation,
                                       out Quaternion open, out Quaternion closed))
                 return;
-            _phalanges.Add(new Phalanx { t = bone, open = open, closed = closed, useTrigger = useTrigger, thumb = thumb });
+            _phalanges.Add(new Phalanx { t = bone, open = open, closed = closed, useTrigger = useTrigger, thumb = thumb, finger = finger });
         }
 
         void LateUpdate()
@@ -254,6 +388,22 @@ namespace VRMultiplayer
             _grip = Mathf.Lerp(_grip, gripTarget, 1f - Mathf.Exp(-smoothing * Time.deltaTime));
             _trigger = Mathf.Lerp(_trigger, trigTarget, 1f - Mathf.Exp(-triggerSmoothing * Time.deltaTime));
             Apply(_grip, _trigger);
+
+            // Authored silah pozu prosedurel kivrimin USTUNE gelir; agirlik harmanla
+            // yuruyor, boylece silahi alip birakirken parmaklar ziplamiyor.
+            //
+            // ONCELIK: atolyede ELLE yazilan parmak kivrimlari (fpCurls) her seyin onunde.
+            // Avatardan cevrilen poz (fpJoints) yalnizca elle yazilmis deger yoksa
+            // kullanilir - cevrimin sadakati olculdu ve yeterli degil.
+            var hand = ActiveHandPose();
+            bool manual = hand.HasValue && hand.Value.HasFpCurls;
+            WeaponGripProfile.FingerPose fp;
+            bool converted = !manual && TryGetFpPose(out fp, out _);
+            _weaponWeight = Mathf.MoveTowards(_weaponWeight, (manual || converted) ? 1f : 0f,
+                                              Time.deltaTime / WeaponBlendSeconds);
+            if (_weaponWeight <= 0f) return;
+            if (manual) ApplyFingerCurls(hand.Value.fpCurls, _weaponWeight);
+            else ApplyWeaponPose(_trigger, _weaponWeight);
         }
 
         /// <summary>

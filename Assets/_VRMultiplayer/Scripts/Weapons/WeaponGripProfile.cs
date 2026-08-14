@@ -51,6 +51,10 @@ namespace VRMultiplayer.Weapons
         public HandPose supportHand = HandPose.Defaults(false);
 
         [Header("Iki elli nisan filtresi")]
+        [Tooltip("Destek elinin namluyu ne kadar yonettigi. 1 = tam sanal dipcik (tufek), " +
+                 "0 = namluyu YALNIZ ana el yonetir, destek eli gorsel olarak tutunur ama " +
+                 "nisani cevirmez (tabanca). Ara degerler harmanlanir.")]
+        [Range(0f, 1f)] public float twoHandAimWeight = 1f;
         [Tooltip("Bu acinin altindaki el titremesi namluya HIC yansimaz (derece).")]
         public float aimDeadzoneDegrees = 0.75f;
         [Tooltip("Deadzone bitiminden tam takibe yumusak gecis bandi (derece).")]
@@ -165,8 +169,32 @@ namespace VRMultiplayer.Weapons
             [Tooltip("Tetik TAM cekiliyken isaret parmaginin 3 bogumu. Bos = isaret parmagi sabit kalir.")]
             public Quaternion[] indexPulled;
 
+            /// <summary>
+            /// AYNI pozun BIRINCI SAHIS eli icin karsiligi: 15 eklemin dinlenmeden sapmasi,
+            /// FP rig'inin kendi kemik uzayinda.
+            ///
+            /// Neden ayri alan: yukaridaki quaternion'lar AVATARIN humanoid kemiklerinde yazildi,
+            /// FP eli ise Meta'nin Generic rig'ini kullaniyor. Lokal rotasyon iki rig arasinda
+            /// dogrudan TASINMAZ - kemiklerin dinlenme yonelimleri farkli.
+            ///
+            /// Tasima yolu: sapmanin EKSENI ve ACISI. Eksen once avatar kemiginin dinlenme
+            /// cercevesinden EL cercevesine (parmak yonu / avuc normali / yan eksen) cikarilir,
+            /// oradan FP kemiginin dinlenme cercevesine indirilir; aci aynen kalir. Boylece
+            /// yalnizca katlanma degil parmak YAYILMASI ve basparmagin gercek donus yonu de
+            /// korunur. Olculdu: sapmayi tek mentese acisina indirgeyen ilk surumde parmak
+            /// uclari 25-45 mm, basparmak 105 mm kayiyordu. Cevrim editorde bir kez
+            /// yapilir (menu 50), runtime yalnizca uygular.
+            /// </summary>
+            [Tooltip("FP rig'inde 15 eklemin DINLENMEDEN sapmasi. Uretim: menu 50.")]
+            public Quaternion[] fpJoints;
+
+            [Tooltip("Tetik TAM cekiliyken FP eli icin isaret parmaginin 3 sapmasi.")]
+            public Quaternion[] fpIndexPulledJoints;
+
             public bool HasPose => joints != null && joints.Length == HandPoseBones.JointCount;
             public bool HasIndexPulled => indexPulled != null && indexPulled.Length == HandPoseBones.IndexJointCount;
+            public bool HasFpJoints => fpJoints != null && fpJoints.Length == HandPoseBones.JointCount;
+            public bool HasFpIndexPulled => fpIndexPulledJoints != null && fpIndexPulledJoints.Length == HandPoseBones.IndexJointCount;
         }
 
         /// <summary>Static hand pose: wrist offset + five finger curls (ISDK Fingers Freedom:
@@ -178,6 +206,33 @@ namespace VRMultiplayer.Weapons
             public Vector3 wristLocalPosition;
             [Tooltip("Bilek kemiginin cipaya gore lokal yonelimi (euler).")]
             public Vector3 wristLocalEuler;
+
+            /// <summary>
+            /// BIRINCI SAHIS elinin cipaya gore yeri. Avatarin bilek offset'inden AYRI
+            /// tutuluyor cunku iki rig'in bilek konvansiyonu ayni degil: FP eli avatarin
+            /// degerini miras alinca cihazda kabzanin yanina dusuyordu.
+            ///
+            /// Sifir = FP bilegi tam kabza cipasinda, silahin kendi yoneliminde. Ayar
+            /// oyun icindeki Silah Atolyesi panelinden yapilir (gorerek), buraya yazilir.
+            /// </summary>
+            public Vector3 fpWristLocalPosition;
+            public Vector3 fpWristLocalEuler;
+
+            public Quaternion FpWristRotation => Quaternion.Euler(fpWristLocalEuler);
+
+            /// <summary>
+            /// FP eli icin PARMAK BASINA kivrim (0..1; sira: bas, isaret, orta, yuzuk, serce).
+            /// Silah Atolyesi'nde elle yaziliyor.
+            ///
+            /// Neden fpJoints'in yaninda ayri bir alan: fpJoints avatardan CEVRILEN pozdur ve
+            /// cevrim guvenilir cikmadi (yuzuk parmaginda 17-19 derece sistematik sapma).
+            /// Buradaki degerler cevrilmiyor - dogrudan FP rig'inin kendi mentese kuralina
+            /// (FingerCurlMath) uygulaniyor, yani gordugun sey yazdigin sey. Doluysa
+            /// fpJoints'in ONUNE gecer.
+            /// </summary>
+            public float[] fpCurls;
+
+            public bool HasFpCurls => fpCurls != null && fpCurls.Length == 5;
 
             [Range(0f, 1f)] public float thumbCurl;
             [Range(0f, 1f)] public float indexCurl;
