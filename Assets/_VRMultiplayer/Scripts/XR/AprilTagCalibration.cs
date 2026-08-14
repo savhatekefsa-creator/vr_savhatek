@@ -238,6 +238,18 @@ namespace VRMultiplayer
                  "kabulun bedeli 5 metrelik bir sicramaydi.")]
         [Range(2, 6)] public int yawRecoveryConfirmations = 3;
 
+        [Tooltip("Yaw sacilmasi bu dereceyi asarsa YON duzeltmesi birakilir (konum duzeltilmeye " +
+                 "devam eder). 0 = KAPALI, yalnizca log'a yazilir.\n\n" +
+                 "NE OLCUYOR: penceredeki yon olcumlerinin dairesel standart sapmasi. Duzlemsel " +
+                 "poz belirsizliginin flip'i konumu neredeyse hic oynatmadan yonu ziplatiyor — " +
+                 "iki cozum ayni noktayi farkli acilarla goruyor. Konum kararlilik kapisi " +
+                 "(calibStabilitySpread) bu yuzden flip'i hicbir zaman yakalayamadi.\n\n" +
+                 "VARSAYILAN 0 (KAPALI): plan 2 derece oneriyor ama o sayi OLCULMEDI. Normal " +
+                 "kullanimda sacilmanin ne oldugunu bilmeden kapi acilirsa, dogru yon " +
+                 "olcumlerini eleyip sorunu cozulmus GOSTERIR — 3a'da ayni tuzaktan kacinilmisti. " +
+                 "Once log'daki 'yawsac' sutunu okunacak, esik ona gore secilecek.")]
+        public float yawSpreadMaxDegrees = 0f;
+
         [Header("Poz gecerlilik kapisi (Adim 3)")]
         [Tooltip("SADECE LOG (3a) mi, yoksa gercekten ELESIN mi (3b).\n\n" +
                  "ACIK = hicbir tespit elenmez, yalnizca 'elenecekti' diye log'a yazilir.\n" +
@@ -539,6 +551,7 @@ namespace VRMultiplayer
             _recentByTag.Clear();
             _calibLocal.Clear();
             _calibYawLocal.Clear();
+            _calibWeight.Clear();
             _calibId = -1;
             _lastTagTime = -1f;
 
@@ -630,6 +643,7 @@ namespace VRMultiplayer
             {
                 _calibLocal.Clear();
                 _calibYawLocal.Clear();
+                _calibWeight.Clear();
                 _calibId = -1;
             }
         }
@@ -867,6 +881,7 @@ namespace VRMultiplayer
         // Kayan pencere: son yakin olcumler (ortalanir). RIG-YEREL saklanir — bkz. ToLocal.
         readonly List<Vector3> _calibLocal = new List<Vector3>();
         readonly List<float> _calibYawLocal = new List<float>();
+        readonly List<float> _calibWeight = new List<float>();   // Adim 5 — bkz. SampleWeight
         float _calibLastSampleAt = -999f;   // bkz. calibWindowMaxGap
         int _outlierRun;                    // ust uste kac aykiri ornek geldi
         int _calibId = -1;
@@ -894,6 +909,53 @@ namespace VRMultiplayer
         // Rig YALNIZCA Y ekseninde donduruluyor (ApplyCorrection: RotateAround(..., Vector3.up)),
         // o yuzden yaw icin tek bir aci cikarmak/eklemek yeterli.
         float RigYaw => _rig != null ? _rig.eulerAngles.y : 0f;
+
+        // ---- ORNEK AGIRLIGI (Adim 5) ------------------------------------------------------
+        //
+        // Pencerede 0,5 m'den ve 1,9 m'den gelen ornekler AYNI agirliktaydi; kendi olcumumuz
+        // bunu yalanliyor: 1 m'de 3 mm, 2 m'de 15 mm jitter.
+        //
+        // Duzlemsel poz kestiriminde konum hatasi mesafenin KARESIYLE buyuyor (tag goruntude
+        // kucüldükçe ayni piksel hatasi daha cok metreye karsilik geliyor). sigma ~ d^2 ise
+        // varyans ~ d^4, ve ters-varyans agirligi 1/d^4 olur. Uydurma bir us degil, olcumun
+        // kendi modeli.
+        //
+        // Bunun bedeli SU AN calibrateMaxDistance ile odeniyordu: uzak ornegi agirliklandirmak
+        // yerine TAMAMEN atmak. Agirlikli ortalamada kesme yumusuyor — uzak ornek hak ettigi
+        // kadar katki veriyor, hiç yoksa da yok sayilmiyor.
+        //
+        // 1 m REFERANS ALINIR: w = (1/d)^4. Boylece 1 m'de w=1, 0,5 m'de 16, 2 m'de 0,0625.
+        // Oranlar 1/d^4 ile ayni, sayilar okunabilir kaliyor ve toplam tasma riski yok.
+        //
+        // MESAFE ALTTAN KIRPILIR: gozluk tag'e 25 cm'den fazla yaklasamaz (kamera odak ve
+        // gorus alani). Kirpmadan, hatali kucuk bir d tek basina butun pencereyi ele gecirirdi.
+        const float WeightRefDistance = 1f;
+        const float WeightMinDistance = 0.25f;
+
+        static float SampleWeight(float distance)
+        {
+            float d = Mathf.Max(WeightMinDistance, distance);
+            float r = WeightRefDistance / d;
+            return r * r * r * r;
+        }
+
+        /// <summary>
+        /// Dairesel standart sapma (derece). <paramref name="dir"/> agirlikli birim vektorlerin
+        /// bileskesi, <paramref name="totalW"/> agirliklarin toplami.
+        ///
+        /// R = |bileske| / toplam agirlik, sonuc sqrt(-2 ln R). R=1 (hepsi ayni yon) -> 0 derece.
+        /// R kucüldükçe sacilma hizla buyur.
+        ///
+        /// R alttan kirpilir: Log(0) eksi sonsuz doner ve tek bir NaN butun kestirimi sessizce
+        /// zehirlerdi. Ustten de kirpilir — kayan nokta yuvarlamasi R'yi 1'in bir tik ustune
+        /// cikarabiliyor ve Log negatif olunca karekok NaN veriyor.
+        /// </summary>
+        static float YawSpreadDegrees(Vector2 dir, float totalW)
+        {
+            if (totalW <= 0f) return 0f;
+            float R = Mathf.Clamp(dir.magnitude / totalW, 1e-6f, 1f);
+            return Mathf.Sqrt(-2f * Mathf.Log(R)) * Mathf.Rad2Deg;
+        }
 
         /// <summary>Rig'i cozer. ORNEKLEMEDEN ONCE cagrilmali: rig bilinmeden alinan bir ornek
         /// dunya koordinatinda saklanip sonra yerel sanilirdi.</summary>
@@ -955,6 +1017,7 @@ namespace VRMultiplayer
         CalibrationManager _cm;   // rig + CompleteFromTag icin; ilk duzeltmede bir kez bulunur
         float _nextStateDiagAt;   // teshis yazimini kisitlar (bkz. ApplyCorrection)
         float _nextSpreadDiagAt;  // KARARSIZ satirini kisitlar — her karede yazilirdi
+        float _diagYawSpread;     // son olculen yaw sacilmasi (Adim 5) — teshis satirinda
 
         /// <summary>
         /// SUREKLI, kendini onaran hizalama. Tag her gorulduginde:
@@ -986,7 +1049,7 @@ namespace VRMultiplayer
             bool justSwitched = _calibId >= 0 && entry.id != _calibId;
             if (justSwitched)
             {
-                _calibLocal.Clear(); _calibYawLocal.Clear();
+                _calibLocal.Clear(); _calibYawLocal.Clear(); _calibWeight.Clear();
                 _switchFrom = _calibId;
                 _switchPending = true;
             }
@@ -1019,7 +1082,7 @@ namespace VRMultiplayer
             {
                 WriteDiag($"PENCERE SILINDI  bosluk {Time.time - _calibLastSampleAt:0.0} sn " +
                           $"> {calibWindowMaxGap:0.0}  ({_calibLocal.Count} ornek atildi)");
-                _calibLocal.Clear(); _calibYawLocal.Clear();
+                _calibLocal.Clear(); _calibYawLocal.Clear(); _calibWeight.Clear();
             }
             _calibLastSampleAt = Time.time;
 
@@ -1046,7 +1109,7 @@ namespace VRMultiplayer
                 {
                     if (++_outlierRun >= 2)
                     {
-                        _calibLocal.Clear(); _calibYawLocal.Clear();
+                        _calibLocal.Clear(); _calibYawLocal.Clear(); _calibWeight.Clear();
                         _outlierRun = 0;
                     }
                     else
@@ -1060,9 +1123,15 @@ namespace VRMultiplayer
             }
 
             // Kayan pencereye ekle, en fazla calibrateSampleCount tut.
+            // AGIRLIK ORNEKLE BIRLIKTE SAKLANIR: ornegin alindigi andaki mesafe onun kalitesini
+            // belirliyor ve o mesafe sonradan bilinemez (oyuncu hareket ediyor).
             _calibLocal.Add(localPos);
             _calibYawLocal.Add(YawOf(worldRot) - RigYaw);
-            while (_calibLocal.Count > calibrateSampleCount) { _calibLocal.RemoveAt(0); _calibYawLocal.RemoveAt(0); }
+            _calibWeight.Add(SampleWeight(distance));
+            while (_calibLocal.Count > calibrateSampleCount)
+            {
+                _calibLocal.RemoveAt(0); _calibYawLocal.RemoveAt(0); _calibWeight.RemoveAt(0);
+            }
 
             // ILK hizalamada AZ ornek yeter, sonrakilerde cok.
             // Ilk duzeltme metre mertebesindedir — 3 mm'lik ornekleme hatasi yaninda gurultu
@@ -1076,11 +1145,19 @@ namespace VRMultiplayer
                 return;
             }
 
-            // Ortalanmis olculen tag pozu. Ortalama YEREL alinir, sonra dunyaya cevrilir —
+            // AGIRLIKLI ortalama (Adim 5). Ortalama YEREL alinir, sonra dunyaya cevrilir —
             // asagisi (sapma, GECIS, ApplyCorrection) dunya uzayinda calisiyor.
+            float wTotal = 0f;
             Vector3 avgLocal = Vector3.zero;
-            foreach (var p in _calibLocal) avgLocal += p;
-            avgLocal /= _calibLocal.Count;
+            for (int i = 0; i < _calibLocal.Count; i++)
+            {
+                avgLocal += _calibLocal[i] * _calibWeight[i];
+                wTotal += _calibWeight[i];
+            }
+            // wTotal sifir olamaz (SampleWeight her zaman pozitif) ama bolme once kontrol
+            // edilir: pencere ile agirlik listesi bir sekilde ayrisirsa sessiz NaN uretmesin.
+            if (wTotal <= 0f) { _calibNote = "agirlik yok"; return; }
+            avgLocal /= wTotal;
             Vector3 avgPos = ToWorld(avgLocal);
 
             // KARARLILIK KAPISI — sayiyla degil, TUTARLILIKLA olculur.
@@ -1094,8 +1171,22 @@ namespace VRMultiplayer
             // yani kendi kendini duzelten yumusak bir ceza.
             // Sacilma YEREL uzayda olculur. Rigid donusum mesafeleri korudugu icin sayi
             // dunyadakiyle ayni; yerel kalmasinin sebebi karsilastirmanin ayni uzayda olmasi.
+            //
+            // AGIRLIKSIZ ORTALAMAYA GORE OLCULUR — bilerek. Adim 5'in agirlikli ortalamasi
+            // yakin ornege sonuna kadar yaslaniyor (0,5 m'deki ornek 2 m'dekinden 256 kat agir),
+            // yani uzak ornekler ondan UZAK duser. Sacilmayi o merkeze gore olcseydik uzak
+            // ornekler kapiyi bosuna tetiklerdi — ustelik zaten neredeyse hic katki vermeyen
+            // ornekler yuzunden. Kullanicinin sikayet ettigi "KARARSIZ 15 ornek" durumu
+            // SIKLASIRDI, azalmazdi.
+            //
+            // Kapinin isi degismedi: "pencere kendi icinde tutarli mi". Adim 5 KESTIRIMI
+            // degistiriyor, kapiyi degil — boylece turda hangisinin ne yaptigi ayirt edilebilir.
+            Vector3 plainMean = Vector3.zero;
+            foreach (var p in _calibLocal) plainMean += p;
+            plainMean /= _calibLocal.Count;
+
             float spread = 0f;
-            foreach (var p in _calibLocal) spread = Mathf.Max(spread, Vector3.Distance(p, avgLocal));
+            foreach (var p in _calibLocal) spread = Mathf.Max(spread, Vector3.Distance(p, plainMean));
             if (spread > calibStabilitySpread)
             {
                 // SAYI DOLDUKTAN SONRA ILERLEME CUBUGU YAZILMAZ.
@@ -1121,10 +1212,29 @@ namespace VRMultiplayer
                 }
                 return;
             }
+            // YAW da AYNI AGIRLIKLA ortalanir: yon kestirimi konumla ayni pozdan geliyor, yani
+            // mesafeyle ayni sekilde bozuluyor.
             Vector2 dir = Vector2.zero;
-            foreach (var y in _calibYawLocal)
-                dir += new Vector2(Mathf.Sin(y * Mathf.Deg2Rad), Mathf.Cos(y * Mathf.Deg2Rad));
+            for (int i = 0; i < _calibYawLocal.Count; i++)
+            {
+                float y = _calibYawLocal[i] * Mathf.Deg2Rad;
+                dir += new Vector2(Mathf.Sin(y), Mathf.Cos(y)) * _calibWeight[i];
+            }
             float avgYaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg + RigYaw;
+
+            // YAW SACILMASI — dairesel ortalamadan BEDAVA gelen olcu.
+            //
+            // Dairesel ortalamada birim vektorlerin bileskesinin boyu (R) aynilik olcusudur:
+            // hepsi ayni yonu gosteriyorsa R=1, dagilmissa R kucülür. sqrt(-2 ln R) bunu
+            // standart sapmaya cevirir.
+            //
+            // NEDEN ONEMLI: duzlemsel poz belirsizliginin flip'i, KONUMU neredeyse hic
+            // oynatmadan yon'u ziplatir — iki cozum ayni noktayi farkli acilarla gorur. Bu
+            // yuzden tek bir konum kararlilik kapisi (calibStabilitySpread) flip'i hicbir
+            // zaman yakalayamadi: konum sacilmasi kucuk kaliyordu. Yon sacilmasi flip'in en
+            // dogrudan imzasi.
+            float yawSpread = YawSpreadDegrees(dir, wTotal);
+            _diagYawSpread = yawSpread;   // teshis satirinda yazilacak (ApplyCorrection)
 
             // Tag olmasi gereken yerden ne kadar sapmis?
             float dev = Vector3.Distance(avgPos, entry.position);
@@ -1191,6 +1301,23 @@ namespace VRMultiplayer
             if (yawCounts && !yawRecovery &&
                 yawCorrectionMaxDistance > 0f && distance > yawCorrectionMaxDistance)
                 yawCounts = false;
+
+            // YAW SACILMA KAPISI (Adim 5) — esik 0 iken KAPALI, yalnizca olculuyor.
+            //
+            // Konum duzeltilmeye DEVAM eder, yalnizca yon birakilir. Mimari bu ayrimi zaten
+            // destekliyor (yawCounts konumdan bagimsiz), cunku ayni ayrim mesafe kapisinda da
+            // var: uzaktan konum guvenilir, yon degil.
+            //
+            // KURTARMA MUAF: yon gercekten kaybolduysa (bkz. YawRecoveryAccepted, uc ardisik
+            // teyit) onu sacilma yuzunden bloke etmek, oyuncuyu 69 derece donuk bir dunyada
+            // birakmak olurdu — cihazda tam o olay yasandi.
+            if (yawCounts && !yawRecovery &&
+                yawSpreadMaxDegrees > 0f && yawSpread > yawSpreadMaxDegrees)
+            {
+                yawCounts = false;
+                WriteDiag($"YAW SACILMA  tag {entry.id}  {yawSpread:0.00} > {yawSpreadMaxDegrees:0.00} derece " +
+                          $"— yon birakildi, konum duzeltiliyor");
+            }
 
             if (dev <= correctionDeadzoneMeters &&
                 (!yawCounts || yawDev <= correctionYawDeadzoneDegrees))
@@ -1467,14 +1594,18 @@ namespace VRMultiplayer
             Vector3 d = entry.position - measuredPos;
             string eksen = $"  dx {d.x:+0.000;-0.000} dy {d.y:+0.000;-0.000} dz {d.z:+0.000;-0.000}";
 
+            // YAW SACILMASI (Adim 5) — esik secilebilmesi icin normal kullanimda ne oldugunu
+            // gormek sart. Plan 2 derece oneriyor ama o sayi olculmedi; bu sutun onu olcuyor.
+            string ysac = $"  yawsac {_diagYawSpread:0.00}";
+
             if (snap)
             {
-                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}{bosluk}");
+                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{ysac}{px}{dm}{bosluk}");
             }
             else if (Time.time >= _nextStateDiagAt)
             {
                 _nextStateDiagAt = Time.time + 5f;
-                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}{bosluk}");
+                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{ysac}{px}{dm}{bosluk}");
             }
 
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
