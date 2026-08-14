@@ -244,11 +244,18 @@ namespace VRMultiplayer
                  "poz belirsizliginin flip'i konumu neredeyse hic oynatmadan yonu ziplatiyor — " +
                  "iki cozum ayni noktayi farkli acilarla goruyor. Konum kararlilik kapisi " +
                  "(calibStabilitySpread) bu yuzden flip'i hicbir zaman yakalayamadi.\n\n" +
-                 "VARSAYILAN 0 (KAPALI): plan 2 derece oneriyor ama o sayi OLCULMEDI. Normal " +
-                 "kullanimda sacilmanin ne oldugunu bilmeden kapi acilirsa, dogru yon " +
-                 "olcumlerini eleyip sorunu cozulmus GOSTERIR — 3a'da ayni tuzaktan kacinilmisti. " +
-                 "Once log'daki 'yawsac' sutunu okunacak, esik ona gore secilecek.")]
-        public float yawSpreadMaxDegrees = 0f;
+                 "2 DERECE, IKI TURDA OLCULDU (2026-08-14, ofis):\n" +
+                 "  normal kullanim, tur 1 : 0,08-0,63  (10 olcum, medyan 0,24)\n" +
+                 "  normal kullanim, tur 2 : 0,13-0,69  (8 olcum,  medyan 0,29)\n" +
+                 "  157,8 derecelik gercek yon kaybi ani : 2,77\n" +
+                 "  flip benzetimi (editor, 0/0/+30 derece) : 14,20\n" +
+                 "Esik normal gurultunun (max 0,69) uc kati uzaginda, flip'in (14,2) yedide biri. " +
+                 "Ikisini ayirmak icin genis bir bant var.\n\n" +
+                 "KURTARMA MUAF TUTULUYOR ve bu SART: gercek yon kaybi aninda sacilma 2,77 " +
+                 "olculdu, yani muafiyet olmasaydi kapi tam ihtiyac duyulan anda yonu bloke " +
+                 "eder ve oyuncu 157 derece donuk bir dunyada kalirdi.\n\n" +
+                 "0 = kapali (yalnizca log).")]
+        public float yawSpreadMaxDegrees = 2f;
 
         [Header("Poz gecerlilik kapisi (Adim 3)")]
         [Tooltip("SADECE LOG (3a) mi, yoksa gercekten ELESIN mi (3b).\n\n" +

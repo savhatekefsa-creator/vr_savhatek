@@ -103,6 +103,7 @@ MonoBehaviour:
   yawRecoveryDegrees: 10
   yawRecoveryMaxDegrees: 35
   yawRecoveryConfirmations: 3
+  yawSpreadMaxDegrees: 2
   poseGateLogOnly: 0
   maxNormalTiltDegrees: 20
   maxTagTiltDegrees: 25
@@ -114,6 +115,7 @@ MonoBehaviour:
   calibWindowMaxGap: 5
   calibSwitchMargin: 0.3
   calibStabilitySpread: 0.02
+  calibStabilityScalesWithDistance: 1
   calibOutlierDistance: 0.15
   correctionYawDeadzoneDegrees: 0.4
   smallCorrectionRate: 0.25
