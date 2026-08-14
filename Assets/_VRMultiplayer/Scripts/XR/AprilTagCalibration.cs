@@ -1415,14 +1415,22 @@ namespace VRMultiplayer
             // odanin obur ucunda takilmisti. Bu sayi yazilsaydi soru hic sorulmayacakti.
             string bosluk = _tagGapSeconds >= 0.5f ? $"  bosluk {_tagGapSeconds:0.0} sn" : "";
 
+            // EKSEN BAZLI SAPMA. Tek bir "sapma 291,8 cm" sayisi ne kadarinin DIKEY oldugunu
+            // gizliyordu ve tam o soru acikta kaldi: kalibrasyondan sonra zemin -0,995 m'ye
+            // dusuyor, yani dunya ~1 m indiriliyor, ama bunun duzeltmenin dikey bileseninden
+            // gelip gelmedigi log'dan okunamiyordu. GECIS satiri dx/dy/dz yaziyor, SNAP/HIZA
+            // yazmiyordu — ayni sayi, iki farkli ayrinti duzeyi.
+            Vector3 d = entry.position - measuredPos;
+            string eksen = $"  dx {d.x:+0.000;-0.000} dy {d.y:+0.000;-0.000} dz {d.z:+0.000;-0.000}";
+
             if (snap)
             {
-                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}{bosluk}");
+                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}{bosluk}");
             }
             else if (Time.time >= _nextStateDiagAt)
             {
                 _nextStateDiagAt = Time.time + 5f;
-                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}{bosluk}");
+                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}{bosluk}");
             }
 
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
