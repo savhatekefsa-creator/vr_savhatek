@@ -179,8 +179,27 @@ namespace VRMultiplayer
         public int calibrateSampleCount = 15;
 
         [Tooltip("Kalibrasyon yalnizca tag bu mesafeden YAKINken yapilir (m). Jitter mesafeyle " +
-                 "buyudugu icin yakindan kalibre etmek cok daha dogru — spike: 1 m'de 3 mm, 2 m'de 15 mm.")]
-        public float calibrateMaxDistance = 2f;
+                 "buyudugu icin yakindan kalibre etmek cok daha dogru — spike: 1 m'de 3 mm, 2 m'de 15 mm.\n\n" +
+                 "2 -> 3 m (2026-08-14, Adim 5'in ikinci kabul maddesi). Bu kesme, uzak orneklerin " +
+                 "kotu olmasinin bedelini ATARAK oduyordu. Adim 5'ten sonra uzak ornek " +
+                 "agirliklandiriliyor (1/d^4), yani karisik bir pencerede 3 m'deki ornek 1 m'dekinin " +
+                 "1/81'i kadar etkili — atmaya gerek yok.\n\n" +
+                 "NEDEN 3 VE DAHA FAZLASI DEGIL:\n" +
+                 "  * Sistematik hata mesafeyle DOGRUSAL buyuyor ve ortalamayla GECMIYOR. Ana " +
+                 "nokta kaymasi (olculdu: 4,6 px = 0,30 derece) 2 m'de 1,1 cm, 3 m'de ~1,7 cm " +
+                 "yanal hata demek. Olu bolge 1 cm; yani 3 m'de yalnizca uzak orneklerden olusan " +
+                 "bir pencere ~1,7 cm'lik kalici bir duzeltme uygulayabilir. Bu kabul edilebilir " +
+                 "bir tavan, cunku oyuncu yaklastigi anda yakin ornekler 81:1 agirlikla bastirip " +
+                 "kendini onariyor. 4 m'de tavan ~2,3 cm'e cikar ve kazanci yok.\n" +
+                 "  * Rastgele hata sorun DEGIL: 3 m'de sigma ~37 mm ama duzeltme ORTALAMAYA " +
+                 "bakiyor, onun standart hatasi 15 ornekte ~9,6 mm — olu bolgenin altinda.\n\n" +
+                 "AGIRLIKLANDIRMA TEK BASINA YETMEZ, bilerek not: 1/d^4 yalnizca pencere KARISIK " +
+                 "mesafe iceriyorsa koruyor. Oyuncu surekli 3 m'de durursa tum agirliklar esit " +
+                 "olur ve ortalama duz ortalamaya doner. Ustteki tavan hesabi tam da o en kotu " +
+                 "durum icin yapildi.\n\n" +
+                 "YON ZATEN KORUNUYOR: yawCorrectionMaxDistance 1,5 m: uzak ornek konumu duzeltir, " +
+                 "yonu ellemez. Bu kesmeyi gevsetmek yaw'i uzaktan duzeltmeye ACMAZ.")]
+        public float calibrateMaxDistance = 3f;
 
         [Tooltip("Tag olmasi gereken yerden bu kadar SAPINCA rig duzeltilir (m). Altinda dokunulmaz " +
                  "— jitter'dan surekli snap olmasin. Ust sinir yoksa uyku sonrasi buyuk sapmayi da toparlar.")]

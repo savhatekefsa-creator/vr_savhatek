@@ -96,7 +96,7 @@ MonoBehaviour:
   autoCalibrate: 1
   correctVertical: 1
   calibrateSampleCount: 15
-  calibrateMaxDistance: 2
+  calibrateMaxDistance: 3
   correctionDeadzoneMeters: 0.01
   yawFromReferenceOnly: 1
   yawCorrectionMaxDistance: 1.5
