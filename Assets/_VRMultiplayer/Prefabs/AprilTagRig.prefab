@@ -94,7 +94,7 @@ MonoBehaviour:
   showPassthrough: 0
   offsetReferenceTagId: 0
   autoCalibrate: 1
-  correctVertical: 0
+  correctVertical: 1
   calibrateSampleCount: 15
   calibrateMaxDistance: 2
   correctionDeadzoneMeters: 0.01

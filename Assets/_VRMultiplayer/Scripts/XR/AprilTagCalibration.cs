@@ -149,7 +149,13 @@ namespace VRMultiplayer
 
         [Tooltip("Dikey ekseni de tag'den duzelt. Tag'in yuksekligi olculmus oldugu icin bu, " +
                  "gozlugun zemin tahminindeki hatayi da duzeltir.\n\n" +
-                 "GECICI OLARAK KAPALI (2026-08-13) — TESHIS ICIN, karar degil.\n\n" +
+                 "TESHIS BITTI, GERI ACILDI (2026-08-14). Dikey diye bir sorun yokmus: kapali " +
+                 "turda acilis duzeltmesinin dikey bileseni dy +0,013 m cikti (toplam sapma " +
+                 "198,8 cm'nin tamami yatay: dx -1,093 dz +1,661) ve sonraki tum dy'ler ±3 cm " +
+                 "icinde kaldi. Kumanda elde tutularak olculdugunde zemin de -0,009 m okudu. " +
+                 "Yani onceki -0,995 m, kumandayi YERE YATIRMAKTAN gelen takip kopmasiydi — " +
+                 "TickFloor notunun bastan uyardigi hata. Asagidaki (A)/(B) ayrimi (B) cikti.\n\n" +
+                 "ESKI TESHIS NOTU (arsiv):\n" +
                  "Belirti: kalibrasyondan SONRA kumandayla olculen zemin -0,995 m'ye dusuyor, " +
                  "yani dunya ~1 m iniyor. Oysa kalibrasyondan ONCE ayni kumanda zemini 0,000'da " +
                  "ve tag 0'i ~1,6-1,8 m'de gosteriyor; kullanici da tum tag'lerin 150 cm'de " +
@@ -165,8 +171,8 @@ namespace VRMultiplayer
                  "dy satiri duzeltme UYGULANMADAN once yazildigi icin bu alan kapaliyken de " +
                  "olculuyor — yani tek turda hem kontrol hem olcum elde ediliyor.\n\n" +
                  "Kapaliyken eski davranis gecerli: dikey, gozlugun kendi zemin tahminine " +
-                 "birakilir. Soru cozulunce ACILMALI.")]
-        public bool correctVertical = false;
+                 "birakilir.")]
+        public bool correctVertical = true;
 
         [Tooltip("Kalibrasyon icin kac kare ortalanacak. TEK KARE titrek olabilir ve kalibrasyonu " +
                  "o hatayla kilitler (yasanmis: bir dogru, bir 15 cm kayma). Ortalama bunu bastirir.")]
@@ -2133,8 +2139,16 @@ namespace VRMultiplayer
         {
             if (!_hasFloor) return "";
             if (tagId < 0) tagId = offsetReferenceTagId;
-            if (!_touchPos.TryGetValue(tagId, out Vector3 tp)) return "";
-            return $"  |  tag {tagId} yerden {(tp.y - _floorY) * 100f:0.0} cm";
+            if (!_touchPos.TryGetValue(tagId, out Vector3 raw)) return "";
+
+            // IKI UCU DA AYNI SEKILDE ISLE. Ilk yazimda tag'in HAM konumu, zeminin ise
+            // OFSETLI konumu kullaniliyordu — ofset yalnizca bir tarafa girince kumandanin
+            // izlenen noktasi ile ucu arasindaki fark (olculdu: 5,8-7,8 cm) sonuca oldugu gibi
+            // sizardi. Ayni islemi ikisine de uygulayinca ortak bileseni birbirini goturuyor.
+            float tagY = _touchRot.TryGetValue(tagId, out Quaternion rot)
+                ? ApplyTouchOffset(raw, rot).y : raw.y;
+
+            return $"  |  tag {tagId} yerden {(tagY - _floorY) * 100f:0.0} cm";
         }
 
         void TickFloor()
