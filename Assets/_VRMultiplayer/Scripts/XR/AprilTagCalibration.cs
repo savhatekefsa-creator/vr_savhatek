@@ -148,8 +148,25 @@ namespace VRMultiplayer
         public bool autoCalibrate = true;
 
         [Tooltip("Dikey ekseni de tag'den duzelt. Tag'in yuksekligi olculmus oldugu icin bu, " +
-                 "gozlugun zemin tahminindeki hatayi da duzeltir.")]
-        public bool correctVertical = true;
+                 "gozlugun zemin tahminindeki hatayi da duzeltir.\n\n" +
+                 "GECICI OLARAK KAPALI (2026-08-13) — TESHIS ICIN, karar degil.\n\n" +
+                 "Belirti: kalibrasyondan SONRA kumandayla olculen zemin -0,995 m'ye dusuyor, " +
+                 "yani dunya ~1 m iniyor. Oysa kalibrasyondan ONCE ayni kumanda zemini 0,000'da " +
+                 "ve tag 0'i ~1,6-1,8 m'de gosteriyor; kullanici da tum tag'lerin 150 cm'de " +
+                 "oldugunu metreyle dogruladi. Yani kumanda ile kamera AYNI takip uzayinda " +
+                 "farkli seyler soyluyor.\n\n" +
+                 "Kapali tutmak iki hipotezi ayiriyor:\n" +
+                 "  (A) kamera tag'i ~1 m yuksek goruyor -> dikey duzeltme dunyayi indiriyordu. " +
+                 "Kapaliyken zemin ~0'a doner ve SNAP satirindaki dy ~-1,0 yazar.\n" +
+                 "  (B) kameranin olcumu dogru, -0,995 kumandanin YERDEKI takip kopmasi " +
+                 "(bkz. TickFloor notu: IR halkasi gizlenince poz yarim metre siciyor; " +
+                 "_floorBest EN DUSUK degeri aliyor, tek bozuk kare olcumu asagi cekiyor). " +
+                 "Kapaliyken zemin YINE -0,995 okur ve dy ~0 yazar.\n\n" +
+                 "dy satiri duzeltme UYGULANMADAN once yazildigi icin bu alan kapaliyken de " +
+                 "olculuyor — yani tek turda hem kontrol hem olcum elde ediliyor.\n\n" +
+                 "Kapaliyken eski davranis gecerli: dikey, gozlugun kendi zemin tahminine " +
+                 "birakilir. Soru cozulunce ACILMALI.")]
+        public bool correctVertical = false;
 
         [Tooltip("Kalibrasyon icin kac kare ortalanacak. TEK KARE titrek olabilir ve kalibrasyonu " +
                  "o hatayla kilitler (yasanmis: bir dogru, bir 15 cm kayma). Ortalama bunu bastirir.")]
