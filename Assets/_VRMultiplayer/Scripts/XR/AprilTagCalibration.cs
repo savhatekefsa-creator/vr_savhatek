@@ -948,6 +948,7 @@ namespace VRMultiplayer
         Transform _rig;
         CalibrationManager _cm;   // rig + CompleteFromTag icin; ilk duzeltmede bir kez bulunur
         float _nextStateDiagAt;   // teshis yazimini kisitlar (bkz. ApplyCorrection)
+        float _nextSpreadDiagAt;  // KARARSIZ satirini kisitlar — her karede yazilirdi
 
         /// <summary>
         /// SUREKLI, kendini onaran hizalama. Tag her gorulduginde:
@@ -1091,7 +1092,27 @@ namespace VRMultiplayer
             foreach (var p in _calibLocal) spread = Mathf.Max(spread, Vector3.Distance(p, avgLocal));
             if (spread > calibStabilitySpread)
             {
-                _calibNote = $"olculuyor {ProgressBar(_calibLocal.Count, need)}  (sabitleniyor {spread * 100f:0.0} cm)";
+                // SAYI DOLDUKTAN SONRA ILERLEME CUBUGU YAZILMAZ.
+                //
+                // Cihazda goruldu: panel "13/5", "14/5", "15/5" yaziyordu. Pay paydayi gecince
+                // cubuk anlamsizlasiyor ve oyuncuya "sayiyor ama bitmiyor" hissi veriyor; oysa
+                // bekleyen sey SAYI degil TUTARLILIK. Adim 4'ten once pencere her duzeltmede
+                // silindigi icin bu durum nadiren goruluyordu, simdi pencere yasadigi icin
+                // 15'e kadar dolabiliyor.
+                _calibNote = _calibLocal.Count < need
+                    ? $"olculuyor {ProgressBar(_calibLocal.Count, need)}  (sabitleniyor {spread * 100f:0.0} cm)"
+                    : $"KARARSIZ  sacilma {spread * 100f:0.0} cm > {calibStabilitySpread * 100f:0.0}  ({_calibLocal.Count} ornek)";
+
+                // DISKE de yaz — ama yalnizca pencere DOLUYKEN ve seyrek. Dolu pencerede
+                // kapinin tutmasi, Adim 4'un olcmedigimiz yan etkisi: 15 ornek artik daha uzun
+                // bir zamana ve daha genis bir mesafe araligina yayiliyor, sistematik mesafe
+                // hatasi da sacilmaya giriyor. Ne siklikta oldugunu bilmeden esige dokunmayiz.
+                if (_calibLocal.Count >= calibrateSampleCount && Time.time >= _nextSpreadDiagAt)
+                {
+                    _nextSpreadDiagAt = Time.time + 5f;
+                    WriteDiag($"KARARSIZ  tag {entry.id}  sacilma {spread * 100f:0.0} cm > " +
+                              $"{calibStabilitySpread * 100f:0.0}  ({_calibLocal.Count} ornek)  d {distance:0.00} m");
+                }
                 return;
             }
             Vector2 dir = Vector2.zero;
@@ -1986,7 +2007,15 @@ namespace VRMultiplayer
 
                 // Panelde ANLIK geri bildirim: dokunus yakalandi mi, ne kadar yakindi.
                 // Panel sadelestikten sonra dokunus listesi kalkti, bunun yerini bu satir aldi.
-                _learnNote = $"tag {_approachId} dokunuldu ({_approachBest * 100f:0.0} cm)";
+                //
+                // YAKLASMA 15 CM'DEN BUYUKSE BUNU SOYLE. Cihazda yasandi: uc dokunusun ucu de
+                // 29-32 cm'den yapildi, ucu de sessizce reddedildi ve oyuncu olctugunu sandi.
+                // "dokunuldu (29,2 cm)" satiri teknik olarak dogruydu ama reddedildigini
+                // soylemiyordu — sayiyi okuyup esikle karsilastirmak oyuncunun isi degil.
+                bool yeterince = _approachBest <= 0.15f;
+                _learnNote = yeterince
+                    ? $"tag {_approachId} ALINDI ({_approachBest * 100f:0.0} cm)" + TagHeightNote(_approachId)
+                    : $"tag {_approachId} COK UZAK ({_approachBest * 100f:0.0} cm > 15) — tekrar degdir";
 
                 var de = Find(_approachId);
                 string turetilen = TouchDerived(_approachId, out Vector3 dp)
@@ -2089,6 +2118,25 @@ namespace VRMultiplayer
         bool _floorTracking, _hasFloor;
         float _floorY, _floorRaw;
 
+        /// <summary>
+        /// "tag N yerden X cm" — zemin ve tag dokunusu BIR ARADA varsa.
+        ///
+        /// NEDEN: butun dikey tartismasi tek bir sayiya dayaniyor ve o sayi su an yalnizca
+        /// metreyle olculebiliyor. Oysa ikisi de KUMANDAYLA olculuyor, ayni takip uzayinda,
+        /// ve farkları dogrudan tag'in yerden yuksekligi. Kameranin kestirimine hic girmiyor —
+        /// yani kamera ile kumandayi karsilastirmanin bagimsiz yolu bu.
+        ///
+        /// Ikisinden biri yoksa bos doner: eksik bir sayidan uydurma bir yukseklik uretmek,
+        /// hic gostermemekten kotu.
+        /// </summary>
+        string TagHeightNote(int tagId = -1)
+        {
+            if (!_hasFloor) return "";
+            if (tagId < 0) tagId = offsetReferenceTagId;
+            if (!_touchPos.TryGetValue(tagId, out Vector3 tp)) return "";
+            return $"  |  tag {tagId} yerden {(tp.y - _floorY) * 100f:0.0} cm";
+        }
+
         void TickFloor()
         {
             if (_rightHandDiag == null) return;
@@ -2112,6 +2160,15 @@ namespace VRMultiplayer
                 _hasFloor = true;
                 _floorBest = float.MaxValue;
                 WriteDiag($"ZEMIN  ham {_floorRaw:0.000}  ofsetli {_floorY:0.000}");
+
+                // EKRANDA ONAY. Oyuncu olcumu KOR yapiyordu: kumandayi yere degdirip
+                // kaldiriyor, olcum alindi mi alinmadi mi ancak sonradan log cekilince
+                // anlasiliyordu. Olcumu tekrarlamasi gerekip gerekmedigini o anda bilmeli.
+                //
+                // Tag yuksekligi de burada yaziliyor: sorunun tamami "tag yerden kac cm'de"
+                // sorusuna dayaniyor ve iki sayi bir araya gelmeden cevaplanamiyor. Zemin
+                // olculdugunde tag'e zaten dokunulmussa cevap ANINDA ekranda cikiyor.
+                _learnNote = $"ZEMIN alindi {_floorY:0.000} m" + TagHeightNote();
             }
         }
 
