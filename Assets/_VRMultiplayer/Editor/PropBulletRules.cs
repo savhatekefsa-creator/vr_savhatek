@@ -11,7 +11,7 @@ namespace VRMultiplayer.EditorTools
     ///   45. Mermi Gecirgenligini Uygula — "hangi prop mermiyi durdurur" kuralini prefablara yazar.
     ///
     /// KURAL, IKI YONLU:
-    ///  - DUVAR MERMIYI DURDURUR. Bir duvarin gorunur govdesi varsa collider'i da olmak
+    ///  - GOVDESI OLAN SEY MERMIYI DURDURUR. Gorunur bir gövdesi varsa collider'i da olmak
     ///    zorunda. Paintball paketindeki dikenli uclu panel (Wood_Modular_6 / _7) HIC
     ///    collider'siz geliyordu: hem mermi hem oyuncu iginden geciyordu, ve sahada tek
     ///    belirtisi "bu duvar mermi gecirıyor" oluyordu.
@@ -19,6 +19,28 @@ namespace VRMultiplayer.EditorTools
     ///    mermiyi durdurmalari gorselin yalan soylemesi olurdu. Bunlarda collider KALIR
     ///    (oyuncu iginden gecemez), yalnizca silah isinlari <see cref="BulletPassThrough"/>
     ///    ile onlari gormezden gelir.
+    ///
+    /// KURAL NEDEN "DUVAR" DEGIL DE "GOVDE" DIYOR. Ilk hali yalnizca
+    /// <see cref="PropCategory.Wall"/> propuna collider ariyordu, cunku sikayet bir duvardan
+    /// gelmisti. KIYAMET seti geldiginde bu sessizce yetersiz kaldi: 16 propun 15'i
+    /// collider'siz, ve cogu Cover/Nature olarak siniflandigi icin kural onlara hic bakmadi —
+    /// varilin, cipin, kum torbasinin ve agacin iginden hem mermi hem oyuncu geciyordu, ve
+    /// tek belirti yine "mermi geciyor" oldu. Bir propun mermiyi durdurmasi gerekip
+    /// gerekmedigini belirleyen sey palet kategorisi degil, GOVDESININ olmasi.
+    ///
+    /// GOVDESI OLMAYAN UC GRUP HARIC:
+    ///  - <see cref="PropCategory.Ground"/>: yanik lekesi, moloz yamasi, cam kirigi. Dosemeye
+    ///    serilen dekallar; collider vermek merminin ZEMINDEN once yerdeki lekeye carpmasi olurdu.
+    ///  - <see cref="PropCategory.Spawn"/>: dogus halkasi bir ISARET, engel degil. Katilastirmak
+    ///    oyuncuyu kendi dogdugu yerden disari iterdi.
+    ///  - KISA <see cref="PropCategory.Nature"/>: cimen, cicek, mantar, calilik. Bunlarin
+    ///    "govdesi" yaprak — merminin cimene carpip durmasi, tam da bu dosyanin onlemeye
+    ///    calistigi yalanin kendisi olurdu.
+    ///
+    /// UCBUKEY DEGIL (convex = false), ve kullanicinin istedigi davranis tam olarak bu:
+    /// yikik duvarin gedigi, kirik pencerenin bosalmis cami, kum torbalarinin arasi GERCEKTEN
+    /// bos kalir — mermi delikten gecer, govdeye carpinca durur. Ucbukey bir collider bu
+    /// deliklerin hepsini kapatip propu tek bir sisirilmis kutuya cevirirdi.
     ///
     /// NEDEN AYRI BIR MENU. Kuralin tasidigi yer prefab — cunku propu yalnizca insa modu
     /// degil, dekor araci (menu 18) ve elle yerlestirme de kuruyor; tek ortak nokta prefabin
@@ -35,6 +57,17 @@ namespace VRMultiplayer.EditorTools
         /// Mermiyi GECIREN proplarin kutuphane kimlikleri. Sebep yorumda: liste kisa
         /// kalmali, "her delikli sey" degil "aradan gercekten gorulen sey".
         /// </summary>
+        /// <summary>
+        /// Bir <see cref="PropCategory.Nature"/> propunun "govdesi var" sayilmasi icin gereken
+        /// boy (m). Altinda kalan yesillik collider'siz birakilir.
+        ///
+        /// Esik kutuphanedeki GERCEK bosluktan secildi, yuvarlak bir sayidan degil: en uzun
+        /// yaprakli parca bush_02 ile 1.16 m, en kisa agac scorched_tree ve tree_trunk_01 ile
+        /// 2.00 m. Arada 84 cm'lik bos bant var ve 1.5 tam ortasina dusuyor — yani kutuphaneye
+        /// orta boy bir sey girmedikce bu esik kimseyi yanlis tarafa atmaz.
+        /// </summary>
+        const float FoliageHeightMetres = 1.5f;
+
         static readonly string[] PassThroughIds =
         {
             "wood_modular_8",  // merdiven — basamak aralari bos
@@ -69,16 +102,22 @@ namespace VRMultiplayer.EditorTools
                 if (string.IsNullOrEmpty(path)) continue;
 
                 bool wantPass = pass.Contains(def.id);
-                bool isWall = def.category == PropCategory.Wall;
+
+                // Govdesizler: zemin dekali, dogus isareti ve kisa yesillik. Sinif yorumdaki
+                // uc grubun kodu.
+                bool bodiless = def.category == PropCategory.Ground
+                             || def.category == PropCategory.Spawn
+                             || (def.category == PropCategory.Nature
+                                 && def.height < FoliageHeightMetres);
 
                 bool hasPass = prefab.GetComponent<BulletPassThrough>() != null;
                 int colliders = prefab.GetComponentsInChildren<Collider>(true).Length;
 
-                // Duvar olup collider'i olmayanlar: mermi de oyuncu da geciyor demektir.
-                bool needCollider = isWall && !wantPass && colliders == 0;
+                // Govdesi olup collider'i olmayanlar: mermi de oyuncu da geciyor demektir.
+                bool needCollider = !bodiless && !wantPass && colliders == 0;
 
-                if (!isWall && !wantPass && colliders == 0)
-                    noCollider.Add($"{def.id} ({def.category})");
+                if (bodiless && colliders == 0)
+                    noCollider.Add($"{def.id} ({def.category}, {def.height:0.00} m)");
 
                 if (hasPass == wantPass && !needCollider) continue;
 
@@ -103,7 +142,7 @@ namespace VRMultiplayer.EditorTools
                     {
                         int added = AddMeshColliders(contents);
                         if (added > 0)
-                            changed.Add($"{def.id}: {added} MeshCollider eklendi (duvar artik mermiyi durduruyor)");
+                            changed.Add($"{def.id}: {added} MeshCollider eklendi (artik mermiyi durduruyor)");
                         else
                             blockers.Add($"{def.id}: collider yok ve mesh'ten uretilemedi — elle bak");
                     }
@@ -129,8 +168,8 @@ namespace VRMultiplayer.EditorTools
                 sb.Append("\nDUZELTILEMEDI:\n - " + string.Join("\n - ", blockers) + "\n");
 
             if (noCollider.Count > 0)
-                sb.Append("\nBilgi — duvar OLMADIGI icin dokunulmadi, ama collider'i da yok " +
-                          "(mermi ve oyuncu iginden gecer):\n - " +
+                sb.Append("\nBilgi — govdesi olmadigi icin KASTEN collider'siz birakildi " +
+                          "(dekal / dogus isareti / kisa yesillik; mermi iginden gecer):\n - " +
                           string.Join("\n - ", noCollider) + "\n");
 
             sb.Append("\nMermi geciren proplar: " + string.Join(", ", PassThroughIds));
@@ -155,6 +194,17 @@ namespace VRMultiplayer.EditorTools
             {
                 if (mf.sharedMesh == null) continue;
                 if (mf.GetComponent<Collider>() != null) continue;
+
+                // YUVALI PREFABIN ICINE EKLEME. O parcanin kendi prefabi kutuphanede ayri bir
+                // prop olarak duruyor ve bu gecistE kendi collider'ini aliyor; buraya da
+                // eklemek ayni mesh'e IKI collider demek.
+                //
+                // Yasanmis hali: Burning_Barrel icinde Radiation_Drum var. Varil once islendi
+                // (o an drum'da collider yoktu, biri eklendi), sonra drum'in kendisi islendi ve
+                // varil o collider'i MIRAS aldi — sonuc ayni namluda 2 MeshCollider, 10.254
+                // ucgen, ve her mermi isininin ayni yuzeye iki kez carpmasi. Kaynak prefabi
+                // duzeltmek dogru yer; kopyayi yuvada tamir etmek degil.
+                if (PrefabUtility.IsPartOfPrefabInstance(mf.gameObject)) continue;
                 var mc = mf.gameObject.AddComponent<MeshCollider>();
                 mc.sharedMesh = mf.sharedMesh;
                 mc.convex = false;   // sabit sahne geometrisi: ucbukey olmasi gerekmiyor
