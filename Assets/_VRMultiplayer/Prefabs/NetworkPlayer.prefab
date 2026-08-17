@@ -2892,7 +2892,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   leftHand: {fileID: 1418947192942783369}
   rightHand: {fileID: 5851630593541469558}
-  grabRadius: 0.3
+  grabRadius: 0.2
 --- !u!114 &1455032696690629462
 MonoBehaviour:
   m_ObjectHideFlags: 0

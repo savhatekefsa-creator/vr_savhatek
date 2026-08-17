@@ -35,7 +35,8 @@ namespace VRMultiplayer.UI
         // Basili tutma: ilk tekrar bu gecikmeden sonra, sonra araliklar kisaliyor.
         const float RepeatDelay = 0.45f, RepeatFast = 0.05f, RepeatSlow = 0.14f, RepeatRamp = 1.2f;
 
-        enum Cmd { PrevWeapon, NextWeapon, Hands, StepSize, Save, Revert, Close, Bench, Side, Axis, Finger }
+        enum Cmd { PrevWeapon, NextWeapon, Hands, StepSize, Save, Revert, Close, Bench, Side, Axis, Finger,
+                   FingerPose, FingerReset }
 
         class Btn
         {
@@ -56,6 +57,7 @@ namespace VRMultiplayer.UI
         Transform _hover;
         MeshFilter _hoverMesh;
         TextMesh _title, _values, _status, _stepLabel, _handsLabel, _sideLabel;
+        TextMesh _poseLabel, _poseHint;
         int _hoverIdx = -1;
         bool _built;
         float _statusUntil;
@@ -103,6 +105,17 @@ namespace VRMultiplayer.UI
                 AddFingerRow(fy, f);
                 fy -= RowH + RowGap;
             }
+
+            // Serbest poz kipi: parmak sutununun ALTINDA, cunku kivrim tuslarinin
+            // alternatifi. Yan yana iki dugme — kipi ac/kapa ve parmaklari duzle.
+            _poseLabel = AddBtn(new Vector2(0.20f, fy - 0.010f), new Vector2(0.34f, RowH), Cmd.FingerPose,
+                "PARMAK KIPI", UITheme.AccentPurple);
+            AddBtn(new Vector2(0.46f, fy - 0.010f), new Vector2(0.16f, RowH), Cmd.FingerReset,
+                "DUZLE", UITheme.TextMuted);
+
+            _poseHint = UITheme.MakeText(transform, "", UITheme.AccentPurple, 0.018f,
+                TextAnchor.MiddleCenter, QText);
+            _poseHint.transform.localPosition = new Vector3(0.24f, fy - 0.066f, ZText);
 
             _values = UITheme.MakeText(transform, "", UITheme.TextMuted, 0.021f, TextAnchor.MiddleCenter, QText);
             _values.transform.localPosition = new Vector3(-0.26f, -0.300f, ZText);
@@ -225,6 +238,17 @@ namespace VRMultiplayer.UI
                 case Cmd.Close: Host.open = false; break;
                 case Cmd.Bench: Host.PlaceBench(); break;
                 case Cmd.Finger: Host.Curl(b.index, b.sign); break;
+                case Cmd.FingerPose:
+                    if (!Host.HandsPlaced) { Say("once ELLERI KOY"); break; }
+                    Host.FingerPoseMode = !Host.FingerPoseMode;
+                    Say(Host.FingerPoseMode
+                        ? "parmak kipi ACIK — GRIP ile parmagi tut, surukle"
+                        : "parmak kipi kapandi, poz yazildi");
+                    break;
+                case Cmd.FingerReset:
+                    Host.ResetFingers();
+                    Say("parmaklar duzlendi");
+                    break;
                 case Cmd.Axis:
                     if (b.rotate) Host.Turn(b.index, b.sign);
                     else Host.Nudge(b.index, b.sign);
@@ -264,8 +288,16 @@ namespace VRMultiplayer.UI
             _sideLabel.text = Host.EditLeft ? "DUZENLENEN: SOL" : "DUZENLENEN: SAG";
             _sideLabel.color = Host.EditLeft ? UITheme.AccentPurple : UITheme.AccentCyan;
 
+            bool posing = Host.FingerPoseMode;
+            _poseLabel.text = posing ? "PARMAK KIPI: ACIK" : "PARMAK KIPI";
+            _poseLabel.color = posing ? UITheme.AccentCyan : UITheme.AccentPurple;
+            _poseHint.text = Host.FingerPoseStatus;
+
+            // Kip acikken kivrim sayilari YANILTICI olur: parmaklar artik tek bir kivrim
+            // degerinden degil eklem eklem cozumden geliyor. Sayi yerine tire gosteriyoruz.
             for (int f = 0; f < 5; f++)
-                if (_curlText[f] != null) _curlText[f].text = Host.CurlOf(f).ToString("F2");
+                if (_curlText[f] != null)
+                    _curlText[f].text = posing ? "—" : Host.CurlOf(f).ToString("F2");
 
             if (Host.UnsavedCount > 0 && string.IsNullOrEmpty(_status.text))
                 _status.text = "aktarilmayi bekleyen: " + Host.UnsavedCount;

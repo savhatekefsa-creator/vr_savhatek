@@ -177,6 +177,16 @@ namespace VRMultiplayer.UI
         }
 
         /// <summary>
+        /// Isinin ham hali (baslangic + yon). Panel disindaki hedeflere nisan almak isteyen
+        /// tuketiciler icin — nisan/kavrama pozu secimi ve egim duzeltmesi burada bir kez
+        /// yapiliyor, kopyalanmasin (bkz. <see cref="Weapons.WeaponFingerPoser"/>).
+        /// </summary>
+        public bool TryGetRay(out Vector3 origin, out Vector3 dir) => TryGetAim(out origin, out dir);
+
+        /// <summary>Isinin azami menzili — disaridaki kesisim testleri ayni siniri kullansin.</summary>
+        public float MaxDistance => maxDistance;
+
+        /// <summary>
         /// Isini panelin duzlemiyle kesistirir.
         /// </summary>
         /// <param name="panel">Hedef panel koku (+Z oyuncudan uzaga, olcek 1).</param>

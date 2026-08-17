@@ -160,7 +160,37 @@ namespace VRMultiplayer
             map.TryGetValue(p + "thumb3", out _thumbTip);
             LimitThumb();
             BuildPoseJoints(map, p);
+            BuildIndexHinges();
             return _phalanges.Count > 0;
+        }
+
+        // Tetigin isaret parmagina EKLEYECEGI kivrimin ekseni ve olcegi. Menteseler
+        // TryGetPoseJoints ile ayni sekilde geri okunuyor (yeni eksen turetilmiyor).
+        readonly Vector3[] _indexHinge = new Vector3[HandPoseBones.IndexJointCount];
+        readonly float[] _indexRefFlex = new float[HandPoseBones.IndexJointCount];
+        bool _indexHingesReady;
+
+        /// <summary>Tam tetik cekisinin, bogumun DOGAL kapanmasinin ne kadarini harcadigi.
+        /// Tetik kucuk bir harekettir; 1.0 yumruk yapardi. Silah basina
+        /// <see cref="WeaponGripProfile.HandPose.indexTriggerMaxCurl"/> ile olceklenir.</summary>
+        const float TriggerFlexFraction = 0.30f;
+
+        void BuildIndexHinges()
+        {
+            _indexHingesReady = false;
+            int k = 0;
+            for (int i = 0; i < _phalanges.Count && k < HandPoseBones.IndexJointCount; i++)
+            {
+                var ph = _phalanges[i];
+                if (ph.finger != 1) continue;   // 1 = isaret
+                Quaternion d = ph.closed * Quaternion.Inverse(ph.open);
+                d.ToAngleAxis(out float deg, out Vector3 axis);
+                if (deg < 0.01f || axis.sqrMagnitude < 1e-8f) return;
+                _indexHinge[k] = axis.normalized;   // EBEVEYN uzayinda, + = kapanma
+                _indexRefFlex[k] = deg;
+                k++;
+            }
+            _indexHingesReady = k == HandPoseBones.IndexJointCount;
         }
 
         /// <summary>
@@ -220,6 +250,112 @@ namespace VRMultiplayer
             for (int i = 0; i < _phalanges.Count; i++) _phalanges[i].t.localRotation = _phalanges[i].open;
         }
 
+        /// <summary>15 eklemin DINLENMEDEN sapmasini dogrudan yazar (profil alanindan
+        /// bagimsiz). Atolye, kaydedilmis serbest pozu tezgahta gostermek icin kullanir —
+        /// runtime'in <see cref="ApplyWeaponPose"/> icinde yaptigi islemin aynisi.</summary>
+        public void ApplyPoseJoints(Quaternion[] deviations)
+        {
+            if (deviations == null || deviations.Length != HandPoseBones.JointCount) return;
+            if (_poseBone == null || _poseRest == null) return;
+            for (int j = 0; j < HandPoseBones.JointCount; j++)
+                if (_poseBone[j] != null) _poseBone[j].localRotation = _poseRest[j] * deviations[j];
+        }
+
+        // ------------------------------------------------------------------ serbest poz
+
+        /// <summary>
+        /// ATOLYENIN PARMAK KIPI icin tek kapi: ACIKKEN bu bilesen parmaklara HIC dokunmaz.
+        /// Sifirlanmadan birakilirsa el donar - <see cref="WeaponFingerPoser"/> kipten
+        /// cikarken kendisi kapatir.
+        ///
+        /// Neden bayrak, neden bileseni devre disi birakmak degil: <c>enabled = false</c>
+        /// LateUpdate'i durdurur ama <see cref="ApplyFingerCurls"/> gibi disaridan cagrilan
+        /// yollari durdurmaz; atolyenin Drive() dongusu tam da onu her karede cagiriyor.
+        /// </summary>
+        public bool PoseSuspended { get; set; }
+
+        /// <summary>
+        /// Serbest poz cozumunun bir eklem hakkinda bilmesi gereken her sey.
+        ///
+        /// KRITIK: <see cref="hingeParent"/> BURADA TURETILMEZ, bu bilesenin ZATEN kurdugu
+        /// acik/kapali pozdan geri okunur. Sebep sinif basindaki ders: mentese eksenini
+        /// yeniden turetmek iki kez basarisiz oldu (serbest CCD burulma bindirdi, turetilmis
+        /// eksen basparmagi yanlis taraftan yaklastirdi). Cozum rig'in kendi anatomik
+        /// isaretcileriydi ve o cozum <see cref="_phalanges"/> icinde duruyor - yeni bir
+        /// tahmin uretmek yerine ondan geri cikariyoruz.
+        /// </summary>
+        public struct JointInfo
+        {
+            public Transform bone;
+            /// <summary>Mentese ekseni, EBEVEYN uzayinda. Pozitif aci = KAPANMA yonu.</summary>
+            public Vector3 hingeParent;
+            /// <summary>Sistemin kendi kapali pozunun acisi (derece). Serbest pozun
+            /// sinirlari bundan turetilir - sabit tablo yok, olcu rig'in kendisinden gelir.</summary>
+            public float refFlexDegrees;
+            /// <summary>0 bas, 1 isaret, 2 orta, 3 yuzuk, 4 serce.</summary>
+            public int finger;
+        }
+
+        /// <summary>
+        /// Eklemleri parmak parmak, KOKTEN UCA sirali verir. <see cref="_phalanges"/> zaten bu
+        /// sirada dolduruluyor (AddFinger j1->j2->j3, AddThumbJoint j0->j1->j2).
+        ///
+        /// Iki kurulum konvansiyonu var ve ikisi de ayni formulle geri okunuyor:
+        ///   dort parmak: closed = AngleAxis(d, eksenEbeveyn) * rest
+        ///   basparmak  : closed = rest * AngleAxis(d, eksenKemik)
+        /// Ikincisi eslenik ozdesligiyle birincisine esittir
+        /// (rest * A(d,u) = A(d, rest*u) * rest), yani her iki durumda da
+        /// <c>closed * Inverse(open)</c> menteseyi EBEVEYN uzayinda verir. Tek kod yolu.
+        /// </summary>
+        public bool TryGetPoseJoints(List<JointInfo> into)
+        {
+            if (into == null) return false;
+            into.Clear();
+            if (!_built) return false;
+
+            for (int i = 0; i < _phalanges.Count; i++)
+            {
+                var ph = _phalanges[i];
+                if (ph.t == null || ph.t.parent == null) continue;
+
+                Quaternion d = ph.closed * Quaternion.Inverse(ph.open);
+                d.ToAngleAxis(out float deg, out Vector3 axis);
+                // ToAngleAxis aciyi [0,180]'e getirip ekseni gerektiginde cevirir; yani
+                // eksen HER ZAMAN kapanma yonunu gosterir. Basparmagin negatif yazilmis
+                // acilari (ThumbCmcFlex = -73) da bu sayede dogru isaretle geliyor.
+                if (deg < 0.01f || axis.sqrMagnitude < 1e-8f) continue;
+
+                into.Add(new JointInfo
+                {
+                    bone = ph.t,
+                    hingeParent = axis.normalized,
+                    refFlexDegrees = deg,
+                    finger = ph.finger,
+                });
+            }
+            return into.Count > 0;
+        }
+
+        /// <summary>Bir eklemin DINLENME (acik) lokal rotasyonu - "duz ele don" ve poz
+        /// farkini hesaplamak icin.</summary>
+        public bool TryGetRest(Transform bone, out Quaternion rest)
+        {
+            for (int i = 0; i < _phalanges.Count; i++)
+                if (_phalanges[i].t == bone) { rest = _phalanges[i].open; return true; }
+            rest = Quaternion.identity;
+            return false;
+        }
+
+        /// <summary>15 eklemin poz sirasindaki kemikleri (HandPoseBones duzeni) ve
+        /// DINLENME rotasyonlari. Serbest pozu profile yazarken sapma bu dinlenmeye
+        /// gore hesaplanir - runtime da tam olarak `rest * sapma` uyguluyor.</summary>
+        public bool TryGetPoseBones(out Transform[] bones, out Quaternion[] rests)
+        {
+            bones = _poseBone;
+            rests = _poseRest;
+            return _built && _poseBone != null && _poseRest != null;
+        }
+
         /// <summary>Su an tutulan silahin BU ELE ait el pozu (yoksa null).</summary>
         WeaponGripProfile.HandPose? ActiveHandPose()
         {
@@ -250,17 +386,49 @@ namespace VRMultiplayer
             bool follows;
             if (weight <= 0f || !TryGetFpPose(out fp, out follows)) return;
 
-            bool pulled = follows && fp.HasFpIndexPulled;
+            // TETIGIN ISARET PARMAGINA ETKISI — IKI AYRI YOL, TABANIN KAYNAGINA GORE.
+            //
+            //  (a) CEVRILMIS taban (menu 50): eski fpIndexPulledJoints ile harmanlanir.
+            //      Iki veri de ayni cevrimden ciktigi icin tutarlilar; olculdu, dogru
+            //      yonde calisiyor (+5, +3, +1, 0, -3 derece).
+            //
+            //  (b) ELLE POZLANAN taban (atolye parmak kipi): eski cekili poz KULLANILAMAZ.
+            //      O poz dinlenmeye gore MUTLAK yazildi ve CEVRILMIS tabana gore anlamliydi;
+            //      elle pozlanan taban cok daha kivrik oldugu icin harman parmagi ACIYOR.
+            //      Olculdu: Rifle1 -43, Smg1 -35, Pistol3 -33, Smg 3 -27, Pistol4 -19,
+            //      Sniper1 -18, Rifle 2 -15, Rifle3 -11 derece. Yani tetige basinca parmak
+            //      aciliyordu. Bunun yerine tetik, tabanin USTUNE kivrim EKLER — parmagin
+            //      kendi dogrulanmis mentesesi etrafinda, tabanin ne kadar kivrik oldugundan
+            //      BAGIMSIZ olarak. Boylece hangi taban gelirse gelsin yon her zaman dogru.
+            bool authored = fp.fpJointsAuthored;
+            bool blendPulled = follows && fp.HasFpIndexPulled && !authored;
+            bool addFlex = follows && authored && _indexHingesReady;
+
+            var hand = ActiveHandPose();
+            float maxCurl = hand.HasValue && hand.Value.indexTriggerMaxCurl > 0f
+                ? hand.Value.indexTriggerMaxCurl : 1f;
+            float t = Mathf.Clamp01(trigger);
+
             for (int j = 0; j < HandPoseBones.JointCount; j++)
             {
                 var bone = _poseBone[j];
                 if (bone == null) continue;
 
                 Quaternion delta = fp.fpJoints[j];
-                if (pulled && HandPoseBones.IsIndex(j))
-                    delta = Quaternion.Slerp(delta, fp.fpIndexPulledJoints[j - HandPoseBones.IndexFirst], Mathf.Clamp01(trigger));
+                bool isIndex = HandPoseBones.IsIndex(j);
+                if (blendPulled && isIndex)
+                    delta = Quaternion.Slerp(delta, fp.fpIndexPulledJoints[j - HandPoseBones.IndexFirst], t);
 
                 Quaternion target = _poseRest[j] * delta;
+
+                if (addFlex && isIndex)
+                {
+                    int k = j - HandPoseBones.IndexFirst;
+                    float deg = t * maxCurl * _indexRefFlex[k] * TriggerFlexFraction;
+                    // Mentese EBEVEYN uzayinda, yani on-carpim (poz cozucusuyle ayni kurulum).
+                    target = Quaternion.AngleAxis(deg, _indexHinge[k]) * target;
+                }
+
                 bone.localRotation = Quaternion.Slerp(bone.localRotation, target, weight);
             }
         }
@@ -381,7 +549,9 @@ namespace VRMultiplayer
 
         void LateUpdate()
         {
-            if (!_built || _net == null) return;
+            // Parmak kipi acikken otomatik surucu susar: yoksa cozulen poz her karede
+            // kivrim pozuyla ezilir ve el titrer.
+            if (!_built || _net == null || PoseSuspended) return;
 
             float gripTarget = _left ? _net.LeftGrip01 : _net.RightGrip01;
             float trigTarget = _left ? _net.LeftTrigger01 : _net.RightTrigger01;
@@ -392,14 +562,25 @@ namespace VRMultiplayer
             // Authored silah pozu prosedurel kivrimin USTUNE gelir; agirlik harmanla
             // yuruyor, boylece silahi alip birakirken parmaklar ziplamiyor.
             //
-            // ONCELIK: atolyede ELLE yazilan parmak kivrimlari (fpCurls) her seyin onunde.
-            // Avatardan cevrilen poz (fpJoints) yalnizca elle yazilmis deger yoksa
-            // kullanilir - cevrimin sadakati olculdu ve yeterli degil.
+            // ONCELIK — uc kaynak, guvenilirlik sirasina gore:
+            //
+            //  1. ELLE POZLANAN eklemler (atolye parmak kipi, fpJointsAuthored). Eklem basina
+            //     tam rotasyon; ayrica tetik animasyonu da bu yoldan geciyor.
+            //  2. ELLE YAZILAN kivrimlar (fpCurls). Parmak basina TEK sayi - daha kaba, ama
+            //     cevrilmis pozdan iyi.
+            //  3. AVATARDAN CEVRILEN poz (fpJoints). Sadakati olculdu ve yetersiz bulundu;
+            //     en sona kaldi.
+            //
+            // 1 ve 3 ayni alani (fpJoints) kullaniyor, ayirt eden tek sey fpJointsAuthored.
             var hand = ActiveHandPose();
-            bool manual = hand.HasValue && hand.Value.HasFpCurls;
             WeaponGripProfile.FingerPose fp;
-            bool converted = !manual && TryGetFpPose(out fp, out _);
-            _weaponWeight = Mathf.MoveTowards(_weaponWeight, (manual || converted) ? 1f : 0f,
+            bool hasFp = TryGetFpPose(out fp, out _);
+            bool authored  = hasFp && fp.fpJointsAuthored;
+            bool manual    = !authored && hand.HasValue && hand.Value.HasFpCurls;
+            bool converted = !authored && !manual && hasFp;
+
+            _weaponWeight = Mathf.MoveTowards(_weaponWeight,
+                                              (authored || manual || converted) ? 1f : 0f,
                                               Time.deltaTime / WeaponBlendSeconds);
             if (_weaponWeight <= 0f) return;
             if (manual) ApplyFingerCurls(hand.Value.fpCurls, _weaponWeight);

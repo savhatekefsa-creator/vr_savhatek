@@ -17,6 +17,8 @@ MonoBehaviour:
   gripLocalPosition: {x: -0.04898438, y: 0.07223814, z: 0.1284564}
   gripLocalEuler: {x: 302.6097, y: 206.1595, z: 349.6317}
   barrelLocalDirection: {x: 0, y: 0, z: -1}
+  benchUpLocal: {x: 0, y: 0, z: 0}
+  benchFrontLocal: {x: 0, y: 0, z: 0}
   combat: {fileID: 11400000, guid: e2420be57a714c74b4d5d6b800014ee0, type: 2}
   mainHand:
     wristLocalPosition: {x: 0, y: 0, z: -0.0947}
@@ -77,11 +79,13 @@ MonoBehaviour:
       - {x: -0.010561747, y: -0.008051594, z: 0.032620333, w: 0.9993796}
       - {x: 0.009374087, y: -0.030336991, z: -0.09314082, w: 0.9951465}
       - {x: -0.047334574, y: -0.08496044, z: -0.15565969, w: 0.9830113}
+      fpJointsAuthored: 0
     leftFingers:
       joints: []
       indexPulled: []
       fpJoints: []
       fpIndexPulledJoints: []
+      fpJointsAuthored: 0
   supportRailLocalStart: {x: -0.04898438, y: 0.07223814, z: -0.05154361}
   supportRailLocalEnd: {x: -0.04898438, y: 0.07223814, z: -0.05154361}
   supportBreakDistance: 0.3
@@ -108,11 +112,13 @@ MonoBehaviour:
       indexPulled: []
       fpJoints: []
       fpIndexPulledJoints: []
+      fpJointsAuthored: 0
     leftFingers:
       joints: []
       indexPulled: []
       fpJoints: []
       fpIndexPulledJoints: []
+      fpJointsAuthored: 0
   twoHandAimWeight: 0
   aimDeadzoneDegrees: 0.75
   aimSoftKneeDegrees: 1.5

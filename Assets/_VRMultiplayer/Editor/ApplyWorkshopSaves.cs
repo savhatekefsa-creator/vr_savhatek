@@ -52,6 +52,7 @@ namespace VRMultiplayer.EditorTools
                 if (!TryVec(p, 2, out Vector3 pos) || !TryVec(p, 5, out Vector3 eul)) { skipped++; continue; }
 
                 float[] curls = p.Length > 8 ? ParseCurls(p[8]) : null;
+                Quaternion[] joints = p.Length > 9 ? ParseJoints(p[9]) : null;
 
                 bool support = p[1].Trim().ToLowerInvariant() == "support";
                 // HandPose bir STRUCT: kopyaya yazip profildeki alana GERI koymak sart.
@@ -59,6 +60,18 @@ namespace VRMultiplayer.EditorTools
                 hand.fpWristLocalPosition = pos;
                 hand.fpWristLocalEuler = eul;
                 if (curls != null) hand.fpCurls = curls;
+
+                // Serbest poz (atolye parmak kipi). FingerPose de STRUCT — o da geri konmali.
+                // Alan BOSSA dokunulmaz: kip kullanilmadan yapilan bir kayit, daha once
+                // pozlanmis parmaklari SILMEMELI.
+                if (joints != null)
+                {
+                    var fp = hand.Fingers(support);
+                    fp.fpJoints = joints;
+                    fp.fpJointsAuthored = true;
+                    if (support) hand.leftFingers = fp; else hand.rightFingers = fp;
+                }
+
                 if (support) profile.supportHand = hand; else profile.mainHand = hand;
 
                 EditorUtility.SetDirty(profile);
@@ -67,6 +80,37 @@ namespace VRMultiplayer.EditorTools
 
             AssetDatabase.SaveAssets();
             Debug.Log("[Atolye] " + applied + " kayit islendi, " + skipped + " atlandi. Dosya: " + path);
+        }
+
+        /// <summary>Serbest poz: 15 eklem ";" ile ayrik, her biri "x,y,z,w".
+        /// ParseCurls ile ayni kural — eksik/bozuk satir profildeki saglam pozu bozmasin
+        /// diye TAMAMI gecerli degilse null doner (kismi uygulama yok: yarim bir el,
+        /// bozuk bir elden daha kotu teshis edilir).</summary>
+        static Quaternion[] ParseJoints(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            var parts = s.Split(';');
+            if (parts.Length != HandPoseBones.JointCount) return null;
+
+            var q = new Quaternion[HandPoseBones.JointCount];
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var c = parts[i].Split(',');
+                if (c.Length != 4) return null;
+                if (!float.TryParse(c[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) ||
+                    !float.TryParse(c[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y) ||
+                    !float.TryParse(c[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z) ||
+                    !float.TryParse(c[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float w))
+                    return null;
+
+                var rot = new Quaternion(x, y, z, w);
+                // Birim uzunluga cok uzak bir quaternion mesh'i olceklendirir/makaslar;
+                // boyle bir satiri uygulamaktansa hic uygulamamak dogru.
+                float len = Mathf.Sqrt(x * x + y * y + z * z + w * w);
+                if (len < 0.9f || len > 1.1f) return null;
+                q[i] = Quaternion.Normalize(rot);
+            }
+            return q;
         }
 
         /// <summary>Bes parmagin kivrimi. Eksik/bozuk alan sessizce yok sayilir - yarim

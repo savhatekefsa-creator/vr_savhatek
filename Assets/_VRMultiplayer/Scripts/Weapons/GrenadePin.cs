@@ -102,7 +102,13 @@ namespace VRMultiplayer.Weapons
 
         /// <summary>Pimi bombadan ayirip <paramref name="hand"/> anchor'ina takar ve tutamagi
         /// dondurur (yoksa null). Parcalarin birbirine gore duruslari korunur.</summary>
-        public static Transform DetachTo(Transform root, Transform hand, GrenadeConfig cfg)
+        /// <param name="profile">Bombanin tutus profili. Doluysa pimin yeri ATOLYEDE ayarlanan
+        /// bilek pozundan turetilir (bkz. <see cref="PlaceFromWorkshopPose"/>); yoksa
+        /// config'in pinHandLocal* degerlerine dusulur.</param>
+        /// <param name="leftHand">Pimi ceken el SOL mu? Atolyedeki ayar SOL ele gore yazildi;
+        /// sag elle cekilirse X'te aynalanir.</param>
+        public static Transform DetachTo(Transform root, Transform hand, GrenadeConfig cfg,
+                                         WeaponGripProfile profile = null, bool leftHand = true)
         {
             if (root == null || hand == null) return null;
 
@@ -129,12 +135,63 @@ namespace VRMultiplayer.Weapons
                 p.SetParent(holder, true);
 
             holder.SetParent(hand, false);
-            holder.localPosition = cfg != null ? cfg.pinHandLocalPosition : Vector3.zero;
-            holder.localRotation = Quaternion.Euler(cfg != null ? cfg.pinHandLocalEuler : Vector3.zero);
             // Bomba ile el farkli olcekte olabilir (silahlar 2x, avatar 1x): pimin DUNYA boyu
             // bombadaki haliyle ayni kalsin, elin olcegi onu buyutup kucultmesin.
             holder.localScale = InverseScale(hand.lossyScale, root.lossyScale);
+
+            if (!PlaceFromWorkshopPose(holder, hand, profile, leftHand))
+            {
+                // Yedek: atolye ayari yok ya da FP eli bulunamadi (uzak oyuncu).
+                holder.localPosition = cfg != null ? cfg.pinHandLocalPosition : Vector3.zero;
+                holder.localRotation = Quaternion.Euler(cfg != null ? cfg.pinHandLocalEuler : Vector3.zero);
+            }
             return holder;
+        }
+
+        /// <summary>
+        /// PIMI ATOLYEDE AYARLANAN YERE KOYAR.
+        ///
+        /// Atolyede pim tezgahta sabit durur ve SOL EL ona gore ayarlanir; kaydedilen sey
+        /// "bilegin pime gore durusu" (<c>supportHand.fpWristLocal*</c>):
+        ///     bilekPoz = pimPoz + pimDonus * offsetPoz
+        ///     bilekDonus = pimDonus * offsetDonus
+        ///
+        /// Oyunda ise elimizde BILEK var, pimi ariyoruz — yani ayni bagintinin TERSI:
+        ///     pimDonus = bilekDonus * offsetDonus⁻¹
+        ///     pimPoz   = bilekPoz  - pimDonus * offsetPoz
+        ///
+        /// NEDEN CIPAYA DEGIL DE BILEGE GORE: ayar birinci sahis elinin bilegine gore yapildi.
+        /// Kumanda cipasi ile bilek ayni yer degil (el modeli cipanin altinda, kendi
+        /// offsetiyle oturuyor); cipayi referans alsaydik ayarladigin poz oyunda kayardi.
+        ///
+        /// Tutamak yine EL CIPASINA parent kalir — pim boylece uzak oyuncularin gordugu
+        /// avatarin elinde de durur. Burada yalnizca yerel poz cipa uzayina cevriliyor.
+        /// </summary>
+        static bool PlaceFromWorkshopPose(Transform holder, Transform hand,
+                                          WeaponGripProfile profile, bool leftHand)
+        {
+            if (profile == null) return false;
+
+            var hp = profile.supportHand;   // atolyede pim eli = SOL = destek eli
+            Vector3 offPos = hp.fpWristLocalPosition;
+            Quaternion offRot = hp.FpWristRotation;
+            if (offPos == Vector3.zero && offRot == Quaternion.identity) return false;  // ayarlanmamis
+
+            // Ayar SOL ele gore yazildi. Sag elle cekilirse aynalanir — silah tutuslarinda
+            // kullanilan kuralin aynisi.
+            if (!leftHand)
+            {
+                offPos = WeaponGripMath.MirrorX(offPos);
+                offRot = WeaponGripMath.MirrorX(offRot);
+            }
+
+            Transform wrist = FirstPersonHandView.FindWrist(hand, leftHand);
+            if (wrist == null) return false;   // uzak oyuncu: FP eli yok
+
+            Quaternion pinRot = wrist.rotation * Quaternion.Inverse(offRot);
+            Vector3 pinPos = wrist.position - pinRot * offPos;
+            holder.SetPositionAndRotation(pinPos, pinRot);
+            return true;
         }
     }
 }

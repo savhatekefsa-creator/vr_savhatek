@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using VRMultiplayer.Weapons;
@@ -13,11 +14,11 @@ namespace VRMultiplayer.UI
     /// stick ile secim TAMAMEN kaldirildi.
     ///
     /// KURALLAR (ekip tasarimi):
-    ///  - GORUNURLUK: kafa pitch'i <see cref="openPitchDegrees"/> altina inince acilir,
-    ///    <see cref="closePitchDegrees"/> ustune cikinca kapanir (histerezis — esikte titremesin).
-    ///    Arkasinda beden/zirh modeli YOK: bos havada duran holografik halkalar.
-    ///  - YUVA: her kategorinin (uzun namlulu / tabanca / bomba) KENDI SABIT halkasi var; sira
-    ///    hic degismez, boylece kas hafizasi kurulur. Bos yuva soluk kalir ve kategori adini yazar.
+    ///  - GORUNURLUK: halkalar HEP VAR. Bel hizasinda dururlar; asagi bakmak onlari acmaz,
+    ///    yalnizca goruse sokar. Kavrama da her zaman aciktir — bakmadan, kas hafizasiyla
+    ///    silah cekilebilir. Arkasinda beden/zirh modeli YOK: havada duran holografik halkalar.
+    ///  - YUVA: 3 halka, kategori bagi YOK — istedigini istedigi halkaya koyarsin. Sinir
+    ///    kategori kotasindan gelir (bkz. WeaponInventory.CapOf).
     ///  - RENK: bos/dolu halka MAVI, elin yaklastigi halka TURUNCU-SARI neon.
     ///  - KUSANMA: elini halkanin uzerine goturup GRIP'e basmak silahi dogrudan O ELE verir
     ///    (yerden alir gibi). Grip'i birakinca silah kendi yuvasina doner — bu, HandGrabber'in
@@ -36,36 +37,51 @@ namespace VRMultiplayer.UI
     {
         public static WeaponBeltUI Instance { get; private set; }
 
-        // Yuva sirasi SABIT — index = ekrandaki soldan saga sira. Canta ileride buyurse
-        // (WeaponInventory yuva sayisi) bu iki dizi birlikte buyutulur.
-        static readonly WeaponCategory[] Slots =
-            { WeaponCategory.Heavy, WeaponCategory.Pistol, WeaponCategory.Grenade };
-        static readonly string[] SlotLabel = { "HEAVY", "PISTOL", "GRENADE" };
+        // YUVA-KATEGORI BAGI KALDIRILDI (2026-08-17). Eskiden halkalar sabitti — 1. HEAVY,
+        // 2. PISTOL, 3. GRENADE — ve esya kategorisine gore OTOMATIK yerlesirdi. Artik her
+        // halka her seyi kabul ediyor; sinir kategori KOTASINDAN geliyor (bkz.
+        // WeaponInventory.CapOf). Etiket bos yuvada yalnizca sira numarasi.
+        static readonly string[] SlotLabel = { "1", "2", "3" };
 
         // ESIK ACISI ILE beltOffset BIRBIRINE BAGLI — birini degistiren otekini de kontrol
         // etmeli. Kemerin OTURDUGU aci offset'ten cikar: atan(|y| / z).
         //
-        //   varsayilan (-0.34, 0.26) -> atan(0.34/0.26) ≈ 53 derece, kafadan 0.43 m
+        //   (-0.520, 0.200) -> atan(0.520/0.200) ≈ 69 derece, kafadan 0.56 m (BEL HIZASI)
         //
-        // BOYUN YORGUNLUGU DERSI: esigi indirmek TEK BASINA ise yaramaz. 58 -> 52 gecisinde
-        // yalnizca esik indi, kemer 62 derecede kaldi; menu daha erken aciliyordu ama
-        // halkalara RAHAT BAKMAK icin yine 62 dereceye egilmek gerekiyordu — kullanicinin
-        // "hala cok egiyorum" demesinin sebebi buydu. Boynu yoran sey esik degil, KEMERIN
-        // OTURDUGU ACI. Bu yuzden ikisi birlikte indi (esik 44, kemer 53).
+        // BOYUN YORGUNLUGU DERSI: esik ile kemerin acisi BIRLIKTE degisir. 58 -> 52
+        // gecisinde yalnizca esik indi, kemer 62 derecede kaldi; menu daha erken aciliyordu
+        // ama halkalara RAHAT BAKMAK icin yine 62 dereceye egilmek gerekiyordu. Boynu yoran
+        // sey esik degil, KEMERIN OTURDUGU ACI.
+        //
+        // 2026-08-17: kullanici "envanter cok goz onunde aciliyor, daha cok egilelim" dedi.
+        // Ayni ders TERS yonde uygulandi — yalnizca esigi 56'ya cikarsaydik menu gec acilir
+        // ama kemer yine 53 derecede, yani goz onunde durmaya devam ederdi. Ikisi birlikte
+        // indi: esik 44 -> 56, kemer 53 -> 60 derece.
+        //
+        // AYNI GUN, CIHAZ TESTINDEN SONRA: "halkalar belime yakin durmuyor, daha asagi olmali,
+        // belimde gibi hissettirmeli". 60 derece hala GOGUS hizasiydi. Gercek bel, yetiskinde
+        // kafadan ~0.50-0.60 m asagida — o yuzden kemer 69 dereceye ve 0.56 m'ye indi.
+        // MESAFE ARTTI, yani halkalar uzaklasti ve KUCUK gorunurdu; bu yuzden yaricap da
+        // 0.058 -> 0.082'ye buyudu (kullanicinin "halkalari buyutecegiz" demesiyle ayni yone
+        // dusuyor: 3 yuvaya inmesinin sebebi de buydu). Gorunen aci boyu 7.7 -> 8.4 derece.
         //
         // GEOMETRI INATCIDIR: kemerin acisini dusurmek demek onu YUKARI (|y| kucuk) ve
         // ILERI (z buyuk) almak demektir. "Govdeye yapisik bel hizasi" ile "az egilerek bak"
         // ayni anda saglanamaz; bu ayarda kemer bel yerine GOGUS hizasinda duruyor.
         // Toplam mesafe (0.43 m) bilerek korundu, yani daha uzak GORUNMEZ.
-        [Header("Acilma — kafa egme")]
-        [Tooltip("Kafa bu aciDAN fazla asagi egilince kemer acilir (derece, 0 = duz ileri). " +
-                 "44 = kasitli bir 'asagi bak' hareketi, ama boyun zorlamaz. Degistirirsen " +
-                 "beltOffset'in acisini (atan(|y|/z)) da yakin tut, yoksa menu goruse girmez.")]
-        public float openPitchDegrees = 44f;
-        [Tooltip("Kafa bu acinin ustune cikinca kapanir. openPitch'ten KUCUK olmali (histerezis). " +
-                 "10 derecelik bant: uzanip kavrarken kafa biraz oynasa da kemer kacmaz. " +
-                 "Daha da dusurmek, yerdeki hedefe nisan alirken kemerin acik kalmasina yol acar.")]
-        public float closePitchDegrees = 34f;
+        // KAFA-EGME ESIGI KALDIRILDI (2026-08-17, cihaz karari).
+        //
+        // Kemer eskiden bir MENUYDU: belli bir aciDAN fazla asagi bakinca acilir, kafayi
+        // kaldirinca kapanirdi. Kullanici bunu reddetti: "halkalar bel hizasinda hep var gibi
+        // gorunecek, bi ac bi kapa seklinde olmayacak. Kullanici bakmadan bile elini uzatip
+        // bir halkaya denk getirirse oradan grip ile alabilecek."
+        //
+        // Yani kemer artik bir menu degil, oyuncunun BEDENININ bir parcasi. Halkalar hep var;
+        // asagi bakmak onlari ACMIYOR, sadece GORMENI sagliyor. Kavrama da her zaman acik —
+        // kas hafizasiyla bakmadan silah cekmek bu sayede mumkun.
+        //
+        // Esikler silindigi icin "esik ile kemerin acisini birlikte tut" dersi de artik
+        // gecersiz: kemerin acisi yalnizca NEREDE durdugunu belirliyor.
 
         // Konum / aralik / yazi Play'de CANLI degisir (her kare uygulanir). Halkanin yaricapi
         // ve kalinligi mesh'e islendigi icin ilk acilista okunur — onlari degistirdikten sonra
@@ -80,23 +96,27 @@ namespace VRMultiplayer.UI
         [Tooltip("Kemerin KAFAYA gore konumu (metre): x=saga, y=asagi/yukari, z=ileri. " +
                  "Varsayilan GOGUS hizasi, el mesafesinde. |y|'yi kucultmek + z'yi buyutmek " +
                  "kemeri yukari alir (daha az egilirsin); tersi bele indirir (daha cok egilirsin).")]
-        public Vector3 beltOffset = new Vector3(0f, -0.34f, 0.26f);
-        [Tooltip("Halka merkezleri arasi mesafe (metre).")]
-        public float slotSpacing = 0.146f;
-        [Tooltip("Halkanin dis yaricapi (metre).")]
-        public float ringRadius = 0.058f;
+        public Vector3 beltOffset = new Vector3(0f, -0.620f, 0.155f);
+        [Tooltip("Halka merkezleri arasi mesafe (metre). hoverRadius'un IKI KATINDAN buyuk " +
+                 "olmali, yoksa komsu halkalarin kavrama bolgeleri cakisir.")]
+        public float slotSpacing = 0.215f;
+        [Tooltip("Halkanin dis yaricapi (metre). Kemer her indiginde buyutuluyor: uzaklastikca " +
+                 "kucuk gorunur, ayrica kullanici acikca 'halkalari buyut' dedi.")]
+        public float ringRadius = 0.092f;
         [Tooltip("Halka cizgi kalinligi (metre).")]
-        public float ringThickness = 0.005f;
+        public float ringThickness = 0.008f;
         [Tooltip("Silah adinin halka merkezinin ne kadar altinda duracagi (metre).")]
-        public float labelDrop = 0.084f;
+        public float labelDrop = 0.140f;
         [Tooltip("Yazi satir yuksekligi (metre) — VR'da okunabilirligi punto degil aci belirler.")]
-        public float labelHeight = 0.017f;
+        public float labelHeight = 0.022f;
 
         [Header("Kavrama")]
-        [Tooltip("El halkanin merkezine bu kadar yaklasinca yuva 'elin altinda' sayilir (metre). " +
-                 "Halka yaricapinin ~1.6 kati: isabetsizlige pay birakir ama komsu yuvayi " +
-                 "calmaz. Kemer yakinlastiginda bu da ayni oranda kuculdu.")]
-        public float hoverRadius = 0.094f;
+        [Tooltip("El halkanin merkezine bu kadar yaklasinca yuva 'elin altinda' sayilir (metre).\n\n" +
+                 "slotSpacing'in YARISINDAN kucuk olmali. Onceki ayarda degildi (0.094 vs " +
+                 "0.146/2 = 0.073): komsu halkalarin kavrama bolgeleri cakisiyordu ve iki " +
+                 "halkanin ortasina uzanan el, hangisine biraz daha yakinsa onu aliyordu — " +
+                 "yani yanlis yuvayi kapmak mumkundu. Simdi 0.104 < 0.1075.")]
+        public float hoverRadius = 0.104f;
 
         [Header("Kafa takibi")]
         [Tooltip("Kemer kafa YONUNU takip eder ama pitch'i takip ETMEZ — bakisin degil bedenin " +
@@ -107,34 +127,101 @@ namespace VRMultiplayer.UI
         public float yawFollowSpeed = 150f;
 
         [Header("Renkler")]
-        [Tooltip("Varsayilan halka: MAVI.")]
-        public Color ringIdle = new Color(0.25f, 0.74f, 1f, 0.95f);
+        [Tooltip("Varsayilan halka: BEYAZ. (Mavi denendi ve cihazda begenilmedi.)")]
+        public Color ringIdle = new Color(1f, 1f, 1f, 0.92f);
         [Tooltip("Elin uzandigi halka: parlayan TURUNCU-SARI neon.")]
-        public Color ringHot = new Color(1f, 0.70f, 0.16f, 1f);
-        [Tooltip("Bos yuva (ya da silahi su an ELDE olan yuva): ayni mavi, soluk.")]
-        public Color ringDim = new Color(0.25f, 0.74f, 1f, 0.30f);
-        public Color discIdle = new Color(0.02f, 0.07f, 0.11f, 0.55f);
+        public Color ringHot = new Color(1f, 0.78f, 0.34f, 1f);
+        [Tooltip("Bos yuva: ayni beyaz, soluk.")]
+        public Color ringDim = new Color(1f, 1f, 1f, 0.32f);
+        [Tooltip("KOTA DOLU: elindeki turden kemerde yer kalmadi. Faz 2'de (kapasite kurali " +
+                 "geldiginde) devreye girer; su an secilmiyor.")]
+        public Color ringFull = new Color(1f, 0.42f, 0.45f, 0.95f);
+        public Color discIdle = new Color(0.03f, 0.09f, 0.14f, 0.50f);
         public Color discHot = new Color(0.16f, 0.10f, 0.01f, 0.65f);
+
+        [Header("Parlama (yumusak hale)")]
+        [Tooltip("Halkanin arkasindaki yumusak hale — 'blur' hissini veren sey. GERCEK blur " +
+                 "post-process ister ve Quest'te world-space arayuz icin kare butcesinden yer; " +
+                 "bunun yerine tek quad'lik radyal bir gradyan kullaniliyor. 0 = kapali.")]
+        [Range(0f, 1f)] public float glowStrength = 0.30f;
+        [Tooltip("Halenin halka yaricapina gore yayilimi. 1.7 = hale halkanin 1.7 kati " +
+                 "genislikte. Buyutmek komsu halkanin uzerine tasar: yaricap 0.082 ve aralik " +
+                 "0.200 iken 2.0'da hale komsunun cizgisine kadar uzanip pus birakiyordu.")]
+        public float glowSpread = 1.7f;
         public Color labelIdle = new Color(0.90f, 0.96f, 1f, 1f);
         public Color labelHot = new Color(1f, 0.82f, 0.45f, 1f);
-        public Color labelDim = new Color(0.62f, 0.78f, 0.90f, 0.45f);
+        public Color labelDim = new Color(0.85f, 0.88f, 0.92f, 0.45f);
+
+        [Header("Goze girmeme — kafa acisina gore SOLMA")]
+        // Halkalar HEP VAR ve HER ZAMAN kavranabilir (kullanicinin kurali). Ama surekli tam
+        // parlaklikta durunca "kafami az egdigimde bile belirgin, gozu rahatsiz ediyor" oldu.
+        //
+        // Cozum GORUNURLUGU acidan turetmek, VARLIGI degil: kemer duruyor, kavrama calisiyor,
+        // yalnizca opakligi kafa asagi indikce artiyor. Boylece hem "bakmadan uzanip alabilme"
+        // korunuyor hem de duz bakarken goz alanini kirletmiyor.
+        [Tooltip("Bu acinin USTUNDE (kafa daha yukari) halkalar tamamen seffaf. Derece, " +
+                 "0 = duz ileri bakis.")]
+        public float fadeStartPitch = 40f;
+        [Tooltip("Bu aciDA ve altinda (kafa daha asagi) halkalar TAM parlaklikta.")]
+        public float fadeFullPitch = 68f;
+        [Tooltip("Solmanin en dip degeri. 0 = duz bakarken tamamen gorunmez. Sifirdan buyuk " +
+                 "birakmak halkalarin 'orada oldugunu' hafifce hatirlatir.")]
+        [Range(0f, 1f)] public float fadeFloor = 0f;
 
         // Cizim sirasi: disk EN ARKADA ve DERINLIK SINAMALI (silah onizlemesi onun ONUNDE
-        // durdugu icin onizlemeyi ORTMEZ), halka ve yazi ise her zaman ustte.
+        // durdugu icin onizlemeyi ORTMEZ), hale onun onunde, halka ve yazi ise her zaman ustte.
         const int QueueDisc = 3000;
-        const int QueueRing = 3001;
-        const int QueueLabel = 3002;
+        const int QueueGlow = 3001;
+        const int QueueRing = 3002;
+        const int QueueLabel = 3003;
+
+        /// <summary>
+        /// Halkanin arkasindaki yumusak hale dokusu. Merkezde degil HALKA YARICAPINDA
+        /// parlar ve iki yona sonumlenir — yani bulanik bir halka gibi gorunur, bulanik bir
+        /// disk gibi degil.
+        ///
+        /// Tek doku, tum halkalarda paylasilir (statik). Boyut kucuk: gradyan zaten yumusak,
+        /// 128 piksel VR'da bile bantlanma gostermiyor.
+        /// </summary>
+        static Texture2D _glowTex;
+        static Texture2D GlowTexture(float spread)
+        {
+            if (_glowTex != null) return _glowTex;
+
+            const int S = 128;
+            float peak = 1f / Mathf.Max(1.05f, spread);   // halkanin dokudaki normalize yaricapi
+            const float sigma = 0.15f;
+
+            _glowTex = new Texture2D(S, S, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            for (int y = 0; y < S; y++)
+            for (int x = 0; x < S; x++)
+            {
+                Vector2 v = new Vector2(x - (S - 1) * 0.5f, y - (S - 1) * 0.5f) / (S * 0.5f);
+                float d = v.magnitude;
+                float t = (d - peak) / sigma;
+                float a = Mathf.Exp(-0.5f * t * t);
+                // Kenarda tam sifira in: quad'in koseleri gorunur bir kare kenari birakmasin.
+                a *= Mathf.Clamp01((1f - d) / 0.18f);
+                _glowTex.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(a)));
+            }
+            _glowTex.Apply();
+            return _glowTex;
+        }
 
         class Ring
         {
             public Transform root;
             public Material ringMat;
+            public Material glowMat;
             public Material discMat;
             public TextMesh label;
             public string labelKey;    // label.text bu anahtardan uretildi (bosuna string uretme)
-            public string fitKey;      // previewFit / previewCenter bu silah icin olculdu
-            public float previewFit = 1f;
-            public Vector3 previewCenter;
+            // Onizleme olcegi artik HALKAYA degil ESYAYA ait (WeaponInventory.Item.Fit):
+            // ayni halkada iki farkli silah durabiliyor.
         }
 
         readonly Ring[] _rings = new Ring[3];
@@ -146,12 +233,13 @@ namespace VRMultiplayer.UI
         HandGrabber _grabber;
         float _nextGrabberScan;
         bool _pcOpen;        // gozluksuz test: TAB ile acik tutulur
+        float _visibility = 1f;   // kafa acisindan turetilen opaklik carpani (bkz. fadeStartPitch)
 
         // Elde tutulan silahlarin tur anahtari. TypeKey icerde Object.name okur ve HER cagride
         // yeni bir string uretir; kare basina iki alloc olmasin diye OBJE REFERANSINA gore
         // onbelleklenir (silah degismedikce yeniden hesaplanmaz).
-        GrabbableObject _keyObjL, _keyObjR;
-        string _keyL, _keyR;
+        GrabbableObject _keyObjHeld;
+        string _keyHeld;
 
         string HeldKeyCached(GrabbableObject g, ref GrabbableObject cachedObj, ref string cachedKey)
         {
@@ -192,20 +280,17 @@ namespace VRMultiplayer.UI
             Transform head = cam.transform;
 
 #if ENABLE_INPUT_SYSTEM
-            // Gozluksuz test (Editor): TAB kemeri acik tutar, 1/2/3 yuvayi SAG ele verir.
             var kb = Keyboard.current;
-            if (kb != null && kb.tabKey.wasPressedThisFrame) _pcOpen = !_pcOpen;
 #endif
 
-            // Asagi bakis acisi: forward.y negatiflestikce buyur. Kafa pitch'i, bakisin
-            // KENDISI — kemer bu esikle acilir ama konumu pitch'i TAKIP ETMEZ (bkz. Layout).
-            float pitchDown = -Mathf.Asin(Mathf.Clamp(head.forward.y, -1f, 1f)) * Mathf.Rad2Deg;
-            bool want = _open
-                ? pitchDown > closePitchDegrees
-                : pitchDown > openPitchDegrees;
-            SetOpen(want || _pcOpen);
+            // HALKALAR HEP ACIK — kemer bir menu degil, bedenin parcasi (bkz. sinif basi).
+            // Asagi bakmak onu ACMIYOR; yalnizca GORUNURLUGUNU artiriyor (asagida).
+            SetOpen(true);
 
-            if (!_open) return;
+            // Kafa asagi bakis acisi. forward.y negatiflestikce buyur.
+            float pitchDown = -Mathf.Asin(Mathf.Clamp(head.forward.y, -1f, 1f)) * Mathf.Rad2Deg;
+            float t = Mathf.InverseLerp(fadeStartPitch, Mathf.Max(fadeStartPitch + 1f, fadeFullPitch), pitchDown);
+            _visibility = Mathf.Lerp(fadeFloor, 1f, Mathf.SmoothStep(0f, 1f, t));
 
             Layout(head, inv);
 
@@ -241,7 +326,7 @@ namespace VRMultiplayer.UI
         {
             var inv = WeaponInventory.Instance;
             if (inv == null) return;
-            foreach (var e in inv.Entries)
+            foreach (var e in inv.AllItems)
                 if (e.Preview != null) e.Preview.SetActive(false);
         }
 
@@ -271,10 +356,18 @@ namespace VRMultiplayer.UI
             if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
             fwd.Normalize();
 
-            float targetYaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
-            if (!_yawValid) { _yaw = targetYaw; _yawValid = true; }
-            else if (Mathf.Abs(Mathf.DeltaAngle(_yaw, targetYaw)) > yawDeadzoneDegrees)
-                _yaw = Mathf.MoveTowardsAngle(_yaw, targetYaw, yawFollowSpeed * Time.deltaTime);
+            // KEMER GOZLUGU BIREBIR TAKIP EDER — olu bolge ve yumusatma YOK.
+            //
+            // Eskiden 30 derecelik bir olu bolge ve 150 derece/sn'lik bir donme hizi vardi;
+            // gerekcesi "uzanirken hedef elin altindan kacmasin" idi. Kullanici bunu reddetti:
+            // "bedenimle beraber hareket etsin, Quest'e gore bak, ne kadar cevirirsem o da
+            // donsun DIREKT." Kemer artik bir menu degil bedenin parcasi (bkz. sinif basi) ve
+            // bedenin kafayla birlikte donmesi beklenen sey.
+            //
+            // BEDELI BILINCLI: uzanirken kafani cevirirsen halkalar da doner. Eski olu bolge
+            // tam da bunu engelliyordu; geri istenirse yawDeadzoneDegrees yeniden baglanabilir.
+            _yaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
+            _yawValid = true;
 
             Quaternion yawRot = Quaternion.Euler(0f, _yaw, 0f);
             Vector3 pos = head.position + yawRot * beltOffset;
@@ -314,67 +407,125 @@ namespace VRMultiplayer.UI
             _hovered = NearestSlot(HandsHoverProbe());
 
             var grabber = LocalGrabber();
-            string keyL = HeldKeyCached(grabber != null ? grabber.HeldLeft : null, ref _keyObjL, ref _keyL);
-            string keyR = HeldKeyCached(grabber != null ? grabber.HeldRight : null, ref _keyObjR, ref _keyR);
+
+            // ELINDEKININ kategorisi: halkalarin "kabul eder / dolu" rengi buna gore secilir.
+            // Bos elle bakarken hicbir halka kirmizi yanmaz — kirmizi bir YASAK degil, "su an
+            // tuttugun sey buraya girmez" demek.
+            bool holding = false;
+            WeaponCategory heldCat = WeaponCategory.Heavy;
+            var heldObj = grabber != null ? (grabber.HeldRight != null ? grabber.HeldRight : grabber.HeldLeft) : null;
+            if (heldObj != null)
+            {
+                holding = true;
+                heldCat = WeaponInventory.CategoryOf(
+                    HeldKeyCached(heldObj, ref _keyObjHeld, ref _keyHeld));
+            }
 
             for (int i = 0; i < _rings.Length; i++)
             {
                 var r = _rings[i];
-                var e = inv.Slot(Slots[i]);
+                var items = inv.Slot(i);
                 bool hot = _hovered == i;
+                bool filled = items.Count > 0;
 
-                // Silah SU AN elde ise yuvasi bos gorunur — "nerede?" sorusunu dogru yanitlar
-                // (canta kaydi duruyor ama silah cantada degil).
-                bool inHand = e != null && (e.Key == keyL || e.Key == keyR);
-                bool filled = e != null && !inHand;
+                // KOTA DOLU: elindekini bu yuva kabul edemiyor (yuva dolu ya da kategori
+                // kotasi bitti). Yalnizca ELINDE BIR SEY VARKEN anlamli.
+                bool blocked = holding && !inv.CanPlace(heldCat, i);
 
-                UITheme.SetMaterialColor(r.ringMat, hot ? ringHot : (filled ? ringIdle : ringDim));
-                UITheme.SetMaterialColor(r.discMat, hot ? discHot : discIdle);
+                Color ringCol = hot ? ringHot
+                              : blocked ? ringFull
+                              : filled ? ringIdle : ringDim;
 
-                string key = filled ? e.Key : SlotLabel[i];
+                // SOLMA. Kafa yukaridayken halkalar seffaflasir ama VAR OLMAYA ve
+                // KAVRANMAYA devam eder. Elin uzandigi halka bundan MUAF: bakmadan uzanip
+                // sonra goz atinca hangisinin uzerinde oldugunu gorebilmelisin — sinyalin
+                // tam da gerekli oldugu an bu.
+                float vis = hot ? 1f : _visibility;
+                UITheme.SetMaterialColor(r.ringMat, Fade(ringCol, vis));
+                UITheme.SetMaterialColor(r.discMat, Fade(hot ? discHot : discIdle, vis));
+                if (r.glowMat != null) UITheme.SetMaterialColor(r.glowMat, Fade(GlowColor(ringCol), vis));
+
+                // Etiket: dolu yuvada esya adi (iki esya varsa "A + B"), bos yuvada sira no.
+                string key = LabelKeyOf(items, i);
                 if (r.labelKey != key)
                 {
                     r.labelKey = key;
-                    r.label.text = filled ? DisplayName(e.Key) : SlotLabel[i];
+                    r.label.text = key;
                 }
-                r.label.color = hot ? labelHot : (filled ? labelIdle : labelDim);
+                r.label.color = Fade(hot ? labelHot : (blocked ? ringFull : filled ? labelIdle : labelDim), vis);
 
-                PlacePreview(r, e, filled, hot);
+                PlaceSlotPreviews(r, items, hot, vis);
+            }
+        }
+
+        /// <summary>Yuvanin etiketi. Iki esya varsa ikisi de yazilir — hangi halkada ne
+        /// oldugunu kemere bakmadan hatirlamak icin.</summary>
+        static string LabelKeyOf(IReadOnlyList<WeaponInventory.Item> items, int slot)
+        {
+            if (items.Count == 0) return SlotLabel[slot];
+            if (items.Count == 1) return DisplayName(items[0].Key);
+            return DisplayName(items[0].Key) + " + " + DisplayName(items[1].Key);
+        }
+
+        /// <summary>
+        /// Yuvadaki esyalari halkanin icine yerlestirir. TEK esya ortada durur; IKI esya
+        /// yan yana ve daha kucuk — kullanicinin kurali geregi "el hangisine yakinsa onu
+        /// alacak", yani ikisinin AYRI birer konumu olmak zorunda.
+        /// </summary>
+        void PlaceSlotPreviews(Ring r, IReadOnlyList<WeaponInventory.Item> items, bool hot, float vis)
+        {
+            // Onizlemeler OPAK mesh'ler (silahin kendi materyali); alfalarini solduramayiz.
+            // Bunun yerine gorunurluk esigin altindayken tamamen gizlenirler — kafa yukaridayken
+            // bel hizasinda asili duran silahlar goz alanini en cok kirleten seydi.
+            bool show = vis > 0.35f;
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                var it = items[i];
+                if (it.Preview == null) continue;
+                if (it.Preview.activeSelf != show) it.Preview.SetActive(show);
+                if (!show) continue;
+
+                bool pair = items.Count > 1;
+                // Iki esya: halkanin ic capinin yarisi kadar saga/sola. Tek esya: ortada.
+                float side = pair ? (i == 0 ? -1f : 1f) * ringRadius * 0.42f : 0f;
+                PlacePreview(r, it, side, pair, hot);
             }
         }
 
         /// <summary>Silahin GORSEL kopyasini halkanin ortasina, yan gorunumde ve halkaya
         /// SIGACAK olcekte yerlestirir. Olcek/merkez silah basina BIR KEZ olculur (mesh
         /// bounds'u degismez), sonraki karelerde sadece transform yazilir.</summary>
-        void PlacePreview(Ring r, WeaponInventory.Entry e, bool filled, bool hot)
+        void PlacePreview(Ring r, WeaponInventory.Item e, float sideOffset, bool pair, bool hot)
         {
             if (e == null || e.Preview == null) return;
-            if (!filled) { e.Preview.SetActive(false); return; }
 
             var t = e.Preview.transform;
-            if (!e.Preview.activeSelf) e.Preview.SetActive(true);
 
             // YAN GORUNUM: namlu ekseni (profilden) halkanin SAG eksenine cevrilir — namlusu
             // Z'de de X'te de olsa (orn. HK416) her silah ayni acidan taninir.
             Quaternion rot = _belt.rotation * Quaternion.FromToRotation(e.BarrelDir, Vector3.right);
 
-            if (r.fitKey != e.Key)
+            // Sigma olcegi ESYA basina olculur (halka basina degil): ayni halkada iki farkli
+            // silah durabildigi icin olcum artik halkaya ait olamaz.
+            if (!e.FitMeasured)
             {
-                r.fitKey = e.Key;
+                e.FitMeasured = true;
                 Bounds b = LocalBounds(t);
                 float longest = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
                 float inner = (ringRadius - ringThickness) * 2f * 0.86f;   // halkanin ic capi
-                r.previewFit = longest > 1e-4f ? inner / longest : 1f;
-                r.previewCenter = b.center;
+                e.Fit = longest > 1e-4f ? inner / longest : 1f;
+                e.FitCenter = b.center;
             }
 
-            float scale = r.previewFit * (hot ? 1.15f : 1f);
+            // Ikili yuvada her esya daha kucuk cizilir ki yan yana sigsinlar.
+            float scale = e.Fit * (pair ? 0.62f : 1f) * (hot ? 1.15f : 1f);
             // Mesh'in KENDI merkezi halkanin merkezine gelsin: onizlemenin kok pivotu silahin
             // orta noktasi degil (namlu dibi, sarjor vb.) — cikarilmazsa silah yuvadan kacar.
             // -Z = oyuncuya dogru. Onizleme diskin ONUNDE durmali: disk derinlik sinamali
             // cizilir, opak onizleme derinlik yazar ve diski kendi arkasinda gizler.
-            Vector3 center = r.root.position + _belt.rotation * new Vector3(0f, 0f, -0.022f);
-            t.SetPositionAndRotation(center - rot * (r.previewCenter * scale), rot);
+            Vector3 center = r.root.position + _belt.rotation * new Vector3(sideOffset, 0f, -0.022f);
+            t.SetPositionAndRotation(center - rot * (e.FitCenter * scale), rot);
             t.localScale = Vector3.one * scale;
         }
 
@@ -390,9 +541,12 @@ namespace VRMultiplayer.UI
         {
             var p = new Probe();
             var g = LocalGrabber();
-            if (g == null) return p;
-            if (g.LeftAnchor != null) { p.hasL = true; p.l = g.LeftAnchor.position; }
-            if (g.RightAnchor != null) { p.hasR = true; p.r = g.RightAnchor.position; }
+            if (g == null || !g.HasHands) return p;
+            // AVUC sondasi, kumanda cipasi DEGIL: cipa bilekte duruyor ve halkaya uzanan
+            // elin gorunen avucu ondan ~5 cm onde (bkz. HandGrabber.Probe). Cipayla olcmek,
+            // el gorunurde halkanin icindeyken yuvayi "uzak" saydiriyordu.
+            p.hasL = true; p.l = g.LeftPalm;
+            p.hasR = true; p.r = g.RightPalm;
             return p;
         }
 
@@ -436,13 +590,15 @@ namespace VRMultiplayer.UI
             if (slot < 0) return false;
 
             var inv = WeaponInventory.Instance;
-            var e = inv != null ? inv.Slot(Slots[slot]) : null;
+            if (inv == null) return false;
+
+            // Kullanicinin kurali: "el hangisine yakinsa onu alacak halkanin icerisinden."
+            var e = inv.NearestIn(slot, handPos);
             if (e == null) return false;   // bos yuva: kemer eli SAHIPLENMEZ, normal kapma sursun
 
-            // AYNI SILAHTAN IKINCI KOPYA YOK. Canta tur basina TEK mermi sayisi tutuyor; iki
-            // ornek ayni kayittan beslenir ve kemer bedava sarjor pinarina donerdi.
-            if (e.Key == HeldKeyCached(grabber.HeldLeft, ref _keyObjL, ref _keyL) ||
-                e.Key == HeldKeyCached(grabber.HeldRight, ref _keyObjR, ref _keyR)) return false;
+            // AYNI SILAHTAN IKINCI KOPYA ARTIK SERBEST: kemerde duran her esya kendi mermisini
+            // tasiyor ve cekilince yuvadan CIKIYOR, yani iki ornek ayni kayittan beslenemiyor.
+            // Cift tabanca bu sayede mumkun (bkz. WeaponInventory sinif basi).
 
             if (e.Prefab == null)
             {
@@ -451,9 +607,27 @@ namespace VRMultiplayer.UI
                 return false;
             }
 
-            Debug.Log($"[Kemer] {Slots[slot]} yuvasi -> {(hand == 1 ? "SAG" : "SOL")} el: {e.Key} " +
-                      $"({(e.Ammo < 0 ? "dolu" : e.Ammo + " mermi")})");
-            return grabber.EquipIntoHand(hand, e.Prefab, e.Ammo, e.Spares);
+            if (!grabber.EquipIntoHand(hand, e.Prefab, e.Ammo, e.Spares)) return false;
+
+            // Esya ele gitti -> yuvadan cikar. "Havada asili duran seyi aldin" modeli:
+            // kemerde kopya kalmaz, dolayisiyla bedava sarjor uretilemez.
+            inv.Take(slot, e);
+            return true;
+        }
+
+        /// <summary>
+        /// EL SU AN BIR HALKANIN UZERINDE MI, ve elindeki oraya konabilir mi?
+        /// <see cref="HandGrabber.Release"/> grip birakilirken bunu sorar: evet ise silah
+        /// kemere girer, hayir ise yere duser.
+        /// </summary>
+        public static int PlacementSlot(Vector3 handPos, WeaponCategory cat)
+        {
+            var self = Instance;
+            var inv = WeaponInventory.Instance;
+            if (self == null || inv == null || !self._open) return -1;
+            int slot = self.NearestSlot(handPos);
+            if (slot < 0) return -1;
+            return inv.CanPlace(cat, slot) ? slot : -1;
         }
 
 #if ENABLE_INPUT_SYSTEM
@@ -505,6 +679,22 @@ namespace VRMultiplayer.UI
                 // holografik his ve kolokasyonlu oyunda duvarin arkasinda kaybolmama.
                 var disc = MakeMesh(slot, "Disc", discMesh,
                     UITheme.CreateTransparentMaterial(discIdle), QueueDisc, 0f);
+
+                // HALE: halkanin arkasinda, gradyan dokulu tek quad. Halkadan ONCE cizilir
+                // (QueueGlow < QueueRing) ve biraz GERIDE durur, yani halkanin keskin cizgisi
+                // her zaman halenin ustunde kalir.
+                Material glowMat = null;
+                if (glowStrength > 0f)
+                {
+                    float half = ringRadius * glowSpread;
+                    glowMat = UITheme.CreateOverlayMaterial(GlowColor(ringIdle));
+                    var tex = GlowTexture(glowSpread);
+                    if (glowMat.HasProperty("_BaseMap")) glowMat.SetTexture("_BaseMap", tex);
+                    if (glowMat.HasProperty("_MainTex")) glowMat.SetTexture("_MainTex", tex);
+                    MakeMesh(slot, "Glow", UIMesh.RoundedRect(half * 2f, half * 2f, 0f),
+                             glowMat, QueueGlow, -0.002f);
+                }
+
                 var ring = MakeMesh(slot, "Ring", ringMesh,
                     UITheme.CreateOverlayMaterial(ringIdle), QueueRing, -0.004f);
 
@@ -516,6 +706,7 @@ namespace VRMultiplayer.UI
                     root = slot,
                     discMat = disc.GetComponent<MeshRenderer>().sharedMaterial,
                     ringMat = ring.GetComponent<MeshRenderer>().sharedMaterial,
+                    glowMat = glowMat,
                     label = label,
                     labelKey = SlotLabel[i],
                 };
@@ -523,6 +714,16 @@ namespace VRMultiplayer.UI
 
             _belt.gameObject.SetActive(false);
         }
+
+        /// <summary>Halenin rengi: halkanin rengi, <see cref="glowStrength"/> kadar saydam.
+        /// Ayni tonu paylasmalari sart — hale ayri bir renk olsaydi durum degisiminde
+        /// (bos -> dolu -> elin altinda) iki ayri sinyal cakisirdi.</summary>
+        Color GlowColor(Color ring)
+            => new Color(ring.r, ring.g, ring.b, ring.a * glowStrength);
+
+        /// <summary>Rengi verilen gorunurluk carpaniyla soldurur (yalnizca alfa).</summary>
+        static Color Fade(Color c, float vis)
+            => vis >= 1f ? c : new Color(c.r, c.g, c.b, c.a * Mathf.Clamp01(vis));
 
         static Transform MakeMesh(Transform parent, string name, Mesh mesh, Material mat,
                                   int queue, float z)

@@ -79,6 +79,11 @@ namespace VRMultiplayer.Weapons
         {
             public Vector3 pos, euler;
             public float[] curls;
+            // Serbest poz (parmak kipi) de anlik goruntuye girer: yoksa "kayitliya don"
+            // bilegi ve kivrimlari geri alip elle pozlanmis parmaklari OLDUGU GIBI birakirdi
+            // ve geri donulecek bir yer kalmazdi (curls'un ilk surumundeki hatanin aynisi).
+            public Quaternion[] leftJoints, rightJoints;
+            public bool leftAuthored, rightAuthored;
 
             public static Snapshot Of(WeaponGripProfile.HandPose hp) => new Snapshot
             {
@@ -86,6 +91,10 @@ namespace VRMultiplayer.Weapons
                 euler = hp.fpWristLocalEuler,
                 // KOPYA: diziyi paylasirsak "geri al" degistirdigimiz diziyi geri yukler.
                 curls = hp.HasFpCurls ? (float[])hp.fpCurls.Clone() : null,
+                leftJoints = hp.leftFingers.HasFpJoints ? (Quaternion[])hp.leftFingers.fpJoints.Clone() : null,
+                rightJoints = hp.rightFingers.HasFpJoints ? (Quaternion[])hp.rightFingers.fpJoints.Clone() : null,
+                leftAuthored = hp.leftFingers.fpJointsAuthored,
+                rightAuthored = hp.rightFingers.fpJointsAuthored,
             };
 
             public WeaponGripProfile.HandPose Into(WeaponGripProfile.HandPose hp)
@@ -93,12 +102,71 @@ namespace VRMultiplayer.Weapons
                 hp.fpWristLocalPosition = pos;
                 hp.fpWristLocalEuler = euler;
                 hp.fpCurls = curls != null ? (float[])curls.Clone() : null;
+
+                var l = hp.leftFingers;
+                l.fpJoints = leftJoints != null ? (Quaternion[])leftJoints.Clone() : null;
+                l.fpJointsAuthored = leftAuthored;
+                hp.leftFingers = l;
+
+                var r = hp.rightFingers;
+                r.fpJoints = rightJoints != null ? (Quaternion[])rightJoints.Clone() : null;
+                r.fpJointsAuthored = rightAuthored;
+                hp.rightFingers = r;
                 return hp;
             }
         }
 
         Snapshot _savedMain, _savedSupport;
 
+        // Serbest parmak pozlama kipi. Cozucu ayri sinifta: ag/UI bilmiyor, girdisi de
+        // yalnizca kumanda + kemikler.
+        readonly WeaponFingerPoser _poser = new WeaponFingerPoser();
+
+        /// <summary>Parmak kipi acik mi? Acilirken duzenlenen elin cozucusu baglanir,
+        /// kapanirken poz profile YAZILIR (kapatmayi "vazgec" sanmasin diye).</summary>
+        public bool FingerPoseMode
+        {
+            get => _poser.Active;
+            set
+            {
+                if (value == _poser.Active) return;
+                if (value) BeginFingerPose();
+                else EndFingerPose(commit: true);
+            }
+        }
+
+        public string FingerPoseStatus => _poser.Status;
+
+        void BeginFingerPose()
+        {
+            if (_profile == null || !_handsPlaced) return;
+            var h = _editLeft ? _leftHand : _right;
+            if (h == null || h.curl == null) return;
+            _poser.Begin(h.curl, h.pose);
+        }
+
+        void EndFingerPose(bool commit)
+        {
+            if (!_poser.Active) return;
+            bool dirty = _poser.Dirty;
+            if (commit && dirty && _poser.TryExport(out Quaternion[] dev)) WriteFingerPose(dev);
+            _poser.End();
+        }
+
+        /// <summary>Cozulen pozu profile yazar. FingerPose ve HandPose IKISI DE STRUCT:
+        /// ikisini de geri koymadan degisiklik kaybolur.</summary>
+        void WriteFingerPose(Quaternion[] dev)
+        {
+            var hp = _editLeft ? _profile.supportHand : _profile.mainHand;
+            var fp = hp.Fingers(_editLeft);
+            fp.fpJoints = dev;
+            fp.fpJointsAuthored = true;
+            if (_editLeft) hp.leftFingers = fp; else hp.rightFingers = fp;
+            Write(hp);
+        }
+
+        // Kip acik kalirken bilesen olurse oyun girisleri SUSTURULMUS kalirdi (kimse silah
+        // kapamaz, ates edemez). End() bayragi geri aciyor; iki cikis yolu da ona ugramali.
         void OnDisable() => Teardown();
 
         void Update()
@@ -122,6 +190,10 @@ namespace VRMultiplayer.Weapons
 
             _panel.Tick(_pointer);
             DriveHands();
+            // Poz cozumu DriveHands'ten SONRA: Drive bilegi her karede yeniden yaziyor,
+            // parmaklar da onun ardindan cozulmeli. Ters sirada parmaklar bir kare bayat
+            // bilek pozuna gore cozulur ve el titrer.
+            _poser.Tick(_pointer, _coarse);
         }
 
         VRPointer AcquirePointer()
@@ -155,7 +227,11 @@ namespace VRMultiplayer.Weapons
 
         void Teardown()
         {
+            // ONCE kipi kapat: cozucu yok edilmek uzere olan kemiklere referans tutuyor,
+            // ayrica susturdugu oyun girislerini geri acmasi gerek.
+            EndFingerPose(commit: true);
             RemoveHands();
+            if (_pin != null) { Destroy(_pin.gameObject); _pin = null; }
             if (_weapon != null) Destroy(_weapon);
             if (_panel != null) Destroy(_panel.gameObject);
             _panel = null;
@@ -196,6 +272,14 @@ namespace VRMultiplayer.Weapons
 
             if (_weapon != null)
                 _weapon.transform.SetPositionAndRotation(_panel.Bench, BenchRotation());
+
+            // Pim tezgahin cocugu DEGIL (ayri bir nesne olarak duruyor) — tezgah tasininca
+            // onu da elle goturmek gerekiyor, yoksa bomba onune gelirken pim geride kalir.
+            if (_pin != null)
+            {
+                Vector3 lf = Vector3.Cross(Vector3.up, flat).normalized;
+                _pin.position = _panel.Bench + lf * PinSideOffset;
+            }
         }
 
         /// <summary>
@@ -209,14 +293,55 @@ namespace VRMultiplayer.Weapons
         ///
         /// Ayarlanan veriyi ETKILEMEZ: el, silaha GORE yerlestiriliyor - tezgahtaki durus
         /// yalnizca senin nasil gordugundur.
+        ///
+        /// BOMBALAR TEK EKSENLE TARIF EDILEMEZ. Namlu kurali nesnenin uzun eksenini hedefe
+        /// cevirir ve geri kalan serbestligi (roll) FromToRotation'a birakir; tufekte bu
+        /// gorunmez, bombada belirleyici olan tam da o serbestliktir. Ustelik uc bombanin da
+        /// barrelLocalDirection'i (0,0,1) yazili — hicbir seyi tarif etmeyen bir varsayilan —
+        /// ve olculdu: emniyet kolu/pim halkasi ucunde UC AYRI yone bakiyordu (G1 -Z,
+        /// G2 +X+Z, G3 +X-Z). Profilde <see cref="WeaponGripProfile.HasBenchPose"/> varsa
+        /// sunum IKI eksenle tam kurulur ve ucu de ayni durur.
         /// </summary>
         Quaternion BenchRotation()
         {
             Vector3 fwd = _panel != null ? _panel.BenchForward : Vector3.forward;
+
+            // ACIK SUNUM (bomba): "su eksen yukari, su eksen bana baksin". Roll artik
+            // tanimli — kalan hicbir serbestlik yok.
+            if (_profile != null && _profile.HasBenchPose)
+            {
+                Quaternion local = Quaternion.LookRotation(_profile.benchFrontLocal.normalized,
+                                                           _profile.benchUpLocal.normalized);
+                return Quaternion.LookRotation(-fwd, Vector3.up) * Quaternion.Inverse(local);
+            }
+
             Vector3 barrel = _profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f
                 ? _profile.barrelLocalDirection.normalized
                 : Vector3.forward;
-            return Quaternion.FromToRotation(barrel, -fwd);
+            return AimAxis(barrel, -fwd);
+        }
+
+        /// <summary>
+        /// <paramref name="from"/> (silah-lokal eksen) -> <paramref name="to"/> (dunya yonu)
+        /// donusu; ANTIPARALEL girdide ekseni dunya yukarisina sabitler.
+        ///
+        /// NEDEN: <c>Quaternion.FromToRotation</c> iki vektor tam ters oldugunda donme eksenini
+        /// KEYFI secer (cross carpimi sifirdir, secim Unity'nin icinde). Olculdu: barrelLocal'i
+        /// (0,0,1) olan nesneler — Smg 1 ve uc bomba — oyuncu tam +Z'ye bakarken X ekseninde
+        /// 180 donuyor ve tezgahta BAS ASAGI duruyordu; oyuncu 1 derece yana donunce
+        /// kendiliginden duzeliyordu. Ayni tezgahta bir bakista ters, bir bakista duz duran
+        /// nesne ayarlanamaz. Ekseni dunya yukarisi yapmak nesneyi kendi ekseninde cevirir,
+        /// devirmez.
+        /// </summary>
+        static Quaternion AimAxis(Vector3 from, Vector3 to)
+        {
+            from = from.normalized;
+            to = to.normalized;
+            if (Vector3.Dot(from, to) > -0.99999f) return Quaternion.FromToRotation(from, to);
+
+            Vector3 axis = Vector3.ProjectOnPlane(Vector3.up, from);
+            if (axis.sqrMagnitude < 1e-6f) axis = Vector3.ProjectOnPlane(Vector3.right, from);
+            return Quaternion.AngleAxis(180f, axis.normalized);
         }
 
         // ------------------------------------------------------------------ silah
@@ -234,6 +359,10 @@ namespace VRMultiplayer.Weapons
 
         void Select(int i)
         {
+            // Silah degisiyor: eller onun cocugu, yani birazdan onlar da gidecek. Kipi
+            // burada kapatmak, cozucunun yok edilmis kemiklere tutunmasini engeller ve
+            // yarim kalan pozu ONCEKI silahin profiline yazar (yenisine degil).
+            EndFingerPose(commit: true);
             if (_weapon != null) Destroy(_weapon);
             _index = i;
             _weapon = Instantiate(_weapons[i]);
@@ -242,12 +371,67 @@ namespace VRMultiplayer.Weapons
 
             _profile = WeaponGripBinder.FindProfile(_weapon.name);
             _weapon.transform.SetPositionAndRotation(_panel.Bench, BenchRotation());
+            SetUpPin();
             if (_profile != null)
             {
                 _savedMain = Snapshot.Of(_profile.mainHand);
                 _savedSupport = Snapshot.Of(_profile.supportHand);
             }
             if (_handsPlaced) PlaceHands();
+        }
+
+        // ------------------------------------------------------------------ bomba pimi
+
+        /// <summary>Tezgahtaki pim (yalnizca bombalarda). Bombanin YANINDA, sanki cekilmis
+        /// gibi durur; SOL el ona gore ayarlanir.</summary>
+        Transform _pin;
+
+        /// <summary>Pimin bombadan ne kadar yana cekilecegi (metre). Cekilmis pim bombanin
+        /// dibinde durmamali — el onu ayri bir nesne olarak kavrayacak.</summary>
+        const float PinSideOffset = 0.16f;
+
+        /// <summary>
+        /// Secilen silah bir BOMBA ise pimini koparip yanina koyar.
+        ///
+        /// NEDEN: bomba tek elle tutulur, destek eli YOKTUR — kundak rayi da yazili degil
+        /// (olculdu: uc bombanin da rayi bos). Yani tezgahtaki SOL el bugune kadar bombanin
+        /// orijininde, anlamsiz bir yerde duruyordu. Oysa bombada sol elin gercek isi PIMI
+        /// CEKMEK. Pim ayri bir nesne olarak yanina konunca sol el ona gore ayarlanabiliyor
+        /// ve tezgah oyundaki gercek durusu (bomba sagda, pim solda) gosteriyor.
+        ///
+        /// Pim koparma isi runtime ile AYNI yordamdan geciyor (<see cref="GrenadePin.FindParts"/>):
+        /// tezgahta gordugun parcalar, oyunda elinde kalacak parcalarin ta kendisi.
+        /// </summary>
+        void SetUpPin()
+        {
+            if (_pin != null) { Destroy(_pin.gameObject); _pin = null; }
+            if (_weapon == null) return;
+
+            var cfg = GrenadeBinder.FindConfig(_weapon.name);
+            if (cfg == null) return;   // bomba degil
+
+            var parts = GrenadePin.FindParts(_weapon.transform, cfg.pinNodes);
+            if (parts.Count == 0)
+            {
+                Debug.LogWarning("[Atolye] '" + _weapon.name + "' pim dugumu bulunamadi — pim " +
+                                 "tezgaha konmadi. GrenadeConfig.pinNodes ile adlari yazabilirsin.");
+                return;
+            }
+
+            // Tutamak once BOMBA uzayinda dogar, parcalar DUNYA duruslari korunarak icine
+            // alinir (GrenadePin.DetachTo ile ayni sira) — boylece halka ve kanca birbirine
+            // gore bozulmadan gelir.
+            var holder = new GameObject("Pim").transform;
+            holder.SetParent(_weapon.transform, false);
+            foreach (var p in parts) p.SetParent(holder, true);
+
+            // Tezgahta bombanin YANINA: benchForward'a dik yon (oyuncunun soluna), cunku
+            // pimi ceken el SOL el.
+            holder.SetParent(null, true);
+            Vector3 fwd = _panel != null ? _panel.BenchForward : Vector3.forward;
+            Vector3 left = Vector3.Cross(Vector3.up, fwd).normalized;
+            holder.position = _weapon.transform.position + left * PinSideOffset;
+            _pin = holder;
         }
 
         /// <summary>Tezgahtaki silah bir MAKET: fizigi, agi ve kavranmasi kapatilir.
@@ -311,6 +495,9 @@ namespace VRMultiplayer.Weapons
 
         void RemoveHands()
         {
+            // Kemikler birazdan yok edilecek; cozucu once birakmali (aksi halde bir sonraki
+            // karede yok edilmis Transform'lara yazmaya calisir).
+            EndFingerPose(commit: true);
             if (_right != null && _right.carrier != null) Destroy(_right.carrier.gameObject);
             if (_leftHand != null && _leftHand.carrier != null) Destroy(_leftHand.carrier.gameObject);
             _right = null; _leftHand = null;
@@ -332,17 +519,39 @@ namespace VRMultiplayer.Weapons
 
             // ANA EL kabza cipasinda, DESTEK EL kundak rayinin ortasinda. Iki elin
             // cipasi ayri; ikisini de ayni yere koymak destek elini kabzaya yigardi.
-            Vector3 localAnchor = left ? SupportAnchorLocal() : _profile.gripLocalPosition;
-            Vector3 anchor = _weapon.transform.TransformPoint(localAnchor);
-            Quaternion anchorRot = _weapon.transform.rotation * _profile.GripLocalRotation;
+            //
+            // BOMBADA SOL EL PIMDE. Bombanin destek rayi yok (olculdu: uc bombada da bos),
+            // yani sol el eskiden bombanin orijininde anlamsiz duruyordu. Pim varsa cipa
+            // ONA baglanir — sol elin bombadaki gercek isi pimi tutmak.
+            Vector3 anchor;
+            Quaternion anchorRot;
+            if (left && _pin != null)
+            {
+                anchor = _pin.position;
+                anchorRot = _pin.rotation;
+            }
+            else
+            {
+                Vector3 localAnchor = left ? SupportAnchorLocal() : _profile.gripLocalPosition;
+                anchor = _weapon.transform.TransformPoint(localAnchor);
+                anchorRot = _weapon.transform.rotation * _profile.GripLocalRotation;
+            }
 
             var hp = left ? _profile.supportHand : _profile.mainHand;
             h.pose.SetPositionAndRotation(anchor + anchorRot * hp.fpWristLocalPosition,
                                           anchorRot * hp.FpWristRotation);
 
-            if (h.curl != null)
+            // PARMAK KIPINDEKI EL'e dokunma: cozucu o elin parmaklarini suruyor, burada
+            // her karede kivrim pozu yazsak cozumu aninda ezerdik.
+            bool posing = _poser.Active && left == _editLeft;
+            if (h.curl != null && !posing)
             {
-                if (hp.HasFpCurls) h.curl.ApplyFingerCurls(hp.fpCurls, 1f);
+                // Oncelik runtime ile AYNI (bkz. FirstPersonFingerCurl.LateUpdate): elle
+                // pozlanan eklemler > elle yazilan kivrimlar > duz el. Tezgah kendi kaydini
+                // gostermezse ustune devam etmek imkansiz olurdu.
+                var fp = hp.Fingers(left);
+                if (fp.HasAuthoredFpJoints) h.curl.ApplyPoseJoints(fp.fpJoints);
+                else if (hp.HasFpCurls) h.curl.ApplyFingerCurls(hp.fpCurls, 1f);
                 else h.curl.ApplyFlat();
             }
 
@@ -378,8 +587,23 @@ namespace VRMultiplayer.Weapons
         // ------------------------------------------------------------------ ayar
         /// <summary>Okla itme. Eksenler SILAHIN cercevesinde: +ileri namlu yonu,
         /// +sag kabzanin sagi, +yukari silahin ustu.</summary>
-        /// <summary>Panelin duzenledigi el (SAG/SOL dugmesi bunu degistirir).</summary>
-        public bool EditLeft { get => _editLeft; set => _editLeft = value; }
+        /// <summary>Panelin duzenledigi el (SAG/SOL dugmesi bunu degistirir).
+        ///
+        /// Parmak kipi ACIKKEN el degistirmek cozucuyu OTEKI ele TASIR: once icinde
+        /// bulundugun el yazilir, sonra yeni el baglanir. Kipi sessizce kapatmak
+        /// kullaniciya "bozuldu" hissi verirdi; el degistirip devam etmek dogal olan.</summary>
+        public bool EditLeft
+        {
+            get => _editLeft;
+            set
+            {
+                if (value == _editLeft) return;
+                bool wasPosing = _poser.Active;
+                if (wasPosing) EndFingerPose(commit: true);
+                _editLeft = value;
+                if (wasPosing) BeginFingerPose();
+            }
+        }
 
         public void Nudge(int axis, int sign)
         {
@@ -413,7 +637,12 @@ namespace VRMultiplayer.Weapons
             Write(hp);
         }
 
-        /// <summary>Bir parmagin kivrimini degistirir (0 bas .. 4 serce).</summary>
+        /// <summary>Bir parmagin kivrimini degistirir (0 bas .. 4 serce).
+        ///
+        /// SERBEST POZU DUSURUR: elle pozlanmis eklemler kivrimlarin ONUNDE geldigi icin,
+        /// onlar dururken kivrim tusuna basmak EKRANDA HICBIR SEY DEGISTIRMEZDI — kullanici
+        /// tusun bozuk oldugunu sanardi. Kivrima donmek acik bir tercihtir; poz da
+        /// "kayitliya don" ile geri gelebilir.</summary>
         public void Curl(int finger, int sign)
         {
             if (_profile == null) return;
@@ -422,7 +651,32 @@ namespace VRMultiplayer.Weapons
             float step = _coarse ? 0.10f : 0.02f;
             hp.fpCurls[Mathf.Clamp(finger, 0, 4)] =
                 Mathf.Clamp01(hp.fpCurls[Mathf.Clamp(finger, 0, 4)] + sign * step);
+            ClearAuthored(ref hp);
             Write(hp);
+        }
+
+        /// <summary>Parmaklari duz (dinlenme) hale getirir. Kip acikken cozumu sifirlar,
+        /// kapaliyken hem kivrimlari hem serbest pozu temizler — iki durumda da ekranda
+        /// gorunen sey "duz el" olur.</summary>
+        public void ResetFingers()
+        {
+            if (_profile == null) return;
+            if (_poser.Active) { _poser.ResetToRest(); return; }
+
+            var hp = _editLeft ? _profile.supportHand : _profile.mainHand;
+            hp.fpCurls = new float[5];
+            ClearAuthored(ref hp);
+            Write(hp);
+        }
+
+        /// <summary>Duzenlenen elin serbest pozunu dusurur (veriyi silmez, yalnizca
+        /// "elle pozlandi" bayragini indirir — bayrak inince kivrim yolu devralir).</summary>
+        void ClearAuthored(ref WeaponGripProfile.HandPose hp)
+        {
+            var fp = hp.Fingers(_editLeft);
+            if (!fp.fpJointsAuthored) return;
+            fp.fpJointsAuthored = false;
+            if (_editLeft) hp.leftFingers = fp; else hp.rightFingers = fp;
         }
 
         public float CurlOf(int finger)
@@ -503,7 +757,12 @@ namespace VRMultiplayer.Weapons
             string curls = hp.HasFpCurls
                 ? string.Join(",", System.Array.ConvertAll(hp.fpCurls, v => v.ToString("F3", ic)))
                 : "";
-            return string.Format("{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}",
+            // Rol, hangi FIZIKSEL eli duzenledigimizi belirler: ana el SAG, destek eli SOL
+            // (tezgahtaki yerlesimin aynisi). Bu yuzden satira yalnizca o elin serbest pozu
+            // giriyor; oteki el kendi satirinda gidiyor.
+            bool left = role == "support";
+            string joints = Joints(hp.Fingers(left));
+            return string.Format("{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}|{9}",
                 _profile.name, role,
                 hp.fpWristLocalPosition.x.ToString("F5", ic),
                 hp.fpWristLocalPosition.y.ToString("F5", ic),
@@ -511,7 +770,28 @@ namespace VRMultiplayer.Weapons
                 hp.fpWristLocalEuler.x.ToString("F3", ic),
                 hp.fpWristLocalEuler.y.ToString("F3", ic),
                 hp.fpWristLocalEuler.z.ToString("F3", ic),
-                curls);
+                curls, joints);
+        }
+
+        /// <summary>Serbest poz: 15 eklem, ";" ile ayrik, her biri "x,y,z,w". YALNIZCA elle
+        /// pozlanmisken yazilir — cevrilmis poz (menu 50) zaten projede duruyor, cihazdan
+        /// geri tasinmasina gerek yok ve tasinsa daha dusuk oncelikli veriyi yuksek
+        /// oncelikli alana terfi ettirmis olurduk.</summary>
+        static string Joints(WeaponGripProfile.FingerPose fp)
+        {
+            if (!fp.HasAuthoredFpJoints) return "";
+            var ic = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new StringBuilder(15 * 32);
+            for (int j = 0; j < fp.fpJoints.Length; j++)
+            {
+                if (j > 0) sb.Append(';');
+                var q = fp.fpJoints[j];
+                sb.Append(q.x.ToString("F5", ic)).Append(',')
+                  .Append(q.y.ToString("F5", ic)).Append(',')
+                  .Append(q.z.ToString("F5", ic)).Append(',')
+                  .Append(q.w.ToString("F5", ic));
+            }
+            return sb.ToString();
         }
     }
 }

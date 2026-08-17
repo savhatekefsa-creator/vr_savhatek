@@ -74,7 +74,7 @@ namespace VRMultiplayer.EditorTools
             if (Object.FindFirstObjectByType<ARSession>() == null)
                 new GameObject("AR Session").AddComponent<ARSession>();
 
-            // 3) Player prefab: RoomScanSync (owner presses X to send the room to the PC).
+            // 3) Player prefab: RoomScanSync (tus bagi yok; sahip TriggerScan() ile gonderir).
             if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) == null)
             {
                 EditorUtility.DisplayDialog("NetworkPlayer prefab yok",

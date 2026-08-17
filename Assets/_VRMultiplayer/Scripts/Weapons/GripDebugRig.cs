@@ -31,7 +31,8 @@ namespace VRMultiplayer.Weapons
     /// Sahiplik kontrolu icerdedir; baskasinin avatarinda hicbir sey cizmez.
     ///
     /// TUSLAR (carpismayi onlemek icin CIFT tus / akor — tek tuslar TeamSelector,
-    /// RoomScanSync, CalibrationManager ve ConstructorPlacer tarafindan kullaniliyor):
+    /// ScoreboardUI ve ConstructorPlacer tarafindan kullaniliyor; RoomScanSync ile
+    /// CalibrationManager'in tuslari 2026-08-11'de kaldirildi ama akor duzeni kaldi):
     ///   A + X (iki elin primary'si)      -> test modunu ilerlet
     ///   B + Y kisa bas                   -> o anki olcumu TABLOYA yaz (satiri dondurur)
     ///   B + Y 1.5 sn BASILI TUT          -> tabloyu .md dosyasina kaydet

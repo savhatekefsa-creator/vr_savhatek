@@ -156,6 +156,31 @@ namespace VRMultiplayer
         /// Iki kumanda tasiyicisinin altina el gorselini kurar. Yalnizca SAHIP
         /// icin cagrilir; aga hic girmez, uzak istemcilerde hic yaratilmaz.
         /// </summary>
+        /// <summary>
+        /// Bu kumanda tasiyicisi altindaki BIRINCI SAHIS bilek kemigi (yoksa null).
+        ///
+        /// Disaridan kullanimi: atolyede ayarlanan pozlar BILEGE goredir, ama oyundaki bazi
+        /// tuketiciler (orn. bomba pimi) ag el CIPASINA baglanir. Ikisi ayni sey degil —
+        /// cipa kumandanin ham pozu, bilek ise el modelinin oturdugu yer. Ayarlanan degerin
+        /// oyunda birebir cikmasi icin cevrimin bilekten yapilmasi gerekiyor.
+        ///
+        /// UZAK OYUNCUDA NULL DONER: FP eli yalnizca sahipte kurulur. Cagiran taraf o durumda
+        /// kendi yedegine dusmeli.
+        /// </summary>
+        public static Transform FindWrist(Transform carrier, bool left)
+            => FindBone(carrier, left ? "b_l_wrist" : "b_r_wrist");
+
+        /// <summary>Bu tasiyicinin altindaki FP el modelinde ada gore kemik (yoksa null).</summary>
+        public static Transform FindBone(Transform carrier, string boneName)
+        {
+            if (carrier == null) return null;
+            var root = carrier.Find(ObjectName);
+            if (root == null) return null;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name == boneName) return t;
+            return null;
+        }
+
         public static void Attach(Transform leftCarrier, Transform rightCarrier, GameObject avatar)
         {
             Build(leftCarrier, true, avatar);
@@ -210,6 +235,16 @@ namespace VRMultiplayer
             dmr.enabled = false;   // sapma olmadan gorunmez
 
             BuildHandModel(pose.transform, left);
+
+            // KOL SAATI — yalnizca SOL elde ve yalnizca GERCEK oyuncuda.
+            // avatar == null demek "bu el bir tezgah maketi" demek (atolyenin sahte elleri
+            // ayni kurulumdan geciyor); orada saat hem gereksiz hem kafa karistirici olurdu,
+            // ustelik WatchScreenUI'nin okudugu can/mermi kaynaklari da yok.
+            if (left && avatar != null)
+            {
+                var hand = pose.transform.Find("Hand");
+                if (hand != null) UI.WristWatch.Attach(hand, true);
+            }
 
             var view = root.AddComponent<FirstPersonHandView>();
             view._carrier = carrier;

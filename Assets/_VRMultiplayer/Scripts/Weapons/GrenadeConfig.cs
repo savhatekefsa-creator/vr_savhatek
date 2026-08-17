@@ -86,8 +86,11 @@ namespace VRMultiplayer.Weapons
         public Vector3 pinHandLocalPosition = Vector3.zero;
         [Tooltip("Pimin elde durus acisi (el anchor'ina gore lokal euler).")]
         public Vector3 pinHandLocalEuler = Vector3.zero;
-        [Tooltip("Pimi cekmek icin bos elin bombaya yaklasmasi gereken mesafe (m).")]
-        public float pinPullReach = 0.45f;
+        [Tooltip("Pimi cekmek icin bos elin bombaya yaklasmasi gereken mesafe (m). " +
+                 "Bombanin YUZEYINE (bounds) olculur. 0.45 idi — kolun yarisi kadar, yani " +
+                 "bombaya bakmadan basilan her grip pimi cekiyordu. 0.07 = eli gercekten " +
+                 "bombanin uzerine goturmek gerekir.")]
+        public float pinPullReach = 0.07f;
 
         [Header("Nisan yayi (bomba eldeyken thumbstick)")]
         [Tooltip("Kirmizi yorunge yayinin varsaydigi firlatma hizi (m/s). El hizi degil; " +

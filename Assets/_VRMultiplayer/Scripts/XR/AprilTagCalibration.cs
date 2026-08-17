@@ -1089,7 +1089,8 @@ namespace VRMultiplayer
             // SAG A her iki durumda da guvenli: TeamSelector de A okur ama o AG OYUNCUSUNDA
             // yasar — sunucusuz hic var olmaz, baglandiktan sonra da takim secilince _done ile
             // susar. ConstructorPlacer'in A'si yalnizca insa modunda calisir.
-            // (Sol X denenmedi: RoomScanSync onu tutuyor ve oyuna katilinca canlaniyor.)
+            // (Sol X artik BOS — RoomScanSync'in tus bagi 2026-08-11'de kaldirildi — ama A'da
+            // kalmak dogru: ogrenme sag elle yapilan bir is, tus da sag elde olmali.)
             bool a = XRButtons.Button(UnityEngine.XR.XRNode.RightHand,
                                       UnityEngine.XR.CommonUsages.primaryButton);
             bool pressed = a && !_applyPrev;

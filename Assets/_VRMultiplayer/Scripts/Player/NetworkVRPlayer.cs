@@ -117,6 +117,18 @@ namespace VRMultiplayer
                     foreach (var r in remoteAvatar.GetComponentsInChildren<Renderer>(true))
                         r.enabled = false;
 
+                    // KOL SAATI EKRANI RENDERER KAPATMAYLA SUSMUYOR. Yukaridaki dongu O ANDA
+                    // VAR OLAN renderer'lari kapatiyor; ama WatchScreenUI ekranini Start()'ta
+                    // KURUYOR (Face + ~20 quad + 6 yazi) ve Start bu metottan SONRA calisiyor.
+                    // Yani yeni dogan renderer'lar kapatilmamis kaliyor ve sahibin gorusunde
+                    // sag bilekte bir saat arayuzu asili duruyordu — hem de kolun erisim
+                    // siniri yuzunden kumandadan geride, havada.
+                    //
+                    // Cozum obeyi KOMPLE kapatmak: Start hic calismaz, ekran hic kurulmaz.
+                    // Sahibin saati zaten birinci sahis elinde (bkz. UI.WristWatch).
+                    foreach (var w in remoteAvatar.GetComponentsInChildren<WatchScreenUI>(true))
+                        w.gameObject.SetActive(false);
+
                     // Tasiyicilarin kendi mesh'leri yukarida HideRenderers ile zaten
                     // kapatildi; el gorseli ondan SONRA kuruluyor ki kapanmasin.
                     FirstPersonHandView.Attach(leftHand, rightHand, remoteAvatar);

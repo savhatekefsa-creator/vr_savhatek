@@ -4,7 +4,6 @@ using System.IO;
 using System.Text;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.XR;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using UnityEngine.XR.OpenXR.Features.Meta;
@@ -17,9 +16,12 @@ namespace VRMultiplayer
     /// existing LAN link. The server saves Assets/_VRMultiplayer/RoomPlans/RoomPlan.json, which
     /// the editor menus "Import Room Plan" / "Build Walls From Plan" consume.
     ///
-    /// Usage (owner only): calibrate first, then press X (left controller). One headset doing
-    /// this once is enough. Requires the Meta OpenXR "Planes" feature + USE_SCENE permission;
-    /// if the room was never scanned, the system Space Setup flow is launched automatically.
+    /// KULLANIM: kumanda tusu YOK. Eskiden sol X tetikliyordu; oda gonderme tek seferlik bir
+    /// kurulum isi oldugu halde tus mac boyunca canliydi ve kazara basis izin istemi / Space
+    /// Setup acabiliyordu (2026-08-11'de kaldirildi). Gerekirse <see cref="TriggerScan"/>
+    /// cagrilir (or. ileride bir menu dugmesi). Once kalibrasyon sart; bir gozlugun bir kez
+    /// gondermesi yeter. Meta OpenXR "Planes" ozelligi + USE_SCENE izni gerekir; oda hic
+    /// taranmamissa sistemin Space Setup akisi otomatik baslatilir.
     /// </summary>
     public class RoomScanSync : NetworkBehaviour
     {
@@ -28,7 +30,6 @@ namespace VRMultiplayer
 
         TextMesh _panel;
         bool _busy;
-        bool _prevX;
         float _hidePanelAt = -1f;
 
         // Server-side reassembly (one buffer per sender's player object = this instance).
@@ -48,12 +49,13 @@ namespace VRMultiplayer
         void Update()
         {
             if (_hidePanelAt > 0f && Time.time > _hidePanelAt) { HidePanel(); }
+        }
 
-            bool x = XRButtons.Button(XRNode.LeftHand, CommonUsages.primaryButton);
-
-            if (x && !_prevX && !_busy)
-                StartCoroutine(ScanAndSend());
-            _prevX = x;
+        /// <summary>Taramayi baslatir (tus bagi yok — bkz. sinif aciklamasi). Sahip degilse
+        /// obje zaten disabled oldugundan cagri ancak sahibin instance'inda ise yarar.</summary>
+        public void TriggerScan()
+        {
+            if (!_busy) StartCoroutine(ScanAndSend());
         }
 
         IEnumerator ScanAndSend()
@@ -62,7 +64,7 @@ namespace VRMultiplayer
 
             if (!CalibrationManager.Calibrated)
             {
-                Show("ODA GONDERME\n\nOnce KALIBRASYON yapmalisin\n(A/B noktalari + tetik).", 4f);
+                Show("ODA GONDERME\n\nOnce KALIBRASYON yapmalisin\n(duvardaki TAG'e bak).", 4f);
                 _busy = false;
                 yield break;
             }
@@ -115,7 +117,7 @@ namespace VRMultiplayer
                 }
                 if (!requested)
                 {
-                    Show("Space Setup baslatilamadi.\nGozluk ayarlarindan 'Alan Kurulumu'\nyapip tekrar dene (X).", 8f);
+                    Show("Space Setup baslatilamadi.\nGozluk ayarlarindan 'Alan Kurulumu'\nyapip tekrar dene.", 8f);
                     _busy = false;
                     yield break;
                 }
@@ -130,7 +132,7 @@ namespace VRMultiplayer
             var plan = ExtractPlan(planeMgr);
             if (plan == null || plan.floorPolygon.Length < 3)
             {
-                Show("Zemin poligonu okunamadi.\nSpace Setup'ta zemin/duvarlari\ntarayip tekrar dene (X).", 8f);
+                Show("Zemin poligonu okunamadi.\nSpace Setup'ta zemin/duvarlari\ntarayip tekrar dene.", 8f);
                 _busy = false;
                 yield break;
             }

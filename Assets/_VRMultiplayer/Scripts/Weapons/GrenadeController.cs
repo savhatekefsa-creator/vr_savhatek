@@ -207,13 +207,14 @@ namespace VRMultiplayer.Weapons
         {
             if (_armed || _exploded || _grab == null || !_grab.IsOwner) return;
 
-            // TUKETIM: pim cekmek bombayi baglar (artik geri donusu yok, patlayacak). Bu, "kullanma"
-            // anidir — cantadaki bu bomba turunu simdi siliyoruz ki kemer bir daha ayni bombayi
-            // sunmasin (sonsuz bomba bug'i). Yenisi raftan alinir. Yalnizca owner'in kendi
-            // cantasi; ApplyPin uzak makinelerde de kosar ama envanter yerel oldugu icin burada.
-            var inv = WeaponInventory.Instance;
-            if (inv != null) inv.RemoveType(WeaponInventory.TypeKey(_grab));
-
+            // TUKETIM ARTIK KENDILIGINDEN OLUYOR — burada envantere dokunulmuyor.
+            //
+            // Eskiden kemerden cekmek TAZE bir kopya dogurur, kayit kemerde KALIRDI; sonsuz
+            // bomba acigini kapatmak icin pim cekilince kaydi elle silmek gerekiyordu.
+            // Yeni modelde (2026-08-17) kemerden cekmek esyayi YUVADAN CIKARIYOR — elindeki
+            // bomba kemerdekinin ta kendisi, kemerde kopyasi yok. Dolayisiyla silinecek bir
+            // kayit da yok. Ustelik eski satir artik ZARARLI olurdu: ayni turden ikinci bir
+            // bombayi (kullanici 2 bomba tasiyabiliyor) kemerden dusururdu.
             ApplyPin(hand);
             SendPinToServer(hand);
         }
@@ -245,7 +246,15 @@ namespace VRMultiplayer.Weapons
 
             Transform anchor = PinHandAnchor(hand);
             if (anchor != null)
-                _pinHolder = GrenadePin.DetachTo(transform, anchor, _cfg);
+            {
+                // Tutus profili de veriliyor: pimin elde duracagi yer ATOLYEDE ayarlandi
+                // (bkz. GrenadePin.PlaceFromWorkshopPose). Profil yoksa config'in eski
+                // pinHandLocal* degerlerine dusulur — davranis birebir korunur.
+                var grip = _grab != null ? _grab.GetComponent<WeaponGrip>() : null;
+                _pinHolder = GrenadePin.DetachTo(transform, anchor, _cfg,
+                                                 grip != null ? grip.Profile : null,
+                                                 hand == 0);
+            }
             else
                 Debug.LogWarning("[Bomba] Pimi cekenin eli bulunamadi — pim bombada birakildi.");
 

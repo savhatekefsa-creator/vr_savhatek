@@ -18,7 +18,7 @@ namespace VRMultiplayer
     ///   1) Put the RIGHT controller on physical point A (the shared origin) and pull the TRIGGER.
     ///   2) Move it to physical point B (which defines the forward direction) and pull the TRIGGER.
     /// The rig recenters so A maps to <see cref="sharedOrigin"/> and A->B maps to
-    /// <see cref="sharedForward"/>. Pull the trigger again to re-calibrate.
+    /// <see cref="sharedForward"/>.
     /// </summary>
     public class CalibrationManager : MonoBehaviour
     {
@@ -74,7 +74,6 @@ namespace VRMultiplayer
         int _step;            // 0 = waiting for A, 1 = waiting for B, 2 = done
         Vector3 _a;
         bool _prevTrigger;
-        bool _prevY;
         string _note = "";    // "neden simdi kalibre oluyorum" — panelin altina eklenir
 
         /// <summary>True once this player has completed A/B calibration at least once.
@@ -111,7 +110,7 @@ namespace VRMultiplayer
             if (Calibrated)
             {
                 _step = 2;
-                SetStatus("TAG ILE KALIBRE EDILDI!\nIyi oyunlar.\n(Yeniden kalibre: SOL kumanda Y tusu)");
+                SetStatus("TAG ILE KALIBRE EDILDI!\nIyi oyunlar.");
                 StartCoroutine(HideAfter(6f));
                 Debug.Log("[Calibration] Katilimda zaten kalibreydi (tag) — A/B istenmedi.");
                 return;
@@ -153,10 +152,6 @@ namespace VRMultiplayer
             bool triggerEdge = trigger && !_prevTrigger;
             _prevTrigger = trigger;
 
-            bool y = ReadLeftY();
-            bool yEdge = y && !_prevY;
-            _prevY = y;
-
             if (XRButtons.GameplayInputSuppressed) return;
 
             // TAG-ONLY: A/B yolu tamamen kapali. Tetik hicbir nokta yakalamaz.
@@ -168,23 +163,11 @@ namespace VRMultiplayer
             // yani kayma dosyaya bakarak da anlasilamaz. Tek cerceve = tek sifir.
             if (!tagOnly && triggerEdge && _step < 2) CapturePoint();
 
-            // Yeniden kalibrasyon: SOL kumanda Y.
-            if (yEdge && _step == 2)
-            {
-                _step = 0;
-                if (tagOnly)
-                {
-                    // Tag surekli duzeltiyor; "yeniden kalibre" burada yalnizca DURUM
-                    // bayragini birakmak demek, boylece tag bir sonraki tespitte cerceveyi
-                    // bastan kurar ve panel yeniden ilerleme gosterir.
-                    Calibrated = false;
-                    SetStatus("YENIDEN KALIBRASYON\nDuvardaki TAG'e bak\nve 1-2 metre yaklas.");
-                }
-                else
-                {
-                    SetStatus("YENIDEN KALIBRASYON\nSag kumandayi A noktasina koy,\nTETIGE bas.");
-                }
-            }
+            // YENIDEN KALIBRASYON TUSU YOK (eskiden SOL Y idi, 2026-08-11'de kaldirildi):
+            // kalibrasyon artik yalnizca TAG ile ve tag her tespitte cerceveyi ZATEN duzeltiyor —
+            // elle sifirlamanin tek gorunur etkisi, mac ortasinda kazara basilinca Calibrated
+            // bayragini dusurup kafanin onune panel dikmekti. A/B yolu (tagOnly=false) icin de
+            // tekrar yolu yok: botched bir A/B'nin caresi uygulamayi yeniden acmak.
         }
 
         // Panel takibi HeadFollowPanel bileseninde (obje inaktifken calismaz — eski
@@ -265,7 +248,7 @@ namespace VRMultiplayer
             // Not "neden kalibre oluyoruz" diyordu; is bitti, artik yaniltici olur. Sirayi
             // bekleyen akis (or. insa modu) kendi panelini bundan sonra acar.
             _note = "";
-            SetStatus("KALIBRE EDILDI!\nIyi oyunlar.\n(Yeniden kalibre: SOL kumanda Y tusu)");
+            SetStatus("KALIBRE EDILDI!\nIyi oyunlar.");
             StartCoroutine(HideAfter(6f));
         }
 
@@ -294,7 +277,7 @@ namespace VRMultiplayer
             if (_started)
             {
                 StopAllCoroutines();
-                SetStatus("TAG ILE KALIBRE EDILDI!\nIyi oyunlar.\n(Yeniden kalibre: SOL kumanda Y tusu)");
+                SetStatus("TAG ILE KALIBRE EDILDI!\nIyi oyunlar.");
                 StartCoroutine(HideAfter(6f));
             }
             Debug.Log("[Calibration] Cerceve TAG'den kuruldu — A/B atlandi.");
@@ -308,8 +291,6 @@ namespace VRMultiplayer
 
         bool ReadRightTrigger() => XRButtons.Button(XRNode.RightHand, CommonUsages.triggerButton);
 
-        bool ReadLeftY() => XRButtons.Button(XRNode.LeftHand, CommonUsages.secondaryButton);
-
         void SetStatus(string s)
         {
             // Panel sahnede ATANMAMISSA runtime'da olustur. Aksi halde kalibrasyon mesajlari
@@ -317,8 +298,7 @@ namespace VRMultiplayer
             // ve "kalibre olmus gibi" sanip yanlis cerceveyle oynardi (yasanmis).
             //
             // "~" oneki: ConstructorPassthrough.HideVirtualWorld cizen kok objeleri gizliyor;
-            // bu panel kalibrasyon durumunu ve "yeniden kalibre: SOL Y" talimatini tasidigi
-            // icin passthrough acikken de gorunmeli.
+            // bu panel kalibrasyon durumunu tasidigi icin passthrough acikken de gorunmeli.
             if (status == null)
                 status = UI.HeadFollowPanel.Create("~Calibration Panel", "", Color.white);
 
