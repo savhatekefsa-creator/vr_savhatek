@@ -21,8 +21,8 @@ namespace VRMultiplayer.EditorTools
     ///
     /// Everything is sized for the scanned room this project targets: roughly 4.9 x 3.7 m with a
     /// 2.68 m ceiling. That is small. A full-height wall is a serious commitment of floor in a
-    /// space like that, which is why the kit is a wall, a way THROUGH a wall, and a waist-high
-    /// piece that doubles as cover.
+    /// space like that, which is why the kit is a wall, a way THROUGH a wall, a waist-high
+    /// piece that doubles as cover, and a railing that bounds the space without closing the view.
     ///
     /// Re-running is safe: prefabs are overwritten in place, so the library keeps its ids and
     /// every saved map that references them survives. Change a constant, run the menu again.
@@ -54,6 +54,29 @@ namespace VRMultiplayer.EditorTools
         const float DoorWallLength = 1.5f;   // 12 hucre
         const float DoorWidth = 0.875f;      // VR'da rahat gecis; 0.75 dar geliyor
         const float DoorHeight = 2.0f;       // ustunde 0.2 m lento kalir
+
+        // --- boru korkuluk ---
+        // SINIR, DUVAR DEGIL. Bu parcanin isi oyuncuyu bir hattin gerisinde tutmak ama arkasini
+        // GOSTERMEYE devam etmek — cati kenarinda sehri, gercek odada da acikligi. Iki yatay
+        // boru ve iki dikmeden ibaret olmasinin sebebi bu: dolu bir levha ayni durdurmayi yapar
+        // ve manzarayi da goturur.
+        //
+        // 1.10 m GOGUS HIZASI, kasten. Diz hizasi bir korkuluk govdeyi durdurmaz — oyuncu
+        // ustunden egilir, ve VR'da sanal engelin gerisinde duran sey gercek duvar oldugu icin
+        // bu elini duvara vurmasi demek. Gogus hizasinda govde daha once durur; goz hizasinin
+        // altinda kaldigi icin de gorusu kapatmaz.
+        const float RailLength = 1.0f;    // 8 hucre — Wall_Solid ile ayni modul, yan yana dizilir
+        const float RailHeight = 1.10f;
+        const float RailPipe = 0.05f;     // boru kesiti
+        const float RailPostW = 0.09f;    // dikme genisligi
+
+        // Dikme DERINLIGI tam bir hucre — sabit bir sayi DEGIL, Cell'in kendisi. Ince eksen
+        // bunun altina indiginde MapBuilder.FitAxis onu zaten bir hucreye buyutur (izgara bir
+        // hucreden inceyi rezerve edemez), yani elle 4 cm yazsaydik borular oyunda yassilmis
+        // cikardi. Hucreye baglamak o buyutmeyi gereksiz kilar: ne rezerve ediliyorsa gorunen o
+        // — ve hucre boyu bir daha degistiginde (0.125 -> 0.0625 bir kez oldu) korkuluk
+        // kendiliginde dogru kalir.
+        const float RailDepth = Cell;
 
         // --- masa ---
         const float TableLength = 1.0f;   // 8 hucre
@@ -141,6 +164,9 @@ namespace VRMultiplayer.EditorTools
 
             var stone = EnsureMaterial(MaterialFolder + "/Kit_Stone.mat", new Color(0.62f, 0.61f, 0.58f));
             var wood = EnsureMaterial(MaterialFolder + "/Kit_Wood.mat", new Color(0.45f, 0.32f, 0.20f));
+            // Galvaniz boru grisi — korkulugu tas duvardan ayirir, ama dikkat cekmeye
+            // calismaz; hangi rengin "buraya girme" diye bagiracagi haritayi kuranin karari.
+            var metal = EnsureMaterial(MaterialFolder + "/Kit_Metal.mat", new Color(0.55f, 0.57f, 0.60f));
             // Raf, sahnedeki panel gibi BEYAZ — silahlar onunde kontrastla okunuyor.
             var rackMat = EnsureMaterial(MaterialFolder + "/Kit_Rack.mat", new Color(0.90f, 0.90f, 0.88f));
 
@@ -148,6 +174,7 @@ namespace VRMultiplayer.EditorTools
             {
                 Build("Wall_Solid", stone, SolidWall()),
                 Build("Wall_Door", stone, DoorWall()),
+                Build("Railing_Pipe", metal, PipeRailing()),
                 Build("Table_Low", wood, Table()),
 
                 // Silah rafi: tek parca, 16 silahin tamami uzerinde.
@@ -192,6 +219,42 @@ namespace VRMultiplayer.EditorTools
                         new Vector3(jambX, WallHeight * 0.5f, 0f)),
                 new Box(new Vector3(DoorWidth, lintel, WallThick),
                         new Vector3(0f, DoorHeight + lintel * 0.5f, 0f)),
+            };
+        }
+
+        /// <summary>
+        /// Pipe railing: two horizontal rails on two posts. A boundary you can see through.
+        ///
+        /// THE POSTS SIT FULLY INSIDE THE MODULE, which is what makes a run of these read as one
+        /// railing instead of a row of separate panels. Each post is inset by its own half-width,
+        /// so two modules placed side by side bring their end posts edge to edge at the seam —
+        /// they touch and form a single double-width stanchion, the way a real railing joins.
+        /// Centring the posts on the module ends would instead have put two posts in exactly the
+        /// same place, z-fighting against each other at every joint.
+        ///
+        /// NO <c>BulletPassThrough</c> HERE, unlike the weapon rack. The rack needs it because
+        /// its grid is drawn as one dense panel whose box colliders cover the gaps; this railing
+        /// has a collider per pipe and nothing in between, so shots already pass through the open
+        /// air and stop on the metal. That is the honest behaviour, and it comes for free.
+        /// </summary>
+        static Box[] PipeRailing()
+        {
+            float postX = RailLength * 0.5f - RailPostW * 0.5f;
+
+            return new[]
+            {
+                // Ust boru — el yuksekligi, korkulugun okunan hatti.
+                new Box(new Vector3(RailLength, RailPipe, RailPipe),
+                        new Vector3(0f, RailHeight - RailPipe * 0.5f, 0f)),
+                // Orta boru: tek boruda alttan gecilebilir goruntusu olusuyor ve bosluk
+                // "buradan atlanir" diye okunuyor. Ikincisi hatti kapatir, gorusu kapatmadan.
+                new Box(new Vector3(RailLength, RailPipe, RailPipe),
+                        new Vector3(0f, RailHeight * 0.5f, 0f)),
+                // Dikmeler.
+                new Box(new Vector3(RailPostW, RailHeight, RailDepth),
+                        new Vector3(-postX, RailHeight * 0.5f, 0f)),
+                new Box(new Vector3(RailPostW, RailHeight, RailDepth),
+                        new Vector3(postX, RailHeight * 0.5f, 0f)),
             };
         }
 
