@@ -1175,6 +1175,8 @@ namespace VRMultiplayer
                     else
                     {
                         // Tek seferlik sapma: orneği ATLA, pencereyi koru.
+                        // Burada da pencere eksik kaliyor, yani is var (bkz. sayac kapisi).
+                        _alignedNow = false;
                         _calibNote = $"olculuyor {ProgressBar(_calibLocal.Count, CalibNeed)}";
                         return;
                     }
@@ -1201,6 +1203,18 @@ namespace VRMultiplayer
             int need = CalibNeed;
             if (_calibLocal.Count < need)
             {
+                // PENCERE DOLDURMAK "IS"TIR — tespit yavaslamamali.
+                //
+                // Bu satir olmadan _alignedNow bir onceki hizalamadan kalma true degerinde
+                // kaliyordu, busy false cikiyordu ve pencere IDLE hizinda (1 Hz) doluyordu:
+                // 5 ornek = 5 saniye. Cihazda olculdu (2026-08-18 drift turu): dokuz bakis
+                // kopmasinin dokuzunda da duzeltme satiri PENCERE SILINDI'den tam 4-5 sn
+                // sonra geldi. detectionsPerSecond zaten 3 idi, yani hiz ayari degil bu kapi
+                // darboğazdi — 5 ornek artik ~1,7 sn'de doluyor.
+                //
+                // Gerekce, satir 750'deki "henuz kalibre degilsek tam hizda tara" notunun
+                // aynisi: oyuncu duvara bakmis bekliyor, tasarruf edilecek bir sey yok.
+                _alignedNow = false;
                 _calibNote = $"olculuyor {ProgressBar(_calibLocal.Count, need)}";
                 return;
             }
