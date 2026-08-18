@@ -419,6 +419,15 @@ namespace VRMultiplayer
         [Range(0.05f, 1f)]
         public float smallCorrectionRate = 0.25f;
 
+        [Tooltip("Kazanc, olculen pencere sacilmasina gore AZALSIN mi (Adim 6).\n\n" +
+                 "KAPALIYKEN kazanc yine hesaplanir ve her duzeltme satirina yazilir, ama " +
+                 "UYGULANMAZ. Adim 3'un iki turlu duzeni: kabul edilen pencerelerin sacilmasi " +
+                 "bugune kadar HIC olculmedi, cunku KARARSIZ satiri yalnizca sinir ASILDIGINDA " +
+                 "yaziliyor. Oran normal kullanimda 0,1 ise bu alan hicbir sey degistirmez; " +
+                 "0,8 ise kazanci neredeyse yariya indirir. Once olcup sonra acilir.\n\n" +
+                 "Log'da bakilacak sutunlar: 'sac/sinir' ve 'kazanc'.")]
+        public bool gainScalesWithSpread = false;
+
         [Tooltip("Bu sapmanin USTU 'buyuk' sayilir ve ANINDA duzeltilir (m). Uyku sonrasi ya da " +
                  "takip kaybinda dunya hemen yerine otursun; suzulerek gelmesi cok daha kotudur.")]
         public float snapThresholdMeters = 0.10f;
@@ -1064,6 +1073,12 @@ namespace VRMultiplayer
         float _nextSpreadDiagAt;  // KARARSIZ satirini kisitlar — her karede yazilirdi
         float _diagYawSpread;     // son olculen yaw sacilmasi (Adim 5) — teshis satirinda
 
+        // ADIM 6'NIN GIRDILERI. Alan olarak tutuluyorlar, parametre olarak degil: ayni desen
+        // _diagYawSpread'de zaten var ve tek cagri yeri (ApplyCorrection) kapinin hemen
+        // ardinda, yani bayatlamalari mumkun degil.
+        float _diagSpreadRatio;   // kabul edilen pencerenin sacilma / sinir orani
+        int _diagSampleCount;     // o penceredeki ornek sayisi
+
         /// <summary>
         /// SUREKLI, kendini onaran hizalama. Tag her gorulduginde:
         ///   - yakin degilse "yaklas" (jitter mesafeyle buyur, uzaktan hizalama kotu)
@@ -1269,6 +1284,14 @@ namespace VRMultiplayer
                 }
                 return;
             }
+
+            // ADIM 6 OLCUMU. Buraya kadar gelen pencere KABUL EDILMIS demektir ve sacilmasi
+            // simdiye kadar hicbir yere yazilmiyordu — KARARSIZ satiri yalnizca sinir asilinca
+            // yaziliyor, yani elimizde REDDEDILENLERIN dagilimi vardi, kabul edilenlerin degil.
+            // Kazanci bu sayiya baglamadan once sayinin kendisi olculmeli.
+            _diagSpreadRatio = spreadLimit > 0f ? spread / spreadLimit : 0f;
+            _diagSampleCount = _calibLocal.Count;
+
             // YAW da AYNI AGIRLIKLA ortalanir: yon kestirimi konumla ayni pozdan geliyor, yani
             // mesafeyle ayni sekilde bozuluyor.
             Vector2 dir = Vector2.zero;
@@ -1583,6 +1606,49 @@ namespace VRMultiplayer
         /// referans (anchor tracking'i 'None' oldugunda ise yaramiyordu, ustelik LateUpdate'te
         /// tag'in duzeltmesini eziyordu).
         /// </summary>
+        /// <summary>
+        /// Duzeltme kazancinin carpani (0-1]. 1 = bugunku davranis, yani sabit
+        /// <see cref="smallCorrectionRate"/>.
+        ///
+        /// ADIM 6'NIN YALNIZCA YARISI. Plan kazanci iki belirsizlige baglamayi oneriyordu:
+        /// olcum belirsizligi ve son duzeltmeden bu yana biriken odometri suruklenmesi.
+        /// IKINCISI OLCULDU VE DUSURULDU (2026-08-18, drift turu, ofis): tag 8-56 sn goruus
+        /// disinda birakilip donuldugunde dokuz donusun ALTISINDA sapma olu bolgenin (1 cm)
+        /// altinda kaldi; kalan ucu 38,3 sn -> 1,8 cm, 51,4 sn -> 1,7 cm, 56,4 sn -> 2,6 cm.
+        /// Benzer bosluklar arasindaki sacilma trendin kendisi kadar buyuk (35,2 sn'de
+        /// <=1 cm, 38,3 sn'de 1,8 cm), yani suruklenme gurultuden ayirt edilemiyor; en kotu
+        /// durum bile ~0,05 cm/sn'lik bir UST SINIR veriyor. Ustelik zaman teriminin motive
+        /// edici vakasi olan uyku sonrasi toparlanma bu hesaba hic ugramiyor: uykudan sonra
+        /// sapma <see cref="snapThresholdMeters"/> esigini asar ve rate zaten 1 olur.
+        /// "Olculmemis sayi koda girmez" kuralinin dogal sonucu: driftRatePerSecond YOK.
+        ///
+        /// Kalan yari OLCULU: pencerenin kendi sacilmasi. Ortalamanin standart hatasi
+        /// sacilma/sqrt(N); referans olarak kabul sinirinin dolu penceredeki hali alinir.
+        /// Boylece YENI BIR SABIT GIRMIYOR — calibStabilitySpread ve calibrateSampleCount
+        /// zaten var ve ikisi de olculmus.
+        ///
+        /// KAZANC ASLA BUGUNKUNDEN BUYUK OLMAZ, bilerek. Kucuk sacilma "olcum dogru"
+        /// demek DEGIL: bu dosyanin kendi notuna gore baskin hata bakis acisina bagli
+        /// SISTEMATIK sapma, ve sistematik sapmanin sacilmasi kucuktur. Kazanci sacilma
+        /// kucukken 1'e dogru buyutmek, tam da en emin gorunen anda yanlis cevaba kosmak
+        /// olurdu — planin EKF'i reddetme gerekcesinin aynisi.
+        /// </summary>
+        float CorrectionGain()
+        {
+            if (_diagSampleCount <= 0) return 1f;   // olcum yok: davranis degismesin
+
+            // Sacilma/sinir orani, ornek sayisiyla duzeltilir: yarim dolu bir pencere ayni
+            // sacilmada daha az guvenilir, cunku ortalamanin standart hatasi sqrt(N) ile duser.
+            float oran = _diagSpreadRatio *
+                         Mathf.Sqrt(calibrateSampleCount / (float)Mathf.Max(1, _diagSampleCount));
+
+            // Kalman kazancinin skaler hali. SIFIRA INMEZ ve inmemeli: 5 sn'den uzun her bakis
+            // kopmasinda pencere siliniyor (calibWindowMaxGap) ve 5 ornekle bastan basliyor.
+            // Drift turunda pencere 6,3 dakikada DOKUZ kez silindi — nadir bir durum degil,
+            // ve o anlarda kazanci sifirlamak duzeltmeyi tamamen durdururdu.
+            return 1f / (1f + oran * oran);
+        }
+
         void ApplyCorrection(TagEntry entry, Vector3 measuredPos, float measuredYaw, float dev,
                              bool applyYaw, float distance)
         {
@@ -1616,7 +1682,14 @@ namespace VRMultiplayer
             // benzer cercevede) suzulmek oyuncuyu saniyelerce yanlis yerde tutardi.
             bool snap = _layoutStale
                      || dev > snapThresholdMeters || Mathf.Abs(yawDelta) > snapThresholdDegrees;
-            float rate = snap ? 1f : Mathf.Clamp01(smallCorrectionRate);
+            // ADIM 6: kucuk duzeltmenin kazanci olculen sacilmaya gore azalir. SNAP YOLU
+            // DISARIDA: snap zaten "olcume degil, olcumun buyuklugune" tepki veriyor ve uyku
+            // sonrasi toparlanmanin tek yolu o; onu sacilmayla yavaslatmak, kazanci eklemekle
+            // duzeltilmek istenen seyin tam tersi olurdu.
+            float gain = CorrectionGain();
+            float rate = snap ? 1f
+                              : Mathf.Clamp01(smallCorrectionRate) *
+                                (gainScalesWithSpread ? gain : 1f);
 
             // Duzeltmeler saniyede 3'e kadar tetiklenir; hepsini yazmak dosyayi bogar.
             // SNAP her zaman yazilir (nadir ve onemli), normal hiza 5 saniyede bir.
@@ -1655,14 +1728,20 @@ namespace VRMultiplayer
             // gormek sart. Plan 2 derece oneriyor ama o sayi olculmedi; bu sutun onu olcuyor.
             string ysac = $"  yawsac {_diagYawSpread:0.00}";
 
+            // ADIM 6 SUTUNU. Kapali olsa da YAZILIR: acmadan once bu oranin normal kullanimda
+            // ne oldugunu gormek gerekiyor (bkz. gainScalesWithSpread). "(uygulanmadi)" notu,
+            // yaw sutunundaki ayni notun isini gorur — log'un yalan soylememesi icin.
+            string kzn = $"  sac/sinir {_diagSpreadRatio:0.00} ({_diagSampleCount} ornek)" +
+                         $"  kazanc {gain:0.00}" + (gainScalesWithSpread ? "" : " (uygulanmadi)");
+
             if (snap)
             {
-                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{ysac}{px}{dm}{bosluk}");
+                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{ysac}{px}{dm}{bosluk}{kzn}");
             }
             else if (Time.time >= _nextStateDiagAt)
             {
                 _nextStateDiagAt = Time.time + 5f;
-                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{ysac}{px}{dm}{bosluk}");
+                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{ysac}{px}{dm}{bosluk}{kzn}");
             }
 
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
