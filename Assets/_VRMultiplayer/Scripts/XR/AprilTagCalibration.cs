@@ -326,6 +326,26 @@ namespace VRMultiplayer
                  "Kurulumun genelini yaz: hepsi zeminde ise Zemin.")]
         public TagMount defaultMounting = TagMount.Duvar;
 
+        [Header("Coklu tag fuzyonu (deneysel)")]
+        [Tooltip("Ayni karede GORULEN tag'leri BIRLIKTE cozsun mu.\n\n" +
+                 "NEDEN: duzlemsel bir isaretcinin en guvenilmez bileseni kendi yaw'idir " +
+                 "(1-3 derece, bakis acisina bagli, ortalamayla gecmiyor) -- konumu ise mm " +
+                 "mertebesinde. Iki tag ayni karede goruluyorsa yonu onlarin KONUMLARINDAN " +
+                 "turetebiliriz: 3 m arayla duran iki tag icin 15 mm'lik konum gurultusu " +
+                 "0,29 derecelik yon gurultusu demek. Yani fuzyon, tag'in zayif olcumunu " +
+                 "kullanmak yerine BAYPAS ediyor.\n\n" +
+                 "KAPALIYKEN eski yol aynen calisir (en yakin tek tag). Tek tag goruluyorsa " +
+                 "acikken de eski yola duser -- fuzyon en az iki tag ister.")]
+        public bool useMultiTagFusion = false;
+
+        [Tooltip("Fuzyon cozumunun kabul edilebilir artik hatasi (m). Ustu REDDEDILIR.\n\n" +
+                 "Bu sayi kendi kendini dogrulayan bir kapi: cozumden sonra her tag'in " +
+                 "olculen yeri ile ilan edilen yeri arasinda kalan fark, tag'lerin BIRBIRIYLE " +
+                 "ve yerlesimle ne kadar uyustugunu dogrudan olcer. Buyukse ya yerlesim " +
+                 "yanlis, ya bir tespit bozuk, ya da flip var -- ucunu de tek sayi yakalar.\n\n" +
+                 "GECIS ile ayni buyuklukte olmali: olculen en iyi GECIS medyani 3,3 cm.")]
+        public float fusionMaxResidual = 0.05f;
+
         [Tooltip("Tag'in NORMALI yataydan bu kadar sapabilir (derece). Ustu elenir.\n\n" +
                  "NEDEN ISE YARAR: kagitlar DUVARA duz yapistirilmis, yani normalleri yatay " +
                  "olmak ZORUNDA. Duzlemsel poz belirsizliginin yanlis cozumu tag'i one/arkaya " +
@@ -874,6 +894,10 @@ namespace VRMultiplayer
             _nearestId = -1;
             _nearestDist = float.MaxValue;
 
+            // Fuzyon adaylari KARE BASINA toplanir; onceki karenin kalintisi
+            // birikirse artik gorulmeyen tag'ler cozume girer.
+            _fuseMeasured.Clear(); _fuseDeclared.Clear(); _fuseWeight.Clear(); _fuseDist.Clear();
+
             // TESHIS: tag'in GORUNTUDEKI yeri. Hem lens distorsiyonu hem ana nokta hatasi
             // KONUMA BAGLI etkiler — kadrajin ortasindaki tag ile kenarindaki tag farkli
             // yanilir. "Tag neredeydi" bilgisi olmadan bu ikisini olcmek mumkun degil.
@@ -942,6 +966,19 @@ namespace VRMultiplayer
                         bestRot = worldRot;
                     }
 
+                    // FUZYON ADAYI. Kazanan secimiyle ayni kapilardan gecmis olan HER tag
+                    // toplanir — fuzyon icin "en yakin" diye bir sey yok, hepsi birlikte
+                    // cozuluyor. Mesafe kesmesi burada uygulanir: tek-tag yolunda bu kontrol
+                    // ContinuousCorrect'in icinde, fuzyonun oraya ugramasi gerekmiyor.
+                    if (useMultiTagFusion && entry != null && entry.useForCalibration &&
+                        dist <= calibrateMaxDistance)
+                    {
+                        _fuseMeasured.Add(worldPos);
+                        _fuseDeclared.Add(entry.position);
+                        _fuseWeight.Add(SampleWeight(dist));
+                        _fuseDist.Add(dist);
+                    }
+
                     // KAPALI tag KONTROLU KALDIRILDI. Yeni bir tag'i dogrulamak icin konulmustu:
                     // "plaka kaymis ama NE KADAR" sorusunu cevapliyordu. Yerini dokunus yontemi
                     // aldi — artik sapmayi olcup elle duzeltmiyoruz, konumu dogrudan kumandadan
@@ -962,7 +999,13 @@ namespace VRMultiplayer
                 _jitterMm = JitterMmFor(_nearestId);
             }
 
-            if (bestEntry != null)
+            // FUZYON ONCE DENENIR, tek-tag yolu YEDEK. Iki yol ayni karede birden
+            // calismaz: ikisi de rig'i oynatiyor ve ikincisi, birincinin tasidigi yeni
+            // cerceveye kendi hesabini uygulardi -- ust uste binen duzeltmeler sapma uretir
+            // (ayni gerekce tek-tag yolunda da yaziyor).
+            bool fuzyonUygulandi = _fuseMeasured.Count >= 2 && FuseCorrect();
+
+            if (!fuzyonUygulandi && bestEntry != null)
                 ContinuousCorrect(bestEntry, bestDist, bestPos, bestRot);
 
             TickPanel();
@@ -1714,6 +1757,150 @@ namespace VRMultiplayer
             // Drift turunda pencere 6,3 dakikada DOKUZ kez silindi — nadir bir durum degil,
             // ve o anlarda kazanci sifirlamak duzeltmeyi tamamen durdururdu.
             return 1f / (1f + oran * oran);
+        }
+
+        // ---- COKLU TAG FUZYONU ------------------------------------------------------------
+        //
+        // Kare basina toplanan adaylar. Tek-tag yolunun kayan penceresinden AYRI tutuluyor:
+        // o pencere "tek tag'in zaman icindeki ortalamasi", bu liste "ayni ANDAKI tag'ler".
+        readonly List<Vector3> _fuseMeasured = new List<Vector3>();
+        readonly List<Vector3> _fuseDeclared = new List<Vector3>();
+        readonly List<float> _fuseWeight = new List<float>();
+        readonly List<float> _fuseDist = new List<float>();
+        float _nextFuseDiagAt;
+
+        /// <summary>
+        /// Ayni karede gorulen tag'leri BIRLIKTE cozer: olculen konumlari ilan edilen
+        /// konumlara en iyi oturtan yaw + oteleme.
+        ///
+        /// NEDEN TEK TAG'DEN IYI: duzlemsel bir isaretcinin en guvenilmez bileseni kendi
+        /// yaw'idir (1-3 derece, bakis acisina bagli, ortalamayla GECMIYOR); konumu ise mm
+        /// mertebesinde. Fuzyon yonu tag'lerin DONUSUNDEN degil KONUMLARINDAN turetiyor,
+        /// yani sistemin zayif olcumunu hic kullanmiyor. 3 m arayla iki tag icin 15 mm'lik
+        /// konum gurultusu 0,29 derecelik yon gurultusu demek.
+        ///
+        /// COZUM: agirlikli Procrustes, yalnizca yaw + oteleme (pitch/roll ASLA — dunyayi
+        /// yan yatirmak mide bulandirir). Agirlik tek-tag yolundakiyle ayni: 1/d^4.
+        ///
+        /// KENDI KENDINI DOGRULAR: cozumden sonra kalan artik hata (RMS), tag'lerin
+        /// birbiriyle ve yerlesimle ne kadar uyustugunu dogrudan olcer. Yerlesim hatasi,
+        /// bozuk tespit ve flip -- ucu de tek sayida gorunur. Esigi asarsa duzeltme
+        /// uygulanmaz ve tek-tag yoluna dusulur.
+        ///
+        /// YAN ETKI, BILINCLI: fuzyon calistigi karede tek-tag yolu calismaz, yani onun
+        /// kayan penceresi DOLMAZ. Surekli iki tag goren bir turda sonra tek tag'e dusulurse
+        /// pencere sifirdan dolar (~1,7 sn). Kabul edildi: fuzyon zaten daha iyi bir cozum
+        /// veriyorken pencereyi bosuna beslemek, ayni kareye iki farkli olcum mantigi sokardi.
+        /// </summary>
+        /// <returns>
+        /// true = fuzyon karari verdi (rig'e dokundu ya da "hizali" dedi);
+        /// false = cozemedi, tek-tag yolu denesin.
+        /// </returns>
+        bool FuseCorrect()
+        {
+            if (!EnsureRig()) return false;
+
+            int n = _fuseMeasured.Count;
+            float wTop = 0f;
+            Vector3 mBar = Vector3.zero, dBar = Vector3.zero;
+            for (int i = 0; i < n; i++)
+            {
+                float w = _fuseWeight[i];
+                wTop += w;
+                mBar += _fuseMeasured[i] * w;
+                dBar += _fuseDeclared[i] * w;
+            }
+            if (wTop <= 0f) return false;
+            mBar /= wTop;
+            dBar /= wTop;
+
+            // YAW: yatay duzlemde agirlikli Procrustes. Unity'nin Y donusu
+            //   d.x = m.x*cos + m.z*sin ,  d.z = -m.x*sin + m.z*cos
+            // oldugundan pay/payda asagidaki gibi cikiyor.
+            float pay = 0f, payda = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 m = _fuseMeasured[i] - mBar;
+                Vector3 d = _fuseDeclared[i] - dBar;
+                float w = _fuseWeight[i];
+                pay += w * (m.z * d.x - m.x * d.z);
+                payda += w * (m.x * d.x + m.z * d.z);
+            }
+
+            // Tag'ler ust uste dusuyorsa yon belirsiz — cozmeye calismak gurultuyu
+            // yon sanmak olur.
+            if (Mathf.Abs(pay) < 1e-9f && Mathf.Abs(payda) < 1e-9f) return false;
+            float theta = Mathf.Atan2(pay, payda) * Mathf.Rad2Deg;
+
+            // ARTIK HATA. Dikey de dahil: tag'lerin yuksekligi yerlesimde yanlissa kati
+            // donusum onu kapatamaz ve burada gorunur — istenen budur.
+            Quaternion R = Quaternion.Euler(0f, theta, 0f);
+            float kare = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 kalan = (R * (_fuseMeasured[i] - mBar) + dBar) - _fuseDeclared[i];
+                kare += _fuseWeight[i] * kalan.sqrMagnitude;
+            }
+            float rms = Mathf.Sqrt(kare / wTop);
+
+            if (rms > fusionMaxResidual)
+            {
+                // Seyrek yazilir: her karede yazmak dosyayi bogar, ama BU SATIR degerli —
+                // yerlesim hatasinin dogrudan olcusu.
+                if (Time.time >= _nextFuseDiagAt)
+                {
+                    _nextFuseDiagAt = Time.time + 5f;
+                    WriteDiag($"FUZYON RED  {n} tag  kalinti {rms * 100f:0.0} cm > " +
+                              $"{fusionMaxResidual * 100f:0.0}  yaw {theta:+0.00;-0.00}" +
+                              $"  — tag'ler birbiriyle ya da yerlesimle celisiyor");
+                }
+                _calibNote = $"FUZYON RED (kalinti {rms * 100f:0.0} cm)";
+                return false;   // tek-tag yolu denesin
+            }
+
+            Vector3 oteleme = dBar - mBar;
+            float dev = oteleme.magnitude;
+
+            if (dev <= correctionDeadzoneMeters && Mathf.Abs(theta) <= correctionYawDeadzoneDegrees)
+            {
+                _calibNote = $"HIZALI ({dev * 100f:0.0} cm, {n} tag fuzyon)";
+                _alignedNow = true;
+                return true;   // is yok — ama KARAR fuzyonun, tek-tag yolu ayni karede calismasin
+            }
+            _alignedNow = false;
+
+            bool snap = _layoutStale || dev > snapThresholdMeters ||
+                        Mathf.Abs(theta) > snapThresholdDegrees;
+            float rate = snap ? 1f : Mathf.Clamp01(smallCorrectionRate);
+
+            // SIRA: once donme (olculen agirlik merkezi etrafinda, o nokta sabit kalir),
+            // sonra oteleme. Tek-tag yolundaki desenin aynisi.
+            _rig.RotateAround(mBar, Vector3.up, theta * rate);
+            Vector3 delta = oteleme * rate;
+            if (!correctVertical) delta.y = 0f;
+            _rig.position += delta;
+
+            if (_cm != null) _cm.CompleteFromTag();
+            TickAnchorHold();
+            _layoutStale = false;
+            _lastCorrectionAt = Time.time;
+
+            _calibNote = $"FUZYON {n} tag ({dev * 100f:0.0} cm, yaw {theta:0.0})";
+
+            if (snap || Time.time >= _nextFuseDiagAt)
+            {
+                _nextFuseDiagAt = Time.time + 5f;
+                float dMin = float.MaxValue, dMax = 0f;
+                for (int i = 0; i < n; i++)
+                {
+                    if (_fuseDist[i] < dMin) dMin = _fuseDist[i];
+                    if (_fuseDist[i] > dMax) dMax = _fuseDist[i];
+                }
+                WriteDiag($"{(snap ? "FUZSNAP" : "FUZYON ")}  {n} tag  sapma {dev * 100f:0.0} cm" +
+                          $"  yaw {theta:+0.00;-0.00}  kalinti {rms * 100f:0.0} cm" +
+                          $"  d {dMin:0.00}-{dMax:0.00} m");
+            }
+            return true;
         }
 
         void ApplyCorrection(TagEntry entry, Vector3 measuredPos, float measuredYaw, float dev,
