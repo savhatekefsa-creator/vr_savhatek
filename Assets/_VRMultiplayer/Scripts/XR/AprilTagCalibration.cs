@@ -25,6 +25,27 @@ namespace VRMultiplayer
     /// </summary>
     public class AprilTagCalibration : MonoBehaviour
     {
+        /// <summary>
+        /// Tag'in fiziksel montaji. Poz gecerlilik kapisinin (Adim 3) 2. ve 3. sinamasi
+        /// bu bilgiye gore REFERANS DEGISTIRIR — kapinin isi degismiyor, neyi "dogru duruş"
+        /// saydigi degisiyor.
+        ///
+        /// Duvar: kagit dik, normali YATAY, kendi yukari ekseni DUNYA DIKEYIYLE hizali.
+        /// Zemin: kagit yatik, normali DIKEY, kendi yukari ekseni YATAY.
+        ///
+        /// Zemin tag'i yatik olmasina ragmen yaw uretebiliyor: <see cref="YawOf"/> ileri
+        /// vektorun yatay izdusumu dejenere oldugunda tag'in kendi yukari eksenine dusuyor,
+        /// yani duzlem ici donmeyi okuyor. O taraf icin ek is gerekmedi.
+        ///
+        /// VARSAYILAN DUVAR: alan eski haritalarda yok, sifir olarak okunur ve eski davranis
+        /// aynen korunur.
+        /// </summary>
+        public enum TagMount
+        {
+            Duvar = 0,
+            Zemin = 1,
+        }
+
         [Serializable]
         public class TagEntry
         {
@@ -56,6 +77,12 @@ namespace VRMultiplayer
                      "Bu alan kimligi SIRAYA degil PLAKAYA baglar: plaka silinince yalnizca " +
                      "onun tag'i duser, digerleri numarasini korur.")]
             public uint sourceInstanceId;
+
+            [Tooltip("Tag DUVARDA mi ZEMINDE mi. Poz gecerlilik kapisinin 'dogru durus' " +
+                     "referansini belirler; yanlis ayarlanirsa o tag'in HER tespiti elenir.\n\n" +
+                     "Plakadan uretilen tag'lerde otomatik doldurulur (dik plaka -> Duvar, " +
+                     "yatik plaka -> Zemin). Elle yazilan ya da kopyalanan tag'lerde kontrol et.")]
+            public TagMount mounting = TagMount.Duvar;
 
             [Tooltip("Bu tag KALIBRASYONDA kullanilsin mi.\n\n" +
                      "KAPALIYKEN tag yine gorulur, olculur ve panelde gorunur — ama rig'i " +
@@ -291,6 +318,14 @@ namespace VRMultiplayer
                  "buluyor. Kazanc hassasiyet degil, nadir ama BUYUK bir sicramanin onlenmesi.")]
         public bool poseGateLogOnly = false;
 
+        [Tooltip("Yerlesimde TANIMLI OLMAYAN tag'ler icin varsayilan montaj.\n\n" +
+                 "NEDEN GEREKLI: poz kapisi tespit edilen HER tag icin calisiyor, ama yeni bir " +
+                 "tag'i olcup yerlesime yazmadan once o tag yerlesimde YOK — montaji da " +
+                 "bilinmiyor. Butun tag'leri zemine koyan bir kurulumda bu alan Duvar kalirsa " +
+                 "yeni tag'in her tespiti elenir ve tag hicbir zaman olculemez.\n\n" +
+                 "Kurulumun genelini yaz: hepsi zeminde ise Zemin.")]
+        public TagMount defaultMounting = TagMount.Duvar;
+
         [Tooltip("Tag'in NORMALI yataydan bu kadar sapabilir (derece). Ustu elenir.\n\n" +
                  "NEDEN ISE YARAR: kagitlar DUVARA duz yapistirilmis, yani normalleri yatay " +
                  "olmak ZORUNDA. Duzlemsel poz belirsizliginin yanlis cozumu tag'i one/arkaya " +
@@ -299,6 +334,7 @@ namespace VRMultiplayer
                  "hatayi eleyebilen elimizdeki TEK bagimsiz kapi bu.\n\n" +
                  "OLCULDU (2026-08-13, EV): egik bakista tag'ler arasi uyusmazlik 10,2 cm, " +
                  "karsidan bakista 2,4 cm. Elemek istedigimiz sey tam olarak o egik okumalar.")]
+
         [Range(5f, 45f)] public float maxNormalTiltDegrees = 20f;
 
         [Tooltip("Tag'in KENDI dikeyi (yukari ekseni) dunya dikeyinden bu kadar sapabilir " +
@@ -1488,8 +1524,10 @@ namespace VRMultiplayer
         // bagimsiz kapi bu.
         int _poseChecked, _poseWouldReject;
 
-        bool PoseValid(Quaternion worldRot, Vector3 worldPos, Vector3 camPos, out string neden)
+        bool PoseValid(TagMount mount, Quaternion worldRot, Vector3 worldPos, Vector3 camPos,
+                       out string neden)
         {
+            bool zemin = mount == TagMount.Zemin;
             neden = null;
             Vector3 normal = TagNormal(worldRot);
 
@@ -1505,20 +1543,28 @@ namespace VRMultiplayer
                 }
             }
 
-            // 2) NORMAL YATAYLIGI. |normal.y| = sin(yataydan sapma).
-            float normalTilt = Mathf.Asin(Mathf.Clamp01(Mathf.Abs(normal.y))) * Mathf.Rad2Deg;
+            // 2) NORMAL YONELIMI. |normal.y| = sin(yataydan sapma).
+            //
+            // Duvarda normal YATAY olmali, zeminde DIKEY. Olculen ayni sayidir; yalnizca
+            // "sifir" kabul edilen yer degisir, o yuzden zeminde 90'a olan uzaklik alinir.
+            float yataydanSapma = Mathf.Asin(Mathf.Clamp01(Mathf.Abs(normal.y))) * Mathf.Rad2Deg;
+            float normalTilt = zemin ? 90f - yataydanSapma : yataydanSapma;
             if (normalTilt > maxNormalTiltDegrees)
             {
-                neden = $"normal {normalTilt:0.0} derece egik (sinir {maxNormalTiltDegrees:0})";
+                neden = $"normal {normalTilt:0.0} derece {(zemin ? "yatik" : "egik")} " +
+                        $"(sinir {maxNormalTiltDegrees:0}, montaj {mount})";
                 return false;
             }
 
-            // 3) TAG DIKEYLIGI. Tag'in kendi yukari ekseni dunya dikeyinden ne kadar sapmis.
+            // 3) TAG EKSENI. Tag'in kendi yukari ekseni dunya dikeyinden ne kadar sapmis.
+            // Duvarda dikeye HIZALI, zeminde dikeye DIK olmasi beklenir.
             float tagTilt = Vector3.Angle(worldRot * Vector3.up, Vector3.up);
             if (tagTilt > 90f) tagTilt = 180f - tagTilt;   // bas asagi da olsa EGIKLIK olcuyoruz
+            if (zemin) tagTilt = 90f - tagTilt;
             if (tagTilt > maxTagTiltDegrees)
             {
-                neden = $"tag {tagTilt:0.0} derece yatik (sinir {maxTagTiltDegrees:0})";
+                neden = $"tag ekseni {tagTilt:0.0} derece sapmis " +
+                        $"(sinir {maxTagTiltDegrees:0}, montaj {mount})";
                 return false;
             }
             return true;
@@ -1531,7 +1577,14 @@ namespace VRMultiplayer
         bool PoseGate(int tagId, Quaternion worldRot, Vector3 worldPos, Vector3 camPos, float dist)
         {
             _poseChecked++;
-            if (PoseValid(worldRot, worldPos, camPos, out string neden)) return true;
+
+            // MONTAJ YERLESIMDEN OKUNUR, yoksa varsayilana duser. Yerlesimde olmayan tag
+            // (yeni kurulum, hayalet tespit) icin bilinen bir dogru durus yok; kurulumun
+            // genelini varsaymak, yeni tag'i olcemeden elemekten iyidir.
+            var kayit = Find(tagId);
+            TagMount mount = kayit != null ? kayit.mounting : defaultMounting;
+
+            if (PoseValid(mount, worldRot, worldPos, camPos, out string neden)) return true;
 
             _poseWouldReject++;
             // Her red YAZILIR: oran bu satirlardan cikacak ve 3b'ye gecip gecmeyecegimize
@@ -3002,7 +3055,14 @@ namespace VRMultiplayer
                 // gordugun anda kaybederdin.
                 _panel = UI.HeadFollowPanel.Create("~AprilTag Olcum", "", Color.white);
                 var f = _panel.GetComponent<UI.HeadFollowPanel>();
-                if (f != null) f.heightOffset = 0.35f;   // kalibrasyon panelinin USTUNDE
+                if (f != null)
+                {
+                    f.heightOffset = 0.35f;          // kalibrasyon panelinin USTUNDE
+                    // ZEMIN TAG'I ICIN SART: tag yerde oldugunda oyuncu asagi bakiyor ve duz
+                    // duran panel gorus alanindan cikiyor. Olu bolge, duvar tag'indeki
+                    // davranisi bozmadan bunu cozuyor.
+                    f.pitchFollowDeadzone = 20f;
+                }
             }
             _panel.gameObject.SetActive(true);
 
