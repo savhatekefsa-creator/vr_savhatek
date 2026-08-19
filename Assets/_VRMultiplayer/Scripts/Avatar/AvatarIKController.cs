@@ -96,6 +96,11 @@ namespace VRMultiplayer
         public float trackingReadyMinHeight = 1f;
         [Tooltip("Fine-tune: nudge the whole body up (+) or down (-).")]
         public float bodyHeightOffset = 0f;
+        [Tooltip("Kafa dosemenin bu kadar altina inerse oyuncu DUSUYOR sayilir ve govde kafayi " +
+                 "birebir asagi takip eder (bkz. FallHazard). Comelme bu esige ASLA ulasmaz: " +
+                 "comelen bir oyuncunun kafasi zeminin altina inmez, yere yatanin bile ~20 cm " +
+                 "ustunde kalir. Kucultursen egilen oyuncunun govdesi yere batmaya baslar.")]
+        public float fallFollowDepth = 1f;
         [Tooltip("Body only turns after the head yaw differs by more than this.")]
         public float yawDeadzone = 45f;
         public float yawSpeed = 220f;
@@ -377,6 +382,17 @@ namespace VRMultiplayer
         }
 
         // --- Height calibration (read by AvatarFitDebug) ---
+        /// <summary>
+        /// Oyuncu su an DUSUYOR mu: kafa dosemenin <see cref="fallFollowDepth"/> kadar altinda.
+        ///
+        /// Disari acilmasinin sebebi <see cref="UI.AvatarCrouchPose"/>: o bilesen avatarin
+        /// tabani zeminin altina inince koku yukari itiyor (batmayi onleyen bir sinir) ve
+        /// dususte bu sinir avatari her karede catiya geri firlatiyordu — kafa 44 m asagida,
+        /// govde catida. Zemin sinirinin gecerli olmadigi TEK durum budur, ve bunu bilen tek
+        /// yer burasi.
+        /// </summary>
+        public bool Falling { get; private set; }
+
         public bool FitLocked => _fitLocked;
         public float StandingHeight => _standingH;
         public float FitScale => _baseScale * _scaleK;
@@ -524,6 +540,25 @@ namespace VRMultiplayer
 
             float ph = headSource.position.y - groundY;
 
+            // DUSEN OYUNCUNUN GOVDESI DE DUSMELI. Govde yuksekligi asagida groundY'den
+            // turetiliyor, kafadan DEGIL — bu, comelmenin avatari yerden kaldirmasini onleyen
+            // bilincli bir karar (bkz. asagidaki "root is NO LONGER derived" notu). Ama catidan
+            // dusen oyuncuda ayni karar kafayi 44 m asagi gonderip govdeyi catida BIRAKIYORDU:
+            // dusen oyuncu kendi dususunu goruyor, digerleri onu yerinde duruyor goruyordu.
+            //
+            // AYRIM NET VE UCUZ: comelen bir oyuncunun kafasi zeminin ALTINA inmez, yere yatanin
+            // bile ~20 cm ustunde kalir. Kafa dosemenin fallFollowDepth kadar altindaysa bu
+            // comelme degil DUSUSTUR.
+            //
+            // MESAFE AGA VERILMIYOR: kafa zaten replike (owner-authoritative NetworkTransform),
+            // ve ayakta olculmus boy (_standingH) ile arasindaki fark dususun TAM kendisidir.
+            // Her istemci bu hesabi elindeki veriyle yapar — ek NetworkVariable, ek RPC yok.
+            float fallDrop = ph < -fallFollowDepth
+                ? (_fitLocked ? _standingH : 0f) - ph
+                : 0f;
+            bool falling = fallDrop > 0f;
+            Falling = falling;
+
             // Per-arm max reach, seeded from the CALIBRATED standing height (arm reach ~ 44% of
             // it). _standingH used to be a running Mathf.Max that never decayed, so a single
             // raised-headset frame inflated the reach -- and the crouch ratio below -- for the
@@ -543,7 +578,10 @@ namespace VRMultiplayer
             // on the lock: before it, _standingH means nothing and would squat a standing player.
             if (_fitLocked && _crouchLayer >= 0 && _animator != null)
             {
-                float ratio = ph / _standingH;
+                // Dusen oyuncu COMELMIYOR. Ham oran dususte -25 gibi bir sayi oluyor ve
+                // comelme katmanini sonuna kadar aciyordu: avatar 44 metre boyunca comelmis
+                // bir heykel gibi iniyordu. Dususte oran "ayakta"ya sabitlenir.
+                float ratio = falling ? 1f : ph / _standingH;
                 float crouch = Mathf.Clamp01(
                     (crouchStartRatio - ratio) / Mathf.Max(0.05f, crouchStartRatio - crouchFullRatio));
                 _smoothCrouch = Mathf.Lerp(_smoothCrouch, crouch, crouchSmoothing * Time.deltaTime);
@@ -560,8 +598,12 @@ namespace VRMultiplayer
                 // grew the body, which lowered the bone again: a feedback loop that ended with the
                 // scale frozen at a wrong value and the avatar buried in, or floating above, the
                 // floor. Solved once from a steady standing sample, it cannot drift at all.
+                // Dususten boy olcumu ALINMAZ: -42 m'lik bir ornek kalibrasyonu zehirler ve
+                // oyuncu maci yanlis olceklenmis bir avatarla tamamlar.
                 if (!_fitLocked)
-                    TickCalibration(ph);
+                {
+                    if (!falling) TickCalibration(ph);
+                }
                 else if (ph > _standingH + recalibrateRise)
                 {
                     // Nobody is taller than their standing height, so a sustained higher head
@@ -579,12 +621,14 @@ namespace VRMultiplayer
                 if (look.sqrMagnitude < 0.01f) look = transform.forward;
                 look.Normalize();
                 Vector3 xz = headSource.position - look * (headForwardOffset * _scaleK);
-                transform.position = new Vector3(xz.x, groundY + bodyHeightOffset, xz.z);
+                transform.position = new Vector3(xz.x, groundY + bodyHeightOffset - fallDrop, xz.z);
             }
             else
             {
                 // Legacy mode: pin the feet to the terrain (raycast), body under the head.
-                float g = groundY;
+                // Varsayilan zemin dususu de HESABA KATAR: isin bir yuzey bulursa (asagida)
+                // zaten dogru yeri yazar, bulamazsa oyuncu en azindan catida asili kalmaz.
+                float g = groundY - fallDrop;
                 if (snapToGround)
                 {
                     Vector3 origin = new Vector3(

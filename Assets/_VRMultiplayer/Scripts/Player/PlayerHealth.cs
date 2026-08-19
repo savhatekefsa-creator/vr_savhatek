@@ -39,8 +39,11 @@ namespace VRMultiplayer
     /// vurulamaz.
     ///
     /// Attach to the NetworkPlayer root (next to <see cref="PlayerIdentity"/>).
+    ///
+    /// DUSME ayri bir dosyada: <c>PlayerHealth.Fall.cs</c>. Neden bilesen degil de partial
+    /// oldugu orada yaziyor.
     /// </summary>
-    public class PlayerHealth : NetworkBehaviour
+    public partial class PlayerHealth : NetworkBehaviour
     {
         public const int MaxHealth = 100;
 
@@ -255,6 +258,10 @@ namespace VRMultiplayer
         void Update()
         {
             if (!IsSpawned || !IsServer) return;
+
+            // Dusme, olum kapisindan ONCE: dusen oyuncu carpma aninda olur, ve olduktan sonra
+            // da dususun geri donus adimi islemeye devam etmeli (bkz. PlayerHealth.Fall.cs).
+            TickFall();
 
             if (Dead.Value) { TickSpawn(); return; }
 

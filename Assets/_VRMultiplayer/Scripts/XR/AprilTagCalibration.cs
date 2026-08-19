@@ -1057,7 +1057,13 @@ namespace VRMultiplayer
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
 
             Vector3 delta = (entry.position - measuredPos) * rate;
-            if (!correctVertical) delta.y = 0f;
+
+            // DUSUS SIRASINDA DIKEY DUZELTME SUSAR. Oyuncu catidan dusuyorken rig 40 m
+            // asagida; tag de o kadar asagida OLCULUR ve buradaki duzeltme onu dususun
+            // ortasinda yukari cekmeye calisir — saniyede 1-3 kez. Yatay duzeltme acik
+            // kaliyor: rig duz asagi indigi icin tag'in X/Z olcumu degismez, drift telafisi
+            // dogru calismaya devam eder. (bkz. FallHazard.SuppressVerticalCalibration)
+            if (!correctVertical || FallHazard.SuppressVerticalCalibration) delta.y = 0f;
             _rig.position += delta;
 
             // Rig hizalandi -> kalibrasyon DURUMUNU da tamamla. Bu satir olmadan tag dogru
