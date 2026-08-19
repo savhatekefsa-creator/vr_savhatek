@@ -57,6 +57,7 @@ namespace VRMultiplayer.UI
             // kadar egilir, yani panel bakis merkezine yapismaz — hem okunur kalir hem
             // tam bakilan yeri kapatmaz.
             Vector3 dir = fwd;
+            Vector3 yukari = Vector3.up;
             if (pitchFollowDeadzone > 0f)
             {
                 float pitch = -Mathf.Asin(Mathf.Clamp(head.forward.y, -1f, 1f)) * Mathf.Rad2Deg;
@@ -66,11 +67,18 @@ namespace VRMultiplayer.UI
                 if (asan != 0f)
                 {
                     Vector3 sag = Vector3.Cross(Vector3.up, fwd);   // yatay sag eksen
-                    dir = Quaternion.AngleAxis(asan, sag) * fwd;    // + = asagi
+                    var egim = Quaternion.AngleAxis(asan, sag);     // + = asagi
+                    dir = egim * fwd;
+
+                    // OFSET DE EGILIR. heightOffset'in isi "bakilan yeri kapatma" — bu bir
+                    // EKRAN UZAYI derdi, dunya uzayi degil. Dunya dikeyine uygulanirsa asagi
+                    // bakista paneli bakisin disina iter: cihazda yasandi, panel egilse bile
+                    // 35 cm'lik ofset onu gorus alaninin ustunde tutuyordu.
+                    yukari = egim * Vector3.up;
                 }
             }
 
-            Vector3 targetPos = head.position + dir * distance + Vector3.up * heightOffset;
+            Vector3 targetPos = head.position + dir * distance + yukari * heightOffset;
             Quaternion targetRot = Quaternion.LookRotation(dir);
 
             // Sert takip (varsayilan) ve ILK yerlestirme: dogrudan otur. Ilk kare tembel

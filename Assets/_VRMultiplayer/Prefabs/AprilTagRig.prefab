@@ -91,7 +91,7 @@ MonoBehaviour:
   learnTargetId: -1
   learnMaxDistance: 1
   learnSampleCount: 30
-  showTagMarkers: 0
+  showTagMarkers: 1
   showPassthrough: 0
   offsetReferenceTagId: 0
   autoCalibrate: 1
