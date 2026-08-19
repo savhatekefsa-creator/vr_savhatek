@@ -324,7 +324,7 @@ namespace VRMultiplayer
                 var takip = status.GetComponent<UI.HeadFollowPanel>();
                 // Tag ZEMINDEYSE bu panel de asagi bakarken okunuyor; duz kalirsa
                 // "tag'e bak" talimatini veren panelin kendisi gorunmez oluyor.
-                if (takip != null) takip.pitchFollowDeadzone = 20f;
+                if (takip != null) takip.pitchFollowDeadzone = 10f;
 
             status.gameObject.SetActive(true);
             status.text = s + _note;

@@ -2927,7 +2927,15 @@ namespace VRMultiplayer
             // kapatiyor. Oneksiz birakinca isaretci tam da ise yarayacagi anda kaybolurdu —
             // plakayi gercek tag'le karsilastirmak icin ikisini AYNI ANDA gormek gerekiyor.
             var root = new GameObject($"~TagIsaretci_{t.id}");
-            root.transform.SetPositionAndRotation(t.position, Quaternion.Euler(0f, t.yawDegrees, 0f));
+
+            // MONTAJA GORE YATIR. Isaretcinin isi "gercek tag tam buraya oturmali" demek;
+            // zemindeki bir tag icin DIK cizilen plaka konumu dogru gosterse bile kagidi
+            // uzerine yapistiramazsin. Zeminde plaka yatik cizilir, kagit dogrudan ustune
+            // gelir — yerlesim gozle ve ELLE denetlenebilir hale gelir.
+            Quaternion yon = t.mounting == TagMount.Zemin
+                ? Quaternion.Euler(90f, t.yawDegrees, 0f)
+                : Quaternion.Euler(0f, t.yawDegrees, 0f);
+            root.transform.SetPositionAndRotation(t.position, yon);
 
             // Yesil = kalibrasyonda kullaniliyor. Sari = dogrulama bekliyor.
             Color c = t.useForCalibration ? new Color(0.2f, 1f, 0.35f) : new Color(1f, 0.85f, 0.15f);
@@ -3061,7 +3069,7 @@ namespace VRMultiplayer
                     // ZEMIN TAG'I ICIN SART: tag yerde oldugunda oyuncu asagi bakiyor ve duz
                     // duran panel gorus alanindan cikiyor. Olu bolge, duvar tag'indeki
                     // davranisi bozmadan bunu cozuyor.
-                    f.pitchFollowDeadzone = 20f;
+                    f.pitchFollowDeadzone = 10f;
                 }
             }
             _panel.gameObject.SetActive(true);
@@ -3237,14 +3245,29 @@ namespace VRMultiplayer
             return p.ToString();
         }
 
+        /// <summary>
+        /// Poz'un YATAY yonu (derece). Duvardaki tag'de normalin (ileri ekseni) yatay
+        /// izdusumu; ZEMINDEKI tag'de normal dik yukari baktigi icin o izdusum dejenere olur
+        /// ve tag'in KENDI yukari ekseni kullanilir.
+        ///
+        /// ESIK NEDEN 0,25 (yani |yatay| &lt; 0,5): eskiden 1e-8'di ve bu, normalin dikeyden
+        /// 0,006 dereceden az sapmasini sart kosuyordu — gercek bir olcumde ASLA olmaz.
+        /// Sonuc: zemindeki tag geri dususe hic girmiyor, kucuk ama sifirdan buyuk bir
+        /// vektorun yonunu okuyordu ve o yon tamamen olcum gurultusuyle belirleniyordu.
+        /// Belirtisi cihazda goruldu: zemin tag'inin isaretcisi konumu dogru, ACISI rastgele.
+        ///
+        /// 0,5 iki durumu temiz ayirir ve arada bosluk birakir: poz kapisi duvar tag'inin
+        /// normalini yataydan en fazla 20 derece saptirtiyor (|yatay| >= 0,94), zemin
+        /// tag'ininkini dikeyden 20 derece (|yatay| &lt;= 0,34).
+        /// </summary>
         static float YawOf(Quaternion q)
         {
             Vector3 f = q * Vector3.forward;
             f.y = 0f;
-            if (f.sqrMagnitude < 1e-8f)
+            if (f.sqrMagnitude < 0.25f)
             {
                 f = q * Vector3.up; f.y = 0f;
-                if (f.sqrMagnitude < 1e-8f) return 0f;
+                if (f.sqrMagnitude < 1e-8f) return 0f;   // ikisi de dikey: cozulemez
             }
             return Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
         }
