@@ -321,6 +321,10 @@ namespace VRMultiplayer
             // icin passthrough acikken de gorunmeli.
             if (status == null)
                 status = UI.HeadFollowPanel.Create("~Calibration Panel", "", Color.white);
+                var takip = status.GetComponent<UI.HeadFollowPanel>();
+                // Tag ZEMINDEYSE bu panel de asagi bakarken okunuyor; duz kalirsa
+                // "tag'e bak" talimatini veren panelin kendisi gorunmez oluyor.
+                if (takip != null) takip.pitchFollowDeadzone = 20f;
 
             status.gameObject.SetActive(true);
             status.text = s + _note;
