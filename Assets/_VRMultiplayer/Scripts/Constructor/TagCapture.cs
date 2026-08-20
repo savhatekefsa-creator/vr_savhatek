@@ -410,7 +410,28 @@ namespace VRMultiplayer.Constructor
                 // (-180, 180]'e cek: plaka yaw'i hep pozitif (270), kamera olcumu Atan2'den
                 // negatif (-90) geliyordu ve ayni yon iki sayi olarak yaziliyordu.
                 float yaw = eski != null ? eski.yawDegrees : p.Yaw;
+
+                // ZEMIN PLAKASINDA 180 EKLENIR — OLCULDU, varsayilmadi.
+                //
+                // Duvarda plakanin yaw'i dogrudan tag'in yaw'i oluyor. Zeminde degil: orada
+                // normal dikey oldugu icin YawOf yonu tag'in KENDI YUKARI EKSENINDEN okuyor
+                // (bkz. AprilTagCalibration.YawOf) ve o eksen, plakanin yaw referansindan
+                // tam 180 derece sapiyor.
+                //
+                // 2026-08-19 olcumu (envanter turu, 13 tag): plakadan turemis tag'lerin
+                // HEPSI ilan 0 iken -178 ile -180 arasi okundu; tag basina sacilma 1,6-3,8
+                // derece, yani gurultu degil sabit bir kayma. Tag 0 plakadan gelmedigi ve
+                // ilani zaten 180 oldugu icin dogru okunuyordu — farki ortaya cikaran da o.
+                //
+                // Duzeltilmezse her yeni zemin plakasi 180 ters dogar, ve sapmasi 10 dereceyi
+                // astigi icin YAW KURTARMA yolunu tetikleyip DUNYAYI CEVIRIR. Cihazda tam bu
+                // yasandi: tag 4 dunyayi 180, tag 6 90 derece dondurdu ve o sirada konan
+                // plakalar metrelerce yanlis kaydedildi.
+                if (eski == null && MountOf(p.propId) == AprilTagCalibration.TagMount.Zemin)
+                    yaw += 180f;
+
                 if (yaw > 180f) yaw -= 360f;
+                if (yaw <= -180f) yaw += 360f;
 
                 // YENI tag KAPALI dogar (kagit henuz yerinde olmayabilir); VAR OLANIN durumu
                 // korunur (arac zincirleme calistiriliyor, calisan tag'ler dusmemeli).

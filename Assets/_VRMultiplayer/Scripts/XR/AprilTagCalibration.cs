@@ -346,6 +346,25 @@ namespace VRMultiplayer
                  "GECIS ile ayni buyuklukte olmali: olculen en iyi GECIS medyani 3,3 cm.")]
         public float fusionMaxResidual = 0.05f;
 
+        [Tooltip("Bilinmeyen tag'leri OTOMATIK haritalasin mi.\n\n" +
+                 "Cerceve GUVENILIRKEN (ayni karede en az iki BILINEN tag fuzyonla cozulmus, " +
+                 "kalinti esigin altinda) yerlesimde olmayan bir tag gorulurse konumu ve yonu " +
+                 "olculup yerlesime yazilir. Yazilan tag artik BILINEN olur ve sonrakiler icin " +
+                 "temel islevi gorur — harita disari dogru kendiliginden buyur.\n\n" +
+                 "NEDEN GEREKLI: konumlari plaka koyarak tanimlamak, plakanin o andaki " +
+                 "cerceveyi miras almasina dayaniyor; cerceve heNUZ dogrulanmamisken hata " +
+                 "zincirleniyor. Cihazda olculdu: boyle konan tag'ler 1-2,8 m sapti. " +
+                 "Olcerek eklemek o zinciri kesiyor, cunku temel her adimda DOGRULANMIS oluyor.")]
+        public bool autoMapUnknownTags = false;
+
+        [Tooltip("Otomatik haritalama icin kac olcum ortalanacak.")]
+        public int autoMapSampleCount = 20;
+
+        [Tooltip("Otomatik haritalamada orneklerin izin verilen sacilmasi (m). Ustu YAZILMAZ.\n\n" +
+                 "Tek bir bozuk tespit yerlesime kalici olarak islenmesin diye: pencere kendi " +
+                 "icinde tutarli degilse olcum guvenilmez demektir ve beklemek yazmaktan iyidir.")]
+        public float autoMapMaxSpread = 0.03f;
+
         [Tooltip("Tag'in NORMALI yataydan bu kadar sapabilir (derece). Ustu elenir.\n\n" +
                  "NEDEN ISE YARAR: kagitlar DUVARA duz yapistirilmis, yani normalleri yatay " +
                  "olmak ZORUNDA. Duzlemsel poz belirsizliginin yanlis cozumu tag'i one/arkaya " +
@@ -896,7 +915,9 @@ namespace VRMultiplayer
 
             // Fuzyon adaylari KARE BASINA toplanir; onceki karenin kalintisi
             // birikirse artik gorulmeyen tag'ler cozume girer.
-            _fuseMeasured.Clear(); _fuseDeclared.Clear(); _fuseWeight.Clear(); _fuseDist.Clear();
+            _fuseMeasured.Clear(); _fuseDeclared.Clear(); _fuseWeight.Clear();
+            _fuseDist.Clear(); _fuseId.Clear();
+            _autoMapId.Clear(); _autoMapPos.Clear(); _autoMapYaw.Clear();
 
             // TESHIS: tag'in GORUNTUDEKI yeri. Hem lens distorsiyonu hem ana nokta hatasi
             // KONUMA BAGLI etkiler — kadrajin ortasindaki tag ile kenarindaki tag farkli
@@ -941,6 +962,39 @@ namespace VRMultiplayer
                 // elemiyor; 3b'de poseGateLogOnly kapatilinca burasi 'continue' eder.
                 if (!PoseGate(tag.ID, worldRot, worldPos, camPose.position, dist)) continue;
 
+                // YAW ENVANTERI — zemin kurulumunda kagidin hangi yone yapistirildigini
+                // OLCEREK ogrenmenin tek yolu. Plakanin gorsel yonu ile sistemin yaw diye
+                // okudugu eksen (zeminde tag'in kendi yukari ekseni, bkz. YawOf) ayni olmak
+                // ZORUNDA DEGIL; ikisi arasindaki sabit kayma ancak burada gorunur.
+                //
+                // Yalnizca poz kapisindan gecmis, hareket kapisindan gecmis olcumler yazilir:
+                // egik ya da hareketli bir okumadan cikan yaw zaten guvenilmez ve envanteri
+                // kirletirdi. Tag basina 5 saniyede bir.
+                {
+                    var yerlesik = Find(tag.ID);
+                    if (yerlesik != null &&
+                        (!_yawEnvanterAt.TryGetValue(tag.ID, out float sonYazim) ||
+                         Time.time - sonYazim >= 5f))
+                    {
+                        _yawEnvanterAt[tag.ID] = Time.time;
+                        float olculen = YawOf(worldRot);
+                        float fark = Mathf.DeltaAngle(yerlesik.yawDegrees, olculen);
+                        WriteDiag($"YAW ENVANTERI  tag {tag.ID}  olculen {olculen:+0.0;-0.0}" +
+                                  $"  ilan {yerlesik.yawDegrees:+0.0;-0.0}  fark {fark:+0.0;-0.0}" +
+                                  $"  d {dist:0.00} m");
+                    }
+                }
+
+                // OTOMATIK HARITALAMA ADAYI: yerlesimde OLMAYAN tag. Kapilardan gecmis
+                // olcum; cercevenin guvenilir olup olmadigina asagida, fuzyon cozuldukten
+                // SONRA bakilacak — o karar burada verilemez.
+                if (autoMapUnknownTags && Find(tag.ID) == null && dist <= calibrateMaxDistance)
+                {
+                    _autoMapId.Add(tag.ID);
+                    _autoMapPos.Add(worldPos);
+                    _autoMapYaw.Add(YawOf(worldRot));
+                }
+
                 if (learnMode)
                     Learn(tag.ID, dist, worldPos, worldRot);
 
@@ -977,6 +1031,7 @@ namespace VRMultiplayer
                         _fuseDeclared.Add(entry.position);
                         _fuseWeight.Add(SampleWeight(dist));
                         _fuseDist.Add(dist);
+                        _fuseId.Add(entry.id);
                     }
 
                     // KAPALI tag KONTROLU KALDIRILDI. Yeni bir tag'i dogrulamak icin konulmustu:
@@ -1004,6 +1059,13 @@ namespace VRMultiplayer
             // cerceveye kendi hesabini uygulardi -- ust uste binen duzeltmeler sapma uretir
             // (ayni gerekce tek-tag yolunda da yaziyor).
             bool fuzyonUygulandi = _fuseMeasured.Count >= 2 && FuseCorrect();
+
+            // OTOMATIK HARITALAMA yalnizca fuzyon BASARILI olduysa. Kosul sert bilerek:
+            // fuzyonun uygulanmis olmasi demek, en az iki BILINEN tag'in ayni karede
+            // birbiriyle ve yerlesimle kalinti esiginin altinda uyustugu demek. Cerceve o
+            // anda dogrulanmis durumda; bilinmeyen bir tag'i ancak boyle bir cercevede
+            // olcmek anlamli.
+            if (fuzyonUygulandi && _autoMapId.Count > 0) TickAutoMap();
 
             if (!fuzyonUygulandi && bestEntry != null)
                 ContinuousCorrect(bestEntry, bestDist, bestPos, bestRot);
@@ -1767,7 +1829,18 @@ namespace VRMultiplayer
         readonly List<Vector3> _fuseDeclared = new List<Vector3>();
         readonly List<float> _fuseWeight = new List<float>();
         readonly List<float> _fuseDist = new List<float>();
+        readonly List<int> _fuseId = new List<int>();
+
+        /// <summary>YAW ENVANTERI icin tag basina son yazim ani — her karede yazmak dosyayi bogar.</summary>
+        readonly Dictionary<int, float> _yawEnvanterAt = new Dictionary<int, float>();
         float _nextFuseDiagAt;
+
+        /// <summary>Fuzyonun en son karar verdigi an. Panel bunu okuyor — bkz. PanelText.</summary>
+        float _fuseAppliedAt = -999f;
+
+        /// <summary>Fuzyon SU AN mi suruyor. Tek bir karelik boslukta panelin eski mesaja
+        /// donup yanip sonmemesi icin kisa bir kuyruk birakiliyor.</summary>
+        bool FusionDriving => Time.time - _fuseAppliedAt < 1.5f;
 
         /// <summary>
         /// Ayni karede gorulen tag'leri BIRLIKTE cozer: olculen konumlari ilan edilen
@@ -1796,6 +1869,134 @@ namespace VRMultiplayer
         /// true = fuzyon karari verdi (rig'e dokundu ya da "hizali" dedi);
         /// false = cozemedi, tek-tag yolu denesin.
         /// </returns>
+        // ---- OTOMATIK HARITALAMA ------------------------------------------------------
+        //
+        // Kare basina toplanan BILINMEYEN tag'ler (yerlesimde yok).
+        readonly List<int> _autoMapId = new List<int>();
+        readonly List<Vector3> _autoMapPos = new List<Vector3>();
+        readonly List<float> _autoMapYaw = new List<float>();
+
+        /// <summary>Tag basina biriken ornekler. RIG-YEREL saklanir (bkz. ToLocal): rig
+        /// duzeltilince ornekler onunla tasinir ve gecersizlesmez.</summary>
+        class AutoMapOrnek
+        {
+            public readonly List<Vector3> Yerel = new List<Vector3>();
+            public readonly List<float> Yaw = new List<float>();   // rig-yerel yaw
+            public float SonOrnekAt;
+        }
+        readonly Dictionary<int, AutoMapOrnek> _autoMap = new Dictionary<int, AutoMapOrnek>();
+
+        /// <summary>
+        /// Bilinmeyen tag'leri, DOGRULANMIS bir cercevede olcup yerlesime ekler.
+        ///
+        /// YALNIZCA FUZYON BASARILIYKEN cagrilir: en az iki bilinen tag ayni karede
+        /// birbiriyle ve yerlesimle uyusmus demektir. Tek tag'in kurdugu cerceveye
+        /// guvenmek, bu projede olculmus bir hataya yol acti — plakalar oyle konmustu ve
+        /// 1-2,8 m saptilar.
+        ///
+        /// YAW DA OLCULUR. Plakadan turetilen yaw, plakanin donus referansiyla zemin
+        /// tag'inin yaw konvansiyonu arasindaki farka bagliydi ve 180 derece ters cikiyordu.
+        /// Olcerek yazmak o sorunu kokunden kaldiriyor: ne olculduyse o yaziliyor.
+        ///
+        /// YENI TAG ACIK DOGAR — bilerek. Kapali dogsa sonraki tag'ler icin TEMEL olamaz ve
+        /// harita disari dogru buyuyemez; oysa yontemin butun degeri o zincirde. Guvence
+        /// yerine su ikili konuyor: (1) ornekler kendi icinde tutarli olmali
+        /// (autoMapMaxSpread), (2) yazildiktan sonra tag fuzyona girer ve kotu ise
+        /// 'kalinti' satiri onu ADIYLA yazar.
+        /// </summary>
+        void TickAutoMap()
+        {
+            if (!EnsureRig()) return;
+
+            for (int i = 0; i < _autoMapId.Count; i++)
+            {
+                int id = _autoMapId[i];
+
+                if (!_autoMap.TryGetValue(id, out var o))
+                {
+                    o = new AutoMapOrnek();
+                    _autoMap[id] = o;
+                    WriteDiag($"HARITALAMA BASLADI  tag {id}");
+                }
+
+                // Uzun bosluk pencereyi bosaltir: aradan gecen surede oyuncu bambaska bir
+                // yere gitmis olabilir ve eski orneklerle yenileri ayni olcume ait degildir.
+                if (o.Yerel.Count > 0 && Time.time - o.SonOrnekAt > calibWindowMaxGap)
+                {
+                    o.Yerel.Clear();
+                    o.Yaw.Clear();
+                }
+                o.SonOrnekAt = Time.time;
+
+                o.Yerel.Add(ToLocal(_autoMapPos[i]));
+                o.Yaw.Add(_autoMapYaw[i] - RigYaw);
+
+                if (o.Yerel.Count < Mathf.Max(3, autoMapSampleCount)) continue;
+
+                // Sacilma kapisi: pencere kendi icinde tutarli degilse YAZMA. Bir kez
+                // yazilan yanlis konum, sonraki tag'lerin de temeli olur.
+                Vector3 ort = Vector3.zero;
+                foreach (var v in o.Yerel) ort += v;
+                ort /= o.Yerel.Count;
+                float sacilma = 0f;
+                foreach (var v in o.Yerel) sacilma = Mathf.Max(sacilma, Vector3.Distance(v, ort));
+                if (sacilma > autoMapMaxSpread)
+                {
+                    o.Yerel.Clear();
+                    o.Yaw.Clear();
+                    WriteDiag($"HARITALAMA BEKLIYOR  tag {id}  sacilma {sacilma * 100f:0.0} cm > " +
+                              $"{autoMapMaxSpread * 100f:0.0}  — pencere atildi");
+                    continue;
+                }
+
+                // Yaw dairesel ortalanir; aritmetik ortalama 179 ile -179'u 0 yapardi.
+                Vector2 yon = Vector2.zero;
+                foreach (var y in o.Yaw)
+                {
+                    float r = y * Mathf.Deg2Rad;
+                    yon += new Vector2(Mathf.Sin(r), Mathf.Cos(r));
+                }
+                float yaw = Mathf.Atan2(yon.x, yon.y) * Mathf.Rad2Deg + RigYaw;
+                if (yaw > 180f) yaw -= 360f;
+                if (yaw <= -180f) yaw += 360f;
+
+                Vector3 dunya = ToWorld(ort);
+
+                var liste = new List<TagEntry>(tagLayout ?? Array.Empty<TagEntry>());
+                liste.Add(new TagEntry
+                {
+                    id = id,
+                    position = dunya,
+                    yawDegrees = yaw,
+                    useForCalibration = true,
+                    mounting = defaultMounting,
+                    sourceInstanceId = Constructor.TagCapture.ExternalSource,   // plakadan gelmedi
+                });
+                tagLayout = liste.ToArray();
+
+                bool yazildi = PersistLayout();
+                RebuildMarkers();
+                _autoMap.Remove(id);
+
+                WriteDiag($"HARITALANDI  tag {id}  {dunya.x:0.000} {dunya.y:0.000} {dunya.z:0.000}" +
+                          $"  yaw {yaw:+0.0;-0.0}  sacilma {sacilma * 100f:0.0} cm" +
+                          $"  ({o.Yerel.Count} ornek)  {(yazildi ? PersistTarget : "YAZILAMADI")}");
+                _calibNote = $"TAG {id} HARITALANDI";
+            }
+        }
+
+        /// <summary>Fuzyona giren tag kimlikleri, teshis satiri icin.</summary>
+        string FuseIdList()
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < _fuseId.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(_fuseId[i]);
+            }
+            return sb.ToString();
+        }
+
         bool FuseCorrect()
         {
             if (!EnsureRig()) return false;
@@ -1836,10 +2037,17 @@ namespace VRMultiplayer
             // donusum onu kapatamaz ve burada gorunur — istenen budur.
             Quaternion R = Quaternion.Euler(0f, theta, 0f);
             float kare = 0f;
+            // EN KOTU TAG ADIYLA YAZILIR. Coklu kurulumda "kalinti yuksek" tek basina
+            // "birinde sorun var, bul bakalim" demek; hangi tag oldugunu soylemeyen bir
+            // teshis, tag sayisi arttikca degersizlesiyor.
+            int enKotuId = -1;
+            float enKotu = -1f;
             for (int i = 0; i < n; i++)
             {
                 Vector3 kalan = (R * (_fuseMeasured[i] - mBar) + dBar) - _fuseDeclared[i];
                 kare += _fuseWeight[i] * kalan.sqrMagnitude;
+                float m2 = kalan.magnitude;
+                if (m2 > enKotu) { enKotu = m2; enKotuId = _fuseId[i]; }
             }
             float rms = Mathf.Sqrt(kare / wTop);
 
@@ -1850,8 +2058,9 @@ namespace VRMultiplayer
                 if (Time.time >= _nextFuseDiagAt)
                 {
                     _nextFuseDiagAt = Time.time + 5f;
-                    WriteDiag($"FUZYON RED  {n} tag  kalinti {rms * 100f:0.0} cm > " +
-                              $"{fusionMaxResidual * 100f:0.0}  yaw {theta:+0.00;-0.00}" +
+                    WriteDiag($"FUZYON RED  {n} tag [{FuseIdList()}]  kalinti {rms * 100f:0.0} cm > " +
+                              $"{fusionMaxResidual * 100f:0.0}  (en kotu tag {enKotuId}: " +
+                              $"{enKotu * 100f:0.0} cm)  yaw {theta:+0.00;-0.00}" +
                               $"  — tag'ler birbiriyle ya da yerlesimle celisiyor");
                 }
                 _calibNote = $"FUZYON RED (kalinti {rms * 100f:0.0} cm)";
@@ -1865,6 +2074,7 @@ namespace VRMultiplayer
             {
                 _calibNote = $"HIZALI ({dev * 100f:0.0} cm, {n} tag fuzyon)";
                 _alignedNow = true;
+                _fuseAppliedAt = Time.time;
                 return true;   // is yok — ama KARAR fuzyonun, tek-tag yolu ayni karede calismasin
             }
             _alignedNow = false;
@@ -1886,6 +2096,7 @@ namespace VRMultiplayer
             _lastCorrectionAt = Time.time;
 
             _calibNote = $"FUZYON {n} tag ({dev * 100f:0.0} cm, yaw {theta:0.0})";
+            _fuseAppliedAt = Time.time;
 
             if (snap || Time.time >= _nextFuseDiagAt)
             {
@@ -1896,8 +2107,9 @@ namespace VRMultiplayer
                     if (_fuseDist[i] < dMin) dMin = _fuseDist[i];
                     if (_fuseDist[i] > dMax) dMax = _fuseDist[i];
                 }
-                WriteDiag($"{(snap ? "FUZSNAP" : "FUZYON ")}  {n} tag  sapma {dev * 100f:0.0} cm" +
-                          $"  yaw {theta:+0.00;-0.00}  kalinti {rms * 100f:0.0} cm" +
+                WriteDiag($"{(snap ? "FUZSNAP" : "FUZYON ")}  {n} tag [{FuseIdList()}]" +
+                          $"  sapma {dev * 100f:0.0} cm  yaw {theta:+0.00;-0.00}" +
+                          $"  kalinti {rms * 100f:0.0} cm (en kotu tag {enKotuId}: {enKotu * 100f:0.0} cm)" +
                           $"  d {dMin:0.00}-{dMax:0.00} m");
             }
             return true;
@@ -2166,32 +2378,23 @@ namespace VRMultiplayer
             // SAG A her iki durumda da guvenli: TeamSelector de A okur ama o AG OYUNCUSUNDA
             // yasar — sunucusuz hic var olmaz, baglandiktan sonra da takim secilince _done ile
             // susar. ConstructorPlacer'in A'si yalnizca insa modunda calisir.
-            // (Sol X denenmedi: RoomScanSync onu tutuyor ve oyuna katilinca canlaniyor.)
+            // SOL X ARTIK BOS: RoomScanSync'in kisayolu solXKisayolu bayraginin arkasina
+            // alindi (varsayilan kapali). Buradaki grip/tetik akorlari sadelestirilecekse
+            // hedef tus odur — ama kas hafizasini bir kurulum turunun ortasinda degistirme.
             bool a = XRButtons.Button(UnityEngine.XR.XRNode.RightHand,
                                       UnityEngine.XR.CommonUsages.primaryButton);
             bool pressed = a && !_applyPrev;
             _applyPrev = a;
             if (!pressed) return;
 
-            // SOL GRIP basiliyken A: kalibrasyon iznini cevir. Ayri bir tusa yer yok —
-            // projede bos yuz tusu kalmadi, ikisini ayirmanin yolu degistirici tus.
-            var lh = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
-
-            if (XRButtons.HeldWithAxisFallback(lh, UnityEngine.XR.CommonUsages.gripButton,
-                                               UnityEngine.XR.CommonUsages.grip, 0.5f))
-            {
-                ToggleUseForSeenTag();
-                return;
-            }
-
-            // SOL TETIK + A: konumu KUMANDA DOKUNUSUNDAN yaz. Kamera poz kestirimi hic
-            // kullanilmaz — A/B'nin verdigi guveni tag sistemini bozmadan verir.
-            if (XRButtons.HeldWithAxisFallback(lh, UnityEngine.XR.CommonUsages.triggerButton,
-                                               UnityEngine.XR.CommonUsages.trigger, 0.5f))
-            {
-                ApplyTouchDerived();
-                return;
-            }
+            // SOL GRIP+A (kalibrasyon izni) ve SOL TETIK+A (konumu kumandadan yaz)
+            // KALDIRILDI — ikisi de gozlukten yapilmiyordu:
+            //   izin  -> menu "49. Tag Kurulum Merkezi", tag basina ACIK/KAPALI anahtari;
+            //            ayrica gozlukte harita kaydedilirken Capture+Enable birlikte kosuyor
+            //            (ConstructorSync.HostTagSetup), yani tag'ler zaten ACIK doguyor.
+            //   konum -> plaka yaratici modda tag'in ustune oturtularak tanimlaniyor.
+            // Kumanda dokunusundan gelen OKUMA duruyor (TouchDerived, teshis satirinda):
+            // dokunup yerlesimin ne kadar saptigini hala gorebiliyorsun, sadece YAZMIYOR.
 
             if (!_learnDone)
             {
@@ -2233,7 +2436,7 @@ namespace VRMultiplayer
                 if (s == null || s.Layout == null) return false;
 
                 // DIZIYI GERI BAGLA. Yeni tag eklenince "tagLayout = list.ToArray()" calisiyor
-                // (ApplyTouchDerived / ApplyLearned) ve haritanin dizisiyle paylasim KOPUYOR.
+                // (ApplyLearned) ve haritanin dizisiyle paylasim KOPUYOR.
                 // Baglamazsak Save, yeni tag'i olmayan ESKI diziyi yazar ve olcum sessizce
                 // kaybolur -- duzenleme ekranda gorunur ama dosyaya hic gitmez.
                 s.Layout.tags = tagLayout;
@@ -2249,33 +2452,6 @@ namespace VRMultiplayer
 
         /// <summary>Yazmanin nereye gittigi — panel ve log metinleri icin.</summary>
         string PersistTarget => _fromMap ? "haritaya" : "cihaza";
-
-        /// <summary>Son GORULEN tag'in kalibrasyon iznini cevirir ve kalici hale getirir.</summary>
-        void ToggleUseForSeenTag()
-        {
-            var entry = Find(_lastId);
-            if (entry == null)
-            {
-                _learnNote = $"tag {_lastId} yerlesimde yok — once olcup B ile ekle";
-                return;
-            }
-
-            entry.useForCalibration = !entry.useForCalibration;
-            bool saved = PersistLayout();
-            RebuildMarkers();
-
-            _learnNote = $"tag {entry.id} kalibrasyon " +
-                         (entry.useForCalibration ? "ACIK" : "KAPALI") +
-                         (saved ? "" : $" — {PersistTarget.ToUpperInvariant()} YAZILAMADI");
-
-            Debug.Log($"[AprilTagCalib] Tag {entry.id} useForCalibration = {entry.useForCalibration} " +
-                      $"({(saved ? $"{PersistTarget} yazildi" : $"{PersistTarget.ToUpperInvariant()} YAZILAMADI")}).");
-
-            // Log'a da yazilir: acma/kapama olayi gorunmezse, "neden yazilmadi" sorusunu
-            // cevaplamak icin tahmin yurutmek gerekiyordu.
-            WriteDiag($"IZIN   tag {entry.id} kalibrasyon " +
-                      (entry.useForCalibration ? "ACIK" : "KAPALI"));
-        }
 
         // ---- ELLE INCE AYAR ---------------------------------------------------------------
         //
@@ -2406,7 +2582,6 @@ namespace VRMultiplayer
         // kolunu indirdikten sonra okursun.
         readonly Dictionary<int, Vector3> _touchPos = new Dictionary<int, Vector3>();
         readonly Dictionary<int, Quaternion> _touchRot = new Dictionary<int, Quaternion>();
-        readonly Dictionary<int, float> _touchTime = new Dictionary<int, float>();
         int _approachId = -1;
         float _approachBest;
         Vector3 _approachPos;
@@ -2496,7 +2671,6 @@ namespace VRMultiplayer
             {
                 _touchPos[_approachId] = _approachPos;
                 _touchRot[_approachId] = _approachRot;
-                _touchTime[_approachId] = Time.time;
 
                 // REFERANS tag'e dokunulduysa ofset havuzuna ekle.
                 //
@@ -2871,83 +3045,6 @@ namespace VRMultiplayer
             catch { /* teshis yazamamak oyunu durdurmamali */ }
         }
 
-        /// <summary>Son dokunulan (referans olmayan) tag'in konumunu kumandadan yazar.</summary>
-        void ApplyTouchDerived()
-        {
-            // YALNIZCA EN SON dokunulan tag yazilir — uygunsa.
-            //
-            // Eskiden "uygun olanlar arasinda en yeni" seciliyordu ve bu, hedef tag uygun
-            // degilse SESSIZCE BASKA bir tag'i yaziyordu. Cihazda yasandi: tag 1'in yanindayken
-            // (kalibrasyonu o an tag 1 suruyordu) uc kez basildi, ucunde de TAG 2 yazildi,
-            // ustelik bir dakika onceki bayat dokunusuyla. Kullanici tag 1'i olctugunu sandi.
-            //
-            // Yanlis tag'i sessizce yazmaktansa reddedip SEBEBINI soylemek gerekir.
-            int best = -1;
-            float bestT = -1f;
-            foreach (var kv in _touchTime)
-                if (kv.Value > bestT) { bestT = kv.Value; best = kv.Key; }
-
-            if (best < 0) { _learnNote = "once kumandayla bir tag'e degdir"; return; }
-
-            if (best == _calibId)
-            {
-                // Kendi cercevesinde olcmek dongusel olurdu.
-                _learnNote = $"tag {best} SU AN kalibre ediyor — once solGRIP+A ile kapat";
-                return;
-            }
-            if (best == offsetReferenceTagId)
-            {
-                _learnNote = $"tag {best} sifir noktasinin TANIMI — yazilamaz";
-                return;
-            }
-
-            Vector3 pos;
-            if (!TouchDerived(best, out pos))
-            {
-                _learnNote = "once REFERANS tag'e (tag 0) degdir — ofset oradan olculuyor";
-                return;
-            }
-
-            var entry = Find(best);
-            bool isNew = entry == null;
-            if (isNew)
-            {
-                // Yerlesimde HIC OLMAYAN tag: dokunusla sifirdan dogar. Boylece tag 1 ve 2 icin
-                // onceden bir tahmin tutmaya gerek kalmiyor — kagidi nereye asarsan oraya yazilir.
-                // KAPALI dogar: dogrulanmadan kalibrasyona giren yanlis bir tag, dogru olanlarin
-                // kurdugu cerceveyi de bozar.
-                entry = new TagEntry { id = best, useForCalibration = false };
-                var list = new List<TagEntry>(tagLayout ?? Array.Empty<TagEntry>());
-                list.Add(entry);
-                tagLayout = list.ToArray();
-            }
-
-            Vector3 before = entry.position;
-            entry.position = pos;
-
-            // YAW dokunustan gelmez (tek nokta yon tasimaz) — kameradan alinir. Yeni tag'de
-            // sifir birakmak plakayi tamamen yanlis yone cevirir ve dogrulamayi imkansiz kilar.
-            bool yawFromCam = _seenTime.TryGetValue(best, out float st) && Time.time - st < 3f;
-            if (yawFromCam) entry.yawDegrees = _seenYaw[best];
-
-            bool saved = PersistLayout();
-            if (isNew) RebuildMarkers(); else SyncMarkerPoses();
-            NoteWrite(best, pos, entry.yawDegrees);
-
-            _learnNote = (isNew ? $"tag {best} KUMANDADAN olusturuldu"
-                                : $"tag {best} KUMANDADAN yazildi ({(pos - before).magnitude * 100f:0} cm oynadi)")
-                       + (yawFromCam ? "" : "  [yaw YOK — tag'e bak]")
-                       + (saved ? "" : $"  — {PersistTarget.ToUpperInvariant()} YAZILAMADI");
-
-            Debug.Log($"[AprilTagCalib] Tag {best} konumu kumanda dokunusundan turetildi: " +
-                      $"{before} -> {pos}, yaw {entry.yawDegrees:0.0} ({(yawFromCam ? "kameradan" : "eski")}). " +
-                      $"Kamera poz kestirimi konumda kullanilmadi.");
-
-            WriteDiag($"YAZILDI tag {best} {(isNew ? "(YENI)" : "")}  " +
-                      $"{pos.x:0.000} {pos.y:0.000} {pos.z:0.000}  yaw {entry.yawDegrees:0.0}" +
-                      $"  once {before.x:0.000} {before.y:0.000} {before.z:0.000}");
-        }
-
         // ---- ANCHOR TUTUSU ----------------------------------------------------------------
         bool _anchorBound;
 
@@ -3141,6 +3238,23 @@ namespace VRMultiplayer
             // gostermez. Simetrik cubuk hangi konvansiyon olursa olsun gorunur kalir.
             MakePart(root.transform, "burun", c,
                      new Vector3(0.008f, 0.008f, tagSizeMeters * 2.5f), Vector3.zero);
+
+            // ZEMINDE AYRI BIR YON CUBUGU SART. Yukaridaki burun tag'in NORMALI boyunca
+            // uzuyor; zeminde normal dikey oldugu icin cubuk yere dik durur ve duzlem ici
+            // donmeyi HIC gostermez. Oysa kagidi yapistirirken bilinmesi gereken tek sey
+            // odur: hangi kenari nereye baksin.
+            //
+            // Bu cubuk tag'in KENDI YUKARI EKSENI boyunca uzuyor — YawOf zemin tag'inde
+            // yonu tam o eksenden okuyor (bkz. YawOf), yani ekranda gordugun ok, sistemin
+            // yaw diye anladigi seyin ta kendisi. Tek tarafli: 180 derecelik hatayi ancak
+            // asimetrik bir isaret yakalatir, simetrik cubuk iki yonu ayni gosterirdi.
+            if (t.mounting == TagMount.Zemin)
+            {
+                float boy = tagSizeMeters * 0.9f;
+                MakePart(root.transform, "yon", c,
+                         new Vector3(0.010f, boy, 0.010f),
+                         new Vector3(0f, boy * 0.5f + tagSizeMeters * 0.5f, 0f));
+            }
 
             return root;
         }
@@ -3365,6 +3479,15 @@ namespace VRMultiplayer
                     q.Append("bu tag kalibrasyonda KAPALI");
                 else if (!MotionOk(_lastDistance))
                     q.Append($"BEKLE — sabit dur ({MotionError(_lastDistance) * 100f:0.0} cm hata)");
+                // FUZYON SURUYORSA "kazanan tag" DIYE BIR SEY YOK.
+                //
+                // Bu satir tek-tag yolunun mesaji: "baktigin tag degil, su oteki kalibre
+                // ediyor". Fuzyonda hepsi BIRLIKTE cozuluyor, yani _calibId bayat bir sayi.
+                // Cihazda yasandi: panel "tag 3 gorunuyor / tag 2 kalibre ediyor" yaziyor,
+                // sayilar surekli degisiyordu ve kullanici bunu fuzyonun kendisi sandi —
+                // oysa fuzyon dogru calisiyor, panel onu anlatamiyordu.
+                else if (FusionDriving)
+                    q.Append(_calibNote);   // "FUZYON 4 tag (1,3 cm, yaw -0,8)"
                 else if (_lastId != _calibId)
                     q.Append($"tag {_calibId} kalibre ediyor");
                 else
@@ -3409,7 +3532,7 @@ namespace VRMultiplayer
             }
             else
             {
-                // Ofset yoksa dokunustan konum turetilemez ve solTETIK+A sessizce reddeder.
+                // Ofset yoksa dokunustan konum turetilemez ve teshis satiri bos kalir.
                 p.Append("OFSET YOK — once tag " + offsetReferenceTagId + "'a dokun\n");
             }
 
@@ -3427,7 +3550,7 @@ namespace VRMultiplayer
             if (!string.IsNullOrEmpty(_lastWrite)) p.Append(_lastWrite + "\n");
 
             if (learnMode)
-                p.Append("A=yaz  solGRIP+A=ac/kapat  solTETIK+A=kumandadan  solCUBUK=ince");
+                p.Append("A=yaz  solCUBUK=ince");
 
             return p.ToString();
         }

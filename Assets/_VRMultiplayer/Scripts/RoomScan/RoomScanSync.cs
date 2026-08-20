@@ -17,7 +17,8 @@ namespace VRMultiplayer
     /// existing LAN link. The server saves Assets/_VRMultiplayer/RoomPlans/RoomPlan.json, which
     /// the editor menus "Import Room Plan" / "Build Walls From Plan" consume.
     ///
-    /// Usage (owner only): calibrate first, then press X (left controller). One headset doing
+    /// Usage (owner only): set solXKisayolu = true, calibrate, then press X (left controller).
+    /// The shortcut is OFF by default so left X stays free for the tag system. One headset doing
     /// this once is enough. Requires the Meta OpenXR "Planes" feature + USE_SCENE permission;
     /// if the room was never scanned, the system Space Setup flow is launched automatically.
     /// </summary>
@@ -25,6 +26,16 @@ namespace VRMultiplayer
     {
         const string ScenePermission = "com.oculus.permission.USE_SCENE";
         const int ChunkSize = 3000; // stays well under the transport payload limit
+
+        [Tooltip("SOL X kisayolunu ac. VARSAYILAN KAPALI.\n\n" +
+                 "Neden: oda taramasi bu projede kullanilmiyor, ama tus canliydi ve HICBIR " +
+                 "kapinin arkasinda degildi — insa modunda, passthrough'da, kalibrasyon " +
+                 "sirasinda bile X'e basmak taramayi baslatiyordu. Oda hic taranmamissa " +
+                 "sistemin Space Setup akisini aciyor, yani oyuncuyu oyundan disari atiyor.\n\n" +
+                 "Kapali olmasi ayrica SOL X'i tag sistemine birakir: AprilTagCalibration " +
+                 "bu tusu 'RoomScanSync onu tutuyor' diye kullanamamis ve olcum tuslarini " +
+                 "sag A + grip/tetik akorlarina sikistirmisti.")]
+        public bool solXKisayolu;
 
         TextMesh _panel;
         bool _busy;
@@ -48,6 +59,10 @@ namespace VRMultiplayer
         void Update()
         {
             if (_hidePanelAt > 0f && Time.time > _hidePanelAt) { HidePanel(); }
+
+            // Panel gizleme YUKARIDA kaldi: kapi kapaliyken de acik kalmis bir panelin
+            // kapanmasi gerekir, yoksa tus kapatildigi anda ekranda asili kalirdi.
+            if (!solXKisayolu) return;
 
             bool x = XRButtons.Button(XRNode.LeftHand, CommonUsages.primaryButton);
 

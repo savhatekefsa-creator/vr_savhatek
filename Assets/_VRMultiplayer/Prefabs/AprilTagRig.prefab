@@ -78,12 +78,12 @@ MonoBehaviour:
   tagSizeMeters: 0.14
   tagLayout:
   - id: 0
-    position: {x: 0, y: 0, z: 0}
+    position: {x: 0, y: 1.5, z: 0}
     yawDegrees: 180
     sourceInstanceId: 0
-    mounting: 1
+    mounting: 0
     useForCalibration: 1
-  layoutVersion: 6
+  layoutVersion: 7
   detectionsPerSecond: 3
   idleDetectionsPerSecond: 1
   decimation: 3
@@ -100,13 +100,18 @@ MonoBehaviour:
   calibrateMaxDistance: 3
   correctionDeadzoneMeters: 0.01
   yawFromReferenceOnly: 1
-  yawCorrectionMaxDistance: 2
+  yawCorrectionMaxDistance: 1.5
   yawRecoveryDegrees: 10
   yawRecoveryMaxDegrees: 35
   yawRecoveryConfirmations: 3
   yawSpreadMaxDegrees: 2
   poseGateLogOnly: 0
-  defaultMounting: 1
+  defaultMounting: 0
+  useMultiTagFusion: 1
+  fusionMaxResidual: 0.05
+  autoMapUnknownTags: 1
+  autoMapSampleCount: 20
+  autoMapMaxSpread: 0.03
   maxNormalTiltDegrees: 20
   maxTagTiltDegrees: 25
   maxHeadSpeed: 0.15
