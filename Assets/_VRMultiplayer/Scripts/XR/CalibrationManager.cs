@@ -323,6 +323,11 @@ namespace VRMultiplayer
             if (status == null)
                 status = UI.HeadFollowPanel.Create("~Calibration Panel", "", Color.white);
 
+            // SAHNEDEN GELEN panel icin de sart: serilestirilmis font referansi kayit
+            // anindaki fonta muhurlu kalir ve ustte-cizen paylasimli materyali de yoktur.
+            // ApplyFont ikisini de kancadaki guncel fonta cevirir; ikinci cagrilar ucuz.
+            UI.UITheme.ApplyFont(status);
+
             status.gameObject.SetActive(true);
             status.text = s + _note;
             Debug.Log("[Calibration] " + s);

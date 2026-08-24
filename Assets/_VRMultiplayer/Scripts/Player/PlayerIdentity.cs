@@ -84,7 +84,13 @@ namespace VRMultiplayer
             // includeInactive: remoteAvatar prefabda KAPALI baslayip spawn'da aciliyor
             // (bkz. NetworkVRPlayer) — kapaliyken de yakalanmali.
             _bodyRenderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
-            if (nameTag != null) _nameTagRenderer = nameTag.GetComponent<MeshRenderer>();
+            if (nameTag != null)
+            {
+                _nameTagRenderer = nameTag.GetComponent<MeshRenderer>();
+                // Prefab'a serilestirilen font, kayit anindaki fonta muhurlu kalir; kanca
+                // (Resources/Fonts/UIFont SDF) degisince etiket eski fontta kalirdi.
+                UI.UITheme.ApplyFont(nameTag);
+            }
         }
 
         /// <summary>The color everyone currently sees (team color wins over the unique color).</summary>
