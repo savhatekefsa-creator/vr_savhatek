@@ -1,4 +1,5 @@
 using Unity.Netcode;
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer.UI
@@ -61,7 +62,7 @@ namespace VRMultiplayer.UI
         Material _vignetteMat;
 
         Transform _card;
-        TextMesh _title, _killer, _body, _distance, _count;
+        TextMeshPro _title, _killer, _body, _distance, _count;
         Transform _arrow;
         Material _arrowMat;
         LineRenderer _ringBg, _ringFill;
@@ -72,7 +73,7 @@ namespace VRMultiplayer.UI
         string _killerName;      // beni en son kim oldurdu (bilinmiyorsa bos)
         TeamSpawnZone _zone;
         byte _team;
-        Font _font;
+        TMP_FontAsset _font;
 
         void Awake()
         {
@@ -136,7 +137,7 @@ namespace VRMultiplayer.UI
             WriteArc(_ringBg, 1f);
         }
 
-        TextMesh Text(string s, Color c, float h, Vector3 pos)
+        TextMeshPro Text(string s, Color c, float h, Vector3 pos)
         {
             var tm = UITheme.MakeText(_card, s, c, h, TextAnchor.MiddleCenter, QText);
             tm.transform.localPosition = pos;
@@ -178,19 +179,19 @@ namespace VRMultiplayer.UI
         /// <summary>PlayerHUD'daki ozel font secimi burada da gecerli olsun (bos = varsayilan).
         /// Materyal de degismeli: yalnizca tm.font yazmak yaziyi ESKI fontun atlasiyla cizmeye
         /// devam ettirir (yanlis glifler / bos kutu).</summary>
-        public void SetFont(Font f)
+        public void SetFont(TMP_FontAsset f)
         {
             if (f == null) return;
             _font = f;
             Apply(_title); Apply(_killer); Apply(_body); Apply(_distance); Apply(_count);
         }
 
-        void Apply(TextMesh tm)
+        void Apply(TextMeshPro tm)
         {
             if (tm == null || _font == null) return;
-            tm.font = _font;
-            var mr = tm.GetComponent<MeshRenderer>();
-            if (mr != null) mr.sharedMaterial = _font.material;
+            // Kuyruk korunur (QText); materyal (font, kuyruk) basina paylasilir. Eski kod
+            // burada _font.material'i dogrudan basiyor ve QText kuyrugunu KAYBEDIYORDU.
+            UITheme.ApplyFont(tm, QText, _font);
         }
 
         /// <summary>Her kare PlayerHUD tarafindan cagrilir.</summary>

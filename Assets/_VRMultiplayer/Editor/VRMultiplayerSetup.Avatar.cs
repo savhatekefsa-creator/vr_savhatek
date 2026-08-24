@@ -146,9 +146,13 @@ namespace VRMultiplayer.EditorTools
                 tagGo.transform.SetParent(animGo.transform, false);
                 tagGo.transform.localPosition = new Vector3(0f, 2.0f, 0f);
                 tagGo.transform.localScale = Vector3.one * 0.2f;
-                var tm = tagGo.AddComponent<TextMesh>();
-                tm.text = "Oyuncu"; tm.characterSize = 0.1f; tm.fontSize = 64;
-                tm.anchor = TextAnchor.MiddleCenter; tm.alignment = TextAlignment.Center; tm.color = Color.white;
+                var tm = tagGo.AddComponent<TMPro.TextMeshPro>();
+                VRMultiplayer.UI.UITheme.ApplyFont(tm);
+                VRMultiplayer.UI.UITheme.ConfigureText(tm, TextAnchor.MiddleCenter);
+                tm.text = "Oyuncu";
+                // eski: characterSize 0.1 x punto 64 = 0.64 yerel satir
+                tm.fontSize = VRMultiplayer.UI.UITheme.FontSizeForLocalLineHeight(tm, 0.64f);
+                tm.color = Color.white;
                 tagGo.AddComponent<Billboard>();
 
                 var skinned = avatar.GetComponentInChildren<SkinnedMeshRenderer>();

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer
@@ -32,7 +33,7 @@ namespace VRMultiplayer
         public static readonly Color DeadColor = new Color(0.55f, 0.68f, 0.9f, 0.35f);
 
         [SerializeField] SkinnedMeshRenderer avatarRenderer;
-        [SerializeField] TextMesh nameTag;
+        [SerializeField] TextMeshPro nameTag;
 
         public NetworkVariable<Color> NetColor = new NetworkVariable<Color>(Color.white);
         public NetworkVariable<FixedString32Bytes> NetName = new NetworkVariable<FixedString32Bytes>();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Unity.XR.CoreUtils;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
@@ -120,7 +121,7 @@ namespace VRMultiplayer
         Vector3 _rigPosAtCalib;
         float _rigYawAtCalib;
         float _lastAnnouncedDrift;
-        TextMesh _panel;
+        TextMeshPro _panel;
         float _panelHideAt;
         float _nextHeartbeat;
         bool _wasTracking = true;

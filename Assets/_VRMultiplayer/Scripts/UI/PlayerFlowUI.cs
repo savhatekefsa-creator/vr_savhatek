@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using Unity.Netcode;
 using VRMultiplayer.Constructor;
@@ -46,7 +47,7 @@ namespace VRMultiplayer.UI
         const float RecenterAngle = 35f, RecenterSpeed = 6f;
 
         ConfirmPanel _warn;
-        TextMesh _searchNote;
+        TextMeshPro _searchNote;
         VRPointer _pointer;
         NetworkDiscovery _discovery;
 

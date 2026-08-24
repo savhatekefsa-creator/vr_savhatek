@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Unity.Netcode;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -93,7 +94,7 @@ namespace VRMultiplayer.UI
         /// alfasi taban sanilip degerler her karede biraz daha sonerdi.</summary>
         class El
         {
-            public TextMesh tm;      // ya yazi...
+            public TextMeshPro tm;      // ya yazi...
             public Material mat;     // ...ya yuzey
             public Color design;
 

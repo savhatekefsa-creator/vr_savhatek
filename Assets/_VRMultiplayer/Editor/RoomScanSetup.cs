@@ -173,11 +173,12 @@ namespace VRMultiplayer.EditorTools
                 var label = new GameObject("Label");
                 label.transform.SetParent(tpl.transform, false);
                 label.transform.position = b.center + Vector3.up * (b.size.y * 0.5f + 0.15f);
-                var tm = label.AddComponent<TextMesh>();
+                var tm = label.AddComponent<TMPro.TextMeshPro>();
+                VRMultiplayer.UI.UITheme.ApplyFont(tm);
+                VRMultiplayer.UI.UITheme.ConfigureText(tm, TextAnchor.MiddleCenter);
                 tm.text = b.label;
-                tm.characterSize = 0.05f;
-                tm.fontSize = 48;
-                tm.anchor = TextAnchor.MiddleCenter;
+                // eski: characterSize 0.05 x punto 48 = 0.24 yerel satir
+                tm.fontSize = VRMultiplayer.UI.UITheme.FontSizeForLocalLineHeight(tm, 0.24f);
                 tm.color = Color.white;
             }
 
@@ -470,14 +471,14 @@ namespace VRMultiplayer.EditorTools
                     plan.floorY + doorHeight - 0.18f,
                     doorMid2.y - n2.y * 0.10f);
                 sign.transform.rotation = Quaternion.LookRotation(new Vector3(n2.x, 0f, n2.y));
-                var tm = sign.AddComponent<TextMesh>();
+                var tm = sign.AddComponent<TMPro.TextMeshPro>();
+                VRMultiplayer.UI.UITheme.ApplyFont(tm);
+                VRMultiplayer.UI.UITheme.ConfigureText(tm, TextAnchor.MiddleCenter);
                 tm.text = "CIKIS";
-                tm.characterSize = 0.04f;
-                tm.fontSize = 64;
-                tm.anchor = TextAnchor.MiddleCenter;
-                tm.alignment = TextAlignment.Center;
+                // eski: characterSize 0.04 x punto 64 = 0.256 yerel satir
+                tm.fontSize = VRMultiplayer.UI.UITheme.FontSizeForLocalLineHeight(tm, 0.256f);
                 tm.color = new Color(0.2f, 1f, 0.35f);
-                tm.fontStyle = FontStyle.Bold;
+                tm.fontStyle = TMPro.FontStyles.Bold;
             }
 
             // ---- floor slab inside the polygon (its own mesh, saved as an asset so it
@@ -623,11 +624,12 @@ namespace VRMultiplayer.EditorTools
             var lg = new GameObject("Label");
             lg.transform.SetParent(parent, false);
             lg.transform.position = pos + Vector3.up * 0.2f;
-            var tm = lg.AddComponent<TextMesh>();
+            var tm = lg.AddComponent<TMPro.TextMeshPro>();
+            VRMultiplayer.UI.UITheme.ApplyFont(tm);
+            VRMultiplayer.UI.UITheme.ConfigureText(tm, TextAnchor.MiddleCenter);
             tm.text = label;
-            tm.characterSize = 0.05f;
-            tm.fontSize = 48;
-            tm.anchor = TextAnchor.MiddleCenter;
+            // eski: characterSize 0.05 x punto 48 = 0.24 yerel satir
+            tm.fontSize = VRMultiplayer.UI.UITheme.FontSizeForLocalLineHeight(tm, 0.24f);
             tm.color = color;
         }
 

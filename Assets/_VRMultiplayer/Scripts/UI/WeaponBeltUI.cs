@@ -1,4 +1,5 @@
 using Unity.Netcode;
+using TMPro;
 using UnityEngine;
 using VRMultiplayer.Weapons;
 #if ENABLE_INPUT_SYSTEM
@@ -130,7 +131,7 @@ namespace VRMultiplayer.UI
             public Transform root;
             public Material ringMat;
             public Material discMat;
-            public TextMesh label;
+            public TextMeshPro label;
             public string labelKey;    // label.text bu anahtardan uretildi (bosuna string uretme)
             public string fitKey;      // previewFit / previewCenter bu silah icin olculdu
             public float previewFit = 1f;

@@ -116,7 +116,7 @@ namespace VRMultiplayer.UI
                 ZBack, QBack, QBack + 1);
         }
 
-        // Baslik HARF HARF: hem genis harf araligi hem camgobegi->mor gecisi icin. Tek TextMesh
+        // Baslik HARF HARF: hem genis harf araligi hem camgobegi->mor gecisi icin. Tek yazi objesi
         // ile ikisi de olmazdi (harf araligi ayari ve harf basina renk yok). Giris ekranindaki
         // "OYUNCU GIRISI" basligiyla ayni teknik — iki ekran ust uste tutarli gorunsun.
         void BuildTitle()

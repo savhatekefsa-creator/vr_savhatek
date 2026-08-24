@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Unity.Netcode;
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer.UI
@@ -100,7 +101,7 @@ namespace VRMultiplayer.UI
         {
             public GameObject go;
             public Material bgMat;
-            public TextMesh left, mid, right;
+            public TextMeshPro left, mid, right;
             public bool bound;
             public float animY;      // su anki yerel y — hedefe dogru kayar
             public float appear;     // 0..1 giris animasyonu
@@ -212,7 +213,7 @@ namespace VRMultiplayer.UI
             _entries.Remove(e);
         }
 
-        /// <summary>Satirin YAZISINI bir kez yazar. Her kare yazmak TextMesh'in mesh'ini
+        /// <summary>Satirin YAZISINI bir kez yazar. Her kare yazmak yazinin mesh'ini
         /// yeniden urettirirdi — degisen tek sey alfa oldugu icin buna gerek yok.</summary>
         void WriteRow(Entry e)
         {
@@ -316,7 +317,7 @@ namespace VRMultiplayer.UI
             SetAlpha(row.right, textAlpha * k);
         }
 
-        static void SetAlpha(TextMesh tm, float a)
+        static void SetAlpha(TextMeshPro tm, float a)
         {
             var c = tm.color;
             tm.color = new Color(c.r, c.g, c.b, a);

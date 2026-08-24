@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -26,7 +27,7 @@ namespace VRMultiplayer
         public Transform rig;
         [Tooltip("The right-controller anchor whose world position marks points A and B.")]
         public Transform pointer;
-        public TextMesh status;
+        public TextMeshPro status;
 
         [Header("Shared virtual reference (MUST be the same on every headset)")]
         [Tooltip("YALNIZCA TAG ile kalibre ol; A/B dokunma yolu tamamen kapali.\n\n" +

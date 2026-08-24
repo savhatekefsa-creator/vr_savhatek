@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer.UI
@@ -132,8 +133,8 @@ namespace VRMultiplayer.UI
             public char ch;            // '\0' = harf tusu degil
             public string action;      // null ve ch=='\0' ve team==0 ise tiklanamaz
             public byte team;          // 0 = takim karti degil
-            public TextMesh label;
-            public TextMesh sub;       // takim kartinin alt yazisi ("Takım" / "SEÇİLDİ")
+            public TextMeshPro label;
+            public TextMeshPro sub;       // takim kartinin alt yazisi ("Takım" / "SEÇİLDİ")
             public Material fillMat, borderMat, glowMat;
         }
 
@@ -142,7 +143,7 @@ namespace VRMultiplayer.UI
 
         Transform _hover, _startIcon;
         MeshFilter _hoverMesh;
-        TextMesh _nameText, _counterText, _hintText, _startLabel;
+        TextMeshPro _nameText, _counterText, _hintText, _startLabel;
         Material _startFillMat, _startBorderMat, _startIconMat;
         El _redCard, _blueCard;
 
@@ -226,7 +227,7 @@ namespace VRMultiplayer.UI
         }
 
         // Baslik HARF HARF ciziliyor: hem tasarimdaki genis harf araligi hem camgobegi->mor
-        // gecisi icin. Tek TextMesh ile ikisi de olmazdi (harf araligi ayari ve harf basina
+        // gecisi icin. Tek yazi objesiyle ikisi de olmazdi (harf araligi ayari ve harf basina
         // renk yok).
         void BuildTitle()
         {

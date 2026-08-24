@@ -1,4 +1,5 @@
 ﻿using Unity.Netcode;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 using VRMultiplayer.UI;
@@ -14,7 +15,7 @@ namespace VRMultiplayer
     public class PlayerHUD : NetworkBehaviour
     {
         [Tooltip("Geri sayim icin kullanilacak ozel font. Bos birakilirsa varsayilan kullanilir.")]
-        public Font countdownFont;
+        public TMP_FontAsset countdownFont;
 
         [Tooltip("Can barinin yeni degere kayma hizi (bar boyu / saniye).")]
         public float barSlideSpeed = 1.2f;

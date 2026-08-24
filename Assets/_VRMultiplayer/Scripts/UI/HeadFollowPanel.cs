@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer.UI
@@ -71,8 +72,8 @@ namespace VRMultiplayer.UI
             if ((transform.position - targetPos).sqrMagnitude < 0.0004f) _recentering = false;
         }
 
-        /// <summary>Standart panel fabrikasi: TextMesh ayarlari (0.16 olcek, 0.1 karakter,
-        /// 60 punto, ortali) tek yerde. Donen TextMesh'in text/renk alanlari sonradan
+        /// <summary>Standart panel fabrikasi: yazi ayarlari (0.096 m satir yuksekligi,
+        /// ortali) tek yerde. Donen yazinin text/renk alanlari sonradan
         /// degistirilebilir; takip bileseni otomatik takilidir.
         ///
         /// <paramref name="lazy"/> icin bkz. <see cref="lazy"/>: BEKLETEN her panelde true
@@ -89,21 +90,24 @@ namespace VRMultiplayer.UI
         ///
         /// Salt teshis panelleri (Avatar Fit Debug gibi) oneksiz kalabilir; onlarin insa
         /// modunda gizlenmesi zaten istenen davranis.</summary>
-        public static TextMesh Create(string name, string text, Color color, bool lazy = false)
+        public static TextMeshPro Create(string name, string text, Color color, bool lazy = false)
         {
             var go = new GameObject(name);
-            go.transform.localScale = Vector3.one * 0.16f;
-            var tm = go.AddComponent<TextMesh>();
-            // FONT SART: Unity 6'da varsayilan TextMesh fontu yok. Bu satir olmadan bu
+            var tm = go.AddComponent<TextMeshPro>();
+            // FONT SART: font atanmayan yazi editorde gorunse bile cihazda cizilmez — bu
             // fabrikanin urettigi HER panel (katilim, takim secme, kalibrasyon, oda tarama,
-            // avatar fit) editorde gorunur ama Quest build'inde bombos cikar.
+            // avatar fit) bu satira guveniyor. Materyal paylasimli ve sahnenin ustune cizer.
             UITheme.ApplyFont(tm);
+            UITheme.ConfigureText(tm, TextAnchor.MiddleCenter);
             tm.text = text;
-            tm.characterSize = 0.1f;
-            tm.fontSize = 60;
-            tm.anchor = TextAnchor.MiddleCenter;
-            tm.alignment = TextAlignment.Center;
             tm.color = color;
+            // Eski fabrika: 0.16 olcek x 0.6 yerel satir = 0.096 m. Ayni gorunur boy.
+            UITheme.SizeText(tm, 0.096f);
+
+            var mr = go.GetComponent<MeshRenderer>();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+
             go.AddComponent<HeadFollowPanel>().lazy = lazy;
             return tm;
         }

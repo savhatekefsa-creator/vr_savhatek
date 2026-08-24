@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer.UI
@@ -51,7 +52,7 @@ namespace VRMultiplayer.UI
         const int QText = 3051;
 
         Transform _root;
-        TextMesh _status, _countdown;
+        TextMeshPro _status, _countdown;
         AudioSource _audio;
         bool _placed;
 

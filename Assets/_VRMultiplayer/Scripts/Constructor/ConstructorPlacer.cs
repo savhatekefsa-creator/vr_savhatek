@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using VRMultiplayer.UI;
 #if ENABLE_INPUT_SYSTEM
@@ -198,7 +199,7 @@ namespace VRMultiplayer.Constructor
         bool _rotArmed, _cycleArmed, _levelArmed;
         float _nextRotRepeatAt;   // ince donus tekrarinin siradaki adimi (bkz. HandleActions)
 
-        TextMesh _panel;
+        TextMeshPro _panel;
         float _hidePanelAt = -1f;
 
         // --- kalibrasyon kapisi (bkz. RequireCalibration) ---
@@ -1086,7 +1087,7 @@ namespace VRMultiplayer.Constructor
 
         // ------------------------------------------------------------- tag id etiketi
 
-        TextMesh _tagLabel;
+        TextMeshPro _tagLabel;
 
         /// <summary>
         /// Plaka koymadan once cercevenin ne kadar taze olmasi gerektigi (sn).
@@ -1605,7 +1606,7 @@ namespace VRMultiplayer.Constructor
             _hidePanelAt = -1f;
         }
 
-        TextMesh _status;
+        TextMeshPro _status;
         float _nextStatusAt;
 
         void EnsureStatusPanel()
@@ -1615,7 +1616,8 @@ namespace VRMultiplayer.Constructor
             var follow = _status.GetComponent<HeadFollowPanel>();
             follow.distance = 1.1f;
             follow.heightOffset = -0.45f;   // goz hizasinin ALTINDA: nisan aldigin yeri kapatmasin
-            _status.characterSize = 0.055f;
+            // eski: characterSize 0.055 -> 0.33 yerel satir x 0.16 olcek = 0.053 m
+            UITheme.SizeText(_status, 0.053f);
         }
 
         void DestroyStatusPanel()

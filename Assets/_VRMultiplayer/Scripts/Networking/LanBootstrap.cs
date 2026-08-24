@@ -5,6 +5,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -25,7 +26,7 @@ namespace VRMultiplayer
     public class LanBootstrap : MonoBehaviour
     {
         public NetworkDiscovery discovery;
-        public TextMesh statusLabel;
+        public TextMeshPro statusLabel;
 
         [Tooltip("Game port (must match the host).")]
         public ushort port = 7777;

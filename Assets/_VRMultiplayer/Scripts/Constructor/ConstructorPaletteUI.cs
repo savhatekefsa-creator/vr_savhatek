@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using VRMultiplayer.UI;
 #if ENABLE_INPUT_SYSTEM
@@ -54,7 +55,7 @@ namespace VRMultiplayer.Constructor
 
         Transform _wheel;
         Material[] _sliceMats;
-        TextMesh[] _labels;
+        TextMeshPro[] _labels;
         GameObject[] _previews;
         Vector3[] _previewScales;
         int _builtSliceCount = -1;
@@ -243,7 +244,7 @@ namespace VRMultiplayer.Constructor
 
             int n = sets.Count;
             _sliceMats = new Material[n];
-            _labels = new TextMesh[n];
+            _labels = new TextMeshPro[n];
             _previews = new GameObject[n];
             _previewScales = new Vector3[n];
 

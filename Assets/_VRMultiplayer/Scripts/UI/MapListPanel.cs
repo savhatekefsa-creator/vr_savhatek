@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using VRMultiplayer.Constructor;
 
@@ -65,7 +66,7 @@ namespace VRMultiplayer.UI
 
         Transform _hover;
         MeshFilter _hoverMesh;
-        TextMesh _title;
+        TextMeshPro _title;
         int _hoverIdx = -1;
         int _page;
 

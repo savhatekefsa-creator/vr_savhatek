@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using TMPro;
 using UnityEngine;
 using VRMultiplayer.Constructor;
 
@@ -59,7 +60,7 @@ namespace VRMultiplayer.UI
         readonly List<Key> _keys = new List<Key>();
         readonly StringBuilder _sb = new StringBuilder(MaxLength);
 
-        TextMesh _nameText, _hintText;
+        TextMeshPro _nameText, _hintText;
         Transform _hover;
         MeshFilter _hoverMesh;
         int _hoverIdx = -1;

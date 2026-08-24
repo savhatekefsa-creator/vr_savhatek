@@ -616,7 +616,7 @@ namespace VRMultiplayer.EditorTools
             var holder = new GameObject("Signs").transform;
             holder.SetParent(decor, false);
 
-            // (yazi, konum, yaw) — duvar IC yuzunden ~9 cm iceride. TextMesh, +Z'si
+            // (yazi, konum, yaw) — duvar IC yuzunden ~9 cm iceride. Yazi, +Z'si
             // OKUYUCUDAN DUVARA dogru bakinca okunur (CIKIS tabelasindaki kural):
             // kuzey duvari icin yaw 0, guney duvari icin 180, bati duvari icin 270.
             var defs = new (string text, Vector3 pos, float yaw)[]

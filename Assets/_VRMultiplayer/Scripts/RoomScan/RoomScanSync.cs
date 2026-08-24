@@ -3,6 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Text;
 using Unity.Netcode;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 using UnityEngine.XR.ARFoundation;
@@ -26,7 +27,7 @@ namespace VRMultiplayer
         const string ScenePermission = "com.oculus.permission.USE_SCENE";
         const int ChunkSize = 3000; // stays well under the transport payload limit
 
-        TextMesh _panel;
+        TextMeshPro _panel;
         bool _busy;
         bool _prevX;
         float _hidePanelAt = -1f;

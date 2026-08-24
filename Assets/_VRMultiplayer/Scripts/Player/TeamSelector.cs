@@ -1,4 +1,5 @@
 using Unity.Netcode;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -23,7 +24,7 @@ namespace VRMultiplayer
     public class TeamSelector : NetworkBehaviour
     {
         PlayerIdentity _identity;
-        TextMesh _panel;
+        TextMeshPro _panel;
         bool _armed;   // becomes true once A and B are both seen released
         bool _done;
         bool _prevA, _prevB;

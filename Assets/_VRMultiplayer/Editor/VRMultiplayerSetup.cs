@@ -195,24 +195,24 @@ namespace VRMultiplayer.EditorTools
 
             // Calibration status label (world-space, faces the camera).
             var labelGo = GameObject.Find("Calibration Label");
-            TextMesh tm;
+            TMPro.TextMeshPro tm;
             if (labelGo == null)
             {
                 labelGo = new GameObject("Calibration Label");
                 labelGo.transform.position = new Vector3(0f, 1.4f, 1.6f);
                 labelGo.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
                 labelGo.transform.localScale = Vector3.one * 0.16f;
-                tm = labelGo.AddComponent<TextMesh>();
-                tm.characterSize = 0.1f;
-                tm.fontSize = 60;
-                tm.anchor = TextAnchor.MiddleCenter;
-                tm.alignment = TextAlignment.Center;
+                tm = labelGo.AddComponent<TMPro.TextMeshPro>();
+                VRMultiplayer.UI.UITheme.ApplyFont(tm);
+                VRMultiplayer.UI.UITheme.ConfigureText(tm, TextAnchor.MiddleCenter);
+                // eski: characterSize 0.1 x punto 60 = 0.6 yerel satir (0.16 olcekte 0.096 m)
+                tm.fontSize = VRMultiplayer.UI.UITheme.FontSizeForLocalLineHeight(tm, 0.6f);
                 tm.color = Color.yellow;
                 labelGo.AddComponent<Billboard>();
             }
             else
             {
-                tm = labelGo.GetComponent<TextMesh>();
+                tm = labelGo.GetComponent<TMPro.TextMeshPro>();
             }
 
             var cal = rigGo.GetComponent<CalibrationManager>();

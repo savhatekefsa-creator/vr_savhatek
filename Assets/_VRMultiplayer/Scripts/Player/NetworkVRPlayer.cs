@@ -1,4 +1,5 @@
 using Unity.Netcode;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -142,7 +143,7 @@ namespace VRMultiplayer
                     }
 
                     // Don't show your own floating name tag either.
-                    foreach (var tm in remoteAvatar.GetComponentsInChildren<TextMesh>(true))
+                    foreach (var tm in remoteAvatar.GetComponentsInChildren<TextMeshPro>(true))
                     {
                         var r = tm.GetComponent<MeshRenderer>();
                         if (r != null) r.enabled = false;

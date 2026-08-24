@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer
@@ -21,7 +22,7 @@ namespace VRMultiplayer
         public float refreshInterval = 0.15f;
 
         AvatarIKController _ik;
-        TextMesh _panel;
+        TextMeshPro _panel;
         float _nextRefresh;
 
         void Awake() => _ik = GetComponent<AvatarIKController>();

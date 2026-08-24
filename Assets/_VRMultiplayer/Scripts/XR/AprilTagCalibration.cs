@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using PassthroughCameraSamples;
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer
@@ -399,7 +400,7 @@ namespace VRMultiplayer
         float _lastTagTime = -1f;    // YALNIZCA tag gercekten bulundugunda
         float _detectHz;
 
-        TextMesh _panel;
+        TextMeshPro _panel;
 
         /// <summary>
         /// Sahnede tek bir kalibrasyon var; harita yuklendiginde ona kendi tag yerlesimini

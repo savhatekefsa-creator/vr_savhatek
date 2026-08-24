@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer.UI
@@ -41,53 +42,83 @@ namespace VRMultiplayer.UI
         public static readonly Color TeamBlueText = new Color(0.50f, 0.65f, 0.94f, 1f);
 
         // --- Fonts ---
-        public const float NameCharacterSize = 0.06f;
-        public const int NameFontSize = 60;
 
-        static Font _defaultFont;
-        static readonly System.Collections.Generic.Dictionary<int, Material> _fontMats =
-            new System.Collections.Generic.Dictionary<int, Material>();
+        static TMP_FontAsset _defaultFont;
+        static Shader _textShader;
+        static readonly System.Collections.Generic.Dictionary<long, Material> _fontMats =
+            new System.Collections.Generic.Dictionary<long, Material>();
 
-        /// <summary>Calisma aninda uretilen HER TextMesh'in kullanmasi gereken font.
+        /// <summary>Calisma aninda uretilen HER yazinin kullanmasi gereken TMP fontu.
         ///
-        /// Unity 6 varsayilan TextMesh fontunu KALDIRDI: font atanmayan bir TextMesh editorde
-        /// (fontun bellekte oldugu ortamda) gorunur ama Quest build'inde HICBIR SEY cizmez.
-        /// Katilim, takim secme, kalibrasyon, oda tarama ve olum panelleri bu yuzden cihazda
-        /// bostu. Tek kaynak burasi — yeni panel yazan herkes ApplyFont cagirmali.</summary>
-        public static Font DefaultFont
+        /// SIRA: once Resources/Fonts/UIFont SDF (ekibin kendi fontu — SDF asset'ini oraya
+        /// birak, kod degismeden devreye girer; atlasi TURKCE karakter tablosuyla uretmeyi
+        /// unutma), yoksa TMP ayarlarindaki varsayilan (LiberationSans SDF).
+        ///
+        /// TextMesh doneminin dersi gecerli: font atanmayan yazi editorde gorunse bile
+        /// cihazda cizilmez. Tek kaynak burasi — yeni panel yazan herkes ApplyFont cagirmali.
+        ///
+        /// NOT: LiberationSans SDF atlasinda Turkce ozel harfler (g-breve, s-cedilla...) YOK.
+        /// Calisma zamani yazilarin ASCII yazilmasi (KALIBRE DEGIL, GORUNMUYOR...) bilincli
+        /// tercih; ekip fontu gelene kadar boyle kalmali.</summary>
+        public static TMP_FontAsset DefaultFont
         {
             get
             {
                 if (_defaultFont == null)
-                    _defaultFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                {
+                    _defaultFont = Resources.Load<TMP_FontAsset>("Fonts/UIFont SDF");
+                    if (_defaultFont == null) _defaultFont = TMP_Settings.defaultFontAsset;
+                    if (_defaultFont == null)
+                        _defaultFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+                }
                 return _defaultFont;
             }
         }
 
-        /// <summary>TextMesh'e fontu VE font materyalini atar. Ikisi de sart: tm.font yazmak
-        /// MeshRenderer'in materyalini kendiliginden ayarlamaz, materyalsiz kalan yazi cizilmez.
+        /// <summary>Tum arayuz yazilarinin shader'i: SDF + ZTest Always. Eski sistemde her
+        /// yazi GUI/Text Shader ile sahnenin USTUNE cizilirdi ve paneller buna yaslanir
+        /// (kolokasyonda gercek duvarin sanal kopyasi cogu zaman panelden yakindir; bkz.
+        /// <see cref="CreateOverlayMaterial(Color)"/>). TMP'nin Overlay varyanti ayni
+        /// davranisi verir. BUILD NOTU: bu shader'a runtime'da Shader.Find ile ulasiliyor,
+        /// o yuzden Always Included Shaders listesinde durmali (GUI/Text Shader gibi).</summary>
+        static Shader TextShader
+        {
+            get
+            {
+                if (_textShader == null)
+                    _textShader = Shader.Find("TextMeshPro/Mobile/Distance Field Overlay");
+                return _textShader;
+            }
+        }
+
+        /// <summary>Yaziya fontu VE paylasilan materyali atar.
         ///
-        /// renderQueue > 0 verilirse o kuyruk icin materyal PAYLASILIR (kuyruk basina tek kopya,
-        /// yazi basina degil) — boylece "her zaman ustte ciz" istegi batching'i bozmaz.</summary>
-        public static void ApplyFont(TextMesh tm, int renderQueue = 0)
+        /// MATERYAL HEP PAYLASILIR: tmp.fontMaterial'i OKUMAK bile yazi basina kopya uretir
+        /// (eski sistemin "6 yazi = 6 materyal" tuzaginin TMP karsiligi) — o property'ye
+        /// dokunma, buradan gec. (font, kuyruk) basina TEK kopya tutulur; renderQueue > 0
+        /// verilirse katman sirasi o kopyaya islenir.</summary>
+        public static void ApplyFont(TMP_Text tm, int renderQueue = 0, TMP_FontAsset fontOverride = null)
         {
             if (tm == null) return;
-            var font = DefaultFont;
-            if (font == null) return;   // built-in kaynak yoksa mevcut davranista birak
+            var font = fontOverride != null ? fontOverride : DefaultFont;
+            if (font == null) return;   // TMP Essentials yoksa mevcut davranista birak
 
             tm.font = font;
+            tm.fontSharedMaterial = SharedFontMaterial(font, renderQueue);
+        }
 
-            var mr = tm.GetComponent<MeshRenderer>();
-            if (mr == null) return;
+        /// <summary>(font, renderQueue) basina tek paylasilan yazi materyali (ZTest Always).</summary>
+        public static Material SharedFontMaterial(TMP_FontAsset font, int renderQueue = 0)
+        {
+            long key = ((long)font.GetInstanceID() << 20) ^ (uint)renderQueue;
+            if (_fontMats.TryGetValue(key, out var mat) && mat != null) return mat;
 
-            if (renderQueue <= 0) { mr.sharedMaterial = font.material; return; }
-
-            if (!_fontMats.TryGetValue(renderQueue, out var mat) || mat == null)
-            {
-                mat = new Material(font.material) { renderQueue = renderQueue };
-                _fontMats[renderQueue] = mat;
-            }
-            mr.sharedMaterial = mat;
+            mat = new Material(font.material);
+            var sh = TextShader;
+            if (sh != null) mat.shader = sh;
+            if (renderQueue > 0) mat.renderQueue = renderQueue;
+            _fontMats[key] = mat;
+            return mat;
         }
 
         // Domain reload kapaliyken statikler oyunlar arasi tasinir; yok edilmis materyale
@@ -96,6 +127,7 @@ namespace VRMultiplayer.UI
         static void ResetStatics()
         {
             _defaultFont = null;
+            _textShader = null;
             _fontMats.Clear();
             _vignette = null;
             _healthGradient = null;
@@ -210,8 +242,9 @@ namespace VRMultiplayer.UI
         /// <c>_ZTest = Always</c> yazmaktir — AMA URP/Unlit'in pass'inde ZTest hic tanimli
         /// degil ve boyle bir property YOK; <c>SetInt("_ZTest", 8)</c> sessizce hicbir sey
         /// yapmaz. Yerinde olculdu: URP/Unlit quad'lar zemine takilip kayboluyordu, ayni
-        /// paneldeki YAZILAR ise duruyordu — cunku TextMesh'in font materyali bu shader'i
-        /// kullaniyor. Sonuc: zemin yok, yazi havada. Panelin tamami ayni shader'a alindi.
+        /// paneldeki YAZILAR ise duruyordu — cunku yazi materyali ustte cizen bir shader
+        /// kullaniyor (bugun TMP'nin Overlay varyanti, bkz. <see cref="TextShader"/>).
+        /// Sonuc: zemin yok, yazi havada. Panelin tamami ayni sinifa alindi.
         ///
         /// STRIP RISKI YOK: oyun zaten yazi ciziyor, yani bu shader her build'de gemide.
         /// Custom bir shader yazmak Resources'a koymayi ya da Always Included listesine
@@ -299,19 +332,17 @@ namespace VRMultiplayer.UI
 
         /// <summary>Dunya-uzayi yazi. Font otomatik atanir (bkz. <see cref="ApplyFont"/>);
         /// boyut <see cref="SizeText"/> ile METRE cinsinden verilir.</summary>
-        public static TextMesh MakeText(Transform parent, string text, Color color,
+        public static TextMeshPro MakeText(Transform parent, string text, Color color,
             float worldLineHeight, TextAnchor anchor = TextAnchor.MiddleCenter, int renderQueue = 0)
         {
             var go = new GameObject("T_" + (string.IsNullOrEmpty(text) ? "empty" : text));
             go.transform.SetParent(parent, false);
 
-            var tm = go.AddComponent<TextMesh>();
+            var tm = go.AddComponent<TextMeshPro>();
             ApplyFont(tm, renderQueue);
+            ConfigureText(tm, anchor);
             tm.text = text;
             tm.color = color;
-            tm.anchor = anchor;
-            tm.alignment = anchor == TextAnchor.MiddleLeft || anchor == TextAnchor.UpperLeft
-                ? TextAlignment.Left : TextAlignment.Center;
             SizeText(tm, worldLineHeight);
 
             var mr = go.GetComponent<MeshRenderer>();
@@ -320,18 +351,59 @@ namespace VRMultiplayer.UI
             return tm;
         }
 
+        /// <summary>TMP yazisini eski TextMesh sozlesmesine oturtur: sarma YOK (satirlar
+        /// eskisi gibi \n ile), tasma serbest, SIFIR boyutlu rect — boylece hiza noktalari
+        /// eski anchor gibi transform'un kendisinden olculur (Center = konumda ortala,
+        /// Left = konumdan saga yaz).</summary>
+        public static void ConfigureText(TMP_Text tm, TextAnchor anchor)
+        {
+            tm.textWrappingMode = TextWrappingModes.NoWrap;
+            tm.overflowMode = TextOverflowModes.Overflow;
+            tm.alignment = ToAlignment(anchor);
+            tm.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            tm.rectTransform.sizeDelta = Vector2.zero;
+        }
+
+        static TextAlignmentOptions ToAlignment(TextAnchor a)
+        {
+            switch (a)
+            {
+                case TextAnchor.UpperLeft:   return TextAlignmentOptions.TopLeft;
+                case TextAnchor.UpperCenter: return TextAlignmentOptions.Top;
+                case TextAnchor.UpperRight:  return TextAlignmentOptions.TopRight;
+                case TextAnchor.MiddleLeft:  return TextAlignmentOptions.Left;
+                case TextAnchor.MiddleRight: return TextAlignmentOptions.Right;
+                case TextAnchor.LowerLeft:   return TextAlignmentOptions.BottomLeft;
+                case TextAnchor.LowerCenter: return TextAlignmentOptions.Bottom;
+                case TextAnchor.LowerRight:  return TextAlignmentOptions.BottomRight;
+                default:                     return TextAlignmentOptions.Center;
+            }
+        }
+
         /// <summary>Yaziyi ISTENEN SATIR YUKSEKLIGINE (metre) olcekler.
         ///
-        /// TextMesh'te satir yuksekligi ~ characterSize * fontSize / 10 yerel birimdir. Projede
-        /// cihazda dogrulanmis degerler (characterSize 0.1 / fontSize 60) sabit tutulup olcek
-        /// transformdan veriliyor — boylece cagiran taraf "kac punto" degil "kac santim"
-        /// dusunur, ki VR'da okunabilirligi belirleyen sey gorme acisi, punto degil.</summary>
-        public static void SizeText(TextMesh tm, float worldLineHeight)
+        /// Eski TextMesh'lerin cihazda dogrulanmis metrigi korunur: yerel satir yuksekligi
+        /// 0.6 birimde sabitlenir, olcek transformdan verilir — boylece cagiran taraf
+        /// "kac punto" degil "kac santim" dusunur, ki VR'da okunabilirligi belirleyen sey
+        /// gorme acisi, punto degil. Punto, fontun kendi metriginden hesaplanir; ekip fontu
+        /// degistiginde boyutlar kaymaz.</summary>
+        public static void SizeText(TMP_Text tm, float worldLineHeight)
         {
             if (tm == null) return;
-            tm.fontSize = 60;
-            tm.characterSize = 0.1f;                       // -> 0.6 yerel birim satir yuksekligi
+            tm.fontSize = FontSizeForLocalLineHeight(tm, 0.6f);
             tm.transform.localScale = Vector3.one * (worldLineHeight / 0.6f);
+        }
+
+        /// <summary>Yerel uzayda istenen satir yuksekligini verecek TMP punto degeri.
+        /// TMP'nin 3B bileseninde 1 punto = 0.1 yerel birim; satir/punto orani fonttan
+        /// fonta degistigi icin metrik fontun kendisinden okunur.</summary>
+        public static float FontSizeForLocalLineHeight(TMP_Text tm, float localLineHeight)
+        {
+            var f = tm != null && tm.font != null ? tm.font : DefaultFont;
+            float linePerPoint = 1.1f;   // metrik okunamazsa makul varsayilan
+            if (f != null && f.faceInfo.pointSize > 0f)
+                linePerPoint = f.faceInfo.lineHeight / f.faceInfo.pointSize;
+            return localLineHeight / (0.1f * linePerPoint);
         }
 
         // --- Health Bar Gradient ---
@@ -482,28 +554,28 @@ namespace VRMultiplayer.UI
         }
 
         /// <summary>
-        /// Dunya-uzayi yazi etiketi. Unity 6'da TextMesh VARSAYILAN FONTSUZ gelir — font
-        /// atanmazsa yazi hic gorunmez (kol saatinde ogrenilen ders); burada bir kez halledildi.
+        /// Dunya-uzayi yazi etiketi. Boyut eski TextMesh sozlesmesiyle uyumlu: characterSize,
+        /// eski (characterSize x punto 64 / 10) yerel satir yuksekligine cevrilir — kol saati
+        /// gibi cagiranlarin yerlesimi degismesin. Materyal artik etiket basina KOPYALANMAZ,
+        /// (font, kuyruk) basina paylasilir (bkz. <see cref="SharedFontMaterial"/>).
         /// </summary>
-        public static TextMesh CreateLabel(Transform parent, string text, Vector3 localPosition,
+        public static TextMeshPro CreateLabel(Transform parent, string text, Vector3 localPosition,
             float characterSize, int renderQueue)
         {
             var go = new GameObject("Label_" + text);
             go.transform.SetParent(parent, false);
             go.transform.localPosition = localPosition;
 
-            var tm = go.AddComponent<TextMesh>();
+            var tm = go.AddComponent<TextMeshPro>();
+            ApplyFont(tm, renderQueue);
+            ConfigureText(tm, TextAnchor.MiddleCenter);
             tm.text = text;
-            tm.characterSize = characterSize;
-            tm.fontSize = 64;
-            tm.anchor = TextAnchor.MiddleCenter;
-            tm.alignment = TextAlignment.Center;
             tm.color = Text;
-            tm.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            tm.fontSize = FontSizeForLocalLineHeight(tm, characterSize * 6.4f);
 
             var mr = go.GetComponent<MeshRenderer>();
-            if (tm.font != null) mr.material = tm.font.material;
-            mr.material.renderQueue = renderQueue;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
             return tm;
         }
 

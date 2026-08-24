@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer.UI
@@ -82,13 +83,13 @@ namespace VRMultiplayer.UI
             public float radius;
             public string action;       // null = ok tusu (slot/dir gecerli)
             public int slot, dir;
-            public TextMesh label;
+            public TextMeshPro label;
             public Material fillMat, borderMat;
         }
 
         readonly List<El> _els = new List<El>();
-        readonly TextMesh[] _counters = new TextMesh[4];
-        TextMesh _accessoryName;
+        readonly TextMeshPro[] _counters = new TextMeshPro[4];
+        TextMeshPro _accessoryName;
         El _maleTab, _femaleTab;
         Transform _hover;
         MeshFilter _hoverMesh;

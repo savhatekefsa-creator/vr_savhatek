@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 
 namespace VRMultiplayer
@@ -55,7 +56,7 @@ namespace VRMultiplayer
         PlayerIdentity _identity;   // K/Ö sayaci icin
         HandGrabber _grabber;
         Transform _face;
-        TextMesh _clock, _compass, _battery, _healthT, _ammo, _kd;
+        TextMeshPro _clock, _compass, _battery, _healthT, _ammo, _kd;
         Transform _healthBar;
         float _nextRefresh;
 
@@ -225,22 +226,21 @@ namespace VRMultiplayer
             nub.localPosition = pos + new Vector3(0.094f, 0f, 0f);
         }
 
-        TextMesh MakeText(Transform parent, string text, Vector3 pos, TextAnchor anchor, Color color, float size)
+        TextMeshPro MakeText(Transform parent, string text, Vector3 pos, TextAnchor anchor, Color color, float size)
         {
             var go = new GameObject("T_" + text);
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;
             go.transform.localScale = Vector3.one * size;
-            var tm = go.AddComponent<TextMesh>();
+            var tm = go.AddComponent<TextMeshPro>();
             // Font + materyal tek kaynaktan (bkz. UITheme.DefaultFont). Kuyruk veriliyor ki
             // yazilar saatin katmanlarinin ustunde kalsin; materyal kuyruk basina PAYLASILIR,
             // yani ekrandaki 6 yazi eskisi gibi 6 ayri materyal uretmez.
             VRMultiplayer.UI.UITheme.ApplyFont(tm, QueueBase + 20);
+            VRMultiplayer.UI.UITheme.ConfigureText(tm, anchor);
             tm.text = text;
-            tm.anchor = anchor;
-            tm.alignment = TextAlignment.Center;
-            tm.characterSize = 0.1f;
-            tm.fontSize = 72;
+            // eski TextMesh: characterSize 0.1 x punto 72 = 0.72 yerel satir. Ayni boy.
+            tm.fontSize = VRMultiplayer.UI.UITheme.FontSizeForLocalLineHeight(tm, 0.72f);
             tm.color = color;
             return tm;
         }
