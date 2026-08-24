@@ -15,22 +15,40 @@
    ```
 5. Projeyi Unity Hub'dan aç (ilk açılış Library'yi üretir, 10-20 dk sürebilir — normal).
 
-## ⚠️ ÖNEMLİ: Asker avatarı (Soldiers-Pack) — git'e girmiyor
-Oyuncu avatarı **US-Soldier** modelini kullanıyor. Bu paket ~15 GB olduğu için depoya
-KOYULMADI (`.gitignore`'da). Prefab askeri **GUID ile** referans veriyor; paket sende
-yoksa avatar **görünmez/bozuk** gelir. Düzeltmek için (bir kez):
+## ⚠️ Asker avatarı — ARTIK DEPODA, Soldiers-Pack import ETME
+Avatarın ihtiyaç duyduğu her şey (US-Soldier.fbx + materyaller + dokular, ~375 MB)
+`Assets/_VRMultiplayer/Models/Soldier/` altında **depoya alındı**. Klonlayan herkes
+karakterleri eksiksiz görür — ek paket gerekmez.
 
-1. **Soldiers-Pack'i içe aktar:** Ekipten aldığın `Soldiers-Pack.unitypackage`'ı
-   (ya da orijinal Asset Store paketini — HERKES AYNI SÜRÜMÜ kullanmalı ki GUID'ler eşleşsin)
-   `Assets/` altına import et.
-2. **Materyalleri URP'ye çevir:** Window > Rendering > Render Pipeline Converter >
-   "Built-in to URP" > sadece **"Material Upgrade"** > Initialize > Convert Assets.
-   (Yoksa asker **magenta/pembe** görünür.)
-3. **Quest için dokuları küçült (build alacaksan):** `Assets/Soldiers-Pack/Textures`
-   klasörünü seç > Inspector > Android sekmesi > Max Size **1024** > ASTC 6x6 > Apply.
-   (4K dokular Quest'te FPS'i çökertir.)
+**SAKIN `Soldiers-Pack.unitypackage`'ı import etme:** paketin dosyaları depodakilerle
+AYNI GUID'leri taşıyor; import edersen Unity GUID çakışmasında birini yeniden
+numaralandırır ve karakter referansları kırılır. (Bu bölümün eski sürümü paketi
+import etmeni söylüyordu — o talimat geçersiz.)
 
-Bu adımlardan sonra prefab avatarı düzgün gelir. Parmak sistemi (grip → yumruk) otomatik çalışır.
+Materyaller zaten URP'ye çevrilmiş, dokular 2048'e küçültülmüş halde depoda.
+Quest build'i öncesi doku import ayarları için: `Tools > VR Multiplayer >
+38. Silah Dokularini Android'e Optimize Et` (rapor için 39).
+
+## ⚠️ Silahlar: FPS Gun Pack 4K — git'e girmiyor (lisans)
+Pistol, ücretli **FPS Gun Pack 4K** paketinin "Pistol 2" mesh/materyallerine bağlı.
+Paket hem boyut hem lisans nedeniyle depoda YOK. Kendi Asset Store hesabından
+`Assets/FPS Gun Pack 4K/` altına import et — GUID'ler aynı olduğu için pistol
+kendiliğinden düzelir. Import etmezsen pistol mesh'siz/pembe görünür (oyun çalışır).
+
+## ⚠️ "Bir sürü hata / modeller yok" — %90 Git LFS eksik
+Büyük dosyalar (FBX, PNG, ~1 GB) **Git LFS**'te durur. LFS kurulu olmadan çekersen
+her biri 130 baytlık "pointer" metin dosyası olarak gelir: Unity yüzlerce import
+hatası basar, RooftopArena gibi modeller sahnede görünmez. Çözüm (bir kez):
+
+1. Unity'yi KAPAT.
+2. `git lfs version` çalışmıyorsa Git LFS kur (https://git-lfs.com).
+3. Proje klasöründe: `git lfs install` sonra `git lfs pull` (~1 GB indirir).
+4. Unity'yi aç — değişen dosyaları kendiliğinden yeniden import eder.
+   Hatalar sürerse: Unity kapalıyken `Library/` klasörünü sil, tekrar aç (10-20 dk).
+
+`git lfs pull` "**This repository is over its data quota**" derse GitHub'ın aylık
+LFS bant genişliği kotası bitmiştir — depo sahibine haber ver (kota sıfırlanana
+kadar beklenir ya da GitHub'dan ek veri paketi alınır).
 
 ## Günlük çalışma akışı
 - Çalışmaya başlamadan önce: `git pull`
