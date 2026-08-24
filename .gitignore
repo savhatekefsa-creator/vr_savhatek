@@ -109,3 +109,8 @@ _SceneBackups/
 # Blender otomatik yedegi: her kaydetmede bir onceki surumu .blend1 olarak birakiyor.
 # Kaynak dosyanin kendisi (.blend) depoda; yedegi ikinci bir kopya olarak tasimanin anlami yok.
 *.blend1
+
+# MCP istemci ayari: Unity kopruse baglanan sunucunun yolu makineye ozel
+# (uvx'in tam yolu kullanicidan kullaniciya degisir). Herkes kendi kurulumunu
+# yapsin diye depoda tutulmuyor; kurulum adimlari EKIP-KURULUM.md'de.
+.mcp.json

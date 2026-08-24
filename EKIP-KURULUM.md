@@ -50,8 +50,27 @@ hatası basar, RooftopArena gibi modeller sahnede görünmez. Çözüm (bir kez)
 LFS bant genişliği kotası bitmiştir — depo sahibine haber ver (kota sıfırlanana
 kadar beklenir ya da GitHub'dan ek veri paketi alınır).
 
+## ⚠️ Pull/merge öncesi Unity'yi KAPAT
+Unity açıkken `git pull` yaparsan, gelen `.fbx`/`.png` dosyalarını Unity onların
+`.meta` dosyaları yerleşmeden görür ve kendisi **yeni GUID üretir** — pull'la gelen
+doğru meta'ların üzerine yazar. GUID değişince o asset'e bağlı her prefab variant,
+materyal ve sahne referansı kopar.
+
+Başımıza geldi: tek bir merge'de 140 `.meta` dosyasının GUID'i değişti; 22 prefab
+"Missing Prefab Variant parent" hatası verdi, SampleScene açılamadı, zemin materyali
+dokusunu kaybetti.
+
+Doğru sıra: **Unity'yi kapat → `git pull` → Unity'yi aç.**
+
+Yine de olduysa panik yok, hiçbir şey kaybolmaz. Doğru GUID'ler commit'lerde duruyor;
+Unity KAPALIYKEN geri koy:
+```
+git restore -- "*.meta"
+```
+Sonra Unity'yi aç, reimport'un bitmesini bekle ve konsolun temiz olduğunu doğrula.
+
 ## Günlük çalışma akışı
-- Çalışmaya başlamadan önce: `git pull`
+- Çalışmaya başlamadan önce: **Unity'yi kapat**, `git pull`, sonra Unity'yi aç.
 - İş bitince: `git add -A && git commit -m "ne yaptigini yaz" && git push`
 - Küçük ve sık commit at; gün sonuna dev tek commit biriktirme.
 
@@ -60,3 +79,41 @@ kadar beklenir ya da GitHub'dan ek veri paketi alınır).
 - Dosya taşıma/yeniden adlandırma işlemlerini **Unity içinden** yap (dışarıdan yaparsan .meta bozulur).
 - `Library/`, `Temp/` gibi klasörler depoya girmez — bunlar makinede otomatik oluşur.
 - Build çıktılarını (apk) depoya ekleme.
+- **Unity açıkken `git pull` yapma** — yukarıdaki bölüme bak, .meta GUID'lerini bozar.
+
+## MCP (yapay zekâ asistanı ↔ Unity köprüsü) — isteğe bağlı
+Asistanın çalışan Unity Editor'e bağlanmasını sağlar: sahne hiyerarşisini okur,
+konsol hatalarını görür, prefab/materyal düzenler, testleri çalıştırır. Projeyi
+çalıştırmak için **gerekli değil** — kullanmayacaksan bu bölümü atla.
+
+Unity paketi (`com.coplaydev.unity-mcp`) `Packages/manifest.json`'da zaten kayıtlı,
+klonlayınca kendiliğinden gelir. Kalan üç adım kendi makinende:
+
+1. **uv kur** (MCP sunucusunu `uvx` çalıştırır):
+   ```
+   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+   ```
+   `%USERPROFILE%\.local\bin\uvx.exe` altına kurulur.
+
+2. **Proje kökünde `.mcp.json` oluştur.** Bu dosya depoda YOK (`.gitignore`'da),
+   çünkü aşağıdaki yol makineye özel — `KULLANICI` yerine kendi kullanıcı adını yaz:
+   ```json
+   {
+     "mcpServers": {
+       "UnityMCP": {
+         "type": "stdio",
+         "command": "C:\\Users\\KULLANICI\\.local\\bin\\uvx.exe",
+         "args": ["--from", "mcpforunityserver==10.1.0", "mcp-for-unity"]
+       }
+     }
+   }
+   ```
+   Sürüm numarası Unity paketinin sürümüyle aynı olmalı; `Window > MCP for Unity`
+   penceresinde yazar.
+
+3. **Unity'de transport'u seç:** `Window > MCP for Unity` → **Transport: Stdio**.
+   HTTP'de bırakırsan istemci Unity'yi bulamaz ("No Unity Editor instances found")
+   ve sabit 8080 portu başka bir uygulamayla çakışabilir.
+
+**Doğrulama:** bağlantı kurulduysa `%USERPROFILE%\.unity-mcp\` altında
+`unity-mcp-status-<hash>.json` oluşur, içinde `"reason":"ready"` yazar.
