@@ -32,6 +32,8 @@ namespace VRMultiplayer.UI
     public class PlayerEntryPanel : MonoBehaviour
     {
         public const string ActionStart  = "start";
+        /// <summary>KARAKTER DUZENI ekranini acar (bkz. UI.CharacterSelectUI).</summary>
+        public const string ActionCharacter = "character";
         public const string ActionRandom = "random";
         public const string ActionClear  = "clear";
 
@@ -107,6 +109,10 @@ namespace VRMultiplayer.UI
         static readonly Color BlueEdge   = UITheme.TeamBlueEdge;
         static readonly Color BlueFill   = new Color(0.039f, 0.067f, 0.125f, 1f);
         static readonly Color BlueText   = UITheme.TeamBlueText;
+
+        static readonly Color CharEdge   = new Color(0.36f, 0.62f, 0.55f, 1f);
+        static readonly Color CharFill   = new Color(0.043f, 0.118f, 0.106f, 1f);
+        static readonly Color CharText   = new Color(0.62f, 0.92f, 0.84f, 1f);
 
         static readonly Color StartOff   = new Color(0.078f, 0.102f, 0.133f, 1f);
         static readonly Color StartOffTx = new Color(0.31f, 0.36f, 0.42f, 1f);
@@ -303,18 +309,26 @@ namespace VRMultiplayer.UI
 
         void BuildTeamPanel()
         {
-            UITheme.MakeOutlined(transform, "TeamPanel", Box(884, 248, 1097, 517),
-                Dim(884, 248, 1097, 517), S(14f), PanelEdge, Backdrop, S(1.5f),
+            UITheme.MakeOutlined(transform, "TeamPanel", Box(884, 248, 1097, 452),
+                Dim(884, 248, 1097, 452), S(14f), PanelEdge, Backdrop, S(1.5f),
                 ZBorder, QBorder, QFill);
 
             var lbl = UITheme.MakeText(transform, "TAKIM SEÇ", SectionLbl, 0.016f,
                 TextAnchor.MiddleCenter, QText);
             lbl.transform.localPosition = new Vector3(X(990f), Y(268f), ZText);
 
-            _redCard = AddTeamCard(900, 285, 1081, 387, "KIZIL", RedEdge, RedFill, RedText,
+            _redCard = AddTeamCard(900, 282, 1081, 358, "KIZIL", RedEdge, RedFill, RedText,
                 PlayerProfile.TeamRed);
-            _blueCard = AddTeamCard(900, 399, 1081, 501, "MAVİ", BlueEdge, BlueFill, BlueText,
+            _blueCard = AddTeamCard(900, 366, 1081, 442, "MAVİ", BlueEdge, BlueFill, BlueText,
                 PlayerProfile.TeamBlue);
+
+            // KARAKTER DUZENI: takim panelinin hemen altinda, kendi kutusunda. Giris
+            // ekraninda durmasinin sebebi akis: oyuncu once kimligini (isim + takim)
+            // belirler, gorunumu istedigi an duzenler ve KATIL'a bastiginda oyuna girer.
+            // Zorunlu bir adim DEGIL — hic dokunmayan oyuncu varsayilan gorunumle girer.
+            var chr = AddButton(Box(884, 462, 1097, 517), Dim(884, 462, 1097, 517), S(12f),
+                "KARAKTER", 0.024f, CharEdge, CharFill, CharText, '\0', ActionCharacter);
+            IconOn(chr, UIMesh.Bolt(), CharText, -S(66f), 0.014f, 0.022f);
         }
 
         El AddTeamCard(float x0, float y0, float x1, float y1, string title,
@@ -362,7 +376,7 @@ namespace VRMultiplayer.UI
 
         void BuildStartButton()
         {
-            Vector2 c = Box(183, 533, 1097, 594), size = Dim(183, 533, 1097, 594);
+            Vector2 c = Box(183, 545, 1097, 594), size = Dim(183, 545, 1097, 594);
 
             var border = UITheme.MakeRounded(transform, "Start Border", c, size, S(12f),
                 StartOff, ZBorder, QBorder);
@@ -373,10 +387,10 @@ namespace VRMultiplayer.UI
 
             _startIcon = UITheme.MakeShape(transform, "Start Icon", UIMesh.Play(), StartOffTx, QIcon);
             _startIcon.localPosition = new Vector3(c.x - S(96f), c.y, ZIcon);
-            _startIcon.localScale = new Vector3(0.020f, 0.024f, 1f);
+            _startIcon.localScale = new Vector3(0.018f, 0.022f, 1f);
             _startIconMat = _startIcon.GetComponent<MeshRenderer>().sharedMaterial;
 
-            _startLabel = UITheme.MakeText(transform, "OYUNA BAŞLA", StartOffTx, 0.034f,
+            _startLabel = UITheme.MakeText(transform, "KATIL", StartOffTx, 0.034f,
                 TextAnchor.MiddleCenter, QText);
             _startLabel.transform.localPosition = new Vector3(c.x + S(14f), c.y, ZText);
 

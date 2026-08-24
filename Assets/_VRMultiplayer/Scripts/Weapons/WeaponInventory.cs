@@ -4,25 +4,10 @@ using UnityEngine;
 
 namespace VRMultiplayer.Weapons
 {
-    /// <summary>Cantanin 3 yuvasi. Kategori SILAH ADINDAN turetilir (ekip karari: tabanca +
-    /// el bombasi + geri kalan her sey): adinda "Pistol" gecen tabanca, "Grenade" gecen bomba,
-    /// GERISI uzun namlulu. UzunNamlulu'nun varsayilan olmasi bilincli — yeni eklenen silah hicbir sey
-    /// yapilmadan uzun namlulu sayilir. Ileride isim yetmezse (orn. "Revolver") profil alanina tasinir.</summary>
+   
     public enum WeaponCategory { Heavy = 0, Pistol = 1, Grenade = 2 }
 
-    /// <summary>
-    /// Yerel silah envanteri: 3 YUVALI canta — uzun namlulu / tabanca / bomba (ekip karari: her
-    /// kategoriden EN FAZLA BIR silah tasinir). Ayni kategoriden yeni bir silah alinca
-    /// yuvadaki ESKISININ YERINE gecer; "bomba yerine dorduncu silah" zaten mumkun degil,
-    /// yuva sayisi sabit. Her silah icin GORSEL onizleme kopyasi (mesh+materyal, script/
-    /// fizik/ag YOK) uretilir — kemer HUD'u (VRMultiplayer.UI.WeaponBeltUI) yuvalari SABIT
-    /// sirayla gosterir: uzun namlulu, tabanca, bomba.
-    ///
-    /// Tamamen YEREL (kendi goruntun), ag yok. Her ~0.3sn elde tuttugun grabbable'lari tarar,
-    /// bu yuzden HandGrabber / GrabbableObject'e HIC dokunmaz (sadece public alanlari okur) ve
-    /// kendini otomatik olusturur.
-    /// </summary>
-    public class WeaponInventory : MonoBehaviour
+       public class WeaponInventory : MonoBehaviour
     {
         public static WeaponInventory Instance { get; private set; }
 
@@ -32,24 +17,11 @@ namespace VRMultiplayer.Weapons
             public WeaponCategory Category;
             public GameObject Preview;  // gorsel-only klon (kemerde gosterilir), pasif baslar
             public GameObject Prefab;   // Resources/WeaponPrefabs'taki kalip; secilince BUNDAN
-                                        // yeni bir tane uretilir. null = bu silah spawn edilemez
-                                        // (kalibi yok) -> kemerde durur ama equip edilemez.
-
-            // Silah cantaya kac mermiyle girdi. Geri cagirinca bu deger yeni silaha yazilir —
-            // yoksa taze silah DOLU dogar (NetworkWeapon.OnNetworkSpawn) ve galeriyi acip
-            // kapamak savurarak dolumdan hizli bir BEDAVA SARJOR olurdu. Cantanin bir NESNEYI
-            // saklamasina gerek yok, bu iki SAYI yetiyor.
+           
             public int Ammo = -1;    // -1 = kayit yok -> silah dolu dogsun
             public int Spares = -1;  // -1 = dokunma (profilde sinirsiz olabilir)
-
-            // Namlunun silah-LOKAL yonu (profilden). Kemer HUD'u onizlemeyi buna gore YAN cevirir:
-            // sabit bir aci hepsine uymaz — cogu silahin namlusu Z'de ama HK416'ninki X'te,
-            // ayni cevirmede digerleri yan dururken o yuzunu doner ve taninmaz olur.
             public Vector3 BarrelDir = Vector3.forward;
         }
-
-        // 3 sabit yuva (index = WeaponCategory). Kemer her zaman ayni sirayi gorur:
-        // uzun namlulu, tabanca, bomba — bos yuva listeye girmez.
         readonly Entry[] _slots = new Entry[3];
         readonly List<Entry> _view = new List<Entry>();
         bool _viewDirty = true;

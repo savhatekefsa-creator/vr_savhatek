@@ -317,6 +317,22 @@ namespace VRMultiplayer
             _ghostOn = on;
         }
 
+        /// <summary>
+        /// Malzeme onbellegini bosalt ve hayalet durumunu MEVCUT malzemelerden yeniden kur.
+        /// Gorunum sistemi (bkz. <see cref="PlayerAppearance"/>) renderer malzemelerini
+        /// DEGISTIRDIGINDE cagirir: onbellek eski malzemeleri tutuyorsa dirilis, oyuncunun
+        /// sectigi gorunumu eski varsayilanla ezerdi. Renderer'larda o an takili malzemeler
+        /// CANLI kabul edilir — cagiran taraf once canli malzemeleri yazmis olmali.
+        /// </summary>
+        public void RefreshMaterialCache()
+        {
+            bool wasOn = _ghostOn;
+            _aliveMats = null;
+            _ghostMats = null;
+            _ghostOn = false;
+            if (wasOn) SetGhost(true);
+        }
+
         void Refresh()
         {
             bool dead = _health != null && _health.Dead.Value;
