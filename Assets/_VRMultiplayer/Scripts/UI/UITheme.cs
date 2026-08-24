@@ -408,31 +408,21 @@ namespace VRMultiplayer.UI
 
         /// <summary>Genis harf araligi + soldan saga renk gecisli baslik — TEK yazi objesi.
         ///
-        /// Eski surum bunu HARF BASINA AYRI OBJE ile yapiyordu, cunku TextMesh'te ne harf
-        /// araligi ne harf basina renk vardi. TMP'de ikisi de zengin metinle geliyor:
-        /// <c>&lt;mspace&gt;</c> her harfin ilerlemesini esitler (eski "harf merkezleri
-        /// -halfSpan..+halfSpan arasinda esit adim" yerlesimi birebir korunur, bosluklar
-        /// dahil), <c>&lt;color&gt;</c> harf basina gecis rengini verir. Metin bir kez
-        /// kurulur; 8-15 GameObject yerine 1 obje, 1 mesh.</summary>
+        /// Eski surum bunu HARF BASINA AYRI OBJE ile esit adimlarla yapiyordu (TextMesh
+        /// kisiti). Ilk TMP cevirisi mspace etiketiyle ayni esit-adim yerlesimi korudu ama
+        /// esit HUCRE, dar harflerin (I, dotlu I) etrafinda hava birakip basligi
+        /// "I HAR I TA" gibi kopuk okutuyordu. Simdi gercek harf izleme (tracking) var:
+        /// her glif dogal genisliginde, aradaki EK bosluk sabit. characterSpacing degeri
+        /// olculerek bulunur — ilk/son harf merkezleri eski -halfSpan..+halfSpan
+        /// araligina oturur, yani basligin toplam genisligi degismez. color etiketi harf
+        /// basina gecis rengini verir; yerlesim bir kez kurulur, kare basi maliyet yok.</summary>
         public static TextMeshPro MakeTitle(Transform parent, string text, Color colorA,
             Color colorB, float worldLineHeight, float worldHalfSpan, int renderQueue = 0)
         {
-            int n = text.Length;
-            float stepWorld = n > 1 ? (worldHalfSpan * 2f) / (n - 1) : 0f;
-
             var tm = MakeText(parent, "", colorA, worldLineHeight, TextAnchor.MiddleCenter, renderQueue);
 
-            // mspace em cinsinden: 1 em'in dunya boyu = satir yuksekligi / (satir/punto orani).
-            var f = tm.font;
-            float linePerPoint = (f != null && f.faceInfo.pointSize > 0f)
-                ? f.faceInfo.lineHeight / f.faceInfo.pointSize : 1.1f;
-            float stepEm = worldLineHeight > 0f ? stepWorld * linePerPoint / worldLineHeight : 0f;
-
             var sb = new System.Text.StringBuilder(text.Length * 16);
-            // InvariantCulture SART: Turkce yerel ayar ondaligi virgulle yazar, etiket bozulur.
-            sb.Append("<mspace=")
-              .Append(stepEm.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))
-              .Append("em>");
+            int n = text.Length;
             for (int i = 0; i < n; i++)
             {
                 char c = text[i];
@@ -444,7 +434,43 @@ namespace VRMultiplayer.UI
             }
             tm.text = sb.ToString();
             tm.gameObject.name = "T_" + text;
+
+            FitTitleSpan(tm, worldHalfSpan);
             return tm;
+        }
+
+        /// <summary>Izleme payini OLCEREK bulur: dogal dizilimde ilk/son harf merkezleri
+        /// arasi mesafe hedeften (2*halfSpan) ne kadar eksikse, aradaki her ilerlemeye
+        /// esit dagitir. Iki gecis olcum yapilir — ikincisi, characterSpacing biriminin
+        /// font/olcek carpanlarina dair varsayimi dogrudan olcumle duzeltir (span,
+        /// spacing'in dogrusal fonksiyonu oldugu icin tek duzeltme yeter).</summary>
+        static void FitTitleSpan(TextMeshPro tm, float worldHalfSpan)
+        {
+            tm.ForceMeshUpdate();
+            var ti = tm.textInfo;
+            int ilk = -1, son = -1;
+            for (int i = 0; i < ti.characterCount; i++)
+                if (ti.characterInfo[i].isVisible) { if (ilk < 0) ilk = i; son = i; }
+            if (son <= ilk) return;
+
+            float dogal = MerkezAraligi(ti, ilk, son);
+            float hedef = (worldHalfSpan * 2f) / Mathf.Max(tm.transform.localScale.x, 1e-6f);
+
+            // TMP 3B icin beklenen birim: ek ilerleme (yerel) ~ spacing * fontSize * 0.001
+            float tahmin = ((hedef - dogal) / (son - ilk)) / (tm.fontSize * 0.001f);
+            tm.characterSpacing = tahmin;
+            tm.ForceMeshUpdate();
+
+            float olculen = MerkezAraligi(tm.textInfo, ilk, son);
+            if (Mathf.Abs(olculen - dogal) > 1e-5f)
+                tm.characterSpacing = tahmin * (hedef - dogal) / (olculen - dogal);
+        }
+
+        static float MerkezAraligi(TMP_TextInfo ti, int ilk, int son)
+        {
+            float a = (ti.characterInfo[ilk].bottomLeft.x + ti.characterInfo[ilk].bottomRight.x) * 0.5f;
+            float b = (ti.characterInfo[son].bottomLeft.x + ti.characterInfo[son].bottomRight.x) * 0.5f;
+            return b - a;
         }
 
         // --- Health Bar Gradient ---
