@@ -406,6 +406,47 @@ namespace VRMultiplayer.UI
             return localLineHeight / (0.1f * linePerPoint);
         }
 
+        /// <summary>Genis harf araligi + soldan saga renk gecisli baslik — TEK yazi objesi.
+        ///
+        /// Eski surum bunu HARF BASINA AYRI OBJE ile yapiyordu, cunku TextMesh'te ne harf
+        /// araligi ne harf basina renk vardi. TMP'de ikisi de zengin metinle geliyor:
+        /// <c>&lt;mspace&gt;</c> her harfin ilerlemesini esitler (eski "harf merkezleri
+        /// -halfSpan..+halfSpan arasinda esit adim" yerlesimi birebir korunur, bosluklar
+        /// dahil), <c>&lt;color&gt;</c> harf basina gecis rengini verir. Metin bir kez
+        /// kurulur; 8-15 GameObject yerine 1 obje, 1 mesh.</summary>
+        public static TextMeshPro MakeTitle(Transform parent, string text, Color colorA,
+            Color colorB, float worldLineHeight, float worldHalfSpan, int renderQueue = 0)
+        {
+            int n = text.Length;
+            float stepWorld = n > 1 ? (worldHalfSpan * 2f) / (n - 1) : 0f;
+
+            var tm = MakeText(parent, "", colorA, worldLineHeight, TextAnchor.MiddleCenter, renderQueue);
+
+            // mspace em cinsinden: 1 em'in dunya boyu = satir yuksekligi / (satir/punto orani).
+            var f = tm.font;
+            float linePerPoint = (f != null && f.faceInfo.pointSize > 0f)
+                ? f.faceInfo.lineHeight / f.faceInfo.pointSize : 1.1f;
+            float stepEm = worldLineHeight > 0f ? stepWorld * linePerPoint / worldLineHeight : 0f;
+
+            var sb = new System.Text.StringBuilder(text.Length * 16);
+            // InvariantCulture SART: Turkce yerel ayar ondaligi virgulle yazar, etiket bozulur.
+            sb.Append("<mspace=")
+              .Append(stepEm.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))
+              .Append("em>");
+            for (int i = 0; i < n; i++)
+            {
+                char c = text[i];
+                if (c == ' ') { sb.Append(' '); continue; }
+                float t = n > 1 ? i / (float)(n - 1) : 0f;
+                sb.Append("<color=#")
+                  .Append(ColorUtility.ToHtmlStringRGB(Color.Lerp(colorA, colorB, t)))
+                  .Append('>').Append(c);
+            }
+            tm.text = sb.ToString();
+            tm.gameObject.name = "T_" + text;
+            return tm;
+        }
+
         // --- Health Bar Gradient ---
 
         static Texture2D _healthGradient;

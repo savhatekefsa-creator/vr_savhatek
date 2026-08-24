@@ -226,24 +226,17 @@ namespace VRMultiplayer.UI
                 Dim(160, 72, 1120, 648), S(18f), Backdrop, ZBack, QBack);
         }
 
-        // Baslik HARF HARF ciziliyor: hem tasarimdaki genis harf araligi hem camgobegi->mor
-        // gecisi icin. Tek yazi objesiyle ikisi de olmazdi (harf araligi ayari ve harf basina
-        // renk yok).
+        // Baslik: genis harf araligi + camgobegi->mor gecisi TEK yazi objesinde
+        // (bkz. UITheme.MakeTitle; eski harf-basina-obje deseni TextMesh kisitiydi).
         void BuildTitle()
         {
             const string text = "OYUNCU GİRİŞİ";
             const float left = 478f, right = 790f, y = 110f;
-            int n = text.Length;
 
-            for (int i = 0; i < n; i++)
-            {
-                if (text[i] == ' ') continue;
-                float t = n > 1 ? i / (float)(n - 1) : 0f;
-                var tm = UITheme.MakeText(transform, text[i].ToString(),
-                    Color.Lerp(TitleA, TitleB, t), 0.046f, TextAnchor.MiddleCenter, QText);
-                tm.transform.localPosition =
-                    new Vector3(X(Mathf.Lerp(left, right, t)), Y(y), ZText);
-            }
+            var tm = UITheme.MakeTitle(transform, text, TitleA, TitleB, 0.046f,
+                (X(right) - X(left)) * 0.5f, QText);
+            tm.transform.localPosition =
+                new Vector3((X(left) + X(right)) * 0.5f, Y(y), ZText);
         }
 
         void BuildNameField()

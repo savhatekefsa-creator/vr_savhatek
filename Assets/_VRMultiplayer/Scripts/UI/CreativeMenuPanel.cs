@@ -96,21 +96,12 @@ namespace VRMultiplayer.UI
             RefreshCards();
         }
 
-        // Baslik harf harf: ModeSelectPanel'deki ayni teknik (harf araligi + renk gecisi).
+        // Baslik: ModeSelectPanel'deki ayni teknik (harf araligi + renk gecisi), tek objede.
         void BuildTitle()
         {
-            const string text = "HARİTA TASARIMI";
-            int n = text.Length;
-            for (int i = 0; i < n; i++)
-            {
-                if (text[i] == ' ') continue;
-                float t = n > 1 ? i / (float)(n - 1) : 0f;
-                var tm = UITheme.MakeText(transform, text[i].ToString(),
-                    Color.Lerp(UITheme.AccentCyan, UITheme.AccentPurple, t), TitleSize,
-                    TextAnchor.MiddleCenter, QText);
-                tm.transform.localPosition = new Vector3(
-                    Mathf.Lerp(-TitleHalfSpan, TitleHalfSpan, t), TitleY, ZText);
-            }
+            var tm = UITheme.MakeTitle(transform, "HARİTA TASARIMI",
+                UITheme.AccentCyan, UITheme.AccentPurple, TitleSize, TitleHalfSpan, QText);
+            tm.transform.localPosition = new Vector3(0f, TitleY, ZText);
         }
 
         void AddCard(float x, Choice choice, string title, string desc, Color edge, Mesh icon)

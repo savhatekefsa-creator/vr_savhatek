@@ -116,23 +116,14 @@ namespace VRMultiplayer.UI
                 ZBack, QBack, QBack + 1);
         }
 
-        // Baslik HARF HARF: hem genis harf araligi hem camgobegi->mor gecisi icin. Tek yazi objesi
-        // ile ikisi de olmazdi (harf araligi ayari ve harf basina renk yok). Giris ekranindaki
-        // "OYUNCU GIRISI" basligiyla ayni teknik — iki ekran ust uste tutarli gorunsun.
+        // Baslik: genis harf araligi + camgobegi->mor gecisi TEK yazi objesinde
+        // (bkz. UITheme.MakeTitle; eski harf-basina-obje deseni TextMesh kisitiydi).
+        // Giris ekranindaki "OYUNCU GIRISI" basligiyla ayni teknik — tutarli gorunsun.
         void BuildTitle()
         {
-            const string text = "VR ARENA";
-            int n = text.Length;
-
-            for (int i = 0; i < n; i++)
-            {
-                if (text[i] == ' ') continue;
-                float t = n > 1 ? i / (float)(n - 1) : 0f;
-                var tm = UITheme.MakeText(transform, text[i].ToString(),
-                    Color.Lerp(TitleA, TitleB, t), TitleSize, TextAnchor.MiddleCenter, QText);
-                tm.transform.localPosition = new Vector3(
-                    Mathf.Lerp(-TitleHalfSpan, TitleHalfSpan, t), TitleY, ZText);
-            }
+            var tm = UITheme.MakeTitle(transform, "VR ARENA", TitleA, TitleB,
+                TitleSize, TitleHalfSpan, QText);
+            tm.transform.localPosition = new Vector3(0f, TitleY, ZText);
         }
 
         void AddCard(float x, AppMode.Mode mode, string title, string desc, Color edge, Mesh icon)
