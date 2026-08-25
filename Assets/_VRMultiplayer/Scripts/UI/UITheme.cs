@@ -128,6 +128,7 @@ namespace VRMultiplayer.UI
         {
             _defaultFont = null;
             _textShader = null;
+            _overlayShader = null;
             _fontMats.Clear();
             _vignette = null;
             _healthGradient = null;
@@ -256,13 +257,39 @@ namespace VRMultiplayer.UI
         /// </summary>
         public static Material CreateOverlayMaterial(Color color)
         {
-            var sh = Shader.Find("GUI/Text Shader");
+            var sh = OverlayShader;
             if (sh == null) return CreateTransparentMaterial(color);   // olmamali; yine de duselim
 
             var m = new Material(sh);
             m.SetTexture("_MainTex", Texture2D.whiteTexture);
             m.SetColor("_Color", color);
             return m;
+        }
+
+        static Shader _overlayShader;
+
+        /// <summary>Panel yuzeylerinin shader'i (GUI/Text Shader — ZTest Always).
+        ///
+        /// KAYNAK: Resources/UIOverlay.mat. O MATERYAL BU SHADER'I BUILD'E TASIYOR — silme,
+        /// "kullanilmiyor" gorunur ama silinirse cihazda TUM panel zeminleri kaybolur.
+        ///
+        /// NEDEN AlwaysIncludedShaders DEGIL: shader "unity default resources" icinde yasiyor
+        /// ve o listeye eklenince Android build'i unity_builtin_extra'yi yazarken cokuyordu
+        /// (BufferedCacheWriter, 'm_LockCount == 0'). Resources'taki bir materyal ayni
+        /// garantiyi build'i kirmadan veriyor.
+        ///
+        /// Shader.Find yedegi duruyor: materyal bir sekilde yuklenemezse editorde calismaya
+        /// devam eder (editorde tum shader'lar yuklu, strip yok).</summary>
+        static Shader OverlayShader
+        {
+            get
+            {
+                if (_overlayShader != null) return _overlayShader;
+                var mat = Resources.Load<Material>("UIOverlay");
+                if (mat != null) _overlayShader = mat.shader;
+                if (_overlayShader == null) _overlayShader = Shader.Find("GUI/Text Shader");
+                return _overlayShader;
+            }
         }
 
         /// <summary>Panel zemini / tus yuzeyi icin colliderSIZ, golgesiz quad. Collider
