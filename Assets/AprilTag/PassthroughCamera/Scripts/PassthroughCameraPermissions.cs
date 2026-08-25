@@ -36,17 +36,25 @@ namespace PassthroughCameraSamples
         /// </summary>
         public void AskCameraPermissions()
         {
+            // OS GERCEGI HER CAGRIDA, static onbellekten ONCE okunur.
+            //
+            // s_askedOnce ve HasCameraPermission STATIC: Quest uygulamayi arka planda canli
+            // tutuyor, resume ile geri gelindiginde bu alanlar SIFIRLANMIYOR. Eski kod once
+            // s_askedOnce'a bakip erken donuyordu; boylece izin OS'te VERILI olsa bile bayat
+            // bir HasCameraPermission'la kaliniyor ve WebCamTextureManager kamerayi hic
+            // acmiyordu (izin ekrani hic cikmadan "takilma"). Once canli durumu yaz:
+            if (IsAllCameraPermissionsGranted())
+            {
+                HasCameraPermission = true;
+                s_askedOnce = true;
+                return;
+            }
+
             if (s_askedOnce)
             {
                 return;
             }
             s_askedOnce = true;
-            if (IsAllCameraPermissionsGranted())
-            {
-                HasCameraPermission = true;
-                PCD.DebugMessage(LogType.Log, "PCA: All camera permissions granted.");
-            }
-            else
             {
                 PCD.DebugMessage(LogType.Log, "PCA: Requesting camera permissions.");
 

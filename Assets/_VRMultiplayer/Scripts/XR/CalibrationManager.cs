@@ -138,6 +138,24 @@ namespace VRMultiplayer
             if (status != null) status.gameObject.SetActive(false);
         }
 
+        /// <summary>
+        /// KALICI uyari gosterir (otomatik gizleme YOK). Uyku sonrasi yon dogrulamasi icin.
+        ///
+        /// NEDEN BU PANEL: teshis paneli (AprilTagCalibration.showPanel) oyunda KAPALI
+        /// tutuluyor ve uyku sonrasi donme tam da bu yuzden gorunmez kaldi. CIHAZDA YASANDI:
+        /// gozluk uykudan uyandi, takip uzayi 175,8 derece donmus halde geldi, tag 0 yedi
+        /// dakika boyunca hic gorulmedi ve oyun bastan sona TERS bir dunyada oynandi. Kod
+        /// uyariyi yaziyordu ama yalnizca log'a — oyuncu log okumuyor.
+        ///
+        /// Bu panel showPanel'den BAGIMSIZ ve "~" onekli oldugu icin passthrough acikken de
+        /// gorunur; yani teshis kapatilsa bile uyari kaybolmaz.
+        /// </summary>
+        public void ShowPersistent(string text)
+        {
+            StopAllCoroutines();   // bekleyen otomatik gizlemeyi iptal et — bu uyari kalici
+            SetStatus(text);
+        }
+
         void Update()
         {
             if (!_started) return;

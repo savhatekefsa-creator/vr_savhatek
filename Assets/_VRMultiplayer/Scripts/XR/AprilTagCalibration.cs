@@ -594,6 +594,44 @@ namespace VRMultiplayer
         }
 
         /// <summary>Uyariyi log'a bir kez yazar; referans yeniden gorununce sifirlanir.</summary>
+        // ---- UYANIS KAPISI ----------------------------------------------------------------
+        //
+        // OLCULDU (24 Agu, cok oyunculu tur): gozluk uykudan uyandi, dunya 175,8 derece donmus
+        // geldi, tag 0 YEDI DAKIKA boyunca hic gorulmedi ve oyun bastan sona ters bir dunyada
+        // oynandi. Uyku ONCESI olcum dogruydu (fark -0,8), yani donmeyi uyku yaratti.
+        //
+        // Donme ISABETI bozmaz (kamera da kumanda da rig ile birlikte doner) ama GERCEK oda ile
+        // sanal dunyayi ayirir: olmayan yerde siper sanirsin, acikta kalirsin. Cok oyunculuda
+        // iki oyuncu farkli yonlerde dunyalar gorur.
+        bool _wokeNeedsRef;
+        float _wokeAt;
+
+        /// <summary>
+        /// Uyandiktan sonra tag 0 gorulene kadar KALICI uyari gosterir.
+        ///
+        /// TickRefWatch ile ayni yerden cagriliyor cunku ikisi de panelden BAGIMSIZ kosmali:
+        /// teshis paneli oyunda kapali ve olayin gorunmez kalmasinin sebebi tam olarak buydu.
+        /// </summary>
+        void TickWakeGate()
+        {
+            if (!_wokeNeedsRef) return;
+
+            // Referans uyandiktan SONRA goruldu mu? Uyku oncesi gorulme sayilmaz.
+            if (_seenTime.TryGetValue(offsetReferenceTagId, out float t) && t >= _wokeAt)
+            {
+                _wokeNeedsRef = false;
+                WriteDiag($"UYANIS KAPISI ACILDI  tag {offsetReferenceTagId} goruldu " +
+                          $"({Time.time - _wokeAt:0.0} sn sonra)");
+                if (_cm != null) _cm.HideStatus();
+                return;
+            }
+
+            if (_cm == null) _cm = FindFirstObjectByType<CalibrationManager>();
+            if (_cm != null)
+                _cm.ShowPersistent($"UYKUDAN UYANILDI\n\nYON DOGRULANMADI — TAG {offsetReferenceTagId}'A BAK\n" +
+                                   $"({Time.time - _wokeAt:0} sn)");
+        }
+
         void TickRefWatch()
         {
             string uyari = YawReferenceWarning();
@@ -774,6 +812,18 @@ namespace VRMultiplayer
                 _calibYawLocal.Clear();
                 _calibWeight.Clear();
                 _calibId = -1;
+
+                // UYANIS KAPISI: takip uzayi uyku boyunca DONMUS olabilir ve bunu yalnizca
+                // tag 0 duzeltebilir. Bayrak, referans tekrar gorulene kadar oyuncuya
+                // KALICI bir uyari gosterir (bkz. TickWakeGate).
+                _wokeNeedsRef = CalibrationManager.Calibrated;
+                _wokeAt = Time.time;
+
+                // Kapinin DEVREYE GIRDIGI de yazilir, yalnizca acildigi degil. Aksi halde
+                // "uyari cikti mi" sorusu log'dan cevaplanamiyor ve testte tahmin gerekiyor.
+                WriteDiag(_wokeNeedsRef
+                    ? "UYANIS KAPISI DEVREDE — tag " + offsetReferenceTagId + " gorulene kadar uyari"
+                    : "UYANIS KAPISI ATLANDI (henuz kalibre degil — normal akis zaten uyaracak)");
             }
         }
 
@@ -1838,9 +1888,41 @@ namespace VRMultiplayer
         /// <summary>Fuzyonun en son karar verdigi an. Panel bunu okuyor — bkz. PanelText.</summary>
         float _fuseAppliedAt = -999f;
 
+        /// <summary>Son BASARILI fuzyonun RMS kalintisi (m); hic olmadiysa -1.</summary>
+        float _fuseResidual = -1f;
+
+        /// <summary>O fuzyonda kac tag vardi.</summary>
+        int _fuseTagCount;
+
         /// <summary>Fuzyon SU AN mi suruyor. Tek bir karelik boslukta panelin eski mesaja
         /// donup yanip sonmemesi icin kisa bir kuyruk birakiliyor.</summary>
         bool FusionDriving => Time.time - _fuseAppliedAt < 1.5f;
+
+        /// <summary>
+        /// Cerceve SU AN coklu tag fuzyonuyla mi suruluyor, ve son kalintisi ne?
+        ///
+        /// Yerlestirme katmani bunu "plakayi simdi basmak guvenli mi" diye soruyor: plaka
+        /// konuldugu andaki cerceveyi KALICI olarak miras aliyor, yani cerceve o an ne kadar
+        /// sapiksa tag o kadar yanlis kaydediliyor ve hata sonraki tag'lere de tasiniyor.
+        ///
+        /// false donmesi "cerceve kotu" demek DEGIL: tek tag goruluyorsa fuzyon hic calismaz.
+        /// O durumda tazelige bakilmali (bkz. <see cref="SecondsSinceCorrection"/>).
+        /// </summary>
+        public bool FusionQuality(out int tagCount, out float residualMeters)
+        {
+            tagCount = _fuseTagCount;
+            residualMeters = _fuseResidual;
+            return FusionDriving;
+        }
+
+        /// <summary>Kalibrasyon yoksa false; bkz. <see cref="FusionQuality"/>.</summary>
+        public static bool FrameFusion(out int tagCount, out float residualMeters)
+        {
+            if (Instance != null) return Instance.FusionQuality(out tagCount, out residualMeters);
+            tagCount = 0;
+            residualMeters = -1f;
+            return false;
+        }
 
         /// <summary>
         /// Ayni karede gorulen tag'leri BIRLIKTE cozer: olculen konumlari ilan edilen
@@ -2075,6 +2157,8 @@ namespace VRMultiplayer
                 _calibNote = $"HIZALI ({dev * 100f:0.0} cm, {n} tag fuzyon)";
                 _alignedNow = true;
                 _fuseAppliedAt = Time.time;
+                _fuseResidual = rms;
+                _fuseTagCount = n;
                 return true;   // is yok — ama KARAR fuzyonun, tek-tag yolu ayni karede calismasin
             }
             _alignedNow = false;
@@ -2097,6 +2181,8 @@ namespace VRMultiplayer
 
             _calibNote = $"FUZYON {n} tag ({dev * 100f:0.0} cm, yaw {theta:0.0})";
             _fuseAppliedAt = Time.time;
+            _fuseResidual = rms;
+            _fuseTagCount = n;
 
             if (snap || Time.time >= _nextFuseDiagAt)
             {
@@ -2945,6 +3031,35 @@ namespace VRMultiplayer
 
             if (_headPrevValid)
             {
+                // TAKIP SICRAMASI: kafa pozu bir karede FIZIKSEL OLARAK IMKANSIZ kadar
+                // degistiyse, hareket eden kafa degil TAKIP UZAYININ KENDISIDIR — gozluk
+                // yeniden konumlandi (relocalization) ve dunya kaymis/donmus olabilir.
+                //
+                // NEDEN UYKU SINYALI YETMIYOR: kapiyi once OnApplicationPause'a baglamistim,
+                // ama cihazda ekran kapanma suresi 24 saate ayarli oldugu icin gozlugu
+                // cikarmak uygulamayi DURAKLATMIYOR — sinyal hic gelmiyor. Oysa takip
+                // kopmasi tam da o anda oluyor. Bu yuzden olayin kendisini olcuyoruz.
+                //
+                // ESIKLER: 72 fps'te bir kare 14 ms. Insan kafasi o surede en fazla birkac
+                // santim ve birkac derece gider; 25 cm / 45 derece ancak bir sicrama olur.
+                // Olculen 175,8 ve 153,9 derecelik donmeler bu esigin cok ustunde.
+                float dPos = Vector3.Distance(p, _headPosPrev);
+                float dAng = Quaternion.Angle(r, _headRotPrev);
+                if (dPos > 0.25f || dAng > 45f)
+                {
+                    if (CalibrationManager.Calibrated && !_wokeNeedsRef)
+                    {
+                        _wokeNeedsRef = true;
+                        _wokeAt = Time.time;
+                        WriteDiag($"TAKIP SICRAMASI  {dPos * 100f:0} cm / {dAng:0} derece bir karede " +
+                                  $"— UYANIS KAPISI DEVREDE (tag {offsetReferenceTagId} gorulene kadar)");
+                    }
+                    // Hiz olcumune KATMA: sicrama gercek hareket degil, kapiyi yanlis kapatirdi.
+                    _headPosPrev = p;
+                    _headRotPrev = r;
+                    return;
+                }
+
                 // Yumusatma: tek karelik gurultu kapiyi rastgele acip kapatmasin.
                 _headSpeed = Mathf.Lerp(_headSpeed, Vector3.Distance(p, _headPosPrev) / dt, 0.3f);
                 _headAngSpeed = Mathf.Lerp(_headAngSpeed, Quaternion.Angle(r, _headRotPrev) / dt, 0.3f);
@@ -3354,6 +3469,7 @@ namespace VRMultiplayer
             // yalnizca panele baglamak, paneli kapatan kurulumda sorunu tekrar gorunmez
             // yapardi — kapatilan sey teshis, olen sey teshisin kendisi olurdu.
             TickRefWatch();
+            TickWakeGate();
 
             if (!showPanel) { if (_panel != null) _panel.gameObject.SetActive(false); return; }
             if (_panel == null)

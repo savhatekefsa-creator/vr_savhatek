@@ -27,6 +27,24 @@ namespace VRMultiplayer.Weapons
         /// basina pelletDamageScale ile carpilir — pompalida tanesi zayif, hepsi olumcul.
         /// hitFlesh yalnizca HASAR UYGULANAN oyuncu isabetinde true doner (istemciler kan
         /// efektini bundan cizer); dost-atesi blogu ve duvar isabeti false kalir.</summary>
+        /// <summary>
+        /// Bu collider TASINAN bir silaha mi ait?
+        ///
+        /// Oyuncu govdesi icin ZATEN cozulmus bir sorunun ikinci yarisi: dunya-uzayi izi
+        /// HAREKET EDEN bir seye cakilirsa, o sey gidince iz HAVADA ASILI KALIR. Hitbox'lar
+        /// HitZone tasidigi icin eleniyordu; silahin BoxCollider'i ise HitZone tasimadigi
+        /// icin "sabit geometri" sanilip iz birakiyordu.
+        ///
+        /// CIHAZDA GORULDU: kisa bir cok oyunculu turda rakip, oyuncunun SILAHINA ates etti;
+        /// oyuncu yer degistirince delikler bosluqta asili kaldi (uc farkli acidan
+        /// fotograflandi, paralaks izlerin duvardan daha yakinda oldugunu gosterdi).
+        ///
+        /// ISIN YINE DURUR — silah fiziksel bir engel; yalnizca IZ birakilmaz. Mermiyi
+        /// tamamen gecirmek istersek yol farkli: silaha BulletPassThrough eklenir.
+        /// </summary>
+        static bool IsCarriedWeapon(Collider c)
+            => c != null && c.GetComponentInParent<NetworkWeapon>() != null;
+
         public static int RaycastOne(Transform weaponRoot, Vector3 origin, Vector3 dir,
             float range, float pelletDamageScale, System.Func<ZoneType, int> damageFor,
             ulong shooter, byte shooterTeam, out Vector3 end, out Vector3 hitNormal,
@@ -95,7 +113,8 @@ namespace VRMultiplayer.Weapons
                 if (BulletPassThrough.Passes(h.collider)) continue;
 
                 end = h.point; // first solid/non-player hit stops the ray
-                hitNormal = h.normal;
+                // TASINAN SILAH: isin DURUR ama IZ BIRAKILMAZ (bkz. IsCarriedWeapon).
+                if (!IsCarriedWeapon(h.collider)) hitNormal = h.normal;
                 break;
             }
             return hitboxesSeen;
@@ -155,7 +174,7 @@ namespace VRMultiplayer.Weapons
                 if (BulletPassThrough.Passes(h.collider)) continue; // RaycastOne ile ayni kural
 
                 end = h.point;
-                hitNormal = h.normal;
+                if (!IsCarriedWeapon(h.collider)) hitNormal = h.normal;  // RaycastOne ile ayni kural
                 return;
             }
         }

@@ -92,19 +92,22 @@ namespace VRMultiplayer.Constructor
         /// isi en kolay yanlis yapilan is haline getiriyordu — ve yanlis girilen yukseklik
         /// sessizce butun cerceveyi dikeyde kaydirir.
         ///
-        /// 2026-08-18: 1,50 -> 0. Tag 0 artik ZEMINE konuyor. Kazanci yalnizca ergonomik degil:
-        /// 1,50 sayisi olculmuyordu, VARSAYILIYORDU — kagit gercekte 1,42'deyse butun dunya
-        /// 8 cm asagi kayiyordu ve hicbir yer haber vermiyordu. Zeminde o varsayim ortadan
-        /// kalkiyor, zemini tag'in kendisi tanimliyor.
+        /// 2026-08-24: 0 -> 1,50. DUVARA GERI DONULDU. Zemin denemesi birakildi: yeni harita
+        /// akisi origin'i 0'a (montaj ZEMIN) yaziyordu, ama fiziksel tag 0 duvarda 1,50 m'de
+        /// duruyor. Poz kapisi bu uyusmazligi her karede eliyor ("montaj Zemin, normal 87
+        /// derece yatik") ve kalibrasyon HIC baslamiyordu — cihazda tam bu yasandi.
         ///
-        /// DUVARA DONULURSE 1,5 yazilir; plakanin kat 3'e konmasiyla birebir ayni sayidir
-        /// (kat yuksekligi 0,5 m x 3), yani origin ile dik plakalar ayni hatta olur.
+        /// 1,50 sayisi plakanin kat 3'e konmasiyla birebir ayni (kat yuksekligi 0,5 m x 3),
+        /// yani origin ile dik plakalar ayni hatta oluyor. Ergonomik risk (kagit gercekte
+        /// 1,42'deyse dunya 8 cm kayar) hala gecerli ama kabul: dik durmak zemine egilmekten
+        /// daha tekrarlanabilir, ve montaj uyusmazligindan kalibrasyonun hic olmamasi daha
+        /// kotu.
         ///
         /// DEGISTIRMEK ICIN: burayi degistirin, tek yer burasi. Degistirdikten sonra CIHAZDAKI
         /// haritalarda tag 0 kendiliginden guncellenmez — yeni harita akisi yeni degeri yazar,
         /// var olan haritalar icin menu 49'daki "Origin'i Yaz" dugmesi kullanilir.
         /// </summary>
-        public const float DefaultOriginHeight = 0f;
+        public const float DefaultOriginHeight = 1.5f;
 
         /// <summary>Haritadaki plaka sayisi.</summary>
         public static int PlateCount(MapLayout layout)

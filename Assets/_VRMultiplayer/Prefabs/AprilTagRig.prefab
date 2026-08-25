@@ -83,7 +83,7 @@ MonoBehaviour:
     sourceInstanceId: 0
     mounting: 0
     useForCalibration: 1
-  layoutVersion: 7
+  layoutVersion: 8
   detectionsPerSecond: 3
   idleDetectionsPerSecond: 1
   decimation: 3
@@ -91,7 +91,7 @@ MonoBehaviour:
   learnTargetId: -1
   learnMaxDistance: 1
   learnSampleCount: 30
-  showTagMarkers: 1
+  showTagMarkers: 0
   showPassthrough: 0
   offsetReferenceTagId: 0
   autoCalibrate: 1
@@ -107,9 +107,9 @@ MonoBehaviour:
   yawSpreadMaxDegrees: 2
   poseGateLogOnly: 0
   defaultMounting: 0
-  useMultiTagFusion: 1
+  useMultiTagFusion: 0
   fusionMaxResidual: 0.05
-  autoMapUnknownTags: 1
+  autoMapUnknownTags: 0
   autoMapSampleCount: 20
   autoMapMaxSpread: 0.03
   maxNormalTiltDegrees: 20
@@ -129,4 +129,4 @@ MonoBehaviour:
   gainScalesWithSpread: 0
   snapThresholdMeters: 0.1
   snapThresholdDegrees: 3
-  showPanel: 1
+  showPanel: 0
