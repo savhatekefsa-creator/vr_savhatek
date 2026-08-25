@@ -51,6 +51,10 @@ namespace VRMultiplayer.Weapons
         AvatarIKController _ik;
         Transform _leftBone, _rightBone;
 
+        // On kol boylari, BIND pozundan (bkz. ClampToArm). Weld dunya pozu yazdigi icin
+        // sonradan olcmek gerilmis degeri okur.
+        float _forearmLocalL, _forearmLocalR;
+
         void Awake()
         {
             _anim = GetComponent<Animator>();
@@ -59,6 +63,8 @@ namespace VRMultiplayer.Weapons
             {
                 _leftBone = _anim.GetBoneTransform(HumanBodyBones.LeftHand);
                 _rightBone = _anim.GetBoneTransform(HumanBodyBones.RightHand);
+                if (_leftBone != null) _forearmLocalL = _leftBone.localPosition.magnitude;
+                if (_rightBone != null) _forearmLocalR = _rightBone.localPosition.magnitude;
             }
         }
 
@@ -117,18 +123,40 @@ namespace VRMultiplayer.Weapons
             WeldSide(ref _right, false);
         }
 
-        void WeldSide(ref HandWeld w, bool left)
+        /// <summary>Bu elin weld hedefi (bilegin gitmesi gereken DUNYA pozu), varsa.
+        ///
+        /// NEDEN DISARI ACIK: kol IK'si kendi hedefine (kumanda), weld ise kabza cipasina
+        /// gidiyordu. Ikisi ayni nokta olmadigi icin el, on kolun bittigi yerden KOPUYOR ve
+        /// deri arayi kapatmak icin on kolu geriyordu — sahada "bilek uzuyor / scale up
+        /// oluyor" diye gorulen sey buydu. Destek elinde fark en buyugu: IK kumandaya, weld
+        /// rayin uzerine gidiyordu ("cift el tutusunda bilek yerinden cikiyor"). Dirsek de
+        /// yanlis bilek konumuna gore cozuldugu icin ic tarafa goculuyordu.
+        ///
+        /// <see cref="AvatarIKController"/> bunu LateUpdate'inde okur (o 0, bu 110 sirasinda,
+        /// yani hedef HER ZAMAN taze) ve IK'yi da buraya cozer; boylece kol gercekten kabzaya
+        /// UZANIR ve weld'in mutlak yazimi kocaman bir isinma degil, kucuk bir duzeltme olur.
+        ///
+        /// Sonme (fadingOut) sirasinda false doner: el zaten IK pozuna geri donuyor.</summary>
+        public bool TryGetWristTarget(bool left, out Vector3 pos, out Quaternion rot)
         {
-            if (!w.active) return;
-            if (w.weapon == null || w.profile == null || w.bone == null)
-            {
-                // Weapon despawned mid-hold/fade: nothing left to weld to.
-                w.active = false;
-                w.fadingOut = false;
-                if (!_left.active && !_right.active) enabled = false;
-                return;
-            }
+            if (left) return TryTarget(ref _left, true, out pos, out rot);
+            return TryTarget(ref _right, false, out pos, out rot);
+        }
 
+        bool TryTarget(ref HandWeld w, bool left, out Vector3 pos, out Quaternion rot)
+        {
+            pos = Vector3.zero; rot = Quaternion.identity;
+            if (!w.active || w.fadingOut) return false;
+            if (w.weapon == null || w.profile == null || w.bone == null) return false;
+            ComputeTarget(ref w, left, out pos, out rot);
+            return true;
+        }
+
+        /// <summary>Cipa (ana el: kabza, destek: ray uzerindeki en yakin nokta) -> bilek
+        /// dunya pozu. Tek kaynak: hem weld'in kendi yazimi hem IK hedefi buradan gelir,
+        /// yoksa ikisi yeniden ayrisir.</summary>
+        void ComputeTarget(ref HandWeld w, bool left, out Vector3 targetPos, out Quaternion targetRot)
+        {
             Vector3 anchorLocal;
             Quaternion anchorLocalRot = w.gripLocalRot;
 
@@ -154,8 +182,43 @@ namespace VRMultiplayer.Weapons
             // independent of the weapon's scale).
             Vector3 anchorPos = w.weapon.TransformPoint(anchorLocal);
             Quaternion anchorRot = w.weapon.rotation * anchorLocalRot;
-            Vector3 targetPos = anchorPos + anchorRot * w.wristLocalPos;
-            Quaternion targetRot = anchorRot * w.wristLocalRot;
+            targetPos = anchorPos + anchorRot * w.wristLocalPos;
+            targetRot = anchorRot * w.wristLocalRot;
+        }
+
+        /// <summary>Bilegi, ON KOLUN ulasabilecegi mesafede tutar.
+        ///
+        /// Boy AWAKE'te onbellege alinir, her karede olculmez: weld el kemiginin DUNYA pozunu
+        /// yaziyor, dolayisiyla ikinci kareden itibaren hand.localPosition zaten GERILMIS
+        /// degeri tasir ve olcum kendi hatasini buyuturdu (sinir her karede biraz daha
+        /// genisler, gerilme hic durmazdi). Bind pozundaki deger sabittir.</summary>
+        Vector3 ClampToArm(Transform hand, bool left, Vector3 target)
+        {
+            Transform lower = hand != null ? hand.parent : null;
+            float lenLocal = left ? _forearmLocalL : _forearmLocalR;
+            if (lower == null || lenLocal < 1e-4f) return target;
+
+            float maxLen = lenLocal * Mathf.Abs(lower.lossyScale.x) * 1.02f;  // %2 pay
+
+            Vector3 d = target - lower.position;
+            float dist = d.magnitude;
+            if (dist <= maxLen || dist < 1e-5f) return target;
+            return lower.position + d * (maxLen / dist);
+        }
+
+        void WeldSide(ref HandWeld w, bool left)
+        {
+            if (!w.active) return;
+            if (w.weapon == null || w.profile == null || w.bone == null)
+            {
+                // Weapon despawned mid-hold/fade: nothing left to weld to.
+                w.active = false;
+                w.fadingOut = false;
+                if (!_left.active && !_right.active) enabled = false;
+                return;
+            }
+
+            ComputeTarget(ref w, left, out Vector3 targetPos, out Quaternion targetRot);
 
             // Engage/release weight. The bone's pose here is this frame's IK/animator result
             // (the weld runs after both), so a partial weight blends between that and the
@@ -174,6 +237,11 @@ namespace VRMultiplayer.Weapons
             }
             else
                 wgt = Mathf.Clamp01((Time.time - w.blendStart) / WeldBlendSeconds);
+
+            // ERISIM SINIRI: IK hedefi de ayni noktaya kistiriliyor (AvatarIKController.
+            // ClampToReach). Weld burada kistirmasaydi el yine on kolun otesine gider ve
+            // deri gerilirdi — iki taraf ayni sinira uymali.
+            targetPos = ClampToArm(w.bone, left, targetPos);
 
             if (wgt >= 1f)
             {

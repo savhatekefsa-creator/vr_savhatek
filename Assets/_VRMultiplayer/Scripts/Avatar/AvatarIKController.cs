@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
+using VRMultiplayer.Weapons;
 
 namespace VRMultiplayer
 {
@@ -178,6 +179,21 @@ namespace VRMultiplayer
         // Arm bones + learned real-world reach (per hand) for the straighten-arms remap.
         Transform _lUpper, _lLower, _lHand, _rUpper, _rLower, _rHand;
 
+        // Kol uzunlugu YEREL uzunluklardan, BIR KEZ olculur (bkz. SetupHandOrientation).
+        // Dunya mesafesiyle olculemez: weld el kemiginin dunya pozunu yaziyor, yani hata
+        // olustugu anda on kol zaten gerilmis oluyor ve olcum kendi hatasini buyuturdu.
+        float _armLenLocalL, _armLenLocalR;
+
+        // Ust kol / on kol AYRI AYRI: dirsegin cemberini kestirmek icin ikisi de gerekli
+        // (bkz. ElbowHintPos). Ayni sebeple yerel olculur.
+        float _upperLenLocalL, _lowerLenLocalL, _upperLenLocalR, _lowerLenLocalR;
+
+        // Silah weld'i (varsa): tutuldugunda IK hedefi kumandadan degil KABZADAN gelir.
+        // TEK SEFERLIK ARANMAZ: bilesen sahnede bastan yok, ilk silah alinirken WeaponGrip
+        // tarafindan AddComponent ile ekleniyor. Bir kez bakip null onbellege alsaydik
+        // hedef paylasimi hic devreye girmezdi — bulunana kadar aranir, sonra durur.
+        WeaponHandWeld _weld;
+
         // TwoBoneIK constraint'lerinden cozulur (prefabta LeftElbowHint / RightElbowHint).
         Transform _lElbowHint, _rElbowHint;
         float _maxReachL, _maxReachR;
@@ -197,6 +213,15 @@ namespace VRMultiplayer
             _rLower = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
             _rHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
 
+            // Rig daha hic yazilmadan olc: bu degerler kemiklerin YEREL ofsetleridir, poz
+            // degisse de sabit kalirlar (weld dunya pozu yazsa bile).
+            _armLenLocalL = ArmLenLocal(_lLower, _lHand);
+            _armLenLocalR = ArmLenLocal(_rLower, _rHand);
+            _upperLenLocalL = _lLower != null ? _lLower.localPosition.magnitude : 0f;
+            _lowerLenLocalL = _lHand != null ? _lHand.localPosition.magnitude : 0f;
+            _upperLenLocalR = _rLower != null ? _rLower.localPosition.magnitude : 0f;
+            _lowerLenLocalR = _rHand != null ? _rHand.localPosition.magnitude : 0f;
+
             foreach (var c in GetComponentsInChildren<TwoBoneIKConstraint>(true))
             {
                 ref var d = ref c.data;
@@ -208,6 +233,35 @@ namespace VRMultiplayer
                 if (d.root != null && d.root == _lUpper) _lElbowHint = d.hint;
                 else if (d.root != null && d.root == _rUpper) _rElbowHint = d.hint;
             }
+        }
+
+        static float ArmLenLocal(Transform lower, Transform hand)
+        {
+            if (lower == null || hand == null) return 0f;
+            // lower.localPosition = ust kolun boyu, hand.localPosition = on kolun boyu.
+            return lower.localPosition.magnitude + hand.localPosition.magnitude;
+        }
+
+        /// <summary>Hedefi omuzdan itibaren kolun ERISEBILECEGI kureye kistirir.
+        ///
+        /// Erisimin otesindeki bir hedefte iki-kemik cozucu kolu tam duz birakir ve el hedefe
+        /// VARAMAZ; weld ise el kemigini yine de oraya yazdigi icin el, on koldan kopar ve
+        /// deri gerilir. Kistirma bu kopmayi kaynaginda keser: el biraz geride kalir ama
+        /// govdeye bagli gorunur. %98 pay birakilir — tam 1.0'da cozucu kilitlenip dirsegin
+        /// hangi yone bukulecegini kaybediyor (dirsegin "birden ice gocmesi" bu).</summary>
+        Vector3 ClampToReach(Vector3 target, bool left)
+        {
+            Transform up = left ? _lUpper : _rUpper;
+            float lenLocal = left ? _armLenLocalL : _armLenLocalR;
+            if (up == null || lenLocal < 1e-4f) return target;
+
+            float maxReach = lenLocal * Mathf.Abs(up.lossyScale.x) * 0.98f;
+            if (maxReach < 1e-4f) return target;
+
+            Vector3 d = target - up.position;
+            float dist = d.magnitude;
+            if (dist <= maxReach || dist < 1e-5f) return target;
+            return up.position + d * (maxReach / dist);
         }
 
         /// <summary>Dirsek yonlendirme ayarlari, tek pakette (saf fonksiyona gecirilebilsin diye).</summary>
@@ -235,9 +289,12 @@ namespace VRMultiplayer
             Transform shoulder = left ? _lUpper : _rUpper;
             if (hint == null || shoulder == null) return;   // hint'siz rig: eski davranis
 
+            float k = Mathf.Abs(shoulder.lossyScale.x);
             hint.position = ElbowHintPos(shoulder.position, wrist,
                                          transform.position, transform.rotation,
-                                         left, Tuning, _scaleK);
+                                         left, Tuning, _scaleK,
+                                         (left ? _upperLenLocalL : _upperLenLocalR) * k,
+                                         (left ? _lowerLenLocalL : _lowerLenLocalR) * k);
         }
 
         /// <summary>
@@ -258,7 +315,8 @@ namespace VRMultiplayer
         /// <param name="scale">Boy kalibrasyonu carpani: mesafeler kisa/uzun oyuncuda olceklenir.</param>
         public static Vector3 ElbowHintPos(Vector3 shoulder, Vector3 wrist,
                                           Vector3 bodyPos, Quaternion bodyRot,
-                                          bool left, ElbowTuning t, float scale)
+                                          bool left, ElbowTuning t, float scale,
+                                          float upperLen = 0f, float lowerLen = 0f)
         {
             Vector3 up = bodyRot * Vector3.up;
             Vector3 fwd = bodyRot * Vector3.forward;
@@ -292,10 +350,24 @@ namespace VRMultiplayer
             if (bulge.sqrMagnitude < 1e-6f) return (shoulder + wrist) * 0.5f + outward * t.hintDistance;
             bulge.Normalize();
 
+            float minR = t.minRadius * scale;
+
+            // GARANTI, DIRSEGIN KENDISINE: eskiden minRadius HINT'e uygulaniyordu, ama hint
+            // dirsek DEGIL — cozucuye "dirsegi bu yone yuvarla" diyen bir isaret. Dirsek,
+            // omuz-bilek ekseni etrafindaki bir cember uzerinde bambaska bir yere duser:
+            // hint govdenin 20 cm disinda olsa bile dirsek ICERIDE kalabiliyordu ve kol
+            // govdenin icinden geciyordu (sahada "dirsegimi icime cekince kolum vucudumun
+            // icinden geciyor").
+            //
+            // Iki-kemik IK'da dirsegin yeri, hint YONU verildiginde ANALITIK olarak bellidir
+            // — asagida onu kestirip govdeyi gercekten temizleyen yonu ariyoruz. Kemik
+            // boylari verilmemisse (0) eski davranisa duseriz.
+            bulge = ClearElbowFromTorso(bulge, shoulder, wrist, bodyPos, minR, upperLen, lowerLen);
+
             Vector3 hint = (shoulder + wrist) * 0.5f + bulge * (t.hintDistance * scale);
 
-            // GARANTI: dirsek govdenin dusey ekseninden en az minRadius kadar disarida.
-            float minR = t.minRadius * scale;
+            // Hint'in kendisi de govdenin icinde kalmasin (yon dogru olsa bile cozucunun
+            // sayisal kararliligi icin faydali).
             float dx = hint.x - bodyPos.x, dz = hint.z - bodyPos.z;
             float h = Mathf.Sqrt(dx * dx + dz * dz);
             if (h < minR)
@@ -310,6 +382,59 @@ namespace VRMultiplayer
                 hint += o * (minR - h);
             }
             return hint;
+        }
+
+        /// <summary>Istenen hint yonunu, KESTIRILEN DIRSEK govdenin dusey ekseninden en az
+        /// <paramref name="minR"/> kadar disarida kalacak sekilde omuz-bilek ekseni etrafinda
+        /// dondurur. Istenen yon zaten temizse aynen doner.
+        ///
+        /// Iki-kemik IK geometrisi: dirsek, omuz-bilek ekseni uzerinde
+        ///   a = (d^2 + L1^2 - L2^2) / 2d
+        /// noktasindaki, yaricapi
+        ///   r = sqrt(L1^2 - a^2)
+        /// olan cember uzerindedir; cember uzerindeki YERINI hint yonu secer. Yani dirsegi
+        /// once kestirip sonra dogru yonu aramak mumkun.
+        ///
+        /// Arama: 15 derecelik adimlarla iki yone birden bakilir, govdeyi temizleyen EN YAKIN
+        /// aci secilir — boylece duzeltme minimum olur ve poz sicramaz. Hicbir aci temizlemiyorsa
+        /// (bilek govdenin tam icinde) en cok acikligi veren aci secilir: cirkin ama en azindan
+        /// kol govdenin ortasindan gecmez.</summary>
+        static Vector3 ClearElbowFromTorso(Vector3 dir, Vector3 shoulder, Vector3 wrist,
+                                           Vector3 bodyPos, float minR, float upperLen, float lowerLen)
+        {
+            if (upperLen < 1e-4f || lowerLen < 1e-4f || minR < 1e-4f) return dir;
+
+            Vector3 axis = wrist - shoulder;
+            float d = axis.magnitude;
+            if (d < 1e-4f || d >= upperLen + lowerLen) return dir;   // kol tam duz: dirsek serbest degil
+            axis /= d;
+
+            float a = (d * d + upperLen * upperLen - lowerLen * lowerLen) / (2f * d);
+            float r2 = upperLen * upperLen - a * a;
+            if (r2 <= 1e-6f) return dir;                              // cember yok (dejenere)
+            float r = Mathf.Sqrt(r2);
+            Vector3 center = shoulder + axis * a;
+
+            float best = float.NegativeInfinity;
+            Vector3 bestDir = dir;
+            for (int i = 0; i < 24; i++)
+            {
+                // 0, +15, -15, +30, -30 ... : istenen yondan disari dogru genisleyen arama
+                int step = (i + 1) / 2;
+                float ang = (i % 2 == 0 ? 1f : -1f) * step * 15f;
+                Vector3 cand = Quaternion.AngleAxis(ang, axis) * dir;
+                cand -= axis * Vector3.Dot(cand, axis);
+                if (cand.sqrMagnitude < 1e-6f) continue;
+                cand.Normalize();
+
+                Vector3 elbow = center + cand * r;
+                float ex = elbow.x - bodyPos.x, ez = elbow.z - bodyPos.z;
+                float clearance = Mathf.Sqrt(ex * ex + ez * ez);
+
+                if (clearance >= minR) return cand;                   // ilk temiz aci = en yakini
+                if (clearance > best) { best = clearance; bestDir = cand; }
+            }
+            return bestDir;
         }
 
         // Local-space basis of a hand: forward = toward the fingers, up = palm normal.
@@ -332,6 +457,38 @@ namespace VRMultiplayer
 
             inverseBasis = Quaternion.Inverse(Quaternion.LookRotation(fingers, palm));
             return true;
+        }
+
+        /// <summary>Bir elin IK hedefini ve dirsek hint'ini surer.
+        ///
+        /// SILAH TUTULUYORSA hedef KABZADAN gelir (weld'in hedefiyle AYNI nokta), kumandadan
+        /// degil. Ikisi ayri oldugu surece kol bir yere, weld elin kendisini baska yere
+        /// goturuyor ve on kol geriliyordu. Hedefi paylasinca kol gercekten kabzaya uzanir,
+        /// dirsek de dogru bilek konumuna gore cozulur.
+        ///
+        /// Her iki yolda da hedef kolun erisim kuresine kistirilir (bkz. ClampToReach).</summary>
+        void DriveHandTarget(bool left, Transform src, Transform ikTarget,
+            Vector3 gripPosOffset, Vector3 gripEulerOffset)
+        {
+            Vector3 wrist;
+            Quaternion rot;
+
+            if (_weld != null && _weld.TryGetWristTarget(left, out Vector3 wp, out Quaternion wr))
+            {
+                wrist = wp;
+                rot = wr;
+            }
+            else
+            {
+                wrist = HandTargetPos(src, left, gripPosOffset);
+                rot = (left ? _leftRotOK : _rightRotOK)
+                    ? HandRotation(src, left, gripEulerOffset)
+                    : src.rotation * Quaternion.Euler(gripEulerOffset);
+            }
+
+            wrist = ClampToReach(wrist, left);
+            ikTarget.SetPositionAndRotation(wrist, rot);
+            DriveElbowHint(left, wrist);
         }
 
         // Where the WRIST (IK tip) should go: pull back from the controller along the finger
@@ -656,25 +813,16 @@ namespace VRMultiplayer
 
             // Hand IK targets (controller pose + grip offset). Rotation is remapped through the
             // skeleton's own hand axes so the wrist follows the controller naturally.
+            // Weld bileseni runtime'da (ilk silah alinirken) ekleniyor; bulunana kadar ara.
+            if (_weld == null) _weld = GetComponent<WeaponHandWeld>();
+
             if (leftHandSource != null && ikLeftHandTarget != null)
-            {
-                Vector3 wrist = HandTargetPos(leftHandSource, true, leftGripPositionOffset);
-                ikLeftHandTarget.SetPositionAndRotation(
-                    wrist,
-                    _leftRotOK ? HandRotation(leftHandSource, true, leftGripEulerOffset)
-                               : leftHandSource.rotation * Quaternion.Euler(leftGripEulerOffset));
-                DriveElbowHint(true, wrist);
-            }
+                DriveHandTarget(true, leftHandSource, ikLeftHandTarget,
+                    leftGripPositionOffset, leftGripEulerOffset);
 
             if (rightHandSource != null && ikRightHandTarget != null)
-            {
-                Vector3 wrist = HandTargetPos(rightHandSource, false, rightGripPositionOffset);
-                ikRightHandTarget.SetPositionAndRotation(
-                    wrist,
-                    _rightRotOK ? HandRotation(rightHandSource, false, rightGripEulerOffset)
-                                : rightHandSource.rotation * Quaternion.Euler(rightGripEulerOffset));
-                DriveElbowHint(false, wrist);
-            }
+                DriveHandTarget(false, rightHandSource, ikRightHandTarget,
+                    rightGripPositionOffset, rightGripEulerOffset);
 
             // Head: copy the HMD look direction onto the head bone (after the rig ran).
             if (driveHeadRotation && headBone != null)
