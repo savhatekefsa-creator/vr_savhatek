@@ -328,12 +328,18 @@ namespace VRMultiplayer
             // "~" oneki: ConstructorPassthrough.HideVirtualWorld cizen kok objeleri gizliyor;
             // bu panel kalibrasyon DURUMUNU tasidigi icin passthrough acikken de gorunmeli
             // (kalibre olmadan insa moduna girilemez, oyuncunun nedenini gormesi gerekir).
+            // PARANTEZ SART: parantezsiz halde if yalnizca ILK satiri kapsiyordu, yani
+            // GetComponent ve pitchFollowDeadzone panel ZATEN VARKEN de her cagrida
+            // kosuyordu. Girinti aksini soyluyordu — sessiz ve kolay atlanan bir hata.
             if (status == null)
+            {
                 status = UI.HeadFollowPanel.Create("~Calibration Panel", "", Color.white);
+
+                // Panel asagi bakarken de okunabilmeli: duz kalirsa "tag'e bak" talimatini
+                // veren panelin kendisi gorus alanindan cikiyor.
                 var takip = status.GetComponent<UI.HeadFollowPanel>();
-                // Tag ZEMINDEYSE bu panel de asagi bakarken okunuyor; duz kalirsa
-                // "tag'e bak" talimatini veren panelin kendisi gorunmez oluyor.
                 if (takip != null) takip.pitchFollowDeadzone = 10f;
+            }
 
             status.gameObject.SetActive(true);
             status.text = s + _note;

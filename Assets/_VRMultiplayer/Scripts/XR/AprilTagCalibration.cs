@@ -596,11 +596,24 @@ namespace VRMultiplayer
                 return;
             }
 
+            // SANIYEDE BIR YAZ, HER KAREDE DEGIL.
+            //
+            // Panel metni yalnizca saniye sayaci degistiginde degisiyor, ama guncelleme
+            // her karede yapiliyordu: 72 fps'te saniyede 72 dizgi ayirma, 72 TextMesh
+            // yeniden kurulumu ve 72 Debug.Log (SetStatus her cagrida log yaziyor).
+            // Kapinin acik kaldigi olculen sureler 2,5-12 sn; en uzunu ~860 gereksiz
+            // log demekti ve Android'de Debug.Log logcat'e gittigi icin ucuz degil.
+            int saniye = Mathf.FloorToInt(Time.time - _wokeAt);
+            if (saniye == _wokeShownSecond) return;
+            _wokeShownSecond = saniye;
+
             if (_cm == null) _cm = FindFirstObjectByType<CalibrationManager>();
             if (_cm != null)
                 _cm.ShowPersistent($"UYKUDAN UYANILDI\n\nYON DOGRULANMADI — TAG {offsetReferenceTagId}'A BAK\n" +
-                                   $"({Time.time - _wokeAt:0} sn)");
+                                   $"({saniye} sn)");
         }
+
+        int _wokeShownSecond = -1;
 
         void TickRefWatch()
         {
@@ -788,6 +801,7 @@ namespace VRMultiplayer
                 // KALICI bir uyari gosterir (bkz. TickWakeGate).
                 _wokeNeedsRef = CalibrationManager.Calibrated;
                 _wokeAt = Time.time;
+                _wokeShownSecond = -1;
 
                 // Kapinin DEVREYE GIRDIGI de yazilir, yalnizca acildigi degil. Aksi halde
                 // "uyari cikti mi" sorusu log'dan cevaplanamiyor ve testte tahmin gerekiyor.
@@ -3006,6 +3020,7 @@ namespace VRMultiplayer
                     {
                         _wokeNeedsRef = true;
                         _wokeAt = Time.time;
+                        _wokeShownSecond = -1;
                         WriteDiag($"TAKIP SICRAMASI  {dPos * 100f:0} cm / {dAng:0} derece bir karede " +
                                   $"— UYANIS KAPISI DEVREDE (tag {offsetReferenceTagId} gorulene kadar)");
                     }
