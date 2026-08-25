@@ -88,6 +88,19 @@ namespace VRMultiplayer
                  "(metre). Omuz zaten ~0.20'de, o yuzden bu deger 'tavuk kanadi' yapmaz.")]
         public float minElbowRadius = 0.20f;
 
+        [Tooltip("Dirsek hint'inin yumusatma yarilanma suresi (s). 0 = yumusatma yok.\n\n" +
+                 "SART: govde temizleme aramasi dogasi geregi SUREKSIZ — bilek birkac mm " +
+                 "kayinca secilen aci +45'ten -45'e atlayabilir ve dirsek karsi tarafa " +
+                 "sicrar. Yumusatma bu sicramayi goze gorunur bir kayisa cevirir.")]
+        public float elbowHintHalfLife = 0.07f;
+
+        [Tooltip("Kol KATLANDIKCA (el omza yaklastikca) dirsegin GERI bileseni bu oranda " +
+                 "sonup yerini DISARI'ya birakir. 0 = eski davranis.\n\n" +
+                 "Insan dirsegi eli gogse cekince geriye degil DISARI/ASAGI gider; eski " +
+                 "sabit 'back' agirligi tabancayi govdeye cekince dirsegi asiri geriye " +
+                 "atiyordu.")]
+        [Range(0f, 1f)] public float elbowFoldOutward = 0.8f;
+
         [Header("Body")]
         [Tooltip("Feet position relative to the avatar root (measured by the wizard; usually negative).")]
         public float feetOffset = -0.9f;
@@ -188,6 +201,10 @@ namespace VRMultiplayer
         // (bkz. ElbowHintPos). Ayni sebeple yerel olculur.
         float _upperLenLocalL, _lowerLenLocalL, _upperLenLocalR, _lowerLenLocalR;
 
+        // Yumusatilmis dirsek hint'i (dunya). Sicramayi goze gorunur kayisa cevirir.
+        Vector3 _hintPosL, _hintPosR;
+        bool _hintSeededL, _hintSeededR;
+
         // Silah weld'i (varsa): tutuldugunda IK hedefi kumandadan degil KABZADAN gelir.
         // TEK SEFERLIK ARANMAZ: bilesen sahnede bastan yok, ilk silah alinirken WeaponGrip
         // tarafindan AddComponent ile ekleniyor. Bir kez bakip null onbellege alsaydik
@@ -268,6 +285,8 @@ namespace VRMultiplayer
         public struct ElbowTuning
         {
             public float down, outward, back, forwardOnCross, crossMeters, hintDistance, minRadius;
+            /// <summary>Kol katlandikca GERI bileseninin DISARI'ya devredilme orani (0..1).</summary>
+            public float foldOutward;
         }
 
         ElbowTuning Tuning => new ElbowTuning
@@ -279,6 +298,7 @@ namespace VRMultiplayer
             crossMeters = crossBlendMeters,
             hintDistance = elbowHintDistance,
             minRadius = minElbowRadius,
+            foldOutward = elbowFoldOutward,
         };
 
         void DriveElbowHint(bool left, Vector3 wrist)
@@ -290,11 +310,38 @@ namespace VRMultiplayer
             if (hint == null || shoulder == null) return;   // hint'siz rig: eski davranis
 
             float k = Mathf.Abs(shoulder.lossyScale.x);
-            hint.position = ElbowHintPos(shoulder.position, wrist,
-                                         transform.position, transform.rotation,
-                                         left, Tuning, _scaleK,
-                                         (left ? _upperLenLocalL : _upperLenLocalR) * k,
-                                         (left ? _lowerLenLocalL : _lowerLenLocalR) * k);
+            float upperLen = (left ? _upperLenLocalL : _upperLenLocalR) * k;
+            float lowerLen = (left ? _lowerLenLocalL : _lowerLenLocalR) * k;
+
+            Vector3 target = ElbowHintPos(shoulder.position, wrist,
+                                          transform.position, transform.rotation,
+                                          left, Tuning, _scaleK, upperLen, lowerLen);
+
+            hint.position = SmoothHint(left, target);
+        }
+
+        /// <summary>Hint'i zaman icinde yumusatir. Govde temizleme aramasi SUREKSIZ oldugu
+        /// icin sart: bilek birkac mm kayinca "temizleyen en yakin aci" bir anda kolun obur
+        /// tarafina gecebilir ve dirsek sicrar. Sahada gorulen "geri getirince el pozisyonu
+        /// tuhaf sekilde degisiyor" bunun sonucuydu.
+        ///
+        /// Yarilanma suresiyle, kare hizindan BAGIMSIZ. Buyuk sicramalarda (isinma, dogus,
+        /// yeniden kalibrasyon) yumusatma atlanir — yoksa dirsek yeni yerine suzulerek
+        /// giderdi.</summary>
+        Vector3 SmoothHint(bool left, Vector3 target)
+        {
+            bool seeded = left ? _hintSeededL : _hintSeededR;
+            Vector3 cur = left ? _hintPosL : _hintPosR;
+
+            if (!seeded || elbowHintHalfLife <= 0f || (target - cur).sqrMagnitude > 1f)
+                cur = target;                     // ilk kare ya da isinma: dogrudan otur
+            else
+                cur = Vector3.Lerp(cur, target,
+                    1f - Mathf.Pow(0.5f, Time.deltaTime / elbowHintHalfLife));
+
+            if (left) { _hintPosL = cur; _hintSeededL = true; }
+            else      { _hintPosR = cur; _hintSeededR = true; }
+            return cur;
         }
 
         /// <summary>
@@ -331,7 +378,22 @@ namespace VRMultiplayer
                 : (lateral < 0f ? 1f : 0f);
             float depth = Mathf.Lerp(-t.back, t.forwardOnCross, cross01);
 
-            Vector3 bulge = -up * t.down + outward * t.outward + fwd * depth;
+            // KOL KATLANDIKCA GERI DEGIL DISARI. Insan dirsegi eli gogse cekince geriye
+            // degil disari/asagi gider; sabit "back" agirligi tabancayi govdeye cekince
+            // dirsegi asiri geriye atiyordu ("dirsegi geri cekiyorum, cok geri gidiyor").
+            // fold: 0 = kol acik, 1 = el omuzda.
+            float outwardW = t.outward;
+            if (t.foldOutward > 0f && upperLen > 1e-4f && lowerLen > 1e-4f)
+            {
+                float reach = upperLen + lowerLen;
+                float fold = 1f - Mathf.Clamp01(Vector3.Distance(shoulder, wrist) / reach);
+                fold = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.85f, fold));
+                float w = fold * t.foldOutward;
+                if (depth < 0f) depth *= 1f - w;          // yalnizca GERI bileseni sonuyor
+                outwardW += w * t.back;                    // sonen agirlik disariya gidiyor
+            }
+
+            Vector3 bulge = -up * t.down + outward * outwardW + fwd * depth;
             if (bulge.sqrMagnitude < 1e-6f) bulge = outward;
 
             Vector3 armDir = wrist - shoulder;
@@ -417,7 +479,10 @@ namespace VRMultiplayer
 
             float best = float.NegativeInfinity;
             Vector3 bestDir = dir;
-            for (int i = 0; i < 24; i++)
+            // +-90 ile SINIRLI: daha genis arama, dirsegi kolun tam obur tarafina atmaya
+            // baslar ve poz bir anda ters cevrilir. 90 dereceyi asan durumda "en cok aciklik"
+            // dalina duseriz — kol biraz govdeye yakin gecer ama ters donmez.
+            for (int i = 0; i < 13; i++)
             {
                 // 0, +15, -15, +30, -30 ... : istenen yondan disari dogru genisleyen arama
                 int step = (i + 1) / 2;

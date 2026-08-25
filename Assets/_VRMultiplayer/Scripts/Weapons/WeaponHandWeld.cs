@@ -51,9 +51,11 @@ namespace VRMultiplayer.Weapons
         AvatarIKController _ik;
         Transform _leftBone, _rightBone;
 
-        // On kol boylari, BIND pozundan (bkz. ClampToArm). Weld dunya pozu yazdigi icin
-        // sonradan olcmek gerilmis degeri okur.
-        float _forearmLocalL, _forearmLocalR;
+        // Omuz (ust kol koku) + TAM kol boyu, BIND pozundan. Sonradan olcmek gerilmis
+        // degeri okur: weld el kemiginin dunya pozunu yaziyor, yani hata olustugu anda
+        // olcum zaten kirlenmis olur ve sinir her karede biraz daha genisler.
+        Transform _upperL, _upperR;
+        float _armLocalL, _armLocalR;
 
         void Awake()
         {
@@ -63,8 +65,14 @@ namespace VRMultiplayer.Weapons
             {
                 _leftBone = _anim.GetBoneTransform(HumanBodyBones.LeftHand);
                 _rightBone = _anim.GetBoneTransform(HumanBodyBones.RightHand);
-                if (_leftBone != null) _forearmLocalL = _leftBone.localPosition.magnitude;
-                if (_rightBone != null) _forearmLocalR = _rightBone.localPosition.magnitude;
+                _upperL = _anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                _upperR = _anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                var lowerL = _anim.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+                var lowerR = _anim.GetBoneTransform(HumanBodyBones.RightLowerArm);
+                if (lowerL != null && _leftBone != null)
+                    _armLocalL = lowerL.localPosition.magnitude + _leftBone.localPosition.magnitude;
+                if (lowerR != null && _rightBone != null)
+                    _armLocalR = lowerR.localPosition.magnitude + _rightBone.localPosition.magnitude;
             }
         }
 
@@ -119,8 +127,20 @@ namespace VRMultiplayer.Weapons
         void LateUpdate()
         {
             if (_anim == null || !_anim.isHuman) return;
-            WeldSide(ref _left, true);
-            WeldSide(ref _right, false);
+
+            // ANA EL ONCE. Erisim disinda kalan ana el SILAHI kendine cekiyor (bkz.
+            // WeldSide); destek eli de silahin O SON konumuna gore raya oturmali, yoksa
+            // bir kare eski konuma gore hesaplanip titrer.
+            if (_left.active && !_left.isSupport)
+            {
+                WeldSide(ref _left, true);
+                WeldSide(ref _right, false);
+            }
+            else
+            {
+                WeldSide(ref _right, false);
+                WeldSide(ref _left, true);
+            }
         }
 
         /// <summary>Bu elin weld hedefi (bilegin gitmesi gereken DUNYA pozu), varsa.
@@ -186,24 +206,30 @@ namespace VRMultiplayer.Weapons
             targetRot = anchorRot * w.wristLocalRot;
         }
 
-        /// <summary>Bilegi, ON KOLUN ulasabilecegi mesafede tutar.
+        /// <summary>Bilegi OMUZDAN itibaren kolun erisebilecegi kureye kistirir.
         ///
-        /// Boy AWAKE'te onbellege alinir, her karede olculmez: weld el kemiginin DUNYA pozunu
-        /// yaziyor, dolayisiyla ikinci kareden itibaren hand.localPosition zaten GERILMIS
-        /// degeri tasir ve olcum kendi hatasini buyuturdu (sinir her karede biraz daha
-        /// genisler, gerilme hic durmazdi). Bind pozundaki deger sabittir.</summary>
-        Vector3 ClampToArm(Transform hand, bool left, Vector3 target)
+        /// Olcum omuzdan ve TAM kol boyuyla yapilir (dirsekten + on kolla degil): dirsegin
+        /// yerini IK seciyor, gercek sinir omuz-bilek mesafesidir.
+        ///
+        /// Boy AWAKE'te onbellege alinmis bind degeri: weld el kemiginin DUNYA pozunu
+        /// yazdigi icin sonradan olcmek gerilmis degeri okur ve sinir her karede biraz daha
+        /// genisleyerek gerilmeyi hic durdurmazdi.
+        ///
+        /// %98: tam duz kolda iki-kemik cozucu dirsegin bukulme YONUNU kaybediyor
+        /// (dirsegin "birden ice gocmesi"); kucuk bir pay onu onluyor.</summary>
+        Vector3 ClampToReach(Vector3 target, bool left)
         {
-            Transform lower = hand != null ? hand.parent : null;
-            float lenLocal = left ? _forearmLocalL : _forearmLocalR;
-            if (lower == null || lenLocal < 1e-4f) return target;
+            Transform up = left ? _upperL : _upperR;
+            float lenLocal = left ? _armLocalL : _armLocalR;
+            if (up == null || lenLocal < 1e-4f) return target;
 
-            float maxLen = lenLocal * Mathf.Abs(lower.lossyScale.x) * 1.02f;  // %2 pay
+            float maxLen = lenLocal * Mathf.Abs(up.lossyScale.x) * 0.98f;
+            if (maxLen < 1e-4f) return target;
 
-            Vector3 d = target - lower.position;
+            Vector3 d = target - up.position;
             float dist = d.magnitude;
             if (dist <= maxLen || dist < 1e-5f) return target;
-            return lower.position + d * (maxLen / dist);
+            return up.position + d * (maxLen / dist);
         }
 
         void WeldSide(ref HandWeld w, bool left)
@@ -238,10 +264,22 @@ namespace VRMultiplayer.Weapons
             else
                 wgt = Mathf.Clamp01((Time.time - w.blendStart) / WeldBlendSeconds);
 
-            // ERISIM SINIRI: IK hedefi de ayni noktaya kistiriliyor (AvatarIKController.
-            // ClampToReach). Weld burada kistirmasaydi el yine on kolun otesine gider ve
-            // deri gerilirdi — iki taraf ayni sinira uymali.
-            targetPos = ClampToArm(w.bone, left, targetPos);
+            // ERISIM SINIRI. Uc secenek vardi ve ikisi de sahada kotu goruldu:
+            //   (a) el kemigini oldugu yere yaz  -> on kol gerilir ("bilek uzuyor")
+            //   (b) eli erisime kistir           -> el silahtan kopar, silah havada kalir
+            //   (c) SILAHI ELE GETIR             -> ikisi de olmaz  <-- secilen
+            // Ana el silahi tasiyor: hedef erisim disindaysa silah, tasma kadar geri
+            // cekilir ve el tam uzerinde kalir. Donus DEGISMEZ, yani nisan hatti kaymaz;
+            // silah yalnizca kumandanin birkac cm gerisinde durur. Duzeltme her karede
+            // sifirdan hesaplanir (HandGrabber silahi kumandadan yeniden konumluyor),
+            // dolayisiyla birikmez.
+            Vector3 reachClamped = ClampToReach(targetPos, left);
+            Vector3 excess = reachClamped - targetPos;
+            if (excess.sqrMagnitude > 1e-8f)
+            {
+                if (!w.isSupport) w.weapon.position += excess;   // silah ele gelir
+                targetPos = reachClamped;                        // el her halukarda erisimde
+            }
 
             if (wgt >= 1f)
             {
