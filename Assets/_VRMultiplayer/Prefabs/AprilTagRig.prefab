@@ -81,7 +81,6 @@ MonoBehaviour:
     position: {x: 0, y: 1.5, z: 0}
     yawDegrees: 180
     sourceInstanceId: 0
-    mounting: 0
     useForCalibration: 1
   layoutVersion: 8
   detectionsPerSecond: 3
@@ -106,7 +105,6 @@ MonoBehaviour:
   yawRecoveryConfirmations: 3
   yawSpreadMaxDegrees: 2
   poseGateLogOnly: 0
-  defaultMounting: 0
   useMultiTagFusion: 0
   fusionMaxResidual: 0.05
   autoMapUnknownTags: 0

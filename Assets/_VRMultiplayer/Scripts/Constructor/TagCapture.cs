@@ -56,22 +56,8 @@ namespace VRMultiplayer.Constructor
 
         public const string PlateId = "tagisaret";
 
-        /// <summary>
-        /// YATIK plaka: zemine konan tag'ler icin. Ayri bir prop, cunku prop'lar yalnizca Y
-        /// ekseninde donebiliyor (<see cref="PlacedProp.rot"/> tek bayt) — bir plakayi
-        /// yaratici modda yatirmanin yolu yok. Donus prefabin ICINDEKI cocuga gomulu;
-        /// <c>MapBuilder.Spawn</c> kokun rotasyonunu dogrudan yazdigi icin koke gomulseydi
-        /// silinirdi.
-        /// </summary>
-        public const string PlateFloorId = "tagisaret_zemin";
-
-        /// <summary>Bu prop bir tag plakasi mi (dik ya da yatik).</summary>
-        public static bool IsPlate(string propId) => propId == PlateId || propId == PlateFloorId;
-
-        /// <summary>Plakanin urettigi tag'in montaji — poz gecerlilik kapisi buna bakiyor.</summary>
-        public static AprilTagCalibration.TagMount MountOf(string propId) =>
-            propId == PlateFloorId ? AprilTagCalibration.TagMount.Zemin
-                                   : AprilTagCalibration.TagMount.Duvar;
+        /// <summary>Bu prop bir tag plakasi mi.</summary>
+        public static bool IsPlate(string propId) => propId == PlateId;
 
         /// <summary>
         /// <c>sourceInstanceId</c> icin nisan: "bu tag BU HARITANIN plakalarindan gelmedi ve
@@ -193,7 +179,6 @@ namespace VRMultiplayer.Constructor
                     yawDegrees = t.yawDegrees,
                     useForCalibration = t.useForCalibration,
                     sourceInstanceId = t.id == 0 ? 0u : ExternalSource,
-                    mounting = t.mounting,   // montaj fiziksel gercek, haritayla degismez
                 });
             }
             if (kopya.Count == 0) return 0;
@@ -249,8 +234,8 @@ namespace VRMultiplayer.Constructor
             // yatik 14x14); tek bir def ile hesaplamak yatik plakayi yanlis hucrelere
             // oturtur ve tag'in konumu SESSIZCE kayar.
             if (lib == null) return "Prop kutuphanesi yok — plaka cevrilemez.";
-            if (lib.ById(PlateId) == null && lib.ById(PlateFloorId) == null)
-                return $"Kutuphanede '{PlateId}' de '{PlateFloorId}' de yok — plaka cevrilemez.";
+            if (lib.ById(PlateId) == null)
+                return $"Kutuphanede '{PlateId}' yok — plaka cevrilemez.";
 
             var grid = RoomGrid.FromPlan(layout.builtForRoom, layout.cellSize,
                 RoomGrid.DefaultWallMargin, layout.buildMargin, layout.levelHeight);
@@ -287,7 +272,6 @@ namespace VRMultiplayer.Constructor
                     position = kaynak.position,
                     yawDegrees = kaynak.yawDegrees,
                     useForCalibration = kaynak.useForCalibration,
-                    mounting = kaynak.mounting,   // DUSERSE tag 0'in her tespiti elenir
                 };
 
             var tags = new List<AprilTagCalibration.TagEntry>();
@@ -379,7 +363,7 @@ namespace VRMultiplayer.Constructor
             if (zero != null)
                 sb.AppendLine("  tag 0   (origin, plakadan degil)   " +
                               $"{zero.position.x:0.000} {zero.position.y:0.000} {zero.position.z:0.000}   " +
-                              $"{zero.mounting}");
+                              "");
             else
                 sb.AppendLine("  tag 0   YOK — origin tanimi bulunamadi, once onu ayarla");
 
@@ -389,7 +373,7 @@ namespace VRMultiplayer.Constructor
                 tags.Add(t);
                 sb.AppendLine($"  tag {t.id}   (plakadan degil — korundu)   " +
                               $"{t.position.x:0.000} {t.position.y:0.000} {t.position.z:0.000}  " +
-                              $"yaw {t.yawDegrees:0.0}   {t.mounting}   " +
+                              $"yaw {t.yawDegrees:0.0}   " +
                               $"{(t.useForCalibration ? "ACIK" : "KAPALI")}");
             }
 
@@ -414,24 +398,6 @@ namespace VRMultiplayer.Constructor
                 // negatif (-90) geliyordu ve ayni yon iki sayi olarak yaziliyordu.
                 float yaw = eski != null ? eski.yawDegrees : p.Yaw;
 
-                // ZEMIN PLAKASINDA 180 EKLENIR — OLCULDU, varsayilmadi.
-                //
-                // Duvarda plakanin yaw'i dogrudan tag'in yaw'i oluyor. Zeminde degil: orada
-                // normal dikey oldugu icin YawOf yonu tag'in KENDI YUKARI EKSENINDEN okuyor
-                // (bkz. AprilTagCalibration.YawOf) ve o eksen, plakanin yaw referansindan
-                // tam 180 derece sapiyor.
-                //
-                // 2026-08-19 olcumu (envanter turu, 13 tag): plakadan turemis tag'lerin
-                // HEPSI ilan 0 iken -178 ile -180 arasi okundu; tag basina sacilma 1,6-3,8
-                // derece, yani gurultu degil sabit bir kayma. Tag 0 plakadan gelmedigi ve
-                // ilani zaten 180 oldugu icin dogru okunuyordu — farki ortaya cikaran da o.
-                //
-                // Duzeltilmezse her yeni zemin plakasi 180 ters dogar, ve sapmasi 10 dereceyi
-                // astigi icin YAW KURTARMA yolunu tetikleyip DUNYAYI CEVIRIR. Cihazda tam bu
-                // yasandi: tag 4 dunyayi 180, tag 6 90 derece dondurdu ve o sirada konan
-                // plakalar metrelerce yanlis kaydedildi.
-                if (eski == null && MountOf(p.propId) == AprilTagCalibration.TagMount.Zemin)
-                    yaw += 180f;
 
                 if (yaw > 180f) yaw -= 360f;
                 if (yaw <= -180f) yaw += 360f;
@@ -447,7 +413,6 @@ namespace VRMultiplayer.Constructor
                     yawDegrees = yaw,
                     useForCalibration = acik,
                     sourceInstanceId = p.instanceId,   // kimligi PLAKAYA bagla
-                    mounting = MountOf(p.propId),      // dik plaka -> Duvar, yatik -> Zemin
                 };
                 tags.Add(yeni);
 
@@ -464,7 +429,6 @@ namespace VRMultiplayer.Constructor
 
                 sb.AppendLine($"  tag {id}   instanceId {p.instanceId,-4}  " +
                               $"{world.x:0.000} {world.y:0.000} {world.z:0.000}  yaw {yaw:0.0}" +
-                              $"  {MountOf(p.propId)}" +
                               (eski != null ? "  (yaw korundu)" : "  (yaw plakadan, 5 derece adim)") +
                               oynama +
                               (acik ? "  ACIK kaldi" : "  KAPALI"));
@@ -500,7 +464,7 @@ namespace VRMultiplayer.Constructor
             sb.AppendLine($"{opened} tag kalibrasyona acildi ({layout.tags.Length} tag toplam).");
             foreach (var t in layout.tags)
                 sb.AppendLine($"  tag {t.id}   {t.position.x:0.000} {t.position.y:0.000} {t.position.z:0.000}" +
-                              $"  yaw {t.yawDegrees:0.0}   {t.mounting}   " +
+                              $"  yaw {t.yawDegrees:0.0}   " +
                               $"{(t.useForCalibration ? "ACIK" : "KAPALI")}");
             return sb.ToString();
         }
@@ -538,13 +502,6 @@ namespace VRMultiplayer.Constructor
             zero.position = new Vector3(0f, heightMeters, 0f);
             zero.useForCalibration = true;
 
-            // MONTAJ YUKSEKLIKTEN TURETILIR. Poz gecerlilik kapisi tag 0'in duvarda mi zeminde
-            // mi oldugunu bilmek zorunda; bilmezse yatik kagidin HER tespitini eler ve
-            // kalibrasyon hic baslamaz. Ayri bir soru sormak yerine zaten girilmis olan
-            // yukseklikten okuyoruz: sifir = zemin.
-            zero.mounting = heightMeters <= 0.01f
-                ? AprilTagCalibration.TagMount.Zemin
-                : AprilTagCalibration.TagMount.Duvar;
         }
     }
 }

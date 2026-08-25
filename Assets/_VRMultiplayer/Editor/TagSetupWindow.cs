@@ -377,26 +377,6 @@ namespace VRMultiplayer.EditorTools
                         $"yaw {t.yawDegrees:0.0}",
                         GUILayout.MinWidth(240f));
 
-                    // MONTAJ SECICI. Normalde montaji plaka belirler (dik -> Duvar,
-                    // yatik -> Zemin), ama plakasiz yollarla gelen tag'ler var: baska
-                    // haritadan kopyalananlar, kamerayla olculenler, elle yazilanlar. Onlarda
-                    // deger yanlis kalirsa belirti sessiz degil ama kotu: o tag'in HER
-                    // tespiti "POZ ELENDI" ile duser ve tag hicbir sey kalibre etmez.
-                    // Duzeltmenin baska yolu JSON'u elle acmakti.
-                    if (fromMap && !Application.isPlaying)
-                    {
-                        var yeniMontaj = (AprilTagCalibration.TagMount)EditorGUILayout.EnumPopup(
-                            t.mounting, GUILayout.Width(70f));
-                        if (yeniMontaj != t.mounting)
-                        {
-                            t.mounting = yeniMontaj;
-                            if (_map.Save(_mapName)) AssetDatabase.Refresh();
-                            Reload();
-                        }
-                    }
-                    else
-                        EditorGUILayout.LabelField(t.mounting.ToString(), GUILayout.Width(70f));
-
                     // Tek tek acma yalnizca HARITA tag'lerinde: buyuk mekanda kagitlar tek
                     // turda bitmeyebilir, menu 48'in hepsini-birden'i o durumda fazla kaba.
                     if (fromMap && !Application.isPlaying)
