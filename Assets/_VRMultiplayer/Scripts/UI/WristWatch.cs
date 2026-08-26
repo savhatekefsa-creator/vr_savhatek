@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace VRMultiplayer.UI
@@ -56,19 +57,23 @@ namespace VRMultiplayer.UI
         /// olculdu: ekran 1 mm ETE GOMULUYORDU. Dusurme; yukseltirsen bilekten kopar.</summary>
         const float LiftFromSkin = 0.023f;
 
-        /// <summary>Ekran icerigi <see cref="WatchScreenUI"/> tarafindan 1.5 x 0.95 birimlik
-        /// bir alana ciziliyor; cerceve 1.57 x 1.02. Bu olcek onu FIZIKSEL boyuta cevirir.
-        /// El modeli 1.1x olcekli oldugu icin sonuc: cerceve 6.9 x 4.5 cm.
+        /// <summary>
+        /// Ekran icerigi <see cref="WatchScreenUI"/> tarafindan 1.50 x 1.19 birimlik bir alana
+        /// ciziliyor; cerceve 1.57 x 1.256. Bu sayi onu FIZIKSEL boyuta cevirir.
         ///
-        /// NEDEN BUYUDU (0.032 -> 0.040): cihazda "saatin kendi kotu goruntusu arayuzun
-        /// altindan gorunuyor" dendi. Olculdu — kasa ENINE 5.8 cm, ekran o yonde 3.6 cm idi,
-        /// yani her iki yanda 1.1 cm kasa aciktaydi. 0.040'ta acikta kalan 0.65 cm'e iniyor.
+        /// ARTIK ELLE SECILMIYOR — kadranin OLCULEN uzunlugundan turetilir (bkz. DialFace ve
+        /// FrameAlongUnits). Bu sabit yalnizca kasa mesh'i yoksa ya da kadran yuzeyi
+        /// secilemezse devreye girer.
         ///
-        /// TAM ORTME BU MESH'LE MUMKUN DEGIL: icerigin en/boy orani 1.54 sabit. Enine 5.8 cm'i
-        /// kapatmak icin ekranin kol boyunca 9.4 cm olmasi gerekirdi — Meta el modeli bilekten
-        /// yalnizca 2.5 cm geriye uzandigi icin o ekran kolun bittigi yerin cok otesine tasardi.
-        /// Kalici cozum daha kucuk/temiz bir saat mesh'i (bkz. sinif basi: Watch_FP eldiven
-        /// mansetiyle birlikte modellenmis).</summary>
+        /// TARIHCE, ayni hataya donmemek icin: bir ara "saatin kendi kotu goruntusu arayuzun
+        /// altindan gorunuyor" denince deger 0.032'den 0.040'a CIKARILMISTI. Ortme cabasiydi
+        /// ama olculdu ki kadran 2.8 x 3.5 cm, ekran ise 6.3 x 4.1 cm — yani kadranin iki
+        /// katindan genis, kasanin her yonunde disina tasiyor. Cihazda gorulen "kayma" da
+        /// buydu. Cozum ekrani buyutmek degil, kadrani OLCUP oraya oturtmakti.
+        /// </summary>
+        // ARTIK YEDEK: olcek normalde kadranin OLCULEN uzunlugundan turetilir (bkz. DialFace
+        // ve FrameAlongUnits). Bu sayi yalnizca kasa mesh'i yoksa ya da kadran yuzeyi
+        // secilemezse kullanilir.
         const float FaceScale = 0.040f;
 
         /// <summary>Ekranin kendi normali etrafinda dondurulmesi (derece).
@@ -82,16 +87,23 @@ namespace VRMultiplayer.UI
         /// dolu gorunur; yine de rahatsiz ederse tek dokunus noktasi burasi.</summary>
         const float FaceRollDegrees = -90f;
 
-        /// <summary>
-        /// Ekranin kendi DIKEY ekseni etrafinda egimi (derece). Pozitif = SOL kenar kasadan
-        /// UZAKLASIR, sag kenar yaklasir.
-        ///
-        /// NEDEN: kadran normali mesh'in ust yuzeyinin ORTALAMASI. Yuzey tam duz degil —
-        /// cihazda "arayuzun sol kismi saatle ic ice geciyor" goruldu, yani o tarafta gercek
-        /// yuzey ortalamanin uzerine cikiyor. Ekrani biraz egmek, yuksekligi topyekun
-        /// artirmaktan iyi: yukselti buyutulseydi ekran her yerde kasadan kopardi.
-        /// </summary>
-        const float FaceTiltDegrees = 7f;
+        // FaceTiltDegrees KALDIRILDI. Ekrani kendi dikey ekseninde 7 derece egen bir yamaydi;
+        // amaci "arayuzun sol kismi saatle ic ice geciyor" sikayetini kapatmakti. Gercek sebep
+        // egim eksikligi degildi: yon KABA bir ortalamadan (butun ust yuzeyin normali)
+        // geliyordu, oysa artik GERCEK kadran duzleminden geliyor (bkz. DialFace). Dogru
+        // duzleme oturunca egmeye gerek kalmadi.
+
+        /// <summary>Kadran yuzeyi secimi: kaba normale bu aciya kadar yakin yuzler sayilir.</summary>
+        const float DialFaceAngle = 20f;
+
+        /// <summary>...ve yalnizca yuzeyin en ust bu derinligindekiler (m, mesh-yerel).
+        /// Pahlar ve kasa omuzlari boylece disarida kalir.</summary>
+        const float DialFaceDepth = 0.004f;
+
+        /// <summary>Cerceve quad'inin UZUN ekseni, birim cinsinden (WatchScreenUI: 1.57 x 1.256).
+        /// <see cref="FaceRollDegrees"/> bu ekseni KOL BOYUNCA cevirdigi icin ekran olcegi
+        /// kadranin kol yonundeki uzunlugundan turetilir.</summary>
+        const float FrameAlongUnits = 1.57f;
 
         // ---- Saat kasasi (Watch_FP) --------------------------------------------------
         // Projedeki TEK saat modeli FP_Hands.fbx icindeki Watch_FP; askerin SAG eline
@@ -146,19 +158,94 @@ namespace VRMultiplayer.UI
             return area > 0f ? (sum / area).normalized : Vector3.up;
         }
 
-        /// <summary>Kadranin, kasanin MERKEZINDEN olculen yuksekligi (mesh-yerel birim).
-        /// Ekran bu kadar yukari konur — sinir kutusunun kosesi yerine gercek yuzey.</summary>
-        static float DialHeight(Mesh m)
+        /// <summary>
+        /// KADRANIN DUZ UST YUZEYI: merkezi, normali, kol ekseni ve iki olcusu — hepsi
+        /// mesh-yerel cercevede (+X enine, +Y sirt, +Z parmaklar). Yuzey bulunamazsa false.
+        ///
+        /// NEDEN <see cref="DialNormal"/> YETMIYOR: o, sinir kutusunun ust yarisindaki disari
+        /// bakan TUM yuzlerin ortalamasi — pahlar, kasa omuzlari ve kayis parcalari dahil.
+        /// Ekrani hizalamak icin fazla kaba: olculdu, gercek kadran duzleminden 5.8 derece
+        /// sapiyordu ve bu sapma daha once elle bir egim sabitiyle (FaceTiltDegrees) kapatilmaya
+        /// calisilmisti. Burada o yon yalnizca KABA FILTRE olarak kullanilir; gercek kadran
+        /// yuzeyi ondan turetilir.
+        ///
+        /// SECIM: normali kaba yone <see cref="DialFaceAngle"/> dereceden yakin VE yuzeyin en
+        /// ust <see cref="DialFaceDepth"/> derinligindeki yuzler. Olculdu: 325 ucgenin 29'u,
+        /// 2.8 x 3.5 cm.
+        ///
+        /// MERKEZ, AGIRLIK MERKEZI DEGIL: secilen yuzlerin kapladigi DIKDORTGENIN ortasi
+        /// aliniyor. Ekran bir dikdortgen ve kadrana ortalanmali; agirlik merkezi ucgenlerin
+        /// dagilimina gore kayardi (kadranin bir kosesi daha yogun uclenmisse oraya cekerdi).
+        /// Normal yonunde ise ORTA degil TEPE noktasi verilir — ekran yuzeyin uzerine biner.
+        /// </summary>
+        static bool DialFace(Mesh m, out Vector3 center, out Vector3 normal,
+                             out Vector3 alongArm, out float across, out float along)
         {
-            Vector3 n = DialNormal(m);
-            Vector3 c = m.bounds.center;
-            float best = 0f;
-            foreach (var p in m.vertices)
+            center = Vector3.zero;
+            normal = Vector3.up;
+            alongArm = Vector3.forward;
+            across = along = 0f;
+            if (m == null) return false;
+
+            Vector3 coarse = DialNormal(m).normalized;
+            var v = m.vertices;
+            var tri = m.triangles;
+            if (v.Length == 0 || tri.Length == 0) return false;
+
+            float top = float.NegativeInfinity;
+            for (int i = 0; i < v.Length; i++)
             {
-                float d = Vector3.Dot(p - c, n);
-                if (d > best) best = d;
+                float p = Vector3.Dot(v[i], coarse);
+                if (p > top) top = p;
             }
-            return best;
+
+            // Alan agirlikli normal: buyuk kadran ucgenleri kucuk kenar ucgenlerini bastirir.
+            var picked = new List<int>();
+            Vector3 nSum = Vector3.zero;
+            for (int t = 0; t < tri.Length; t += 3)
+            {
+                Vector3 a = v[tri[t]], b = v[tri[t + 1]], c = v[tri[t + 2]];
+                Vector3 n = Vector3.Cross(b - a, c - a);
+                float area2 = n.magnitude;
+                if (area2 < 1e-12f) continue;
+                n /= area2;
+                if (Vector3.Angle(n, coarse) > DialFaceAngle) continue;
+                float h = (Vector3.Dot(a, coarse) + Vector3.Dot(b, coarse) + Vector3.Dot(c, coarse)) / 3f;
+                if (h < top - DialFaceDepth) continue;
+                nSum += n * area2;
+                picked.Add(t);
+            }
+            if (picked.Count == 0 || nSum.sqrMagnitude < 1e-12f) return false;
+
+            normal = nSum.normalized;
+            alongArm = Vector3.ProjectOnPlane(Vector3.forward, normal);   // mesh +Z = parmaklar
+            if (alongArm.sqrMagnitude < 1e-8f) return false;
+            alongArm.Normalize();
+            Vector3 side = Vector3.Cross(alongArm, normal).normalized;
+
+            float minS = float.PositiveInfinity, maxS = float.NegativeInfinity;
+            float minA = float.PositiveInfinity, maxA = float.NegativeInfinity;
+            float maxN = float.NegativeInfinity;
+            for (int i = 0; i < picked.Count; i++)
+                for (int k = 0; k < 3; k++)
+                {
+                    Vector3 p = v[tri[picked[i] + k]];
+                    float s = Vector3.Dot(p, side);
+                    float aa = Vector3.Dot(p, alongArm);
+                    float nn = Vector3.Dot(p, normal);
+                    if (s < minS) minS = s;
+                    if (s > maxS) maxS = s;
+                    if (aa < minA) minA = aa;
+                    if (aa > maxA) maxA = aa;
+                    if (nn > maxN) maxN = nn;
+                }
+
+            across = maxS - minS;
+            along = maxA - minA;
+            center = side * ((minS + maxS) * 0.5f)
+                   + alongArm * ((minA + maxA) * 0.5f)
+                   + normal * maxN;
+            return true;
         }
 
         /// <summary>
@@ -274,27 +361,53 @@ namespace VRMultiplayer.UI
             // Kadran normali mesh'ten HER SEFERINDE hesaplanir (325 ucgen, bir kez): mesh
             // yeniden pisirilirse hizalama kendiliginde dogru kalir, sabit bir aci gommeye
             // gerek yok.
+            // EKRANIN YERI, YONU VE BOYUTU KADRANIN KENDI YUZEYINDEN TURETILIR.
+            //
+            // OLCULDU (Watch_FP_Baked, kasa olcegi 0.549): kadranin duz ust yuzeyi 29 ucgen
+            // ve fiziksel olarak 2.8 x 3.5 cm. Ekran ise elle secilmis sabitlerle
+            // 6.3 x 4.1 cm cikiyordu — kadranin IKI KATINDAN genis. Kasanin her yonunde
+            // disina tasiyor, merkezi 3 mm kaciyor ve 5.8 derece egik duruyordu; cihazda
+            // gorulen "kayma" buydu. Nasil buyudugu de kayitli: "saatin kendi kotu
+            // goruntusu arayuzun altindan gorunuyor" denince 0.032 -> 0.040 buyutulmustu,
+            // yani ortme cabasi tasmayi artirmisti.
+            //
+            // Sabitleri kovalamak yerine yuzeyi olcup oraya oturtuyoruz — projenin kurali:
+            // yerlesim TURETILIR, gomulmez. Mesh yeniden pisirilirse ekran kendiliginden
+            // dogru kalir.
+            float faceScale = FaceScale;
             Quaternion caseRot = ct.rotation;
-            Vector3 dial = caseMesh != null
-                ? (caseRot * DialNormal(caseMesh)).normalized
-                : back;
-            // Yukari vektor: kol ekseni, kadran duzlemine indirilmis. Sondaki roll icerigi
-            // kol boyunca dik cevirir (bkz. FaceRollDegrees).
-            Vector3 up = Vector3.ProjectOnPlane(fingers, dial);
+            Vector3 dial = back;
+            Vector3 dialCenter = t2.position;
+            Vector3 alongArm = fingers;
+
+            Vector3 dcL, dnL, daL; float dAcross, dAlong;
+            if (caseMesh != null && DialFace(caseMesh, out dcL, out dnL, out daL,
+                                             out dAcross, out dAlong))
+            {
+                float k = ct.localScale.x;
+                dial = (caseRot * dnL).normalized;
+                alongArm = (caseRot * daL).normalized;
+                dialCenter = ct.TransformPoint(dcL);
+
+                // YUKSEKLIGE SIGDIR. Cerceve FrameAlongUnits birim uzunlugunda ve
+                // FaceRollDegrees onu kol boyunca ceviriyor, yani kadranin KOL YONUNDEKI
+                // uzunluguna oturtuyoruz. Genislige sigdirsaydik ekran kol ekseninde
+                // ~9 mm tasardi; boyle kadranin iki yaninda ~3 mm ciplak kalir ve o da
+                // kasanin kendi cercevesi gibi okunur.
+                faceScale = (dAlong * k) / FrameAlongUnits;
+            }
+            else if (caseMesh != null)
+                dial = (caseRot * DialNormal(caseMesh)).normalized;
+
+            Vector3 up = Vector3.ProjectOnPlane(alongArm, dial);
             if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(back, dial);
             t2.rotation = Quaternion.LookRotation(dial, up)
-                        * Quaternion.AngleAxis(FaceRollDegrees, Vector3.forward)
-                        * Quaternion.AngleAxis(FaceTiltDegrees, Vector3.up);
+                        * Quaternion.AngleAxis(FaceRollDegrees, Vector3.forward);
             t2.localScale = Vector3.one;
-
-            // Ekran kadranin USTUNDE dursun: yukselti artik kadran normali dogrultusunda
-            // olculur, kaba sinir-kutusu tepesinden degil.
-            if (caseMesh != null)
-                t2.position = ct.TransformPoint(caseMesh.bounds.center)
-                            + dial * (DialHeight(caseMesh) * ct.localScale.x + ScreenClearance);
+            t2.position = dialCenter + dial * ScreenClearance;
 
             var ui = go.AddComponent<WatchScreenUI>();
-            ui.faceScale = FaceScale;
+            ui.faceScale = faceScale;
             ui.faceStretch = Vector2.one;   // icerik kendi oraninda; esnetme gerekmiyor
             // Quad'in on yuzu -Z'ye bakar; yuzu 180 cevirerek ekrani disari donduruyoruz.
             // (Avatardaki eski ekran da tam olarak bu duzeltmeyi tasiyor.)
