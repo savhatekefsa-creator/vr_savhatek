@@ -197,28 +197,34 @@ namespace VRMultiplayer
             // mesafesinde bu 0.2-0.25 derece eder, VR'da rahat okuma esigi ise kabaca 0.5-1
             // derece. Yani ekran dogru yerdeydi ama okunmuyordu.
             //
+            // NOT: dikey kenar sonradan 2.60 -> 2.40 cm'e cekildi (cihazda istendi).
+            // Yatay kenara DOKUNULMADI; yalnizca Y degerleri 0.938 ile olceklendi, yani
+            // satir aralari %6.2 daraldi. YAZI BOYUTLARI AYNI KALDI — faceStretch ile
+            // ezmek daha kolay olurdu ama o glifleri de yassiltir ve TMP'ye gecmenin
+            // amacini (keskin yazi) bozardi.
+            //
             // IKI DEGISIKLIK: (1) icerik kadranin ENINI de kullaniyor — 0.95 -> 1.19 birim,
             // cunku eski oran 1.5:0.95 idi ve kadranin 2.8 cm'lik eninde 0.5 cm bos kaliyordu.
             // (2) sol/sag ikiye bolme birakildi; duzen SATIR tabanli oldu, boylece her satir
             // tam genisligi kullanir ve yazilar 2-4.5 mm'ye cikar.
             var frame = MakeQuad(_face, "Frame", Bezel, 0);          // ince cerceve
-            frame.localScale = new Vector3(1.57f, 1.256f, 1f);       // = kadranin tamami
+            frame.localScale = new Vector3(1.57f, 1.178f, 1f);       // kadranin eni eksi 2 mm
 
             var bg = MakeQuad(_face, "Bg", ScreenBg, 1);             // ekran zemini
-            bg.localScale = new Vector3(1.50f, 1.19f, 1f);
+            bg.localScale = new Vector3(1.50f, 1.116f, 1f);
 
             var top = MakeQuad(_face, "TopStrip", TopStripCol, 2);   // ust bar (cukur ton)
-            top.localScale = new Vector3(1.50f, 0.22f, 1f);
-            top.localPosition = new Vector3(0f, 0.47f, 0f);
+            top.localScale = new Vector3(1.50f, 0.206f, 1f);
+            top.localPosition = new Vector3(0f, 0.441f, 0f);
 
             // Bevel: ust parlak + alt golge (derinlik hissi)
-            Line("BevelTop", new Vector3(0f,  0.600f, 0f), new Vector3(1.50f, 0.014f, 1f), BevelHi, 3);
-            Line("BevelBot", new Vector3(0f, -0.600f, 0f), new Vector3(1.50f, 0.014f, 1f), BevelLo, 3);
+            Line("BevelTop", new Vector3(0f,  0.563f, 0f), new Vector3(1.50f, 0.014f, 1f), BevelHi, 3);
+            Line("BevelBot", new Vector3(0f, -0.563f, 0f), new Vector3(1.50f, 0.014f, 1f), BevelLo, 3);
 
             // Satir ayiricilari. Dikey ayirici (VDiv) KALKTI: sol/sag bolme, genisligin yariya
             // dusmesi demekti ve bu ekranda yazi boyutunu yaristiran asil sey oydu.
-            Line("HDiv1", new Vector3(0f,  0.360f, 0f), new Vector3(1.50f, 0.014f, 1f), Divider, 4);
-            Line("HDiv2", new Vector3(0f, -0.150f, 0f), new Vector3(1.50f, 0.014f, 1f), Divider, 4);
+            Line("HDiv1", new Vector3(0f,  0.338f, 0f), new Vector3(1.50f, 0.014f, 1f), Divider, 4);
+            Line("HDiv2", new Vector3(0f, -0.141f, 0f), new Vector3(1.50f, 0.014f, 1f), Divider, 4);
 
             // Can barinin olugu + dolu kismi
             var groove = MakeQuad(_face, "HealthGroove", BarGroove, 5);
@@ -242,10 +248,10 @@ namespace VRMultiplayer
             // Pusula "N 0°" degil "NW 359°" olabilir — 4 yerine 7 karakter. 0.26'da o hal
             // saatin uzerine biniyordu; 0.25'te 1.5 mm bosluk kaliyor. Bu satiri buyutmenin
             // tek yolu pusuladan derece SAYISINI atmak (2 karaktere duser, ~1.6x buyur).
-            _clock   = MakeText(_face, "00:00",     new Vector3(-0.72f,  0.47f, 0f), TextAnchor.MiddleLeft,  ScreenText,  0.25f);
-            _compass = MakeText(_face, "N 0°",      new Vector3( 0.72f,  0.47f, 0f), TextAnchor.MiddleRight, Accent,      0.25f);
-            _healthT = MakeText(_face, "100%",      new Vector3(-0.72f,  0.19f, 0f), TextAnchor.MiddleLeft,  HealthColor, 0.40f);
-            _kd      = MakeText(_face, "K 0   Ö 0", new Vector3( 0.72f,  0.19f, 0f), TextAnchor.MiddleRight, Muted,       0.18f);
+            _clock   = MakeText(_face, "00:00",     new Vector3(-0.72f,  0.441f, 0f), TextAnchor.MiddleLeft,  ScreenText,  0.25f);
+            _compass = MakeText(_face, "N 0°",      new Vector3( 0.72f,  0.441f, 0f), TextAnchor.MiddleRight, Accent,      0.25f);
+            _healthT = MakeText(_face, "100%",      new Vector3(-0.72f,  0.178f, 0f), TextAnchor.MiddleLeft,  HealthColor, 0.40f);
+            _kd      = MakeText(_face, "K 0   Ö 0", new Vector3( 0.72f,  0.178f, 0f), TextAnchor.MiddleRight, Muted,       0.18f);
             // ALT SATIR EN KOTU DURUMA GORE: mermi "120" olabilir. 0.44'te genisligi 0.987
             // birime cikip pilin uzerine 0.060 biniyordu (olculdu). 0.40 + pil 0.23 ile
             // aralarinda 1.7 mm bosluk kaliyor ve ikisi de okuma esiginin uzerinde.
@@ -253,9 +259,9 @@ namespace VRMultiplayer
             // boyutundan calıyordu; ustune koyunca ikisi de yerini koruyor ve "bu sayi nedir"
             // sorusu kalmiyor. Cihazda "ya mermi sembolu gelsin ya ustte MERMI yazsin altta
             // sayisi" dendi — ikincisi.
-            MakeText(_face, "MERMI",                new Vector3(-0.72f, -0.215f, 0f), TextAnchor.MiddleLeft,  Muted,       0.17f);
-            _ammo    = MakeText(_face, "∞",         new Vector3(-0.72f, -0.455f, 0f), TextAnchor.MiddleLeft,  ScreenText,  0.30f);
-            _battery = MakeText(_face, "84%",       new Vector3( 0.72f, -0.350f, 0f), TextAnchor.MiddleRight, Muted,       0.23f);
+            MakeText(_face, "MERMI",                new Vector3(-0.72f, -0.202f, 0f), TextAnchor.MiddleLeft,  Muted,       0.17f);
+            _ammo    = MakeText(_face, "∞",         new Vector3(-0.72f, -0.427f, 0f), TextAnchor.MiddleLeft,  ScreenText,  0.30f);
+            _battery = MakeText(_face, "84%",       new Vector3( 0.72f, -0.328f, 0f), TextAnchor.MiddleRight, Muted,       0.23f);
 
             Refresh();
         }

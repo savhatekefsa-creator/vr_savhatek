@@ -85,7 +85,11 @@ namespace VRMultiplayer.UI
         /// bilekten yalnizca 2.5 cm geriye uzanir (on kol YOK). Yani ekranin dirsek tarafi
         /// mesh'in bittigi yerin otesine tasar. Saat kasasi da orada oldugu icin bosluk
         /// dolu gorunur; yine de rahatsiz ederse tek dokunus noktasi burasi.</summary>
-        const float FaceRollDegrees = -90f;
+        // -85, -90 DEGIL: cihazda ekran kasaya gore egik goruldu; once 3 sonra 2 derece
+        // daha, toplam 5 derece SAAT YONUNDE cevrildi (kasanin kendi kadrani da o
+        // kadar egik modellenmis). Yon deneyle dogrulandi: bu eksende POZITIF aci,
+        // ekrana bakan icin saat yonu.
+        const float FaceRollDegrees = -85f;
 
         // FaceTiltDegrees KALDIRILDI. Ekrani kendi dikey ekseninde 7 derece egen bir yamaydi;
         // amaci "arayuzun sol kismi saatle ic ice geciyor" sikayetini kapatmakti. Gercek sebep
@@ -99,6 +103,20 @@ namespace VRMultiplayer.UI
         /// <summary>...ve yalnizca yuzeyin en ust bu derinligindekiler (m, mesh-yerel).
         /// Pahlar ve kasa omuzlari boylece disarida kalir.</summary>
         const float DialFaceDepth = 0.004f;
+
+        /// <summary>Ekranin, kasanin UST GOVDESINE gore kucultme carpani.
+        ///
+        /// Ekran DUZ bir dikdortgen, kasanin ustu ise YUVARLATILMIS. Kadranin duz alanina
+        /// birebir oturtunca kosleri kasanin yuvarlak siluetinin disina sarkiyordu (cihazda
+        /// gorulup bildirildi). Kenarlardan biraz iceri almak bunu kapatir; bedeli yazi
+        /// boyutunda %8, ki olculdu ve hepsi hala okuma esiginin uzerinde kaliyor.
+        /// </summary>
+        const float ScreenInset = 0.92f;
+
+        /// <summary>Ust govde silueti secilirken kadranin tepesinden ne kadar asagi inilecegi (m).
+        /// Olculdu: 1.2 cm'de siluet 4.8 x 3.2 cm'de sabitleniyor; daha derine inince kayis
+        /// da hesaba katilip enine 4.1 cm'e sisiyor.</summary>
+        const float TopBodyBand = 0.012f;
 
         /// <summary>Cerceve quad'inin UZUN ekseni, birim cinsinden (WatchScreenUI: 1.57 x 1.256).
         /// <see cref="FaceRollDegrees"/> bu ekseni KOL BOYUNCA cevirdigi icin ekran olcegi
@@ -171,6 +189,39 @@ namespace VRMultiplayer.UI
                 sum += n * a; area += a;
             }
             return area > 0f ? (sum / area).normalized : Vector3.up;
+        }
+
+        /// <summary>
+        /// Kasanin UST GOVDESININ kol eksenindeki merkezi (mesh-yerel birim).
+        ///
+        /// <see cref="DialFace"/> kadranin DUZ yuzeyini bulur; bu ise gozle "saat" olarak
+        /// algilanan hacmi: kadranin tepesinden <see cref="TopBodyBand"/> kadar asagiya inen
+        /// butun noktalar. Ikisi es merkezli degil, cunku mesh eldiven mansetiyle birlikte
+        /// modellenmis ve kadran govdenin ortasinda oturmuyor.
+        ///
+        /// Bant sinirli tutulur: daha derine inince kayis da hesaba katilir ve merkez kayar.
+        /// </summary>
+        static float TopBodyCenterAlong(Mesh m, Vector3 normal, Vector3 alongArm)
+        {
+            var v = m.vertices;
+            if (v.Length == 0) return 0f;
+
+            float top = float.NegativeInfinity;
+            for (int i = 0; i < v.Length; i++)
+            {
+                float h = Vector3.Dot(v[i], normal);
+                if (h > top) top = h;
+            }
+
+            float lo = float.PositiveInfinity, hi = float.NegativeInfinity;
+            for (int i = 0; i < v.Length; i++)
+            {
+                if (Vector3.Dot(v[i], normal) < top - TopBodyBand) continue;
+                float a2 = Vector3.Dot(v[i], alongArm);
+                if (a2 < lo) lo = a2;
+                if (a2 > hi) hi = a2;
+            }
+            return lo > hi ? 0f : (lo + hi) * 0.5f;
         }
 
         /// <summary>
@@ -404,12 +455,23 @@ namespace VRMultiplayer.UI
                 alongArm = (caseRot * daL).normalized;
                 dialCenter = ct.TransformPoint(dcL);
 
+                // KOL EKSENINDE KADRANA DEGIL, KASANIN UST GOVDESINE ORTALA.
+                //
+                // Olculdu: kadranin DUZ yuzeyi 3.5 cm ve kasanin ust govdesi 4.8 cm; ikisi
+                // ES MERKEZLI DEGIL — govdenin merkezi kadranin 0.64 cm ELE dogru tarafinda.
+                // Ekrani kadrana ortalayinca elin tarafinda kasanin 1.3 cm'i ciplak kaliyor
+                // ve ekran dirsege kacmis gorunuyordu (cihazda bildirildi).
+                //
+                // ENINE DOKUNULMUYOR: orada iki merkez zaten 0.09 cm'de ortusuyor.
+                float sapma = TopBodyCenterAlong(caseMesh, dnL, daL) - Vector3.Dot(dcL, daL);
+                dialCenter += alongArm * (sapma * k);
+
                 // YUKSEKLIGE SIGDIR. Cerceve FrameAlongUnits birim uzunlugunda ve
                 // FaceRollDegrees onu kol boyunca ceviriyor, yani kadranin KOL YONUNDEKI
                 // uzunluguna oturtuyoruz. Genislige sigdirsaydik ekran kol ekseninde
                 // ~9 mm tasardi; boyle kadranin iki yaninda ~3 mm ciplak kalir ve o da
                 // kasanin kendi cercevesi gibi okunur.
-                faceScale = (dAlong * k) / FrameAlongUnits;
+                faceScale = (dAlong * k) / FrameAlongUnits * ScreenInset;
             }
             else if (caseMesh != null)
                 dial = (caseRot * DialNormal(caseMesh)).normalized;
