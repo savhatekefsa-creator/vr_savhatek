@@ -91,6 +91,12 @@ namespace VRMultiplayer.Weapons
                  "GORSEL MERKEZI tam parmak ucunda. Halka parmagin icine giriyorsa birkac " +
                  "milimetre disari alin.")]
         public Vector3 pinFingerTipOffset = Vector3.zero;
+
+        [Tooltip("Pimin ELDEKI gorunur boyu (m, en uzun kenar). 0 (VARSAYILAN) = bombadaki " +
+                 "boyu AYNEN korunur; pim cekilmeden once ne kadarsa cekildikten sonra da " +
+                 "o kadar. Sifirdan farkli bir deger verirsen pim o boya zorlanir - bunu " +
+                 "yalnizca bir modelin pimi gercekten orantisizsa kullan.")]
+        public float pinDisplaySize = 0f;
         [Tooltip("Pimi cekmek icin bos elin bombaya yaklasmasi gereken mesafe (m). " +
                  "Bombanin YUZEYINE (bounds) olculur. 0.45 idi — kolun yarisi kadar, yani " +
                  "bombaya bakmadan basilan her grip pimi cekiyordu. 0.07 = eli gercekten " +

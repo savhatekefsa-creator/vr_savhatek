@@ -36,6 +36,12 @@ namespace VRMultiplayer
         public const string ObjectName = "FP_HandView";
         public const string DotName = "KumandaNoktasi";
 
+        /// <summary>Atolyede ayarlanan bilek pozunun UYGULANDIGI dugum. Silah tutulurken
+        /// weld bunu surukler; bos elde ince ayar da buraya yazilir. Profildeki
+        /// <c>fpWristLocal*</c> degerleri BU dugumun ankraja gore offsetidir — kemik
+        /// degil.</summary>
+        public const string PoseName = "Pose";
+
         // Beyaz nokta: sapma bu degerin altindayken hic gorunmez (normal nisan alirken
         // gorus temiz kalsin), ustunde opaklik dogrusal olarak 1'e cikar. Ust sinir
         // simdilik sabit; cihaz olcumunden sonra profildeki kopma mesafesine baglanacak.
@@ -157,18 +163,36 @@ namespace VRMultiplayer
         /// icin cagrilir; aga hic girmez, uzak istemcilerde hic yaratilmaz.
         /// </summary>
         /// <summary>
-        /// Bu kumanda tasiyicisi altindaki BIRINCI SAHIS bilek kemigi (yoksa null).
+        /// Bu kumanda tasiyicisi altindaki BIRINCI SAHIS bilek KEMIGI (yoksa null).
         ///
-        /// Disaridan kullanimi: atolyede ayarlanan pozlar BILEGE goredir, ama oyundaki bazi
-        /// tuketiciler (orn. bomba pimi) ag el CIPASINA baglanir. Ikisi ayni sey degil —
-        /// cipa kumandanin ham pozu, bilek ise el modelinin oturdugu yer. Ayarlanan degerin
-        /// oyunda birebir cikmasi icin cevrimin bilekten yapilmasi gerekiyor.
+        /// PROFILDEKI POZLARI COZMEK ICIN BUNU KULLANMA — <see cref="FindPose"/> kullan.
+        /// Buradaki eski aciklama "atolyede ayarlanan pozlar bilege goredir" diyordu ve
+        /// YANLISTI: atolye o degerleri <see cref="PoseName"/> dugumune uyguluyor, oyunun
+        /// silah yolu da oyle. Kemik ile Pose ayni NOKTADA durur ama yonleri 157 derece
+        /// farklidir; bomba pimi kemikten cozdugu icin yanlis aciyla, dolayisiyla yanlis
+        /// yerde duruyordu (offset 13-15 cm oldugundan hata santimlere buyuyordu).
+        ///
+        /// Kemik hala mesru olarak kullaniliyor: parmak/avuc gibi ANATOMIK olculer icin
+        /// (bkz. HandGrabber avuc sondasi).
         ///
         /// UZAK OYUNCUDA NULL DONER: FP eli yalnizca sahipte kurulur. Cagiran taraf o durumda
         /// kendi yedegine dusmeli.
         /// </summary>
         public static Transform FindWrist(Transform carrier, bool left)
             => FindBone(carrier, left ? "b_l_wrist" : "b_r_wrist");
+
+        /// <summary>
+        /// Profildeki <c>fpWristLocal*</c> degerlerinin cozulecegi dugum (yoksa null).
+        ///
+        /// Atolye eli buraya koyar, oyunun silah yolu da buraya yazar; dolayisiyla ayarlanan
+        /// degerin oyunda birebir cikmasi icin cevrim BURADAN yapilmali.
+        /// </summary>
+        public static Transform FindPose(Transform carrier)
+        {
+            if (carrier == null) return null;
+            var root = carrier.Find(ObjectName);
+            return root != null ? root.Find(PoseName) : null;
+        }
 
         /// <summary>Bu tasiyicinin altindaki FP el modelinde ada gore kemik (yoksa null).</summary>
         public static Transform FindBone(Transform carrier, string boneName)
@@ -210,7 +234,7 @@ namespace VRMultiplayer
             // fark etmiyor, sifirdan farkli verilecekse olcege bolunmeli.
             root.transform.localPosition = PalmLocalOffset;
 
-            var pose = new GameObject("Pose");
+            var pose = new GameObject(PoseName);
             pose.transform.SetParent(root.transform, false);
 
             // Kumandanin GERCEK yeri. Pose'un KARDESI olmali: Pose silaha kayiyor,

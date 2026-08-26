@@ -102,9 +102,10 @@ namespace VRMultiplayer.Weapons
 
         /// <summary>Pimi bombadan ayirip <paramref name="hand"/> anchor'ina takar ve tutamagi
         /// dondurur (yoksa null). Parcalarin birbirine gore duruslari korunur.</summary>
-        /// <param name="profile">Bombanin tutus profili. Doluysa pimin yeri ATOLYEDE ayarlanan
-        /// bilek pozundan turetilir (bkz. <see cref="PlaceFromWorkshopPose"/>); yoksa
-        /// config'in pinHandLocal* degerlerine dusulur.</param>
+        /// <param name="profile">ARTIK KULLANILMIYOR. Bir ara pimin yeri buradaki atolye
+        /// bilek pozundan turetiliyordu; o yol birakildi cunku pim artik parmak kemigine
+        /// SABIT oturuyor (bkz. FitToBone). Atolyede ayarlanan PARMAK POZU yine gecerli,
+        /// o ayri bir alan. Imza cagiranlari bozmamak icin duruyor.</param>
         /// <param name="leftHand">Pimi ceken el SOL mu? Atolyedeki ayar SOL ele gore yazildi;
         /// sag elle cekilirse X'te aynalanir.</param>
         public static Transform DetachTo(Transform root, Transform hand, GrenadeConfig cfg,
@@ -134,98 +135,127 @@ namespace VRMultiplayer.Weapons
             foreach (var p in parts)
                 p.SetParent(holder, true);
 
-            holder.SetParent(hand, false);
-            // Bomba ile el farkli olcekte olabilir (silahlar 2x, avatar 1x): pimin DUNYA boyu
-            // bombadaki haliyle ayni kalsin, elin olcegi onu buyutup kucultmesin.
-            holder.localScale = InverseScale(hand.lossyScale, root.lossyScale);
+            // BOMBADAKI GERCEK BOY. Pim, cekilmeden onceki buyuklugunde gorunmeli - cihazda
+            // "cekilmeden onceki boyutu ile cekildikten sonraki ayni degil" dendi. Olcum
+            // BURADA yapilmali: parcalar hala bombanin olcek zincirinde, hicbir sey degismedi.
+            Bounds ilkSinir;
+            float ilkBoy = 0f;
+            if (WorldBounds(holder, out ilkSinir))
+                ilkBoy = Mathf.Max(ilkSinir.size.x, Mathf.Max(ilkSinir.size.y, ilkSinir.size.z));
 
-            if (!PlaceFromWorkshopPose(holder, hand, profile, leftHand))
+            // ---- PIM ISARET PARMAGININ UCUNA YAPISIR ----
+            //
+            // NEDEN ARTIK EL CIPASINA BAGLANMIYOR: cipanin olcegi OLCULDU ve
+            // (0.080, 0.045, 0.130) cikti - uc eksende bambaska. Pim oraya baglanip olcek
+            // terslenince (12.5, 22.2, 7.7) gibi bir carpan gerekiyor; ama pim ayni zamanda
+            // DONDURULMUS durumda ve Unity'de duzgun olmayan olcekli bir ebeveynin altinda
+            // dondurulmus cocuk EGRILIR - olcek eksenlere dagilir. Cihazda "pim buyuyor"
+            // denen sey buydu: kod pimi buyutmuyordu, cipanin olcegi onu carpitiyordu.
+            //
+            // Parmak kemikleri temiz ve TEKDUZE (1.1) olcekli. Istenen davranis da bu:
+            // pim isaret parmagina child olsun ve orada YAPISIK kalsin.
+            //
+            // ATOLYE POZU ARTIK KULLANILMIYOR (PlaceFromWorkshopPose): pimin yeri kemige
+            // sabit. Atolyede ayarlanan PARMAK POZU yine gecerli, o ayri bir alan.
+            Transform bone = IndexTip(hand, leftHand);
+            if (bone == null)
             {
-                // Yedek: atolye ayari yok ya da FP eli bulunamadi (uzak oyuncu).
+                // UZAK OYUNCU: FP eli yalnizca sahipte kurulur, kemik yok. Eski yola dus -
+                // pim en azindan adamin elinde gorunsun.
+                holder.SetParent(hand, false);
+                holder.localScale = InverseScale(hand.lossyScale, root.lossyScale);
                 holder.localPosition = cfg != null ? cfg.pinHandLocalPosition : Vector3.zero;
                 holder.localRotation = Quaternion.Euler(cfg != null ? cfg.pinHandLocalEuler : Vector3.zero);
+                return holder;
             }
 
-            // Poz oturduktan SONRA pimi isaret parmaginin ucuna kancala. Yukaridaki
-            // yerlestirme pimin DONUSUNU verir, bu adim da onu parmak ucuna oturtup
-            // parmaga bagli hale getirir. Basarisiz olursa (uzak oyuncu: FP eli yok)
-            // eski davranis aynen kalir.
-            HookOnIndexTip(holder, hand, leftHand, cfg);
+            holder.SetParent(bone, false);
+            holder.localScale = Vector3.one;
+            holder.localRotation = Quaternion.Euler(cfg != null ? cfg.pinHandLocalEuler : Vector3.zero);
+            FitToBone(holder, bone, cfg, ilkBoy);
             return holder;
         }
 
         /// <summary>
-        /// PIMI ATOLYEDE AYARLANAN YERE KOYAR.
+        /// Pimi kemige OTURTUR: once boyutunu normalize eder, sonra gorsel merkezini kemigin
+        /// ucuna tasir.
         ///
-        /// Atolyede pim tezgahta sabit durur ve SOL EL ona gore ayarlanir; kaydedilen sey
-        /// "bilegin pime gore durusu" (<c>supportHand.fpWristLocal*</c>):
-        ///     bilekPoz = pimPoz + pimDonus * offsetPoz
-        ///     bilekDonus = pimDonus * offsetDonus
+        /// NEDEN OLCEK DUZELTMESI GEREKIYOR: pim bombadayken onun olcek zincirinde, elde
+        /// ise kemigin zincirinde. Ikisi ayni degil (cipa 0.080/0.045/0.130, kemik
+        /// tekduze 1.1), dolayisiyla hicbir sey yapmazsak pim cekilince buyur ya da
+        /// kuculur. Cihazda "cekilmeden onceki boyu ile cekildikten sonraki ayni degil"
+        /// denen sey buydu.
         ///
-        /// Oyunda ise elimizde BILEK var, pimi ariyoruz — yani ayni bagintinin TERSI:
-        ///     pimDonus = bilekDonus * offsetDonus⁻¹
-        ///     pimPoz   = bilekPoz  - pimDonus * offsetPoz
+        /// HEDEF, BOMBADAKI BOY. Sabit bir sayiya normalize etmek de denendi ve
+        /// reddedildi: pim modelin kendi orantisinda kalmali. pinDisplaySize sifirdan
+        /// farkli verilirse o boy zorlanir - yalnizca bir modelin pimi gercekten
+        /// orantisizsa kullanilmali.
         ///
-        /// NEDEN CIPAYA DEGIL DE BILEGE GORE: ayar birinci sahis elinin bilegine gore yapildi.
-        /// Kumanda cipasi ile bilek ayni yer degil (el modeli cipanin altinda, kendi
-        /// offsetiyle oturuyor); cipayi referans alsaydik ayarladigin poz oyunda kayardi.
+        /// IKI ADIMLI OLCUM: once olcek 1 iken gercek dunya boyu OLCULUR, sonra hedefe
+        /// bolunur. Modelin ic olceklerini ya da kemigin lossyScale'ini tahmin etmeye gerek
+        /// kalmaz - ne cikarsa ona gore duzeltilir.
         ///
-        /// Tutamak yine EL CIPASINA parent kalir — pim boylece uzak oyuncularin gordugu
-        /// avatarin elinde de durur. Burada yalnizca yerel poz cipa uzayina cevriliyor.
+        /// MERKEZ, ORIJIN DEGIL: tutamagin orijini bombanin orijinidir ve pim parcalari onun
+        /// icinde kendi offsetleriyle durur. Orijini kemige koymak pimi parmaga koymaz;
+        /// tasinmasi gereken sey GORUNEN kutlenin merkezi. (Ayni tuzak saat ekraninda da
+        /// yasandi.)
         /// </summary>
-        static bool PlaceFromWorkshopPose(Transform holder, Transform hand,
-                                          WeaponGripProfile profile, bool leftHand)
+        static void FitToBone(Transform holder, Transform bone, GrenadeConfig cfg, float ilkBoy)
         {
-            if (profile == null) return false;
+            Bounds b;
+            if (!WorldBounds(holder, out b)) return;
 
-            var hp = profile.supportHand;   // atolyede pim eli = SOL = destek eli
-            Vector3 offPos = hp.fpWristLocalPosition;
-            Quaternion offRot = hp.FpWristRotation;
-            if (offPos == Vector3.zero && offRot == Quaternion.identity) return false;  // ayarlanmamis
+            float boy = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
 
-            // Ayar SOL ele gore yazildi. Sag elle cekilirse aynalanir — silah tutuslarinda
-            // kullanilan kuralin aynisi.
-            if (!leftHand)
+            // HEDEF BOY: config sifirdan farkli bir deger ZORLAMIYORSA bombadaki boy.
+            // Kemige baglanmak olcek zincirini degistiriyor (cipa 0.080/0.045/0.130 iken
+            // kemik tekduze 1.1), telafi etmezsek pim cekilince buyuyor ya da kuculuyor.
+            float cfgHedef = cfg != null ? cfg.pinDisplaySize : 0f;
+            float hedef = cfgHedef > 0f ? cfgHedef : ilkBoy;
+            if (hedef > 0f && boy > 1e-5f)
             {
-                offPos = WeaponGripMath.MirrorX(offPos);
-                offRot = WeaponGripMath.MirrorX(offRot);
+                holder.localScale *= hedef / boy;
+                if (!WorldBounds(holder, out b)) return;   // olcek degisti, sinirlar da
             }
 
-            Transform wrist = FirstPersonHandView.FindWrist(hand, leftHand);
-            if (wrist == null) return false;   // uzak oyuncu: FP eli yok
-
-            Quaternion pinRot = wrist.rotation * Quaternion.Inverse(offRot);
-            Vector3 pinPos = wrist.position - pinRot * offPos;
-            holder.SetPositionAndRotation(pinPos, pinRot);
-            return true;
+            Vector3 nokta = bone.position
+                          + bone.rotation * (cfg != null ? cfg.pinFingerTipOffset : Vector3.zero);
+            holder.position += nokta - b.center;
         }
 
         /// <summary>
-        /// Pimi ISARET PARMAGININ UCUNA kancalar: gorsel merkezi parmak ucu isaretcisine
-        /// parent edilir — boylece parmak kivrildikce pim de onunla gider.
+        /// Bu dugumun altindaki mesh'lerin dunya sinir kutusu.
         ///
-        /// KONUMA/DONUSE DOKUNULMAZ. Once bu adim pimin gorsel merkezini zorla parmak
-        /// ucuna tasiyordu; sonuc, ATOLYEDE ayarlanan pozla cakisti (konumu kod, donusu
-        /// ayar belirleyince pim caprazlasip birkac cm kaydi). Nerede duracagina karar
-        /// veren tek yer atolye olmali — oyuncu onu panelden GOREREK ayarliyor, kod
-        /// tahmin yurutmemeli. Burasi yalnizca "hangi kemige bagli" sorusunu cevaplar.
+        /// RENDERER.BOUNDS KULLANILMIYOR — bilerek. Olculdu: yeni yaratilmis ve daha yeni
+        /// yeniden parent edilmis bir nesnede Renderer.bounds BOS donebiliyor (merkez sifir,
+        /// boyut sifir), cunku Unity onu bir sonraki cizime kadar tazelemiyor. Pim tam da
+        /// oyle bir anda olculuyor; bos sinirlarla merkezi kemige tasimak pimi metrelerce
+        /// oteye firlatirdi.
         ///
-        /// Ince ayar icin GrenadeConfig.pinFingerTipOffset var: parmak ucu kemiginin
-        /// uzayinda kucuk bir kaydirma, Play modunda canli surukleyerek denenebilir.
-        ///
-        /// Uzak oyuncuda FP eli yoktur, kemik bulunamaz ve false doner — pim eski
-        /// haliyle el cipasina bagli kalir.
+        /// Onun yerine mesh'in KENDI sinir kutusunun sekiz kosesi transform ile dunyaya
+        /// tasiniyor. Bu her zaman dogru, cunku hicbir onbellege dayanmiyor.
         /// </summary>
-        static bool HookOnIndexTip(Transform holder, Transform hand, bool leftHand,
-                                   GrenadeConfig cfg)
+        static bool WorldBounds(Transform t, out Bounds b)
         {
-            Transform tip = IndexTip(hand, leftHand);
-            if (tip == null) return false;
-
-            holder.SetParent(tip, true);   // DUNYA durusu korunur: atolye ayari aynen kalir
-            if (cfg != null && cfg.pinFingerTipOffset != Vector3.zero)
-                holder.localPosition += cfg.pinFingerTipOffset;   // parmak ucu uzayinda ince ayar
-            return true;
+            b = new Bounds();
+            bool any = false;
+            foreach (var mf in t.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var mesh = mf.sharedMesh;
+                if (mesh == null) continue;
+                Bounds lb = mesh.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 k = lb.center + Vector3.Scale(lb.extents, new Vector3(
+                        (i & 1) == 0 ? -1f : 1f,
+                        (i & 2) == 0 ? -1f : 1f,
+                        (i & 4) == 0 ? -1f : 1f));
+                    Vector3 w = mf.transform.TransformPoint(k);
+                    if (!any) { b = new Bounds(w, Vector3.zero); any = true; }
+                    else b.Encapsulate(w);
+                }
+            }
+            return any;
         }
 
         /// <summary>Isaret parmagi ucu. Meta elinde gercek bir ucu isaretcisi var; yoksa
@@ -233,9 +263,14 @@ namespace VRMultiplayer.Weapons
         static Transform IndexTip(Transform hand, bool leftHand)
         {
             string s = leftHand ? "l" : "r";
-            var t = FirstPersonHandView.FindBone(hand, s + "_index_finger_tip_marker");
-            if (t == null) t = FirstPersonHandView.FindBone(hand, "b_" + s + "_index_null");
+            // ISARET PARMAGININ DISTAL UCU. Istenen kemik "Left_IndexDistalEnd" diye soylendi
+            // ama o ad FP_Hands.fbx'e (askerin eski eli) ait; oyunda kosan model META eli ve
+            // karsiligi "b_l_index_null". Olculdu: Left_* kemikleri calisma aninda YOK.
+            var t = FirstPersonHandView.FindBone(hand, "b_" + s + "_index_null");
+            if (t == null) t = FirstPersonHandView.FindBone(hand, s + "_index_finger_tip_marker");
             if (t == null) t = FirstPersonHandView.FindBone(hand, "b_" + s + "_index3");
+            if (t == null) t = FirstPersonHandView.FindBone(hand, leftHand ? "Left_IndexDistalEnd"
+                                                                          : "Right_IndexDistalEnd");
             return t;
         }
     }
