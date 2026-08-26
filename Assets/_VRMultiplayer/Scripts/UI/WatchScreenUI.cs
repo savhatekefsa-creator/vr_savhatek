@@ -110,11 +110,13 @@ namespace VRMultiplayer
             }
 
             // SONSUZ SEMBOLU AYRI OLCEKLENIR. "∞" glifi rakamlarin ucte biri yuksekligindedir;
-            // ayni fontSize'da 1.3 mm'de kalip okunmaz hale geliyordu. Okunacak bir SAYI degil
-            // taninacak bir SEMBOL oldugu icin buyutmek duzeni bozmaz — tek karakter, dar.
+            // ayni fontSize'da okunmaz hale geliyordu. Okunacak bir SAYI degil taninacak bir
+            // SEMBOL oldugu icin buyutmek duzeni bozmaz — tek karakter, dar. Ayni sey
+            // "silah yok" cizgisi icin de gecerli.
             string ammo = AmmoText();
             _ammo.text = ammo;
-            _ammo.fontSize = ammo == "∞" ? TextFontSize * 2.2f : TextFontSize;
+            _ammo.fontSize = (ammo == "∞" || ammo == NoWeaponAmmo)
+                           ? TextFontSize * 2.2f : TextFontSize;
 
             // Kisisel skor. Mac/tur mantigi YOK — yalnizca bu oturumdaki sayac.
             _kd.text = _identity != null
@@ -136,12 +138,21 @@ namespace VRMultiplayer
             return lvl < 0f ? batteryPercent : Mathf.RoundToInt(lvl * 100f);
         }
 
-        /// <summary>Elindeki silah mermi sayıyorsa gerçek sayı; saymıyorsa (silahsızsın ya da
-        /// o silahta şarjör kapalı) eskisi gibi ∞.</summary>
+        /// <summary>Elde silah yokken mermi alanina yazilan sey. Sayi DEGIL, "veri yok"
+        /// isareti — 0 yazmak "sarjorun bos" demek olurdu ve o baska bir durum.</summary>
+        const string NoWeaponAmmo = "---";
+
+        /// <summary>Elindeki silah mermi sayıyorsa gerçek sayı; saymıyorsa ∞; elin bossa
+        /// <see cref="NoWeaponAmmo"/>.</summary>
         string AmmoText()
         {
             var w = HeldWeapon();
-            if (w == null || !w.UsesAmmo) return "∞";
+            // ELDE SILAH YOKKEN SONSUZ YAZMAK MANTIK HATASIYDI: "sinirsiz mermin var" demek
+            // oluyordu, oysa ortada silah bile yok. Iki durum ayrildi:
+            //   silah YOK          -> cizgi (bilgi yok)
+            //   silah var, saymiyor -> sonsuz (gercekten sinirsiz)
+            if (w == null) return NoWeaponAmmo;
+            if (!w.UsesAmmo) return "∞";
             if (w.IsReloading) return "···";
             return w.Ammo.ToString();
         }
@@ -238,8 +249,13 @@ namespace VRMultiplayer
             // ALT SATIR EN KOTU DURUMA GORE: mermi "120" olabilir. 0.44'te genisligi 0.987
             // birime cikip pilin uzerine 0.060 biniyordu (olculdu). 0.40 + pil 0.23 ile
             // aralarinda 1.7 mm bosluk kaliyor ve ikisi de okuma esiginin uzerinde.
-            _ammo    = MakeText(_face, "∞",         new Vector3(-0.72f, -0.33f, 0f), TextAnchor.MiddleLeft,  ScreenText,  0.37f);
-            _battery = MakeText(_face, "84%",       new Vector3( 0.72f, -0.33f, 0f), TextAnchor.MiddleRight, Muted,       0.23f);
+            // MERMI ETIKETI GERI GELDI, ama YAN YANA degil UST USTE. Yan yana koymak sayinin
+            // boyutundan calıyordu; ustune koyunca ikisi de yerini koruyor ve "bu sayi nedir"
+            // sorusu kalmiyor. Cihazda "ya mermi sembolu gelsin ya ustte MERMI yazsin altta
+            // sayisi" dendi — ikincisi.
+            MakeText(_face, "MERMI",                new Vector3(-0.72f, -0.215f, 0f), TextAnchor.MiddleLeft,  Muted,       0.17f);
+            _ammo    = MakeText(_face, "∞",         new Vector3(-0.72f, -0.455f, 0f), TextAnchor.MiddleLeft,  ScreenText,  0.30f);
+            _battery = MakeText(_face, "84%",       new Vector3( 0.72f, -0.350f, 0f), TextAnchor.MiddleRight, Muted,       0.23f);
 
             Refresh();
         }

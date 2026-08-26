@@ -127,11 +127,26 @@ namespace VRMultiplayer.UI
         /// sayiyi kucultmek degil, mesh'i degistirmek.</summary>
         const float ScreenClearance = 0.0012f;
 
-        /// <summary>Kasanin kol ekseninde OTURACAGI merkez (m; negatif = dirsege dogru).
-        /// Cihazda "saat bilege yapismak zorunda degil, biraz gerisinde durabilir" dendi:
-        /// -0.5 cm'den -2.2 cm'ye cekildi, yani kasa artik el sirtina hic tasmiyor, tamamen
-        /// bilegin gerisinde. Sifir yaparsan saat elin sirtina kayar.</summary>
-        const float CaseCenterAlongArm = -0.022f;
+        /// <summary>
+        /// Kasanin kol ekseninde OTURACAGI merkez (m; negatif = dirsege dogru).
+        ///
+        /// OLCULDU (bilek kemigi = 0, negatif = dirsege dogru):
+        ///   Meta el mesh'i : -2.2 .. 19.0 cm  — yani ON KOL YOK, mesh -2.2'de BITER
+        ///   Kasa mesh'i    : 5.3 cm boyunda (eldiven manseti dahil, saf saat degil)
+        ///
+        /// -2.2 cm'de kasa -4.8 .. 0.4 arasini kapliyordu: ekranin TAMAMI (-4.2 .. -0.7)
+        /// mesh'in bittigi noktanin otesinde, havada kaliyordu. Cihazda "saat kadrani
+        /// bilekten disarida gorunuyor, kesigin disinda kaliyor" denen sey buydu.
+        ///
+        /// -0.4 cm'de ekran -2.4 .. 1.1 araligina geliyor, yani kesigin yalnizca 2 mm
+        /// disina tasiyor — pratikte icerde. Kasanin ARKA ucundan 0.8 cm hala bosta ama
+        /// orasi mansetin ucu, kadran degil.
+        ///
+        /// TAM ICERI ALMAK MUMKUN DEGIL: kasa 5.3 cm, mesh'in sundugu on kol 2.2 cm. Daha
+        /// ileri itmek (0'a dogru) kadrani elin SIRTINA kaydirir. Kalici cozum daha kisa
+        /// bir saat mesh'i.
+        /// </summary>
+        const float CaseCenterAlongArm = -0.004f;
 
         /// <summary>
         /// Kasanin KADRAN normali (mesh-yerel). Ust yuzeyi olusturan ucgenlerin ALAN

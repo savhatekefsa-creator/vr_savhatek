@@ -1026,7 +1026,7 @@ namespace VRMultiplayer
                 // KEMERE KOYMAK BILINCLI BIR HAREKETTIR.
                 //
                 //   1) Avuc bir HALKANIN uzerindeyken birakmak -> silah O yuvaya girer.
-                //   2) Baska her yerde birakmak            -> silah YERE birakilir.
+                //   2) Baska her yerde birakmak            -> silah YOK OLUR.
                 //
                 // NEDEN (2) BOYLE: envanterin varlik sebebi oyuncunun YANINDA TASIMAK
                 // ISTEDIGI silahlari secmesi. Eski kural bunu bozuyordu: bosluga birakilan
@@ -1040,10 +1040,13 @@ namespace VRMultiplayer
                 // "evet ise silah kemere girer, hayir ise yere duser". Uygulama sonradan
                 // sapmisti.)
                 //
-                // YERE BIRAKMAK FIRLATMAK DEGILDIR: el hizi UYGULANMAZ (bkz. asagida
-                // Vector3.zero). Cihazda reddedilen sey silahin elden savrulmasiydi;
-                // ayaga birakmak o degil. Pimi cekilmis bomba yukarida ayri dallandi,
-                // o hala el hiziyla firlar.
+                // (2) NEDEN YOK OLUYOR, YERE DUSMUYOR: bir ara yere birakmayi denedik ve
+                // cihazda REDDEDILDI ("halkalardan birine koymuyorsam grip'i birakinca yok
+                // olsun, yere dusmesin"). Yerde biriken silahlar hem gorsel kirlilik hem de
+                // ag uzerinde yasayan nesne demek. Kural boylece tek cumleye iniyor: bir
+                // silahi TUTMAK istiyorsan ya elinde ya kemerinde olacak.
+                //
+                // Pimi cekilmis bomba yukarida AYRI dallandi — o hala el hiziyla firlar.
                 var cat = Weapons.WeaponInventory.CategoryOf(Weapons.WeaponInventory.TypeKey(g));
                 var inv = Weapons.WeaponInventory.Instance;
                 int slot = -1;
@@ -1067,8 +1070,7 @@ namespace VRMultiplayer
                         RejectBuzz(h);
                     }
                 }
-                g.ApplyThrow(Vector3.zero, Vector3.zero);   // birak, FIRLATMA
-                g.ReleaseServerRpc();
+                RequestWeaponSwap(g, null);   // halkaya konmadi -> silah gider
                 return;
             }
 
