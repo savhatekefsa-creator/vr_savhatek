@@ -145,6 +145,12 @@ namespace VRMultiplayer.Weapons
                 holder.localPosition = cfg != null ? cfg.pinHandLocalPosition : Vector3.zero;
                 holder.localRotation = Quaternion.Euler(cfg != null ? cfg.pinHandLocalEuler : Vector3.zero);
             }
+
+            // Poz oturduktan SONRA pimi isaret parmaginin ucuna kancala. Yukaridaki
+            // yerlestirme pimin DONUSUNU verir, bu adim da onu parmak ucuna oturtup
+            // parmaga bagli hale getirir. Basarisiz olursa (uzak oyuncu: FP eli yok)
+            // eski davranis aynen kalir.
+            HookOnIndexTip(holder, hand, leftHand, cfg);
             return holder;
         }
 
@@ -192,6 +198,45 @@ namespace VRMultiplayer.Weapons
             Vector3 pinPos = wrist.position - pinRot * offPos;
             holder.SetPositionAndRotation(pinPos, pinRot);
             return true;
+        }
+
+        /// <summary>
+        /// Pimi ISARET PARMAGININ UCUNA kancalar: gorsel merkezi parmak ucu isaretcisine
+        /// parent edilir — boylece parmak kivrildikce pim de onunla gider.
+        ///
+        /// KONUMA/DONUSE DOKUNULMAZ. Once bu adim pimin gorsel merkezini zorla parmak
+        /// ucuna tasiyordu; sonuc, ATOLYEDE ayarlanan pozla cakisti (konumu kod, donusu
+        /// ayar belirleyince pim caprazlasip birkac cm kaydi). Nerede duracagina karar
+        /// veren tek yer atolye olmali — oyuncu onu panelden GOREREK ayarliyor, kod
+        /// tahmin yurutmemeli. Burasi yalnizca "hangi kemige bagli" sorusunu cevaplar.
+        ///
+        /// Ince ayar icin GrenadeConfig.pinFingerTipOffset var: parmak ucu kemiginin
+        /// uzayinda kucuk bir kaydirma, Play modunda canli surukleyerek denenebilir.
+        ///
+        /// Uzak oyuncuda FP eli yoktur, kemik bulunamaz ve false doner — pim eski
+        /// haliyle el cipasina bagli kalir.
+        /// </summary>
+        static bool HookOnIndexTip(Transform holder, Transform hand, bool leftHand,
+                                   GrenadeConfig cfg)
+        {
+            Transform tip = IndexTip(hand, leftHand);
+            if (tip == null) return false;
+
+            holder.SetParent(tip, true);   // DUNYA durusu korunur: atolye ayari aynen kalir
+            if (cfg != null && cfg.pinFingerTipOffset != Vector3.zero)
+                holder.localPosition += cfg.pinFingerTipOffset;   // parmak ucu uzayinda ince ayar
+            return true;
+        }
+
+        /// <summary>Isaret parmagi ucu. Meta elinde gercek bir ucu isaretcisi var; yoksa
+        /// son boguma dusulur.</summary>
+        static Transform IndexTip(Transform hand, bool leftHand)
+        {
+            string s = leftHand ? "l" : "r";
+            var t = FirstPersonHandView.FindBone(hand, s + "_index_finger_tip_marker");
+            if (t == null) t = FirstPersonHandView.FindBone(hand, "b_" + s + "_index_null");
+            if (t == null) t = FirstPersonHandView.FindBone(hand, "b_" + s + "_index3");
+            return t;
         }
     }
 }

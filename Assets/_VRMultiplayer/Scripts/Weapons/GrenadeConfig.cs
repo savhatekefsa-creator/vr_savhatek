@@ -86,6 +86,11 @@ namespace VRMultiplayer.Weapons
         public Vector3 pinHandLocalPosition = Vector3.zero;
         [Tooltip("Pimin elde durus acisi (el anchor'ina gore lokal euler).")]
         public Vector3 pinHandLocalEuler = Vector3.zero;
+        [Tooltip("Pim ISARET PARMAGININ UCUNA kancalanir; bu alan o noktadan ince ayar " +
+                 "kaydirmasidir (parmak ucu kemigine gore lokal, metre). Sifir = pimin " +
+                 "GORSEL MERKEZI tam parmak ucunda. Halka parmagin icine giriyorsa birkac " +
+                 "milimetre disari alin.")]
+        public Vector3 pinFingerTipOffset = Vector3.zero;
         [Tooltip("Pimi cekmek icin bos elin bombaya yaklasmasi gereken mesafe (m). " +
                  "Bombanin YUZEYINE (bounds) olculur. 0.45 idi — kolun yarisi kadar, yani " +
                  "bombaya bakmadan basilan her grip pimi cekiyordu. 0.07 = eli gercekten " +

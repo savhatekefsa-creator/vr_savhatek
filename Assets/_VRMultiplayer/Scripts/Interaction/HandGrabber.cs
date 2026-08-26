@@ -55,6 +55,12 @@ namespace VRMultiplayer
         /// sinirindayken saniyede birkac kez tutunup koparadi (histerezis).</summary>
         const float SupportBreakReach = 0.28f;
 
+        /// <summary>Grip BASILI tutulurken "uzaktasin" titresiminin tekrar araligi.
+        /// Her kare darbe gondermek (72-90 Hz) darbeleri ust uste bindirip surekli bir
+        /// ugultuya cevirir ve motoru doyurur; ~7 Hz'lik nabiz ise ayirt edilebilir bir
+        /// "hayir, hala uzaktasin" sinyali olarak okunur.</summary>
+        const float MissBuzzInterval = 0.15f;
+
         class HandState
         {
             public Transform anchor;
@@ -65,6 +71,7 @@ namespace VRMultiplayer
             public GrabbableObject supporting; // two-hand aim: this hand steadies the OTHER hand's weapon
             public WeaponGrip supportGrip;     // cached profile component of `supporting` (null = legacy)
             public Collider[] supportCols;     // supporting'in collider'lari (engage aninda cache — tutus boyunca degismezler)
+            public float nextMissBuzz;         // "uzaktasin" nabzinin bir sonraki darbesi (grip basili tutulurken)
             public float nextSupportCheck;     // birakma-mesafesi kontrolunun bir sonraki calisma zamani (~10 Hz)
             public WeaponGrip grip;            // cached profile component of `held` (null = legacy path)
             public Vector3 aimDir;             // filtered two-hand aim direction (zero = not engaged)
@@ -499,6 +506,21 @@ namespace VRMultiplayer
             else if (!grip && h.prevGrip) Release(h);
             h.prevGrip = grip;
 
+            // GRIP BASILI TUTULURKEN: el destek ankrajinin menzili disindaysa titresim
+            // TEKRARLAR. Tek seferlik darbe "galiba bir sey olmadi" diye okunuyordu;
+            // suregelen nabiz "hala uzaktasin" der ve oyuncu grip'i birakmadan elini
+            // yaklastirip duzeltebilir - yaklasinca nabiz kesilir, tutunma gerceklesir.
+            // Ust sinir yine kopma esigi: ondan da uzaktaysa oyuncu silaha uzanmiyordur.
+            if (!grip) h.nextMissBuzz = 0f;
+            else
+            {
+                bool viaAnchorIgnored;
+                float miss = SupportReachDistance(h, out viaAnchorIgnored);
+                if (miss >= SupportEngageReach && miss < SupportBreakReach
+                    && Time.time >= h.nextMissBuzz)
+                    RejectBuzz(h);   // kadansi RejectBuzz'in kendisi damgalar
+            }
+
             // Two-hand support is only valid while the other hand truly holds that object.
             if (h.supporting != null && h.supporting.HolderClientId != NetworkManager.LocalClientId)
             {
@@ -771,17 +793,46 @@ namespace VRMultiplayer
         void RejectBuzz(HandState h)
         {
             if (h == null) return;
+            h.nextMissBuzz = Time.time + MissBuzzInterval;
             var dev = InputDevices.GetDeviceAtXRNode(h.node);
             if (dev.isValid) dev.SendHapticImpulse(0, 0.3f, 0.04f);
         }
 
-        /// <summary>Bu kategoriyi kabul eden ILK yuva (yoksa -1). Halkalara bakmadan birakilan
-        /// silah buraya gider — eski "cantaya girdi" davranisinin karsiligi.</summary>
-        static int FirstFreeSlot(Weapons.WeaponInventory inv, Weapons.WeaponCategory cat)
+        /// <summary>"Kemere girdi" onayi. Silahin kemere gitmesi SESSIZ oluyordu ve
+        /// kurali gorunmez kiliyordu: oyuncu elindeki silahi birakiyor, silah kayboluyor,
+        /// sonra kemerinde buluyor ve oraya nasil geldigini bilmiyordu. Kisa bir darbe
+        /// bagi kuruyor.
+        ///
+        /// RED titresiminden AYIRT EDILEBILIR olmali, yoksa ikisi karisir: red
+        /// kisa+sert (0.30/0.04) "hayir" diye keser, onay yumusak+uzun (0.20/0.09)
+        /// "tamam" diye siger.</summary>
+        void ConfirmBuzz(HandState h)
         {
-            for (int i = 0; i < Weapons.WeaponInventory.SlotCount; i++)
-                if (inv.CanPlace(cat, i)) return i;
-            return -1;
+            if (h == null) return;
+            var dev = InputDevices.GetDeviceAtXRNode(h.node);
+            if (dev.isValid) dev.SendHapticImpulse(0, 0.2f, 0.09f);
+        }
+
+        /// <summary>
+        /// Bu elin destek olmayi DENEYEBILECEGI durumda ankraja uzakligi; ortada boyle bir
+        /// deneme yoksa -1.
+        ///
+        /// Tutunma kapisi (<see cref="TryGrab"/>) ve grip basili tutulurken calisan
+        /// "uzaktasin" nabzi bu TEK olcuyu paylasir. Ayri hesaplansalardi biri digerinden
+        /// kayabilir ve "titremiyor ama tutunmuyor da" diye sessiz bir bant olusurdu.
+        /// </summary>
+        float SupportReachDistance(HandState h, out bool viaAnchor)
+        {
+            viaAnchor = false;
+            if (h == null || h.held != null || h.supporting != null || h.pinFrom != null) return -1f;
+            var o = Other(h);
+            if (o == null || o.held == null || !o.confirmed || !o.held.snapToHand) return -1f;
+            // Bomba destek eliyle tutulmaz; onun yolu pim cekmedir (bkz. TryGrab).
+            if (o.held.GetComponent<GrenadeController>() != null) return -1f;
+            float sd = AnchorDistance(o.held, o.grip, h.anchor.position);
+            viaAnchor = sd >= 0f;
+            if (!viaAnchor) sd = NearestColliderDistance(o.held, Probe(h), useBounds: false);
+            return sd;
         }
 
         void TryGrab(HandState h)
@@ -828,11 +879,12 @@ namespace VRMultiplayer
             // NERESINE yakin oldugunu umursamiyordu — namlu ucunda duran el de "destek eli"
             // sayilip silahi cekistiriyordu. Ankraj mesafesi dogru tutusta tanim geregi 0'dir.
             // Ankraj yazilmamis profillerde (eski/profilsiz silah) yuzey olcusune duser.
-            if (o != null && o.held != null && o.confirmed && o.held.snapToHand && grenade == null)
+            // Kapiya takilan denemenin mesafesi: asagidaki "neden olmadi" titresimi icin
+            // saklanir. -1 = ortada bir destek eli denemesi hic yoktu.
+            float supportMiss = -1f;
             {
-                float sd = AnchorDistance(o.held, o.grip, h.anchor.position);
-                bool viaAnchor = sd >= 0f;
-                if (!viaAnchor) sd = NearestColliderDistance(o.held, Probe(h), useBounds: false);
+                bool viaAnchor;
+                float sd = SupportReachDistance(h, out viaAnchor);
                 if (sd >= 0f && sd < SupportEngageReach)
                 {
                     h.supporting = o.held;
@@ -848,6 +900,7 @@ namespace VRMultiplayer
                     h.nextSupportCheck = 0f;
                     return;
                 }
+                supportMiss = sd;   // kapiya takildi: mesafeyi asagiya tasi
             }
 
             GrabbableObject best = null;
@@ -870,7 +923,16 @@ namespace VRMultiplayer
             }
             if (best == null)
             {
-                if (leftBannedNearby) RejectBuzz(h); // "olmaz" geri bildirimi, sessiz kalmasin
+                // "olmaz" geri bildirimi, sessiz kalmasin. Iki ayri sebep, TEK desen:
+                //   1) sol el ana tutus yasagina takildi
+                //   2) destek eli denendi ama el ankrajdan UZAKTI (SupportEngageReach disi)
+                // Oyuncu ikisini de ayni kisa-zayif titresim olarak okur; yeni bir his
+                // ogrenmesi gerekmez. (2) icin UST sinir kopma esigi: ondan da uzaktaysa
+                // oyuncu silaha uzanmiyordur, boslukta grip'e basmistir ve titretmek
+                // gurultu olur. Alt sinir zaten SupportEngageReach: icindeyse tutundu.
+                if (leftBannedNearby
+                    || (supportMiss >= SupportEngageReach && supportMiss < SupportBreakReach))
+                    RejectBuzz(h);
                 return;
             }
             Adopt(h, best);
@@ -961,34 +1023,52 @@ namespace VRMultiplayer
                     return;
                 }
 
-                // SILAH KEMERE GIDER — YERE DUSMEZ.
+                // KEMERE KOYMAK BILINCLI BIR HAREKETTIR.
                 //
-                // Kisa bir sure fiziksel dusurme denendi ve cihazda REDDEDILDI ("silahlarin
-                // fiziksel atilisini iptal edelim, envantere gondersin yine"). Silahlar
-                // birakilinca kemere doner; nereye dondugu tek kurala bagli:
+                //   1) Avuc bir HALKANIN uzerindeyken birakmak -> silah O yuvaya girer.
+                //   2) Baska her yerde birakmak            -> silah YERE birakilir.
                 //
-                //   1) El bir HALKANIN uzerindeyse -> O yuvaya (oyuncunun secimi).
-                //   2) Degilse -> yer olan ILK yuvaya (eski "cantaya girdi" davranisi).
+                // NEDEN (2) BOYLE: envanterin varlik sebebi oyuncunun YANINDA TASIMAK
+                // ISTEDIGI silahlari secmesi. Eski kural bunu bozuyordu: bosluga birakilan
+                // silah yer olan ILK yuvaya kendiliginden giriyor, kemer oyuncunun sectigi
+                // degil ELINE NE GECTIYSE onunla doluyordu. Dahasi kemerden bir sey
+                // CIKARMAK imkansizdi: cikardigin silahi birakinca aninda geri giriyordu,
+                // yani yuva hicbir zaman bosalmiyordu. Halka artik hem "koy" hem de
+                // "koyma" demenin yolu.
                 //
-                // Hicbir yuva kabul edemiyorsa (kota dolu) silah yine de yok olur; elde
-                // kalsaydi grip birakildigi halde silah elde kalir ve oyuncu "birakamiyorum"
-                // derdi. Kaybi gorunur kilmak icin uyari yaziliyor.
+                // (Bu zaten ASIL tasarimdi: bkz. WeaponBeltUI.PlacementSlot dokumantasyonu,
+                // "evet ise silah kemere girer, hayir ise yere duser". Uygulama sonradan
+                // sapmisti.)
+                //
+                // YERE BIRAKMAK FIRLATMAK DEGILDIR: el hizi UYGULANMAZ (bkz. asagida
+                // Vector3.zero). Cihazda reddedilen sey silahin elden savrulmasiydi;
+                // ayaga birakmak o degil. Pimi cekilmis bomba yukarida ayri dallandi,
+                // o hala el hiziyla firlar.
                 var cat = Weapons.WeaponInventory.CategoryOf(Weapons.WeaponInventory.TypeKey(g));
                 var inv = Weapons.WeaponInventory.Instance;
+                int slot = -1;
                 if (inv != null)
                 {
-                    int slot = UI.WeaponBeltUI.PlacementSlot(Probe(h), cat);
-                    if (slot < 0) slot = FirstFreeSlot(inv, cat);
+                    slot = UI.WeaponBeltUI.PlacementSlot(Probe(h), cat);
                     // Mermi durumu Place() icinde OKUNUR; despawn ondan SONRA olmali.
                     if (slot >= 0 && inv.Place(g, slot) != null)
                     {
                         RequestWeaponSwap(g, null);   // gercek silah yok olur, kemerde onizleme kalir
+                        ConfirmBuzz(h);               // kural ancak hissedilirse ogrenilir
                         return;
                     }
-                    Debug.LogWarning($"[Kemer] '{cat}' kotasi dolu — birakilan {g.name} kemere " +
-                                     "sigmadi ve yok edildi.");
+                    // Halkanin UZERINDEYDI ama kabul edilmedi (kota/yuva dolu): oyuncu
+                    // koymak ISTEDI ve olmadi, bunu bilmeli. Halkanin disinda birakmak
+                    // ise zaten "koymak istemiyorum" demek — orada titretmek gurultu olur.
+                    if (slot >= 0)
+                    {
+                        Debug.LogWarning($"[Kemer] '{cat}' kotasi dolu — {g.name} yuvaya " +
+                                         "sigmadi, yere birakildi.");
+                        RejectBuzz(h);
+                    }
                 }
-                RequestWeaponSwap(g, null);
+                g.ApplyThrow(Vector3.zero, Vector3.zero);   // birak, FIRLATMA
+                g.ReleaseServerRpc();
                 return;
             }
 

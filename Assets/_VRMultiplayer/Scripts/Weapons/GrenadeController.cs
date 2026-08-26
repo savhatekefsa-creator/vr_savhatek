@@ -49,6 +49,14 @@ namespace VRMultiplayer.Weapons
         bool _exploded;    // gizleme/fx bir kez
         ulong _lastHolder = GrabbableObject.NoHolder; // sunucuda: patlamanin saldirgani
         Transform _pinHolder; // ayrilmis pim (cekenin elinde); null = pim hala bombada
+        // Pim ISARET PARMAGININ UCUNA kancalandi mi, ve kancalandiysa oradaki lokal durusu.
+        // LateUpdate'in bunu bilmesi SART: eskiden her kare config'in ham degerlerini
+        // yaziyordu ve kancayi (ayrica atolyede ayarlanan pozu da) eziyordu — pim elin
+        // 8-13 cm otesinde kaliyordu, cunku ele oturan sey tutamagin ORIJINI idi, pimin
+        // gorunen kutlesi degil.
+        bool _pinHooked;
+        Vector3 _pinLocalPos;
+        Quaternion _pinLocalRot = Quaternion.identity;
 
         /// <summary>Pim cekildi mi — HandGrabber bunu okuyup birakisin cantaya mi yoksa
         /// firlatmaya mi gidecegine karar verir.</summary>
@@ -176,6 +184,18 @@ namespace VRMultiplayer.Weapons
             // asset'indeki pinHandLocal* degerlerini surukleyerek pimi canli ayarlayabilirsin.
             // Asset bir ScriptableObject oldugu icin degerler Play'den cikinca da korunur.
             if (_pinHolder == null || _cfg == null) return;
+
+            if (_pinHooked)
+            {
+                // Parmak ucuna kancalanmis pim: kancanin hesapladigi lokal durus korunur,
+                // canli ayar artik pinFingerTipOffset uzerinden yapilir (o da parmak ucu
+                // kemiginin uzayinda oldugu icin dogrudan lokal konuma eklenebilir).
+                _pinHolder.localPosition = _pinLocalPos + _cfg.pinFingerTipOffset;
+                _pinHolder.localRotation = _pinLocalRot;
+                return;
+            }
+
+            // Kancalanamadi (uzak oyuncu: FP eli yok) — eski davranis birebir korunur.
             _pinHolder.localPosition = _cfg.pinHandLocalPosition;
             _pinHolder.localRotation = Quaternion.Euler(_cfg.pinHandLocalEuler);
         }
@@ -238,6 +258,7 @@ namespace VRMultiplayer.Weapons
             {
                 if (_pinHolder != null) Destroy(_pinHolder.gameObject);
                 _pinHolder = null;
+                _pinHooked = false;
                 return;
             }
 
@@ -254,6 +275,18 @@ namespace VRMultiplayer.Weapons
                 _pinHolder = GrenadePin.DetachTo(transform, anchor, _cfg,
                                                  grip != null ? grip.Profile : null,
                                                  hand == 0);
+
+                // Kancalandi mi? GrenadePin basarili olursa tutamagi EL CIPASINDAN alip
+                // parmak ucu kemigine tasir; parent'in degismis olmasi bunun tek ve
+                // bagimsiz gostergesi. Lokal durusu simdi saklariz, LateUpdate her kare
+                // onu geri yazsin (config offseti canli ayar icin ustune eklenir).
+                _pinHooked = _pinHolder != null && _pinHolder.parent != anchor;
+                if (_pinHooked)
+                {
+                    _pinLocalPos = _pinHolder.localPosition
+                                 - (_cfg != null ? _cfg.pinFingerTipOffset : Vector3.zero);
+                    _pinLocalRot = _pinHolder.localRotation;
+                }
             }
             else
                 Debug.LogWarning("[Bomba] Pimi cekenin eli bulunamadi — pim bombada birakildi.");
