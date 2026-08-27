@@ -79,7 +79,12 @@ namespace VRMultiplayer.Weapons
         public void SetHand(bool left, Transform weapon, WeaponGripProfile profile,
             bool isSupport, bool mirrored)
         {
-            var pose = isSupport ? profile.supportHand : profile.mainHand;
+            // POZ SECIMI VE AYNALAMA TEK KARARDIR. Silah ters elde tutuluyorsa profilde o
+            // duruma AYRI bir poz yazilmis olabilir; o zaman aynalanmaz, oldugu gibi kullanilir.
+            // Yazilmamissa eski yola dusulur (sag-el pozunu aynala). Ikisini ayri yerlerde
+            // karar vermek, elin silahin icinde durmasina yol acardi.
+            bool poseMirror;
+            var pose = profile.PoseFor(isSupport, mirrored, out poseMirror);
             // WeaponGrip re-applies on every replicated state change — keep an in-progress
             // engage ramp instead of restarting it, but a fresh weld (or a re-grab caught
             // mid-fade-out) ramps in from now.
@@ -93,8 +98,8 @@ namespace VRMultiplayer.Weapons
                 bone = left ? _leftBone : _rightBone,
                 gripLocalPos = mirrored ? WeaponGripMath.MirrorX(profile.gripLocalPosition) : profile.gripLocalPosition,
                 gripLocalRot = mirrored ? WeaponGripMath.MirrorX(profile.GripLocalRotation) : profile.GripLocalRotation,
-                wristLocalPos = mirrored ? WeaponGripMath.MirrorX(pose.wristLocalPosition) : pose.wristLocalPosition,
-                wristLocalRot = mirrored ? WeaponGripMath.MirrorX(Quaternion.Euler(pose.wristLocalEuler)) : Quaternion.Euler(pose.wristLocalEuler),
+                wristLocalPos = poseMirror ? WeaponGripMath.MirrorX(pose.wristLocalPosition) : pose.wristLocalPosition,
+                wristLocalRot = poseMirror ? WeaponGripMath.MirrorX(Quaternion.Euler(pose.wristLocalEuler)) : Quaternion.Euler(pose.wristLocalEuler),
                 mirrored = mirrored,
                 // Fade-out ORTASINDA yakalanan yeniden tutus: ramp sifirdan baslasaydi agirlik
                 // o karede (or.) 0.4'ten 0'a dusup bilek bir karelik IK pozuna sicrardi.

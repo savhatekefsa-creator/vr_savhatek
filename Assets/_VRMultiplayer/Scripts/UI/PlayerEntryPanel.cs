@@ -34,6 +34,8 @@ namespace VRMultiplayer.UI
         public const string ActionStart  = "start";
         public const string ActionRandom = "random";
         public const string ActionClear  = "clear";
+        public const string ActionHandR  = "hand_right";
+        public const string ActionHandL  = "hand_left";
 
         /// <summary>Eylem tusuna basildi (yukaridaki sabitlerden biri).</summary>
         public event Action<string> ActionPressed;
@@ -116,6 +118,13 @@ namespace VRMultiplayer.UI
 
         static readonly Color Hint       = UITheme.TextMuted;
         static readonly Color SectionLbl = new Color(0.42f, 0.48f, 0.53f, 1f);
+
+        // Tetik eli kartlari NOTR renkte: takim kartlari gibi anlam tasiyan bir renkleri
+        // yok, secili olan camgobegiyle one cikiyor (baslat dugmesinin aktif rengiyle ayni
+        // aile) ve seciliyken Paint zaten kenar rengine dogru harmanliyor.
+        static readonly Color HandEdge  = UITheme.AccentCyan;
+        static readonly Color HandFill  = new Color(0.070f, 0.098f, 0.118f, 1f);
+        static readonly Color HandText  = new Color(0.86f, 0.93f, 0.96f, 1f);
         static readonly Color HoverCol   = new Color(0.35f, 0.62f, 0.75f, 0.30f);
 
         // ------------------------------------------------------------------ ogeler
@@ -127,7 +136,8 @@ namespace VRMultiplayer.UI
             public string action;      // null ve ch=='\0' ve team==0 ise tiklanamaz
             public byte team;          // 0 = takim karti degil
             public TextMesh label;
-            public TextMesh sub;       // takim kartinin alt yazisi ("Takım" / "SEÇİLDİ")
+            public TextMesh sub;       // secim kartinin alt yazisi (bos durumda subIdle)
+            public string subIdle;     // secili DEGILKEN yazan sey ("Takım" / "El")
             public Material fillMat, borderMat, glowMat;
         }
 
@@ -139,6 +149,7 @@ namespace VRMultiplayer.UI
         TextMesh _nameText, _counterText, _hintText, _startLabel;
         Material _startFillMat, _startBorderMat, _startIconMat;
         El _redCard, _blueCard;
+        El _handRightCard, _handLeftCard;
 
         int _hoverIdx = -1;
         byte _team = PlayerProfile.TeamNone;
@@ -173,8 +184,25 @@ namespace VRMultiplayer.UI
         {
             _team = team;
             RefreshTeamCards();
+            RefreshHandCards();
             RefreshStart();
             Changed?.Invoke();
+        }
+
+        /// <summary>Tetik elini sec. ANINDA kaydedilir (bkz. PlayerProfile.TriggerLeft) —
+        /// isim/takim gibi "OYUNA BASLA"ya kadar beklemez, cunku zorunlu bir alan degil.</summary>
+        public void SetTriggerHand(bool left)
+        {
+            PlayerProfile.TriggerLeft = left;
+            RefreshHandCards();
+        }
+
+        void RefreshHandCards()
+        {
+            bool sol = PlayerProfile.TriggerLeft;
+            // anyChosen HER ZAMAN true: bu alanin "secilmemis" hali yok, varsayilani sag.
+            Paint(_handRightCard, HandEdge, HandFill, HandText, !sol, true);
+            Paint(_handLeftCard,  HandEdge, HandFill, HandText,  sol, true);
         }
 
         public void SetHint(string s, bool warning = false)
@@ -194,6 +222,7 @@ namespace VRMultiplayer.UI
             BuildKeyboard();
             BuildActionRow();
             BuildTeamPanel();
+            BuildHandPanel();
             BuildStartButton();
 
             // Vurgu: TEK obje, mesh'i uzerine gelinen ogenin olcusune gore degistirilir.
@@ -208,6 +237,7 @@ namespace VRMultiplayer.UI
 
             RefreshName();
             RefreshTeamCards();
+            RefreshHandCards();
             RefreshStart();
         }
 
@@ -241,8 +271,12 @@ namespace VRMultiplayer.UI
 
         void BuildNameField()
         {
-            UITheme.MakeOutlined(transform, "Field", Box(183, 143, 1097, 233),
-                Dim(183, 143, 1097, 233), S(16f), FieldEdge, FieldFill, S(2f),
+            // AD ALANI KLAVYE GENISLIGINDE. Eskiden 1097'ye kadar uzaniyordu ve sagdaki
+            // takim sutununun ustune tasiyordu; alani dolduran sey klavye oldugu icin
+            // ikisinin ayni genislikte olmasi hem daha duzenli hem de sag sutuna
+            // TETIK ELI icin yer aciyor.
+            UITheme.MakeOutlined(transform, "Field", Box(183, 143, 872, 233),
+                Dim(183, 143, 872, 233), S(16f), FieldEdge, FieldFill, S(2f),
                 ZBorder, QBorder, QFill);
 
             // Sol kenardaki minik DIKEY "AD" etiketi (tasarimda oldugu gibi).
@@ -254,7 +288,7 @@ namespace VRMultiplayer.UI
             _nameText.transform.localPosition = new Vector3(X(232f), Y(188f), ZText);
 
             _counterText = UITheme.MakeText(transform, "", Counter, 0.018f, TextAnchor.MiddleRight, QText);
-            _counterText.transform.localPosition = new Vector3(X(1075f), Y(188f), ZText);
+            _counterText.transform.localPosition = new Vector3(X(850f), Y(188f), ZText);
         }
 
         // Tus izgarasi: tasarimda 58x49 tus, 70 px adim, klavye alani x 183..872.
@@ -303,22 +337,29 @@ namespace VRMultiplayer.UI
 
         void BuildTeamPanel()
         {
-            UITheme.MakeOutlined(transform, "TeamPanel", Box(884, 248, 1097, 517),
+            UITheme.MakeOutlined(transform, "TeamPanel", Box(884, 143, 1097, 410),
                 Dim(884, 248, 1097, 517), S(14f), PanelEdge, Backdrop, S(1.5f),
                 ZBorder, QBorder, QFill);
 
             var lbl = UITheme.MakeText(transform, "TAKIM SEÇ", SectionLbl, 0.016f,
                 TextAnchor.MiddleCenter, QText);
-            lbl.transform.localPosition = new Vector3(X(990f), Y(268f), ZText);
+            lbl.transform.localPosition = new Vector3(X(990f), Y(166f), ZText);
 
-            _redCard = AddTeamCard(900, 285, 1081, 387, "KIZIL", RedEdge, RedFill, RedText,
+            _redCard = AddChoiceCard(900, 186, 1081, 288, "KIZIL", "Takım", RedEdge, RedFill, RedText,
                 PlayerProfile.TeamRed);
-            _blueCard = AddTeamCard(900, 399, 1081, 501, "MAVİ", BlueEdge, BlueFill, BlueText,
+            _blueCard = AddChoiceCard(900, 298, 1081, 400, "MAVİ", "Takım", BlueEdge, BlueFill, BlueText,
                 PlayerProfile.TeamBlue);
         }
 
-        El AddTeamCard(float x0, float y0, float x1, float y1, string title,
-                       Color edge, Color fill, Color text, byte team)
+        /// <summary>
+        /// Secim karti: takim ya da tetik eli. Ikisi de "iki secenekten birini sec, secili
+        /// olan parlar" davranisinda oldugu icin tek uretici kullaniyor — ayri yazsaydik iki
+        /// yerde iki farkli vurgu kurali olusur ve panel tutarsizlasirdi.
+        /// </summary>
+        /// <param name="team">Takim karti icin takim numarasi; tetik eli kartlarinda 0.</param>
+        /// <param name="action">Tetik eli kartlari icin eylem; takim kartlarinda null.</param>
+        El AddChoiceCard(float x0, float y0, float x1, float y1, string title, string subText,
+                         Color edge, Color fill, Color text, byte team, string action = null)
         {
             Vector2 c = Box(x0, y0, x1, y1), size = Dim(x0, y0, x1, y1);
 
@@ -345,13 +386,14 @@ namespace VRMultiplayer.UI
             // da mavi, "secili kirmizi" ile "secili olmayan kirmizi" yalnizca tona bakarak
             // ayirt edilir — renk korunde ve passthrough'un yikadigi parlak odada bu ayrim
             // kaybolur. Yazi ikinci ve tartismasiz bir isaret.
-            var sub = UITheme.MakeText(transform, "Takım",
+            var sub = UITheme.MakeText(transform, subText,
                 new Color(text.r, text.g, text.b, 0.75f), 0.016f, TextAnchor.MiddleCenter, QText);
             sub.transform.localPosition = new Vector3(c.x, c.y - S(22f), ZText);
 
             var el = new El
             {
-                center = c, size = size, radius = S(10f), team = team, label = tm, sub = sub,
+                center = c, size = size, radius = S(10f), team = team, action = action,
+                label = tm, sub = sub, subIdle = subText,
                 fillMat = body.GetComponent<MeshRenderer>().sharedMaterial,
                 borderMat = border.GetComponent<MeshRenderer>().sharedMaterial,
                 glowMat = glow.GetComponent<MeshRenderer>().sharedMaterial,
@@ -360,9 +402,36 @@ namespace VRMultiplayer.UI
             return el;
         }
 
+        /// <summary>
+        /// TETIK ELI secimi: buyuk silahin kabzasini hangi el kavriyor.
+        ///
+        /// NEDEN "SAGLAK/SOLAK" DEGIL: o kelimeler KISIYI etiketliyor, ayari degil. Ustelik
+        /// ayar el tercihiyle de birebir ayni sey degil — saglak biri pekala sol elle atmak
+        /// isteyebilir. Belirlenen sey "silahi hangi elinle tutuyorsun".
+        ///
+        /// ISIM VE TAKIMDAN FARKLI OLARAK ZORUNLU DEGIL: gecerli varsayilani var (sag), o
+        /// yuzden "OYUNA BASLA"yi kilitlemez. Secim aninda kaydedilir.
+        /// </summary>
+        void BuildHandPanel()
+        {
+            UITheme.MakeOutlined(transform, "HandPanel", Box(884, 422, 1097, 594),
+                Dim(884, 422, 1097, 594), S(14f), PanelEdge, Backdrop, S(2f), ZBack, QBack + 1, QBack + 2);
+
+            var lbl = UITheme.MakeText(transform, "TETİK ELİ", SectionLbl, 0.016f,
+                TextAnchor.MiddleCenter, QText);
+            lbl.transform.localPosition = new Vector3(X(990.5f), Y(445f), ZText);
+
+            _handRightCard = AddChoiceCard(900, 462, 1081, 524, "SAĞ", "El",
+                HandEdge, HandFill, HandText, 0, ActionHandR);
+            _handLeftCard = AddChoiceCard(900, 532, 1081, 594, "SOL", "El",
+                HandEdge, HandFill, HandText, 0, ActionHandL);
+        }
+
         void BuildStartButton()
         {
-            Vector2 c = Box(183, 533, 1097, 594), size = Dim(183, 533, 1097, 594);
+            // Sag kenar 872: ustundeki "Temizle" ve ad alaniyla ayni hizada bitiyor, sag
+            // sutun (takim + tetik eli) kesintisiz kaliyor.
+            Vector2 c = Box(183, 533, 872, 594), size = Dim(183, 533, 872, 594);
 
             var border = UITheme.MakeRounded(transform, "Start Border", c, size, S(12f),
                 StartOff, ZBorder, QBorder);
@@ -490,6 +559,12 @@ namespace VRMultiplayer.UI
 
             if (el.team != 0) { SetTeam(el.team); return; }
 
+            if (el.action == ActionHandR || el.action == ActionHandL)
+            {
+                SetTriggerHand(el.action == ActionHandL);
+                return;
+            }
+
             if (el.action == null)
             {
                 if (_sb.Length >= PlayerProfile.MaxLength) return;   // sinirda sessizce yut
@@ -584,7 +659,9 @@ namespace VRMultiplayer.UI
 
             if (card.sub != null)
             {
-                card.sub.text = selected ? "SEÇİLDİ" : "Takım";
+                // Bos durum yazisi KARTIN KENDISINDEN gelir: takim karti "Takım", tetik eli
+                // karti "El" der. Sabit yazmak tetik eli kartlarinda "Takım" gosteriyordu.
+                card.sub.text = selected ? "SEÇİLDİ" : (card.subIdle ?? string.Empty);
                 card.sub.color = new Color(text.r, text.g, text.b,
                     selected ? 1f : !anyChosen ? 0.75f : 0.35f);
             }

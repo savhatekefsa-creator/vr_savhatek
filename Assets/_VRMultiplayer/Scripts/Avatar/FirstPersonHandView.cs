@@ -322,9 +322,9 @@ namespace VRMultiplayer
             if (_curl != null)
             {
                 WeaponGripProfile heldProfile;
-                bool heldSupport;
-                if (welded && _weld.TryGetHandProfile(_left, out heldProfile, out heldSupport))
-                    _curl.SetWeaponPose(heldProfile, heldSupport);
+                bool heldSupport, heldMirrored;
+                if (welded && _weld.TryGetHandProfile(_left, out heldProfile, out heldSupport, out heldMirrored))
+                    _curl.SetWeaponPose(heldProfile, heldSupport, heldMirrored);
                 else
                     _curl.ClearWeaponPose();
             }
@@ -347,12 +347,14 @@ namespace VRMultiplayer
                 bool supportRole, mirrored;
                 if (_weld.TryGetHandProfile(_left, out prof, out supportRole, out mirrored) && prof != null)
                 {
-                    var hp = supportRole ? prof.supportHand : prof.mainHand;
+                    // Ters elde AYRI poz yazilmissa aynalama YOK — bkz. WeaponGripProfile.PoseFor.
+                    bool poseMirror;
+                    var hp = prof.PoseFor(supportRole, mirrored, out poseMirror);
                     fpWristPos = hp.fpWristLocalPosition;
                     fpWristRot = hp.FpWristRotation;
                     // Silah ters elle tutuluyorsa cipa aynalanmis geliyor; offset de
                     // aynalanmali, yoksa el ters durur.
-                    if (mirrored)
+                    if (poseMirror)
                     {
                         fpWristPos = WeaponGripMath.MirrorX(fpWristPos);
                         fpWristRot = WeaponGripMath.MirrorX(fpWristRot);

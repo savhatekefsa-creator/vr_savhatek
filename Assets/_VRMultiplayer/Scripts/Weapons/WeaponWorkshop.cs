@@ -116,7 +116,7 @@ namespace VRMultiplayer.Weapons
             }
         }
 
-        Snapshot _savedMain, _savedSupport;
+        Snapshot _savedMain, _savedSupport, _savedMainLeft, _savedSupportRight;
 
         // Serbest parmak pozlama kipi. Cozucu ayri sinifta: ag/UI bilmiyor, girdisi de
         // yalnizca kumanda + kemikler.
@@ -157,7 +157,7 @@ namespace VRMultiplayer.Weapons
         /// ikisini de geri koymadan degisiklik kaybolur.</summary>
         void WriteFingerPose(Quaternion[] dev)
         {
-            var hp = _editLeft ? _profile.supportHand : _profile.mainHand;
+            var hp = Edited();
             var fp = hp.Fingers(_editLeft);
             fp.fpJoints = dev;
             fp.fpJointsAuthored = true;
@@ -376,6 +376,8 @@ namespace VRMultiplayer.Weapons
             {
                 _savedMain = Snapshot.Of(_profile.mainHand);
                 _savedSupport = Snapshot.Of(_profile.supportHand);
+                _savedMainLeft = Snapshot.Of(_profile.mainHandLeft);
+                _savedSupportRight = Snapshot.Of(_profile.supportHandRight);
             }
             if (_handsPlaced) PlaceHands();
         }
@@ -523,21 +525,27 @@ namespace VRMultiplayer.Weapons
             // BOMBADA SOL EL PIMDE. Bombanin destek rayi yok (olculdu: uc bombada da bos),
             // yani sol el eskiden bombanin orijininde anlamsiz duruyordu. Pim varsa cipa
             // ONA baglanir — sol elin bombadaki gercek isi pimi tutmak.
+            //
+            // CIPA ELE DEGIL ROLE BAKAR. Sol-ana kipinde eller yer degistirir: kabzayi SOL
+            // el kavrar, ray/pim SAG ele duser. Burada "left" yazsaydik kip degistiginde iki
+            // el birbirinin yerine gecer ve tezgah okunmaz hale gelirdi.
+            bool sup = IsSupport(left);
+
             Vector3 anchor;
             Quaternion anchorRot;
-            if (left && _pin != null)
+            if (sup && _pin != null)
             {
                 anchor = _pin.position;
                 anchorRot = _pin.rotation;
             }
             else
             {
-                Vector3 localAnchor = left ? SupportAnchorLocal() : _profile.gripLocalPosition;
+                Vector3 localAnchor = sup ? SupportAnchorLocal() : _profile.gripLocalPosition;
                 anchor = _weapon.transform.TransformPoint(localAnchor);
                 anchorRot = _weapon.transform.rotation * _profile.GripLocalRotation;
             }
 
-            var hp = left ? _profile.supportHand : _profile.mainHand;
+            var hp = PoseOf(left);
             h.pose.SetPositionAndRotation(anchor + anchorRot * hp.fpWristLocalPosition,
                                           anchorRot * hp.FpWristRotation);
 
@@ -591,6 +599,61 @@ namespace VRMultiplayer.Weapons
         ///
         /// Parmak kipi ACIKKEN el degistirmek cozucuyu OTEKI ele TASIR: once icinde
         /// bulundugun el yazilir, sonra yeni el baglanir. Kipi sessizce kapatmak
+        // ─── SOL ELIN ROLU ────────────────────────────────────────────────────────────
+        // Pozlar SAG el ANA / SOL el DESTEK olacak sekilde yazildi. Solak oyuncu icin bu
+        // ters cevrilir ve o durumun pozlari AYRI alanlarda durur (mainHandLeft /
+        // supportHandRight) — aynalama bir silahta bozuk goruruyorsa oraya elle yazilir.
+        //
+        // Bu kip YALNIZCA hangi ALANA yazildigini degistirir; tezgahin geri kalani (kabza
+        // cipasi, ray, pim, parmak kipi) ayni kalir, cunku onlar ROLE bakar, ele degil.
+
+        bool _leftIsMain;
+
+        /// <summary>SOL el ANA rolde mi? Panelden degistirilir.</summary>
+        public bool LeftIsMain
+        {
+            get => _leftIsMain;
+            set
+            {
+                if (value == _leftIsMain) return;
+                bool wasPosing = _poser.Active;
+                if (wasPosing) EndFingerPose(commit: true);
+                _leftIsMain = value;
+                if (wasPosing) BeginFingerPose();
+            }
+        }
+
+        /// <summary>Bu FIZIKSEL elin rolu DESTEK mi?</summary>
+        bool IsSupport(bool left) => left ? !_leftIsMain : _leftIsMain;
+
+        /// <summary>Bu elin pozunun DURDUGU alan. Sol-ana kipinde ayri alanlar kullanilir.</summary>
+        WeaponGripProfile.HandPose PoseOf(bool left)
+        {
+            bool sup = IsSupport(left);
+            if (!_leftIsMain) return sup ? _profile.supportHand : _profile.mainHand;
+            return sup ? _profile.supportHandRight : _profile.mainHandLeft;
+        }
+
+        /// <summary>Duzenlenen elin pozu.</summary>
+        WeaponGripProfile.HandPose Edited() => PoseOf(_editLeft);
+
+        /// <summary>Duzenlenen elin pozunu geri yaz.</summary>
+        void StoreEdited(WeaponGripProfile.HandPose hp)
+        {
+            bool sup = IsSupport(_editLeft);
+            if (!_leftIsMain) { if (sup) _profile.supportHand = hp; else _profile.mainHand = hp; }
+            else { if (sup) _profile.supportHandRight = hp; else _profile.mainHandLeft = hp; }
+        }
+
+        /// <summary>Kayit satirindaki rol etiketi — hangi alana ait oldugunu ApplyWorkshopSaves
+        /// bundan anlar.</summary>
+        string RoleTag(bool left)
+        {
+            bool sup = IsSupport(left);
+            if (!_leftIsMain) return sup ? "support" : "main";
+            return sup ? "supportRight" : "mainLeft";
+        }
+
         /// kullaniciya "bozuldu" hissi verirdi; el degistirip devam etmek dogal olan.</summary>
         public bool EditLeft
         {
@@ -609,7 +672,7 @@ namespace VRMultiplayer.Weapons
         {
             if (_profile == null) return;
             float m = _coarse ? CoarseMove : FineMove;
-            var hp = _editLeft ? _profile.supportHand : _profile.mainHand;
+            var hp = Edited();
             var p = hp.fpWristLocalPosition;
             switch (axis)
             {
@@ -625,7 +688,7 @@ namespace VRMultiplayer.Weapons
         {
             if (_profile == null) return;
             float d = _coarse ? CoarseTurn : FineTurn;
-            var hp = _editLeft ? _profile.supportHand : _profile.mainHand;
+            var hp = Edited();
             var e = hp.fpWristLocalEuler;
             switch (axis)
             {
@@ -646,7 +709,7 @@ namespace VRMultiplayer.Weapons
         public void Curl(int finger, int sign)
         {
             if (_profile == null) return;
-            var hp = _editLeft ? _profile.supportHand : _profile.mainHand;
+            var hp = Edited();
             if (!hp.HasFpCurls) hp.fpCurls = new float[5];
             float step = _coarse ? 0.10f : 0.02f;
             hp.fpCurls[Mathf.Clamp(finger, 0, 4)] =
@@ -663,7 +726,7 @@ namespace VRMultiplayer.Weapons
             if (_profile == null) return;
             if (_poser.Active) { _poser.ResetToRest(); return; }
 
-            var hp = _editLeft ? _profile.supportHand : _profile.mainHand;
+            var hp = Edited();
             hp.fpCurls = new float[5];
             ClearAuthored(ref hp);
             Write(hp);
@@ -682,14 +745,14 @@ namespace VRMultiplayer.Weapons
         public float CurlOf(int finger)
         {
             if (_profile == null) return 0f;
-            var hp = _editLeft ? _profile.supportHand : _profile.mainHand;
+            var hp = Edited();
             return hp.HasFpCurls ? hp.fpCurls[Mathf.Clamp(finger, 0, 4)] : 0f;
         }
 
         /// <summary>HandPose bir STRUCT: profildeki alana geri yazilmazsa degisiklik kaybolur.</summary>
         void Write(WeaponGripProfile.HandPose hp)
         {
-            if (_editLeft) _profile.supportHand = hp; else _profile.mainHand = hp;
+            StoreEdited(hp);
             Touch();
         }
 
@@ -708,13 +771,15 @@ namespace VRMultiplayer.Weapons
             if (_profile == null) return;
             _profile.mainHand = _savedMain.Into(_profile.mainHand);
             _profile.supportHand = _savedSupport.Into(_profile.supportHand);
+            _profile.mainHandLeft = _savedMainLeft.Into(_profile.mainHandLeft);
+            _profile.supportHandRight = _savedSupportRight.Into(_profile.supportHandRight);
             Touch();
         }
 
         public string ValueText()
         {
             if (_profile == null) return "profil yok";
-            var hp = _editLeft ? _profile.supportHand : _profile.mainHand;
+            var hp = Edited();
             var p = hp.fpWristLocalPosition * 1000f;
             var e = hp.fpWristLocalEuler;
             return string.Format("ileri {0,5:F0}  sag {1,5:F0}  yukari {2,5:F0}   (mm)\n" +
@@ -738,12 +803,16 @@ namespace VRMultiplayer.Weapons
                 string dir = Path.Combine(Application.persistentDataPath, "GripOlcum");
                 Directory.CreateDirectory(dir);
                 string path = Path.Combine(dir, "atolye.md");
+                // SECILI KIPIN ikilisi yazilir. Oteki kip kendi satirlarini onceki
+                // kayitlarda birakti ve ApplyWorkshopSaves "son kayit kazanir"i (silah, ROL)
+                // ciftine gore isletiyor - yani sol-ana ayarini yaparken sag-ana ayari
+                // silinmez.
                 File.AppendAllText(path,
-                    Line(_profile.mainHand, "main") + "\n" +
-                    Line(_profile.supportHand, "support") + "\n",
+                    Line(PoseOf(!_leftIsMain), RoleTag(!_leftIsMain)) + "\n" +
+                    Line(PoseOf(_leftIsMain), RoleTag(_leftIsMain)) + "\n",
                     new UTF8Encoding(false));
                 _unsaved.Remove(_profile.name);
-                return "kaydedildi (sag+sol): " + _profile.name;
+                return "kaydedildi (" + (_leftIsMain ? "SOL ana" : "sag ana") + "): " + _profile.name;
             }
             catch (System.Exception e)
             {
@@ -757,10 +826,11 @@ namespace VRMultiplayer.Weapons
             string curls = hp.HasFpCurls
                 ? string.Join(",", System.Array.ConvertAll(hp.fpCurls, v => v.ToString("F3", ic)))
                 : "";
-            // Rol, hangi FIZIKSEL eli duzenledigimizi belirler: ana el SAG, destek eli SOL
-            // (tezgahtaki yerlesimin aynisi). Bu yuzden satira yalnizca o elin serbest pozu
-            // giriyor; oteki el kendi satirinda gidiyor.
-            bool left = role == "support";
+            // Rol, hangi FIZIKSEL eli duzenledigimizi belirler. Varsayilan kipte ana el SAG,
+            // destek eli SOL; sol-ana kipinde ikisi de yer degistirir (mainLeft = SOL el,
+            // supportRight = SAG el). Bu yuzden satira yalnizca o elin serbest pozu giriyor;
+            // oteki el kendi satirinda gidiyor.
+            bool left = role == "support" || role == "mainLeft";
             string joints = Joints(hp.Fingers(left));
             return string.Format("{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}|{9}",
                 _profile.name, role,

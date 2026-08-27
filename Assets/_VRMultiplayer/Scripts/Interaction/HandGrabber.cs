@@ -275,8 +275,8 @@ namespace VRMultiplayer
             var h = handIndex == 1 ? _right : _left;
             if (h == null || h.held != null || h.supporting != null || h.pinFrom != null) return false;
 
-            // GECICI SOL EL KURALI: buyuk silah SOL ele ANA olarak giremez (bkz. asagidaki bolge).
-            if (handIndex == 0 && LeftPrimaryBannedPrefab(prefab)) { RejectBuzz(h); return false; }
+            // BASKIN OLMAYAN EL KURALI: buyuk silah o ele ANA olarak giremez (bkz. bolge).
+            if (handIndex == OffHand && OffHandPrimaryBannedPrefab(prefab)) { RejectBuzz(h); return false; }
 
             h.pendingNeedsGrip = true;
             SwapWeaponServerRpc(default, prefab.name, handIndex, ammo, spares);
@@ -328,19 +328,23 @@ namespace VRMultiplayer
                 if (_right != null && _right.held == current) h = _right;
                 else if (_left != null && _left.held == current) h = _left;
             }
-            // GECICI SOL EL KURALI: buyuk silah SOL ele dogmaz. Sol eldeki (tabanca/bomba)
-            // buyukle takas ediliyorsa yenisi bos SAG ele yonlenir; sag da doluysa secim
+            // BASKIN OLMAYAN EL KURALI: buyuk silah o ele dogmaz. O eldeki (tabanca/bomba)
+            // buyukle takas ediliyorsa yenisi bos BASKIN ele yonlenir; o da doluysa secim
             // sessizce yok sayilir — asagidaki yerel birakma blogundan ONCE cikmak sart,
             // yoksa eldeki silah despawn edilip yerine hicbir sey gelmezdi.
-            bool leftBanned = LeftPrimaryBannedPrefab(prefab);
-            if (leftBanned && h == _left) h = null;
-            if (h == null && _right != null && _right.held == null) h = _right;
-            if (h == null && !leftBanned && _left != null && _left.held == null) h = _left;
-            if (h == null) h = _right != null ? _right : (leftBanned ? null : _left);
+            bool offBanned = OffHandPrimaryBannedPrefab(prefab);
+            HandState dom = OffHand == 0 ? _right : _left;   // baskin el
+            HandState off = OffHand == 0 ? _left : _right;
+            if (offBanned && h == off) h = null;
+            if (h == null && dom != null && dom.held == null) h = dom;
+            if (h == null && !offBanned && off != null && off.held == null) h = off;
+            if (h == null) h = dom != null ? dom : (offBanned ? null : off);
             if (h == null) return;
-            if (leftBanned && h == _right && _right.held != null && _right.held != current)
+            // Baskin el DOLU ve yasakli silah orada zorlanmiyorsa: birakma yerine reddet.
+            // Yoksa oyuncunun elindeki silah despawn edilir, yerine hicbir sey gelmez.
+            if (offBanned && h == dom && dom.held != null && dom.held != current)
             {
-                RejectBuzz(_left);
+                RejectBuzz(off);
                 return;
             }
 
@@ -412,9 +416,9 @@ namespace VRMultiplayer
             if (!r.TryGet(out var no) || no == null) return;
             var g = no.GetComponent<GrabbableObject>();
 
-            // GECICI SOL EL KURALI: el secimi yukarida zaten filtrelendi; bu, yaris/bayat
+            // BASKIN OLMAYAN EL KURALI: el secimi yukarida zaten filtrelendi; bu, yaris/bayat
             // istek ihtimaline karsi ikinci kapi. Iade et ki silah sahipsiz kalmasin.
-            if (g != null && hand == 0 && LeftPrimaryBanned(g))
+            if (g != null && hand == OffHand && OffHandPrimaryBanned(g))
             {
                 CancelEquipServerRpc(r);
                 return;
@@ -753,19 +757,30 @@ namespace VRMultiplayer
             }
         }
 
-        // ─── GECICI SOL EL KURALI (2026-08-05) ────────────────────────────────────────
-        // Buyuk silahlarda (tabanca ve bomba DISI, profilli silahlar) SOL el ANA el olamaz —
-        // yalnizca DESTEK eli. Sebep: gercek sol-el ana tutus pozlari henuz yazilmadi ve
-        // aynalanmis tutus cihazda bozuk duruyor. KALICI COZUM sol-el tutus yakalamalari
-        // geldiginde bu bolge TUMDEN silinir (uc kapi: TryGrab yakinlik, RequestWeaponSwap
-        // el secimi, EquipSpawnedRpc yaris korumasi).
+        // ─── BASKIN OLMAYAN EL KURALI ─────────────────────────────────────────────────
+        // Buyuk silahlarda (tabanca ve bomba DISI, profilli silahlar) yalnizca BASKIN el ANA
+        // el olabilir; oteki el DESTEK elidir. Hangi elin baskin oldugunu oyuncu giris
+        // ekranindan seciyor (bkz. PlayerProfile.TriggerLeft).
+        //
+        // TARIHCE: kural 2026-08-05'te "SOL el ana olamaz" diye sabit yazilmisti, cunku o gun
+        // tek varsayim sagliydi. Solak oyuncu icin bu kural tersine donmeli — sabit "sol"
+        // yerine baskin OLMAYAN el sorulmasinin sebebi bu.
+        //
+        // TABANCA VE BOMBA HER ZAMAN SERBEST: iki elde de tutulur, cift tabanca bu sayede
+        // mumkun.
+        //
+        // Uc kapi: TryGrab yakinlik, RequestWeaponSwap el secimi, EquipSpawnedRpc yaris
+        // korumasi. Ucu de asagidaki OffHand'i kullanir.
+
+        /// <summary>Baskin OLMAYAN elin indeksi (0 = sol, 1 = sag).</summary>
+        static byte OffHand => PlayerProfile.OffHandIndex;
 
         static bool IsPistolName(string s) =>
             !string.IsNullOrEmpty(s) && s.ToLowerInvariant().Contains("pistol");
 
-        /// <summary>Bu obje SOL elle ANA tutusa kapali mi? Profilsiz nesneler (tas, prop) ve
-        /// bombalar serbest — onlar tek/sol elle dogal kullaniliyor.</summary>
-        static bool LeftPrimaryBanned(GrabbableObject g)
+        /// <summary>Bu obje BASKIN OLMAYAN elle ANA tutusa kapali mi? Profilsiz nesneler
+        /// (tas, prop) ve bombalar serbest — onlar tek elle dogal kullaniliyor.</summary>
+        static bool OffHandPrimaryBanned(GrabbableObject g)
         {
             if (g == null) return false;
             if (g.GetComponent<GrenadeController>() != null) return false;
@@ -777,7 +792,7 @@ namespace VRMultiplayer
         }
 
         /// <summary>Ayni kural, kemerden secilen PREFAB icin (ortada instance yokken).</summary>
-        static bool LeftPrimaryBannedPrefab(GameObject prefab)
+        static bool OffHandPrimaryBannedPrefab(GameObject prefab)
         {
             if (prefab == null) return false;
             if (prefab.GetComponent<GrenadeController>() != null) return false;
@@ -914,10 +929,10 @@ namespace VRMultiplayer
             {
                 var g = col.GetComponentInParent<GrabbableObject>();
                 if (g == null || g.IsHeld) continue;
-                // GECICI SOL EL KURALI: buyuk silah sol ele ANA olarak giremez (destek dali
+                // BASKIN OLMAYAN EL KURALI: buyuk silah o ele ANA olarak giremez (destek dali
                 // yukarida zaten calisti). Aday listesinden cikar — yanindaki tas/tabanca
                 // yine kapilabilsin.
-                if (h.index == 0 && LeftPrimaryBanned(g)) { leftBannedNearby = true; continue; }
+                if (h.index == OffHand && OffHandPrimaryBanned(g)) { leftBannedNearby = true; continue; }
                 float d = Vector3.Distance(probe, col.ClosestPoint(probe));
                 if (d < bestDist) { bestDist = d; best = g; }
             }

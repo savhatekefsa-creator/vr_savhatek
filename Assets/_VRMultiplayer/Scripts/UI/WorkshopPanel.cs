@@ -35,8 +35,8 @@ namespace VRMultiplayer.UI
         // Basili tutma: ilk tekrar bu gecikmeden sonra, sonra araliklar kisaliyor.
         const float RepeatDelay = 0.45f, RepeatFast = 0.05f, RepeatSlow = 0.14f, RepeatRamp = 1.2f;
 
-        enum Cmd { PrevWeapon, NextWeapon, Hands, StepSize, Save, Revert, Close, Bench, Side, Axis, Finger,
-                   FingerPose, FingerReset }
+        enum Cmd { PrevWeapon, NextWeapon, Hands, StepSize, Save, Revert, Close, Bench, Side, Role, Axis,
+                   Finger, FingerPose, FingerReset }
 
         class Btn
         {
@@ -50,13 +50,18 @@ namespace VRMultiplayer.UI
             public TextMesh label;
         }
 
+        // Sol-ana kipinin rengi: panelin camgobegi/mor ikilisinin DISINDA bir ton. Amac
+        // "bu kip acikken buradasin" uyarisi vermek - kipte kaldigini fark etmeden sag-el
+        // pozlarini bozmak en kolay hata.
+        static readonly Color RoleOn = new Color(0.98f, 0.68f, 0.28f, 1f);
+
         static readonly string[] FingerNames = { "BASPARMAK", "ISARET", "ORTA", "YUZUK", "SERCE" };
 
         readonly List<Btn> _btns = new List<Btn>();
         readonly TextMesh[] _curlText = new TextMesh[5];
         Transform _hover;
         MeshFilter _hoverMesh;
-        TextMesh _title, _values, _status, _stepLabel, _handsLabel, _sideLabel;
+        TextMesh _title, _values, _status, _stepLabel, _handsLabel, _sideLabel, _roleLabel;
         TextMesh _poseLabel, _poseHint;
         int _hoverIdx = -1;
         bool _built;
@@ -86,6 +91,13 @@ namespace VRMultiplayer.UI
                 "DUZENLENEN: SAG", UITheme.AccentCyan);
             _stepLabel = AddBtn(new Vector2(0.04f, 0.246f), new Vector2(0.28f, RowH), Cmd.StepSize,
                 "ADIM: INCE", UITheme.TextMuted);
+
+            // SOL ELIN ROLU. Pozlar sag-el-ana varsayimiyla yazildi; solak oyuncuda roller
+            // ters doner ve o pozlar AYRI alanlarda durur. Bu dugme hangi alan ciftine
+            // yazdigimizi secer - tezgahin geri kalani (kabza cipasi, ray, pim, parmak kipi)
+            // role baktigi icin kip degisince kendiliginden yer degistirir.
+            _roleLabel = AddBtn(new Vector2(0.36f, 0.246f), new Vector2(0.30f, RowH), Cmd.Role,
+                "SOL EL: DESTEK", UITheme.TextMuted);
 
             // --- Sol sutun: bilek
             float y = 0.150f;
@@ -233,6 +245,7 @@ namespace VRMultiplayer.UI
                 case Cmd.Hands: Host.ToggleHands(); break;
                 case Cmd.StepSize: Host.Coarse = !Host.Coarse; break;
                 case Cmd.Side: Host.EditLeft = !Host.EditLeft; break;
+                case Cmd.Role: Host.LeftIsMain = !Host.LeftIsMain; break;
                 case Cmd.Revert: Host.Revert(); Say("kayitli hale donuldu (sag+sol)"); break;
                 case Cmd.Save: Say(Host.Save()); break;
                 case Cmd.Close: Host.open = false; break;
@@ -287,6 +300,11 @@ namespace VRMultiplayer.UI
             _stepLabel.text = Host.Coarse ? "ADIM: KABA" : "ADIM: INCE";
             _sideLabel.text = Host.EditLeft ? "DUZENLENEN: SOL" : "DUZENLENEN: SAG";
             _sideLabel.color = Host.EditLeft ? UITheme.AccentPurple : UITheme.AccentCyan;
+
+            // Sol-ana kipi ALISILMISIN DISI oldugu icin turuncu; sonmuk griyle yazsak
+            // kullanici kipte kaldigini fark etmeden sag-el pozlarini bozardi.
+            _roleLabel.text = Host.LeftIsMain ? "SOL EL: ANA" : "SOL EL: DESTEK";
+            _roleLabel.color = Host.LeftIsMain ? RoleOn : UITheme.TextMuted;
 
             bool posing = Host.FingerPoseMode;
             _poseLabel.text = posing ? "PARMAK KIPI: ACIK" : "PARMAK KIPI";

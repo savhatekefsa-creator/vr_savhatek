@@ -17,8 +17,13 @@ namespace VRMultiplayer.EditorTools
     /// Dosyayi cekmek (adb PATH'te degil, Unity'nin Android SDK'sinda):
     ///   adb pull /sdcard/Android/data/&lt;paket&gt;/files/GripOlcum/atolye.md
     ///
-    /// Bicim (satir basina bir kayit, ayni profil birden fazla kez gecebilir - SONUNCU gecerli):
-    ///   ProfilAdi|main|posX|posY|posZ|eulerX|eulerY|eulerZ|kivrimlar
+    /// Bicim (satir basina bir kayit, ayni profil+ROL birden fazla kez gecebilir - SONUNCU
+    /// gecerli; farkli roller birbirini EZMEZ):
+    ///   ProfilAdi|rol|posX|posY|posZ|eulerX|eulerY|eulerZ|kivrimlar|eklemler
+    ///
+    /// Dort rol var. Ilk ikisi normal (sag el ana), son ikisi atolyedeki "SOL EL: ANA"
+    /// kipinden gelir ve solak oyuncunun pozlarini tutar:
+    ///   main | support | mainLeft | supportRight
     /// Son alan bes parmagin kivrimi (bas,isaret,orta,yuzuk,serce), virgulle ayrik.
     /// Bos birakilabilir - o zaman profildeki kivrimlara dokunulmaz.
     /// </summary>
@@ -54,9 +59,27 @@ namespace VRMultiplayer.EditorTools
                 float[] curls = p.Length > 8 ? ParseCurls(p[8]) : null;
                 Quaternion[] joints = p.Length > 9 ? ParseJoints(p[9]) : null;
 
-                bool support = p[1].Trim().ToLowerInvariant() == "support";
+                // DORT ROL, IKI EKSEN. "Rol" hem hangi ALANA yazilacagini hem de kaydin
+                // hangi FIZIKSEL elden geldigini soyluyor; ikisi ayri sorular:
+                //
+                //   rol            alan               fiziksel el
+                //   main           mainHand           sag
+                //   support        supportHand        sol
+                //   mainLeft       mainHandLeft       sol      <- solak oyuncu
+                //   supportRight   supportHandRight   sag      <- solak oyuncu
+                //
+                // Parmak pozu FIZIKSEL ele gore saklaniyor (leftFingers/rightFingers), yuva
+                // secimi ise role gore. Tek bir "support" bayragiyla ikisini birden idare
+                // etmeye calissaydik solak kayitlarinda parmaklar ters ele yazilirdi.
+                string role = p[1].Trim();
+                string rl = role.ToLowerInvariant();
+                bool leftSlots = rl == "mainleft" || rl == "supportright";
+                bool support = rl == "support" || rl == "supportright";
+                bool leftHand = rl == "support" || rl == "mainleft";
+
                 // HandPose bir STRUCT: kopyaya yazip profildeki alana GERI koymak sart.
-                var hand = support ? profile.supportHand : profile.mainHand;
+                var hand = leftSlots ? (support ? profile.supportHandRight : profile.mainHandLeft)
+                                     : (support ? profile.supportHand : profile.mainHand);
                 hand.fpWristLocalPosition = pos;
                 hand.fpWristLocalEuler = eul;
                 if (curls != null) hand.fpCurls = curls;
@@ -66,13 +89,14 @@ namespace VRMultiplayer.EditorTools
                 // pozlanmis parmaklari SILMEMELI.
                 if (joints != null)
                 {
-                    var fp = hand.Fingers(support);
+                    var fp = hand.Fingers(leftHand);
                     fp.fpJoints = joints;
                     fp.fpJointsAuthored = true;
-                    if (support) hand.leftFingers = fp; else hand.rightFingers = fp;
+                    if (leftHand) hand.leftFingers = fp; else hand.rightFingers = fp;
                 }
 
-                if (support) profile.supportHand = hand; else profile.mainHand = hand;
+                if (leftSlots) { if (support) profile.supportHandRight = hand; else profile.mainHandLeft = hand; }
+                else           { if (support) profile.supportHand = hand;      else profile.mainHand = hand; }
 
                 EditorUtility.SetDirty(profile);
                 applied++;

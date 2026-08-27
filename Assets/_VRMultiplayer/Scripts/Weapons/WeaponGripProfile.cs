@@ -80,6 +80,43 @@ namespace VRMultiplayer.Weapons
         public float supportBreakDistance = 0.30f;
         public HandPose supportHand = HandPose.Defaults(false);
 
+        [Header("SOL EL ANA (solak oyuncu) — istege bagli")]
+        [Tooltip("Silah SOL elde ANA olarak tutuldugunda kullanilacak pozlar. BOS BIRAKILABILIR: " +
+                 "o zaman sag el pozu aynalanir (eski davranis). Aynalama bir silahta bozuk " +
+                 "duruyorsa atolyede 'SOL EL: ANA' kipiyle bu alanlar doldurulur ve aynalamanin " +
+                 "yerini alir. Yalnizca bozuk olani doldurmak yeterli; ikisi bagimsiz.")]
+        public HandPose mainHandLeft;
+        public HandPose supportHandRight;
+
+        /// <summary>Bir poz ELLE yazildi mi? Bilek konumu ve acisi birlikte sifirsa yazilmamis
+        /// sayilir — atolyeden gecen her poz en az birini sifirdan farkli birakir.</summary>
+        public static bool IsAuthored(HandPose hp) =>
+            hp.fpWristLocalPosition != Vector3.zero || hp.fpWristLocalEuler != Vector3.zero;
+
+        /// <summary>
+        /// Bu rol icin kullanilacak poz — ve cagiranin AYNALAMASI gerekip gerekmedigi.
+        ///
+        /// Pozlar SAG el ana / SOL el destek olacak sekilde yazildi. Silah ters elde
+        /// tutuluyorsa iki secenek var:
+        ///   1) Bu duruma AYRI bir poz yazilmissa onu kullan, aynalama YOK.
+        ///   2) Yazilmamissa eski yola dus: sag-el pozunu aynala.
+        ///
+        /// Ikisini tek yerde toplamak sart: secim ile aynalama ayri yerlerde yapilirsa biri
+        /// digerinden kayar ve el silahin icinde durur.
+        /// </summary>
+        public HandPose PoseFor(bool supportRole, bool leftIsMain, out bool needsMirror)
+        {
+            if (leftIsMain)
+            {
+                HandPose ozel = supportRole ? supportHandRight : mainHandLeft;
+                if (IsAuthored(ozel)) { needsMirror = false; return ozel; }
+                needsMirror = true;
+            }
+            else needsMirror = false;
+
+            return supportRole ? supportHand : mainHand;
+        }
+
         [Header("Iki elli nisan filtresi")]
         [Tooltip("Destek elinin namluyu ne kadar yonettigi. 1 = tam sanal dipcik (tufek), " +
                  "0 = namluyu YALNIZ ana el yonetir, destek eli gorsel olarak tutunur ama " +

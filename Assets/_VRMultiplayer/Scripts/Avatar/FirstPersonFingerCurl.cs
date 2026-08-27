@@ -215,10 +215,16 @@ namespace VRMultiplayer
 
         /// <summary>Silah tutuldugunda cagrilir; profil authored poz tasiyorsa parmaklar
         /// ona gecer. Profil null ise prosedurel kivrima donulur.</summary>
-        public void SetWeaponPose(WeaponGripProfile profile, bool isSupport)
+        /// <param name="leftIsMain">Silah SOL elde ANA olarak mi tutuluyor? Profilde o duruma
+        /// AYRI poz yazilmissa parmaklar ondan gelir; yazilmamissa sag-el pozu kullanilir
+        bool _weaponLeftMain;   // silah SOL elde ANA mi (ters-el pozu secimi icin)
+
+        /// (parmaklar zaten fiziksel ele gore secildigi icin aynalanmaz).</param>
+        public void SetWeaponPose(WeaponGripProfile profile, bool isSupport, bool leftIsMain)
         {
             _weaponProfile = profile;
             _weaponSupport = isSupport;
+            _weaponLeftMain = leftIsMain;
         }
 
         public void ClearWeaponPose() => _weaponProfile = null;
@@ -360,7 +366,8 @@ namespace VRMultiplayer
         WeaponGripProfile.HandPose? ActiveHandPose()
         {
             if (_weaponProfile == null || _poseBone == null) return null;
-            return _weaponSupport ? _weaponProfile.supportHand : _weaponProfile.mainHand;
+            bool _;
+            return _weaponProfile.PoseFor(_weaponSupport, _weaponLeftMain, out _);
         }
 
         /// <summary>Bu el icin cevrilmis authored poz var mi (yoksa prosedurel kivrim surer).</summary>
@@ -369,7 +376,8 @@ namespace VRMultiplayer
             fp = default;
             indexFollowsTrigger = false;
             if (_weaponProfile == null || _poseBone == null) return false;
-            var pose = _weaponSupport ? _weaponProfile.supportHand : _weaponProfile.mainHand;
+            bool _;
+            var pose = _weaponProfile.PoseFor(_weaponSupport, _weaponLeftMain, out _);
             fp = pose.Fingers(_left);
             indexFollowsTrigger = pose.indexFollowsTrigger;
             return fp.HasFpJoints;
