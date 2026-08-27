@@ -920,7 +920,7 @@ namespace VRMultiplayer
 
             GrabbableObject best = null;
             float bestDist = float.MaxValue;
-            bool leftBannedNearby = false;
+            bool offBannedNearby = false;
             // AllLayers: the default mask skips the "Ignore Raycast" layer, which would make
             // objects on that layer silently ungrabbable.
             Vector3 probe = Probe(h);
@@ -932,20 +932,20 @@ namespace VRMultiplayer
                 // BASKIN OLMAYAN EL KURALI: buyuk silah o ele ANA olarak giremez (destek dali
                 // yukarida zaten calisti). Aday listesinden cikar — yanindaki tas/tabanca
                 // yine kapilabilsin.
-                if (h.index == OffHand && OffHandPrimaryBanned(g)) { leftBannedNearby = true; continue; }
+                if (h.index == OffHand && OffHandPrimaryBanned(g)) { offBannedNearby = true; continue; }
                 float d = Vector3.Distance(probe, col.ClosestPoint(probe));
                 if (d < bestDist) { bestDist = d; best = g; }
             }
             if (best == null)
             {
                 // "olmaz" geri bildirimi, sessiz kalmasin. Iki ayri sebep, TEK desen:
-                //   1) sol el ana tutus yasagina takildi
+                //   1) baskin olmayan el ana tutus yasagina takildi
                 //   2) destek eli denendi ama el ankrajdan UZAKTI (SupportEngageReach disi)
                 // Oyuncu ikisini de ayni kisa-zayif titresim olarak okur; yeni bir his
                 // ogrenmesi gerekmez. (2) icin UST sinir kopma esigi: ondan da uzaktaysa
                 // oyuncu silaha uzanmiyordur, boslukta grip'e basmistir ve titretmek
                 // gurultu olur. Alt sinir zaten SupportEngageReach: icindeyse tutundu.
-                if (leftBannedNearby
+                if (offBannedNearby
                     || (supportMiss >= SupportEngageReach && supportMiss < SupportBreakReach))
                     RejectBuzz(h);
                 return;

@@ -120,9 +120,19 @@ namespace VRMultiplayer.UI
 
             // Serbest poz kipi: parmak sutununun ALTINDA, cunku kivrim tuslarinin
             // alternatifi. Yan yana iki dugme — kipi ac/kapa ve parmaklari duzle.
-            _poseLabel = AddBtn(new Vector2(0.20f, fy - 0.010f), new Vector2(0.34f, RowH), Cmd.FingerPose,
+            //
+            // SAG KENAR TURETILIYOR. Elle yazilan 0.46 + 0.16/2 = 0.54 idi, panelin kendisi
+            // 0.52'de bitiyor: DUZLE cerceveden 2 cm disari tasiyordu. Artik ikisi de
+            // ustlerindeki "+" tusunun sag kenarina hizalaniyor, yani sutun kayarsa birlikte
+            // kayiyorlar.
+            const float SagKenar = RightPlusX + BtnW / 2f;
+            const float DuzleW = 0.15f, KipW = 0.28f, Aralik = 0.012f;
+            float duzleX = SagKenar - DuzleW / 2f;
+            float kipX = SagKenar - DuzleW - Aralik - KipW / 2f;
+
+            _poseLabel = AddBtn(new Vector2(kipX, fy - 0.010f), new Vector2(KipW, RowH), Cmd.FingerPose,
                 "PARMAK KIPI", UITheme.AccentPurple);
-            AddBtn(new Vector2(0.46f, fy - 0.010f), new Vector2(0.16f, RowH), Cmd.FingerReset,
+            AddBtn(new Vector2(duzleX, fy - 0.010f), new Vector2(DuzleW, RowH), Cmd.FingerReset,
                 "DUZLE", UITheme.TextMuted);
 
             _poseHint = UITheme.MakeText(transform, "", UITheme.AccentPurple, 0.018f,
@@ -172,9 +182,15 @@ namespace VRMultiplayer.UI
                 TextAnchor.MiddleLeft, QText);
             t.transform.localPosition = new Vector3(RightLabelX, y, ZText);
 
+            // SAGA YASLI, tusun sol kenarindan turetilmis. Ortalanmisken 0,00 yazisi
+            // "−" tusunun uzerine 1,2 cm biniyordu; ustelik ortalama, metin uzunlugu
+            // degisince (0.00 / 1.00 / — ) tasma miktarini da degistiriyordu. Saga
+            // yaslayinca sag kenar sabit kaliyor, sayi ne olursa olsun tusa girmiyor -
+            // sayi sutunu da boylece hizali okunuyor.
             _curlText[finger] = UITheme.MakeText(transform, "0.00", UITheme.TextMuted, 0.019f,
-                TextAnchor.MiddleCenter, QText);
-            _curlText[finger].transform.localPosition = new Vector3(RightLabelX + 0.225f, y, ZText);
+                TextAnchor.MiddleRight, QText);
+            _curlText[finger].transform.localPosition =
+                new Vector3(RightMinusX - BtnW / 2f - 0.010f, y, ZText);
 
             AddBtn(new Vector2(RightMinusX, y), new Vector2(BtnW, RowH), Cmd.Finger, "−", UITheme.AccentPurple);
             AddBtn(new Vector2(RightPlusX, y), new Vector2(BtnW, RowH), Cmd.Finger, "+", UITheme.AccentPurple);

@@ -808,8 +808,8 @@ namespace VRMultiplayer.Weapons
                 // ciftine gore isletiyor - yani sol-ana ayarini yaparken sag-ana ayari
                 // silinmez.
                 File.AppendAllText(path,
-                    Line(PoseOf(!_leftIsMain), RoleTag(!_leftIsMain)) + "\n" +
-                    Line(PoseOf(_leftIsMain), RoleTag(_leftIsMain)) + "\n",
+                    Line(PoseOf(_leftIsMain), RoleTag(_leftIsMain)) + "\n" +
+                    Line(PoseOf(!_leftIsMain), RoleTag(!_leftIsMain)) + "\n",
                     new UTF8Encoding(false));
                 _unsaved.Remove(_profile.name);
                 return "kaydedildi (" + (_leftIsMain ? "SOL ana" : "sag ana") + "): " + _profile.name;
