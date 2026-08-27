@@ -30,8 +30,6 @@ namespace VRMultiplayer.Weapons
             public WeaponGripProfile profile;
             public bool isSupport;
             public Transform bone;
-            public Vector3 gripLocalPos;    // main-hand anchor (mirror-resolved); unused for support
-            public Quaternion gripLocalRot; // mirror-resolved
             public Vector3 wristLocalPos;   // mirror-resolved
             public Quaternion wristLocalRot;// mirror-resolved
             public bool mirrored;
@@ -96,8 +94,6 @@ namespace VRMultiplayer.Weapons
                 profile = profile,
                 isSupport = isSupport,
                 bone = left ? _leftBone : _rightBone,
-                gripLocalPos = mirrored ? WeaponGripMath.MirrorX(profile.gripLocalPosition) : profile.gripLocalPosition,
-                gripLocalRot = mirrored ? WeaponGripMath.MirrorX(profile.GripLocalRotation) : profile.GripLocalRotation,
                 wristLocalPos = poseMirror ? WeaponGripMath.MirrorX(pose.wristLocalPosition) : pose.wristLocalPosition,
                 wristLocalRot = poseMirror ? WeaponGripMath.MirrorX(Quaternion.Euler(pose.wristLocalEuler)) : Quaternion.Euler(pose.wristLocalEuler),
                 mirrored = mirrored,
@@ -230,19 +226,21 @@ namespace VRMultiplayer.Weapons
 
         void ComputeAnchor(ref HandWeld w, bool left, out Vector3 anchorPos, out Quaternion anchorRot)
         {
+            // Cerceve karari PROFILDE (bkz. WeaponGripProfile.GripAnchorLocal) - tezgah da
+            // ayni yardimcilari cagiriyor, boylece ikisi ayrisamiyor.
             Vector3 anchorLocal;
-            Quaternion anchorLocalRot = w.gripLocalRot;
+            Quaternion anchorLocalRot = w.profile.AnchorLocalRotation(w.mirrored);
 
             if (!w.isSupport)
             {
-                anchorLocal = w.gripLocalPos;
+                anchorLocal = w.profile.GripAnchorLocal(w.mirrored);
             }
             else
             {
                 // Slide along the rail: project this hand's networked carrier onto the segment,
                 // in the weapon's (possibly mirrored) local space.
-                Vector3 rs = w.mirrored ? WeaponGripMath.MirrorX(w.profile.supportRailLocalStart) : w.profile.supportRailLocalStart;
-                Vector3 re = w.mirrored ? WeaponGripMath.MirrorX(w.profile.supportRailLocalEnd) : w.profile.supportRailLocalEnd;
+                Vector3 rs, re;
+                w.profile.SupportRailLocal(w.mirrored, out rs, out re);
                 Vector3 s = w.weapon.TransformPoint(rs);
                 Vector3 e = w.weapon.TransformPoint(re);
                 Transform carrier = _ik != null ? (left ? _ik.leftHandSource : _ik.rightHandSource) : null;

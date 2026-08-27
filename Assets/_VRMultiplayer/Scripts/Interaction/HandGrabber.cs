@@ -209,9 +209,9 @@ namespace VRMultiplayer
         static float AnchorDistance(GrabbableObject weapon, WeaponGrip grip, Vector3 handPos)
         {
             if (weapon == null || grip == null || grip.Profile == null) return -1f;
-            Vector3 local = grip.Profile.supportRailLocalStart;
-            if (local.sqrMagnitude < 1e-8f) return -1f;   // ankraj yazilmamis
-            if (weapon.HolderHand == 0) local = Weapons.WeaponGripMath.MirrorX(local);
+            if (grip.Profile.supportRailLocalStart.sqrMagnitude < 1e-8f) return -1f; // ankraj yazilmamis
+            Vector3 local, railEnd;
+            grip.Profile.SupportRailLocal(weapon.HolderHand == 0, out local, out railEnd);
             return Vector3.Distance(weapon.transform.TransformPoint(local), handPos);
         }
 
@@ -640,13 +640,12 @@ namespace VRMultiplayer
         // so engaging support never pops. Roll stays 1:1 with the grip hand (up = hand up).
         void FollowProfiled(HandState h, WeaponGripProfile profile)
         {
-            Vector3 gripLocal = profile.gripLocalPosition;
-            Quaternion gripLocalRot = profile.GripLocalRotation;
-            if (h.index == 0) // grip in the LEFT hand -> mirror the right-hand authored anchor
-            {
-                gripLocal = WeaponGripMath.MirrorX(gripLocal);
-                gripLocalRot = WeaponGripMath.MirrorX(gripLocalRot);
-            }
+            // Cerceve karari PROFILDE (WeaponGripProfile.GripAnchorLocal) - silahin ele gore
+            // konumu ile elin silaha gore konumu AYNI cerceveden gelmezse el silahin yaninda
+            // durur. Kabza SOL elde ise ana el soldur.
+            bool leftIsMain = h.index == 0;
+            Vector3 gripLocal = profile.GripAnchorLocal(leftIsMain);
+            Quaternion gripLocalRot = profile.AnchorLocalRotation(leftIsMain);
 
             var sup = Other(h);
             bool hasSupport = sup != null && sup.supporting == h.held;

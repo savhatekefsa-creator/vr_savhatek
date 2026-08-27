@@ -99,11 +99,10 @@ namespace VRMultiplayer.Weapons
 
         void Apply()
         {
-            // Kabza cipasi: poz yazim kurali ana el=SAG, sol elde tutuluyorsa aynalanir —
-            // HandGrabber.FollowProfiled ve WeaponHandWeld ile ayni mantik, ayni nokta.
-            Vector3 gripLocal = _profile.gripLocalPosition;
-            if (_grab.HolderHand == 0) gripLocal = WeaponGripMath.MirrorX(gripLocal);
-            Vector3 pivot = transform.TransformPoint(gripLocal);
+            // Kabza cipasi: poz yazim kurali ana el=SAG, sol elde tutuluyorsa aynalanir.
+            // Karar WeaponGripProfile.GripAnchorLocal'da - FollowProfiled, WeaponHandWeld ve
+            // tezgah da ayni cagriyi yapiyor.
+            Vector3 pivot = transform.TransformPoint(_profile.GripAnchorLocal(_grab.HolderHand == 0));
 
             // Namlu ekseni HER ZAMAN profilden gelir (+Z degil: HK416 -X, Pistol -Z).
             Vector3 barrelLocal = _profile.barrelLocalDirection.sqrMagnitude > 1e-6f

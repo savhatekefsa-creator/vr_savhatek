@@ -117,6 +117,41 @@ namespace VRMultiplayer.Weapons
             return supportRole ? supportHand : mainHand;
         }
 
+        /// <summary>
+        /// CIPA CERCEVESI - elin uzerine oturdugu silah-yerel nokta ve yonelim.
+        ///
+        /// TEK KARAR NOKTASI, tipki <see cref="PoseFor"/> gibi. Ayni hesap iki yerde
+        /// yapiliyor: calisma aninda WeaponHandWeld.ComputeAnchor, tezgahta
+        /// WeaponWorkshop.Drive. Ikisi ayrildigi anda "atolyede gordugun poz = oyundaki poz"
+        /// sozu bozulur.
+        ///
+        /// CIHAZDA GORULDU (2026-08-27): sol-ana kipinde tezgah HAM cerceveyi, oyun
+        /// AYNALANMIS cerceveyi kullaniyordu. Dmr1'de iki cerceve arasi 37 derece vardi ve
+        /// ayni offset 5.7 cm farkli yere dusuyordu - kullanici "parmaklar tamam ama bilek
+        /// yanlis" diye bildirdi (parmaklar FIZIKSEL ele gore saklandigi icin etkilenmiyor).
+        ///
+        /// NEDEN AYNALANIYOR: kabza rakisi SAG kumandanin gercek tutus acisindan yakalandi.
+        /// Silah sol elde ANA olarak tutulunca ayni raki aynasiyla uygulanmali, yoksa silah
+        /// ters yone yatar. Poz aynalamasindan (bkz. PoseFor) BAGIMSIZDIR: poz elle
+        /// yazilabilir, cerceve yazilamaz - cerceve her zaman aynalanir.
+        /// </summary>
+        public Vector3 GripAnchorLocal(bool leftIsMain) =>
+            leftIsMain ? WeaponGripMath.MirrorX(gripLocalPosition) : gripLocalPosition;
+
+        /// <summary>Cipa yonelimi - ana elde de destek elinde de ayni (bkz. <see cref="GripAnchorLocal"/>).</summary>
+        public Quaternion AnchorLocalRotation(bool leftIsMain) =>
+            leftIsMain ? WeaponGripMath.MirrorX(GripLocalRotation) : GripLocalRotation;
+
+        /// <summary>Destek eli rayinin iki ucu, cipayla AYNI cercevede.</summary>
+        public void SupportRailLocal(bool leftIsMain, out Vector3 start, out Vector3 end)
+        {
+            start = supportRailLocalStart;
+            end = supportRailLocalEnd;
+            if (!leftIsMain) return;
+            start = WeaponGripMath.MirrorX(start);
+            end = WeaponGripMath.MirrorX(end);
+        }
+
         [Header("Iki elli nisan filtresi")]
         [Tooltip("Destek elinin namluyu ne kadar yonettigi. 1 = tam sanal dipcik (tufek), " +
                  "0 = namluyu YALNIZ ana el yonetir, destek eli gorsel olarak tutunur ama " +
