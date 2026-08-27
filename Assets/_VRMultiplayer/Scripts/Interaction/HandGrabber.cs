@@ -774,6 +774,18 @@ namespace VRMultiplayer
         /// <summary>Baskin OLMAYAN elin indeksi (0 = sol, 1 = sag).</summary>
         static byte OffHand => PlayerProfile.OffHandIndex;
 
+        // ─── GECICI: YASAK KAPALI (2026-08-27) ────────────────────────────────────────
+        // Sol-ana tutuslar ayarlanirken oyuncunun AYNI silahi iki elde de tutup
+        // karsilastirabilmesi gerekiyor: "sol eldeki tutus sagdaki kadar dogru mu?"
+        // sorusunun tek cevabi yan yana gormek. Yasak acikken buyuk silah ters ele hic
+        // girmedigi icin karsilastirma yapilamiyordu.
+        //
+        // GERI ACMA: asagidaki satiri true yap, tek degisiklik bu. 16 silahin sol-ana
+        // tutusu bitince yapilacak — dordu de (TryGrab yakinlik, RequestWeaponSwap el
+        // secimi, EquipSpawnedRpc yaris korumasi, kemerden secim) bu bayraga bagli.
+        const bool BanEnabled = false;
+        // ──────────────────────────────────────────────────────────────────────────────
+
         static bool IsPistolName(string s) =>
             !string.IsNullOrEmpty(s) && s.ToLowerInvariant().Contains("pistol");
 
@@ -781,6 +793,7 @@ namespace VRMultiplayer
         /// (tas, prop) ve bombalar serbest — onlar tek elle dogal kullaniliyor.</summary>
         static bool OffHandPrimaryBanned(GrabbableObject g)
         {
+            if (!BanEnabled) return false;
             if (g == null) return false;
             if (g.GetComponent<GrenadeController>() != null) return false;
             var grip = g.GetComponent<WeaponGrip>();
@@ -793,6 +806,7 @@ namespace VRMultiplayer
         /// <summary>Ayni kural, kemerden secilen PREFAB icin (ortada instance yokken).</summary>
         static bool OffHandPrimaryBannedPrefab(GameObject prefab)
         {
+            if (!BanEnabled) return false;
             if (prefab == null) return false;
             if (prefab.GetComponent<GrenadeController>() != null) return false;
             if (prefab.GetComponent<NetworkWeapon>() == null) return false;
