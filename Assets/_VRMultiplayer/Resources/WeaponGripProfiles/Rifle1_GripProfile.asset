@@ -149,6 +149,86 @@ MonoBehaviour:
       - {x: -0.040360056, y: 0.08766012, z: -0.45155063, w: 0.8870112}
       fpIndexPulledJoints: []
       fpJointsAuthored: 1
+  mainHandLeft:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    fpWristLocalPosition: {x: -0.07496058, y: 0.030025363, z: -0.080108844}
+    fpWristLocalEuler: {x: 330.97247, y: 32.594894, z: 334.26593}
+    fpCurls: []
+    thumbCurl: 0
+    indexCurl: 0
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 0
+    rightFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
+    leftFingers:
+      joints: []
+      indexPulled: []
+      fpJoints:
+      - {x: -0.028949918, y: 0.00060999824, z: 0.07895978, w: 0.99645716}
+      - {x: -0.012540045, y: -0.028970106, z: -0.17187062, w: 0.9846136}
+      - {x: 0.011480026, y: 0.051220115, z: -0.3078307, w: 0.9499921}
+      - {x: 0, y: 0.01748996, z: 0.096619785, w: 0.99516773}
+      - {x: 0, y: -0.039579976, z: -0.30698982, w: 0.9508894}
+      - {x: 0.022770043, y: -0.05952011, z: -0.6001811, w: 0.7973215}
+      - {x: 0, y: -0.023069961, z: -0.22786961, w: 0.9734184}
+      - {x: 0, y: -0.06112983, z: -0.77249783, w: 0.6320683}
+      - {x: 0.0005400011, y: -0.0058300123, z: -0.5771012, w: 0.8166517}
+      - {x: 0, y: -0.0025500045, z: -0.19251032, w: 0.98129165}
+      - {x: 0, y: 0.040750075, z: -0.75768137, w: 0.6513512}
+      - {x: -0.030089885, y: 0.03371987, z: -0.54166794, w: 0.8393768}
+      - {x: 0, y: -0.0058899918, z: 0.048029933, w: 0.9988286}
+      - {x: 0, y: 0.13953018, z: -0.72494096, w: 0.6745309}
+      - {x: -0.052749954, y: 0.1145799, z: -0.5902295, w: 0.79731935}
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 1
+  supportHandRight:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    fpWristLocalPosition: {x: 0.14514987, y: -0.0008949106, z: -0.07396714}
+    fpWristLocalEuler: {x: 309.4489, y: 324.6025, z: 6.2273436}
+    fpCurls: []
+    thumbCurl: 0
+    indexCurl: 0
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 0
+    rightFingers:
+      joints: []
+      indexPulled: []
+      fpJoints:
+      - {x: 0.013380059, y: -0.00028000123, z: -0.03649016, w: 0.9992444}
+      - {x: -0.01189006, y: -0.02747014, z: -0.16292082, w: 0.986185}
+      - {x: 0.00859996, y: 0.038399823, z: -0.23079893, w: 0.97220546}
+      - {x: 0, y: -0.03738018, z: -0.20644102, w: 0.97774476}
+      - {x: 0, y: -0.079110116, z: -0.6135909, w: 0.7856512}
+      - {x: 0.022770043, y: -0.05952011, z: -0.6001811, w: 0.7973215}
+      - {x: 0, y: -0.030520083, z: -0.30142084, w: 0.95300263}
+      - {x: 0, y: -0.053599767, z: -0.6773271, w: 0.73372686}
+      - {x: 0.00056000234, y: -0.006010025, z: -0.5947024, w: 0.80392325}
+      - {x: 0, y: -0.0033800104, z: -0.2555008, w: 0.96680295}
+      - {x: 0, y: 0.038209956, z: -0.71056914, w: 0.70258915}
+      - {x: -0.033330128, y: 0.03735014, z: -0.60001224, w: 0.79842305}
+      - {x: 0, y: 0.01983998, z: -0.16170982, w: 0.9866389}
+      - {x: 0, y: 0.15290897, z: -0.79443467, w: 0.5877861}
+      - {x: -0.052749954, y: 0.1145799, z: -0.5902295, w: 0.79731935}
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 1
+    leftFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
   twoHandAimWeight: 1
   aimDeadzoneDegrees: 0.75
   aimSoftKneeDegrees: 1.5
