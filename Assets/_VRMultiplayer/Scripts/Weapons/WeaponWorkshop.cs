@@ -540,15 +540,14 @@ namespace VRMultiplayer.Weapons
             }
             else
             {
-                // CERCEVE OYUNLA AYNI OLMALI. Eskiden burasi HAM cipayi kullaniyordu; oyun
-                // ise sol-ana tutusta cipayi aynaliyor (kabza rakisi sag kumandadan yakalandi,
-                // ters elde aynasiyla uygulanir). Iki cerceve Dmr1'de 37 derece ayriliyordu ve
-                // tezgahta hizaladigin el oyunda 5.7 cm oteye dusuyordu. Karar artik profilde.
-                Vector3 localAnchor = sup
-                    ? SupportAnchorLocal(_leftIsMain)
-                    : _profile.GripAnchorLocal(_leftIsMain);
+                // TEZGAH HER ZAMAN HAM CERCEVEDE YAZAR - aynalanmis cerceveye asla girmez.
+                // Aynalama yalnizca "poz yazilmamis" durumun yaklasimi; burada poz YAZILIYOR,
+                // yani kaydettigin an calisma ani da ham cerceveye geciyor (bkz.
+                // WeaponGripProfile.AnchorMirrored). Aynalanmis cerceveyi gostersek ilk
+                // itiste cerceve zipplardi - Rifle 2'de 27.7 cm.
+                Vector3 localAnchor = sup ? SupportAnchorLocal() : _profile.gripLocalPosition;
                 anchor = _weapon.transform.TransformPoint(localAnchor);
-                anchorRot = _weapon.transform.rotation * _profile.AnchorLocalRotation(_leftIsMain);
+                anchorRot = _weapon.transform.rotation * _profile.GripLocalRotation;
             }
 
             var hp = PoseOf(left);
@@ -595,14 +594,10 @@ namespace VRMultiplayer.Weapons
         /// GOSTER, gizleme; kullanici eli silahin orijininde gorur ve rayin eksik
         /// oldugunu hemen anlar.
         /// </summary>
-        /// <summary>Destek elinin ray ortasi. Oyun rayda KAYIYOR (elin nerede oldugu belli),
-        /// tezgahta el yok - orta nokta temsilci. Cerceve karari profilde.</summary>
-        Vector3 SupportAnchorLocal(bool leftIsMain)
-        {
-            Vector3 s, e;
-            _profile.SupportRailLocal(leftIsMain, out s, out e);
-            return (s + e) * 0.5f;
-        }
+        /// <summary>Destek elinin ray ortasi, HAM cercevede. Oyun rayda KAYIYOR (elin nerede
+        /// oldugu belli), tezgahta el yok - orta nokta temsilci.</summary>
+        Vector3 SupportAnchorLocal()
+            => (_profile.supportRailLocalStart + _profile.supportRailLocalEnd) * 0.5f;
 
         // ------------------------------------------------------------------ ayar
         /// <summary>Okla itme. Eksenler SILAHIN cercevesinde: +ileri namlu yonu,

@@ -640,12 +640,12 @@ namespace VRMultiplayer
         // so engaging support never pops. Roll stays 1:1 with the grip hand (up = hand up).
         void FollowProfiled(HandState h, WeaponGripProfile profile)
         {
-            // Cerceve karari PROFILDE (WeaponGripProfile.GripAnchorLocal) - silahin ele gore
+            // Cerceve karari PROFILDE (WeaponGripProfile.AnchorMirrored) - silahin ele gore
             // konumu ile elin silaha gore konumu AYNI cerceveden gelmezse el silahin yaninda
             // durur. Kabza SOL elde ise ana el soldur.
             bool leftIsMain = h.index == 0;
             Vector3 gripLocal = profile.GripAnchorLocal(leftIsMain);
-            Quaternion gripLocalRot = profile.AnchorLocalRotation(leftIsMain);
+            Quaternion gripLocalRot = profile.AnchorLocalRotation(false, leftIsMain);
 
             var sup = Other(h);
             bool hasSupport = sup != null && sup.supporting == h.held;

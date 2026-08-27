@@ -135,19 +135,44 @@ namespace VRMultiplayer.Weapons
         /// ters yone yatar. Poz aynalamasindan (bkz. PoseFor) BAGIMSIZDIR: poz elle
         /// yazilabilir, cerceve yazilamaz - cerceve her zaman aynalanir.
         /// </summary>
-        public Vector3 GripAnchorLocal(bool leftIsMain) =>
-            leftIsMain ? WeaponGripMath.MirrorX(gripLocalPosition) : gripLocalPosition;
+        /// <summary>
+        /// Cipa cercevesi AYNALANACAK mi? POZ karariyla AYNI karardir (bkz. <see cref="PoseFor"/>):
+        /// yazilmis bir poz varsa HAM cerceve, yoksa aynalanmis.
+        ///
+        /// NEDEN AYNI KARAR OLMAK ZORUNDA: aynalama, silahin x=0 duzlemine gore SIMETRIK
+        /// oldugunu varsayan bir yaklasimdir. Yazilmis poz varsa yaklasima gerek yok - elin
+        /// nereye gittigi zaten soylenmis. Ustelik varsayim modeli merkezde olmayan silahlarda
+        /// tutmuyor: Rifle 2'nin kabzasi x = -138.7 mm'de, aynalayinca cipa silahin OTEKI
+        /// yanina 27.7 cm oteye gidiyor. Eli silaha oturtmak icin o kadar buyuk bir offset
+        /// gerekiyor ve tam o offset kadar SANAL EL GERCEK KUMANDADAN AYRILIYOR - oyuncu bunu
+        /// "silah ice kayiyor" diye goruyor (cihazda bildirildi 2026-08-27).
+        ///
+        /// Yazilmamis poz icin aynalama AYNEN KALIYOR: sol elde tabanca bugun boyle
+        /// calisiyor ve ayari o varsayimin uzerine yapildi.
+        /// </summary>
+        public bool AnchorMirrored(bool supportRole, bool leftIsMain)
+        {
+            bool m;
+            PoseFor(supportRole, leftIsMain, out m);
+            return m;
+        }
 
-        /// <summary>Cipa yonelimi - ana elde de destek elinde de ayni (bkz. <see cref="GripAnchorLocal"/>).</summary>
-        public Quaternion AnchorLocalRotation(bool leftIsMain) =>
-            leftIsMain ? WeaponGripMath.MirrorX(GripLocalRotation) : GripLocalRotation;
+        /// <summary>Ana el cipasi, dogru cercevede.</summary>
+        public Vector3 GripAnchorLocal(bool leftIsMain) =>
+            AnchorMirrored(false, leftIsMain) ? WeaponGripMath.MirrorX(gripLocalPosition) : gripLocalPosition;
+
+        /// <summary>Cipa yonelimi. Rol de gerekiyor: iki elin pozu ayri yazilabildigi icin
+        /// biri ham cerceveye, oteki aynalanmis cerceveye dusebilir.</summary>
+        public Quaternion AnchorLocalRotation(bool supportRole, bool leftIsMain) =>
+            AnchorMirrored(supportRole, leftIsMain)
+                ? WeaponGripMath.MirrorX(GripLocalRotation) : GripLocalRotation;
 
         /// <summary>Destek eli rayinin iki ucu, cipayla AYNI cercevede.</summary>
         public void SupportRailLocal(bool leftIsMain, out Vector3 start, out Vector3 end)
         {
             start = supportRailLocalStart;
             end = supportRailLocalEnd;
-            if (!leftIsMain) return;
+            if (!AnchorMirrored(true, leftIsMain)) return;
             start = WeaponGripMath.MirrorX(start);
             end = WeaponGripMath.MirrorX(end);
         }

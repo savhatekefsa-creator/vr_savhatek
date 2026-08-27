@@ -229,7 +229,7 @@ namespace VRMultiplayer.Weapons
             // Cerceve karari PROFILDE (bkz. WeaponGripProfile.GripAnchorLocal) - tezgah da
             // ayni yardimcilari cagiriyor, boylece ikisi ayrisamiyor.
             Vector3 anchorLocal;
-            Quaternion anchorLocalRot = w.profile.AnchorLocalRotation(w.mirrored);
+            Quaternion anchorLocalRot = w.profile.AnchorLocalRotation(w.isSupport, w.mirrored);
 
             if (!w.isSupport)
             {
