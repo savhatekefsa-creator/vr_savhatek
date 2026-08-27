@@ -136,45 +136,58 @@ namespace VRMultiplayer.Weapons
         /// yazilabilir, cerceve yazilamaz - cerceve her zaman aynalanir.
         /// </summary>
         /// <summary>
-        /// Cipa cercevesi AYNALANACAK mi? POZ karariyla AYNI karardir (bkz. <see cref="PoseFor"/>):
-        /// yazilmis bir poz varsa HAM cerceve, yoksa aynalanmis.
+        /// Kabza RAKISININ ayna esi. Silahin KENDI cercevesinde aynalar: namlu ileri, ust
+        /// yukari kabul edilip x'te aynalanir.
         ///
-        /// NEDEN AYNI KARAR OLMAK ZORUNDA: aynalama, silahin x=0 duzlemine gore SIMETRIK
-        /// oldugunu varsayan bir yaklasimdir. Yazilmis poz varsa yaklasima gerek yok - elin
-        /// nereye gittigi zaten soylenmis. Ustelik varsayim modeli merkezde olmayan silahlarda
-        /// tutmuyor: Rifle 2'nin kabzasi x = -138.7 mm'de, aynalayinca cipa silahin OTEKI
-        /// yanina 27.7 cm oteye gidiyor. Eli silaha oturtmak icin o kadar buyuk bir offset
-        /// gerekiyor ve tam o offset kadar SANAL EL GERCEK KUMANDADAN AYRILIYOR - oyuncu bunu
-        /// "silah ice kayiyor" diye goruyor (cihazda bildirildi 2026-08-27).
-        ///
-        /// Yazilmamis poz icin aynalama AYNEN KALIYOR: sol elde tabanca bugun boyle
-        /// calisiyor ve ayari o varsayimin uzerine yapildi.
+        /// NEDEN MODEL EKSENINDE DEGIL: duz WeaponGripMath.MirrorX, silahin simetri
+        /// duzleminin model x=0 oldugunu varsayar. 17 silahta oyle (namlu ±Z), ama HK416'nin
+        /// namlusu -X ekseninde - onun simetri duzlemi z=0. Model ekseninde aynalayinca
+        /// HK416'nin NAMLUSU aynalaniyordu: olculdu, namlu 141 derece donuyordu ve silah ele
+        /// ters geliyordu (cihazda bildirildi 2026-08-27). Namlu cercevesinde aynalayinca
+        /// HK416 39 dereceye iniyor, yani obur 17 silahla ayni mertebeye; o 17'sinde sonuc
+        /// BIT BIT AYNI kaliyor cunku onlarda iki cerceve zaten ortusuyor.
         /// </summary>
-        public bool AnchorMirrored(bool supportRole, bool leftIsMain)
+        public Quaternion MirrorRake(Quaternion q)
         {
-            bool m;
-            PoseFor(supportRole, leftIsMain, out m);
-            return m;
+            Vector3 bl = barrelLocalDirection.sqrMagnitude > 1e-6f
+                ? barrelLocalDirection.normalized : Vector3.forward;
+            Vector3 up = Mathf.Abs(Vector3.Dot(bl, Vector3.up)) > 0.95f
+                ? Vector3.forward : Vector3.up;
+            Quaternion f = Quaternion.LookRotation(bl, up);
+            return f * WeaponGripMath.MirrorX(Quaternion.Inverse(f) * q);
         }
 
-        /// <summary>Ana el cipasi, dogru cercevede.</summary>
-        public Vector3 GripAnchorLocal(bool leftIsMain) =>
-            AnchorMirrored(false, leftIsMain) ? WeaponGripMath.MirrorX(gripLocalPosition) : gripLocalPosition;
+        /// <summary>
+        /// Ana el cipasi. HICBIR ZAMAN AYNALANMAZ.
+        ///
+        /// Cipa, silahin uzerindeki FIZIKSEL bir nokta - kabzanin ust-ortasi. El degistirince
+        /// kabza yerinden oynamiyor, dolayisiyla aynalanmasi da anlamsiz. Aynalandiginda nokta
+        /// modelin oteki yanina, 2|x| kadar oteye gidiyordu; model orijini merkezde olmayan
+        /// silahlarda bu felaket: Rifle 2'de 27.7 cm, Smg1'de 24.1 cm. Silah elin yaninda
+        /// duruyordu (cihazda bildirildi 2026-08-27).
+        /// </summary>
+        public Vector3 GripAnchorLocal() => gripLocalPosition;
 
-        /// <summary>Cipa yonelimi. Rol de gerekiyor: iki elin pozu ayri yazilabildigi icin
-        /// biri ham cerceveye, oteki aynalanmis cerceveye dusebilir.</summary>
-        public Quaternion AnchorLocalRotation(bool supportRole, bool leftIsMain) =>
-            AnchorMirrored(supportRole, leftIsMain)
-                ? WeaponGripMath.MirrorX(GripLocalRotation) : GripLocalRotation;
+        /// <summary>
+        /// Cipa yonelimi. Ana el SOL ise HER ZAMAN aynalanir - poz yazilmis olsa bile.
+        ///
+        /// Konumun tersine raki EL'E AIT bir seydir: kabzayi sag elle kavradiginda bilek bir
+        /// yana, sol elle kavradiginda oteki yana yatar. Aynalamayi kaldirdigimda silah sol
+        /// elde sag elin rakisiyla duruyordu ve yamuk goruldu - Dmr1'de ~15 derece (cihazda
+        /// bildirildi 2026-08-27).
+        ///
+        /// Yazilan poz bunu duzeltemez: atolyede ELI silahin uzerinde oynatirsin, silahin
+        /// kumandaya gore acisini degil. O aci burasi.
+        /// </summary>
+        public Quaternion AnchorLocalRotation(bool leftIsMain) =>
+            leftIsMain ? MirrorRake(GripLocalRotation) : GripLocalRotation;
 
-        /// <summary>Destek eli rayinin iki ucu, cipayla AYNI cercevede.</summary>
-        public void SupportRailLocal(bool leftIsMain, out Vector3 start, out Vector3 end)
+        /// <summary>Destek eli rayinin iki ucu. Cipa gibi bunlar da fiziksel noktalar,
+        /// aynalanmaz.</summary>
+        public void SupportRailLocal(out Vector3 start, out Vector3 end)
         {
             start = supportRailLocalStart;
             end = supportRailLocalEnd;
-            if (!AnchorMirrored(true, leftIsMain)) return;
-            start = WeaponGripMath.MirrorX(start);
-            end = WeaponGripMath.MirrorX(end);
         }
 
         [Header("Iki elli nisan filtresi")]
