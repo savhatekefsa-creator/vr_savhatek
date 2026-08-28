@@ -229,18 +229,18 @@ namespace VRMultiplayer.Weapons
             // Cerceve karari PROFILDE (bkz. WeaponGripProfile.GripAnchorLocal) - tezgah da
             // ayni yardimcilari cagiriyor, boylece ikisi ayrisamiyor.
             Vector3 anchorLocal;
-            Quaternion anchorLocalRot = w.profile.AnchorLocalRotation(w.isSupport, w.mirrored);
+            Quaternion anchorLocalRot = w.profile.AnchorLocalRotation(w.mirrored);
 
             if (!w.isSupport)
             {
-                anchorLocal = w.profile.GripAnchorLocal(w.mirrored);
+                anchorLocal = w.profile.GripAnchorLocal();
             }
             else
             {
                 // Slide along the rail: project this hand's networked carrier onto the segment,
                 // in the weapon's (possibly mirrored) local space.
                 Vector3 rs, re;
-                w.profile.SupportRailLocal(w.mirrored, out rs, out re);
+                w.profile.SupportRailLocal(out rs, out re);
                 Vector3 s = w.weapon.TransformPoint(rs);
                 Vector3 e = w.weapon.TransformPoint(re);
                 Transform carrier = _ik != null ? (left ? _ik.leftHandSource : _ik.rightHandSource) : null;
