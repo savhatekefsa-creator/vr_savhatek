@@ -109,25 +109,54 @@ def write_wav(name, x, peak=0.85):
 
 def footstep(seed):
     """Beton uzerinde bot: topuk vurusu + ~110 ms sonra daha hafif burun vurusu +
-    aralarinda cok kisik surtme. Varyantlar zamanlama/perde titremesiyle ayrisir."""
+    aralarinda surtme. Varyantlar zamanlama/perde titremesiyle ayrisir.
+
+    ORTA BANT AGIRLIKLI KARISIM. Ilk surumun dengesi OLCULDU: enerjinin %94'u
+    150 Hz ALTINDA kaliyordu. Bu iki ayri sorun demekti:
+
+      1) QUEST BASAMIYOR. Kulak yanindaki kucuk acik hoparlorler o bandi
+         uretemez; klibin neredeyse tamami cihaza hic ulasmiyordu. PC'de tok
+         bir "tup" duyulup gozlukte kaybolmasinin sebebi buydu.
+      2) BAS SES YON BILDIRMEZ. 150 Hz'in dalga boyu ~2.3 m, kafa ise 18 cm —
+         iki kulak arasinda anlamli seviye farki olusmaz. Adim sesinin bu
+         oyundaki tek isi "yakinimda biri var, SU YONDE" demek oldugu icin bu
+         tek basina yeterdi: mukemmel bir HRTF bile bas gumburtusunun yonunu
+         gosteremez.
+
+    Cozum: sinus thump'lari kisildi, genis bantli katmanlar (gurultu
+    patlamalari, klik, surtme) yukseltildi ve bantlari yukari kaydirildi. Bas
+    TAMAMEN atilmadi — "agirlik" hissini o veriyor; yalnizca baskin olmaktan
+    cikti. Thump'larin temel frekansi da hoparlorun uretebildigi yere tasindi
+    (105 -> 150 Hz): gercek bir bot daha alcaktan vurur, ama cihaza ulasmayan
+    frekansin gerceklige sadik olmasinin bir degeri yok.
+
+    SINUS/GURULTU TUZAGI — dengeyi kurarken en cok yanilttigi yer burasi:
+    sinus tum enerjisini tek bir dar banda yigar, gurultu ayni genligi kHz'lere
+    yayar. Bu yuzden esit GENLIKTEKI bir sinus ile bir gurultu patlamasi esit
+    ENERJI demek DEGILDIR — bant enerjisinde sinus her zaman ezici gelir. Ilk
+    surumde thump 1.0, gurultu 0.55 genlikteydi ve "katmanli" gorunuyordu; olcum
+    %94'e karsi %2 dedi. Katman genliklerini gozle dengelemeye calisma, uretip
+    bant dagilimini OLC.
+    """
     rng = np.random.default_rng(seed)
     out = np.zeros(int(SR * 0.30))
     jit = lambda a, b: rng.uniform(a, b)
 
-    # Topuk: govde thump'i + tok cakil/asfalt dokusu
-    f0 = 105 * jit(0.92, 1.08)
-    place(out, thump(0.09, f0, f0 * 0.62, 0.028) * 1.0, 0.0)
-    place(out, noise_burst(0.05, 0.011, 180, 2100 * jit(0.85, 1.15), rng) * 0.55, 0.0)
-    place(out, click(0.0016, 3200, rng, 0.28), 0.0)
+    # Topuk: govde thump'i + tabanin betona surtunen dokusu.
+    f0 = 150 * jit(0.92, 1.08)
+    place(out, thump(0.085, f0, f0 * 0.62, 0.026) * 0.40, 0.0)
+    place(out, noise_burst(0.06, 0.013, 320, 3800 * jit(0.85, 1.15), rng) * 1.00, 0.0)
+    place(out, click(0.0016, 5200, rng, 0.55), 0.0)
 
-    # Surtme: burun basmadan hemen once ayakkabi tabani kayar (cok kisik)
-    place(out, noise_burst(0.09, 0.05, 700, 4200, rng, attack=0.02) * 0.07, jit(0.04, 0.06))
+    # Surtme: burun basmadan hemen once ayakkabi tabani kayar. Ilk surumde 0.07
+    # ile fiilen duyulmuyordu; adimi "canli" yapan ve yonunu ele veren katman bu.
+    place(out, noise_burst(0.09, 0.05, 700, 4200, rng, attack=0.02) * 0.30, jit(0.04, 0.06))
 
     # Burun: daha tiz, daha hafif ikinci vurus
     ta = jit(0.10, 0.125)
-    f1 = 135 * jit(0.92, 1.08)
-    place(out, thump(0.07, f1, f1 * 0.65, 0.020) * 0.50, ta)
-    place(out, noise_burst(0.04, 0.009, 260, 2600 * jit(0.85, 1.15), rng) * 0.38, ta)
+    f1 = 195 * jit(0.92, 1.08)
+    place(out, thump(0.065, f1, f1 * 0.65, 0.019) * 0.20, ta)
+    place(out, noise_burst(0.045, 0.011, 420, 4400 * jit(0.85, 1.15), rng) * 0.80, ta)
     return out
 
 
@@ -189,8 +218,13 @@ def hit_body(seed):
 
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
+    # Varyantlarin TEPE SEVIYESI de degissin. Ilk surumde dordu de kurusu kurusuna
+    # ayni tepedeydi (0.927 olculdu) cunku write_wav hepsini ayni degere normalize
+    # ediyor. Gercek adimlar birbirinden yuksek/alcak olur; esit seviye, dalga
+    # sekilleri farkli olsa bile "makine" hissi verir.
+    adim_tepe = [0.85, 0.78, 0.82, 0.74]
     for i in range(4):
-        write_wav(f"footstep_{i + 1}.wav", footstep(seed=20 + i))
+        write_wav(f"footstep_{i + 1}.wav", footstep(seed=20 + i), peak=adim_tepe[i])
     write_wav("equip_generic.wav", equip())
     for i in range(3):
         write_wav(f"hit_body_{i + 1}.wav", hit_body(seed=40 + i), peak=0.9)

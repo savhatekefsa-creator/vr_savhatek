@@ -27,12 +27,18 @@ namespace VRMultiplayer.Audio
         static AudioSource _priority;
         static int _next;
         static readonly Dictionary<string, AudioClip> _clips = new Dictionary<string, AudioClip>();
+        static readonly Dictionary<float, AnimationCurve> _curves = new Dictionary<float, AnimationCurve>();
         static readonly HashSet<string> _warned = new HashSet<string>();
 
         /// <summary>3B tek-seferlik ses. clipPath bos ya da klip yoksa SESSIZCE doner —
         /// hicbir kosulda exception/hata uretmez.</summary>
+        /// <param name="refDistance">Sesin YARIYA dustugu mesafe, METRE. 0 (varsayilan) =
+        /// eski davranis, yani a=0.02 ve ref maxDistance ile birlikte olceklenir. Sifirdan
+        /// buyuk verilirse mesafe modeli maxDistance'tan BAGIMSIZ olur — bkz.
+        /// <see cref="Rolloff"/>'daki tuzak aciklamasi.</param>
         public static void PlayAt(string clipPath, Vector3 pos, float volume,
-            float pitchMin = 1f, float pitchMax = 1f, float maxDistance = 120f, bool priority = false)
+            float pitchMin = 1f, float pitchMax = 1f, float maxDistance = 120f, bool priority = false,
+            float refDistance = 0f)
         {
             var clip = Load(clipPath);
             if (clip == null || volume <= 0f) return;
@@ -45,6 +51,14 @@ namespace VRMultiplayer.Audio
             s.spatialBlend = 1f; // havuz Play2D ile paylasiliyor — onceki cagri 0 birakmis olabilir
             s.maxDistance = Mathf.Max(1f, maxDistance);
             s.minDistance = 1f;
+
+            // Egri KAYNAK YARATILIRKEN degil BURADA kuruluyor: ayni havuzu silah sesi ile
+            // adim sesi paylasiyor ve mesafe modelleri farkli. Egri nesneleri a'ya gore
+            // onbellekte, sesi calmak yeni AnimationCurve uretmez.
+            float a = refDistance > 0f
+                ? Mathf.Clamp(refDistance / Mathf.Max(1f, maxDistance), 0.001f, 0.9f)
+                : 0.02f;
+            s.SetCustomCurve(AudioSourceCurveType.CustomRolloff, Rolloff(a));
             s.pitch = pitchMax > pitchMin ? Random.Range(pitchMin, pitchMax) : pitchMin;
             s.volume = Mathf.Clamp01(volume);
             s.clip = clip;
@@ -88,19 +102,34 @@ namespace VRMultiplayer.Audio
             s.playOnAwake = false;
             s.spatialBlend = 1f;
             s.rolloffMode = AudioRolloffMode.Custom;
-            s.SetCustomCurve(AudioSourceCurveType.CustomRolloff, PerceptualRolloff());
+            // Egrinin kendisi PlayAt'te kuruluyor — kaynaklar havuzda paylasildigi icin
+            // burada kurulan tek bir egri, farkli mesafe modeli isteyen cagrilari birbirine
+            // baglardi.
             s.dopplerLevel = 0f; // VR'da hizli el hareketi pitch'i bukmesin
             s.priority = priority;
             return s;
         }
 
-        // Algisal 1/mesafe egrisi (x = mesafe/maxDistance): v = (a/(a+x)) * (1-x^2), a=0.02.
-        // Ilk carpan kulaktaki dogal 1/d dususunu verir, ikincisi egriyi maxDistance'ta
-        // kesin 0'a indirir. maxDistance=120 icin: 0.6 m %80, 10 m %19, 30 m %7, 120 m %0 —
-        // atesleyen kendi silahini gur duyar, 10 m otedeki dolum artik fisilti kalir.
-        static AnimationCurve PerceptualRolloff()
+        /// <summary>
+        /// Algisal 1/mesafe egrisi. x = mesafe/maxDistance icin:  v = (a/(a+x)) * (1-x^2).
+        /// Ilk carpan kulaktaki dogal 1/d dususunu verir, ikincisi egriyi maxDistance'ta
+        /// KESIN 0'a indirir (Logarithmic'in aksine — uzak kaynak voice tuketip havuzu bogmaz).
+        ///
+        /// a NE DEMEK: boyutsuz bir sabit gibi durur ama degildir. a = ref/maxDistance'tir ve
+        /// sadelestirince a/(a+x) = ref/(ref+d) cikar. Yani a, sesin YARIYA DUSTUGU mesafeyi
+        /// (ref) maxDistance cinsinden ifade eder:
+        ///     v(d) = [ref/(ref+d)] * [1-(d/max)^2]
+        ///
+        /// BURASI BIR TUZAKTI. a sabit tutulup maxDistance kucultulurse ref de onunla birlikte
+        /// SESSIZCE kuculur. Silahta a=0.02, max=120 -> ref=2.4 m (dogru; 0.6 m %80, 10 m %19).
+        /// Ama ayni a ile adim sesi 22 m'ye cagriliyordu -> ref=0.44 m: ses her 44 santimde
+        /// yariliyor, 5 m'de %7'ye iniyordu. Adim sesinin duyulmamasinin sebeplerinden biri
+        /// buydu. Yeni cagrilar bu yuzden refDistance'i METRE cinsinden verir.
+        /// </summary>
+        static AnimationCurve Rolloff(float a)
         {
-            const float a = 0.02f;
+            if (_curves.TryGetValue(a, out var cached)) return cached;
+
             var keys = new Keyframe[12];
             float[] xs = { 0f, 0.004f, 0.01f, 0.02f, 0.04f, 0.08f, 0.15f, 0.25f, 0.4f, 0.6f, 0.8f, 1f };
             for (int i = 0; i < xs.Length; i++)
@@ -110,6 +139,7 @@ namespace VRMultiplayer.Audio
             }
             var c = new AnimationCurve(keys);
             for (int i = 0; i < c.length; i++) c.SmoothTangents(i, 0f);
+            _curves[a] = c;
             return c;
         }
 
@@ -141,7 +171,7 @@ namespace VRMultiplayer.Audio
         static void ResetStatics()
         {
             _root = null; _pool = null; _priority = null; _next = 0;
-            _clips.Clear(); _warned.Clear();
+            _clips.Clear(); _warned.Clear(); _curves.Clear();
         }
     }
 }

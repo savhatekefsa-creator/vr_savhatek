@@ -238,7 +238,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5222ee84120265d429e0b4f466c2b8ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Audio.MusicPlayer
-  volume: 0.15
+  volume: 0
 --- !u!4 &305932078
 Transform:
   m_ObjectHideFlags: 0
