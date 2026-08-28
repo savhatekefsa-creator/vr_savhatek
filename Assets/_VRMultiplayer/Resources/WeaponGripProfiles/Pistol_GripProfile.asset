@@ -149,6 +149,56 @@ MonoBehaviour:
       - {x: -0, y: 0, z: -0, w: 1}
       fpIndexPulledJoints: []
       fpJointsAuthored: 0
+  mainHandLeft:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    fpWristLocalPosition: {x: 0, y: 0, z: 0}
+    fpWristLocalEuler: {x: 0, y: 0, z: 0}
+    fpCurls: []
+    thumbCurl: 0
+    indexCurl: 0
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 1
+    indexTriggerMaxCurl: 0.6
+    rightFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
+    leftFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
+  supportHandRight:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    fpWristLocalPosition: {x: 0, y: 0, z: 0}
+    fpWristLocalEuler: {x: 0, y: 0, z: 0}
+    fpCurls: []
+    thumbCurl: 0
+    indexCurl: 0
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 0
+    rightFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
+    leftFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
   twoHandAimWeight: 0
   aimDeadzoneDegrees: 0.75
   aimSoftKneeDegrees: 1.5

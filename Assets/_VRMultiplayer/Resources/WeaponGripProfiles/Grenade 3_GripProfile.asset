@@ -139,8 +139,8 @@ MonoBehaviour:
     middleCurl: 0
     ringCurl: 0
     pinkyCurl: 0
-    indexFollowsTrigger: 0
-    indexTriggerMaxCurl: 0
+    indexFollowsTrigger: 1
+    indexTriggerMaxCurl: 1
     rightFingers:
       joints: []
       indexPulled: []
