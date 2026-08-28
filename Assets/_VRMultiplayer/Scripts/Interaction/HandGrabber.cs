@@ -774,17 +774,14 @@ namespace VRMultiplayer
         /// <summary>Baskin OLMAYAN elin indeksi (0 = sol, 1 = sag).</summary>
         static byte OffHand => PlayerProfile.OffHandIndex;
 
-        // ─── GECICI: YASAK KAPALI (2026-08-27) ────────────────────────────────────────
-        // Sol-ana tutuslar ayarlanirken oyuncunun AYNI silahi iki elde de tutup
-        // karsilastirabilmesi gerekiyor: "sol eldeki tutus sagdaki kadar dogru mu?"
-        // sorusunun tek cevabi yan yana gormek. Yasak acikken buyuk silah ters ele hic
-        // girmedigi icin karsilastirma yapilamiyordu.
+        // Dort kapinin da tek anahtari: TryGrab yakinlik, RequestWeaponSwap el secimi,
+        // EquipSpawnedRpc yaris korumasi, kemerden secim.
         //
-        // GERI ACMA: asagidaki satiri true yap, tek degisiklik bu. 16 silahin sol-ana
-        // tutusu bitince yapilacak — dordu de (TryGrab yakinlik, RequestWeaponSwap el
-        // secimi, EquipSpawnedRpc yaris korumasi, kemerden secim) bu bayraga bagli.
-        const bool BanEnabled = false;
-        // ──────────────────────────────────────────────────────────────────────────────
+        // 2026-08-27'de bir sure KAPATILDI: sol-ana tutuslar ayarlanirken oyuncunun ayni
+        // silahi iki elde de tutup karsilastirmasi gerekiyordu, yasak acikken buyuk silah
+        // ters ele hic girmiyordu. 2026-08-28'de 18 silahin sol-ana tutusu yazilinca geri
+        // acildi — artik ters el "ayarsiz" degil, oyuncunun kendi ayarladigi poz.
+        const bool BanEnabled = true;
 
         static bool IsPistolName(string s) =>
             !string.IsNullOrEmpty(s) && s.ToLowerInvariant().Contains("pistol");
