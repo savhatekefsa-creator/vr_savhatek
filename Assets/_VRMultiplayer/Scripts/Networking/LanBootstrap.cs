@@ -348,9 +348,18 @@ namespace VRMultiplayer
             if (nm != null && nm.IsServer) { MatchGui(); return; }
 
             if (_busy) return;
-            GUILayout.BeginArea(new Rect(20, 20, 260, 90), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(20, 20, 260, 130), GUI.skin.box);
             GUILayout.Label("LAN VR Multiplayer");
             if (GUILayout.Button("SUNUCU başlat")) StartAsServer();
+#if UNITY_EDITOR
+            // EDITORE OZEL tek kisilik test yolu (bkz. SoloVrTest). SUNUCU dugmesi
+            // StartServer() cagirir ve sunucuya avatar SPAWN ETMEZ — yani Link'le
+            // gozlugu taksan bile ortada bakacak bir karakter olmaz. Bu dugme host
+            // baslatir (sunucu + istemci) ve PC ekranina disaridan bakan bir kamera
+            // koyar. Build'e girmez.
+            GUILayout.Space(6);
+            if (GUILayout.Button("SOLO TEST (host + kamera)")) StartSoloTest();
+#endif
             GUILayout.EndArea();
         }
 
@@ -407,6 +416,24 @@ namespace VRMultiplayer
             }
             GUILayout.EndArea();
         }
+
+#if UNITY_EDITOR
+        /// <summary>EDITORE OZEL: host olarak baslatir (sunucu + istemci) ki PC'ye de avatar
+        /// dogsun, ve disaridan bakan seyirci kamerasini kurar. Gozlugu Link'le takip kendi
+        /// karakterine PC ekranindan bakmak icin — kol/dirsek/silah tutusuna bakmanin build
+        /// almadan tek yolu. Build'e girmez.</summary>
+        void StartSoloTest()
+        {
+            if (_busy) return;
+            var solo = FindFirstObjectByType<SoloVrTest>();
+            if (solo == null)
+            {
+                var go = new GameObject("~SoloVrTest");
+                solo = go.AddComponent<SoloVrTest>();
+            }
+            solo.StartSolo();
+        }
+#endif
 
         /// <summary>
         /// Dedicated-server mode for the PC: runs the room WITHOUT spawning a player avatar.

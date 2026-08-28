@@ -57,6 +57,11 @@ namespace VRMultiplayer
         Transform _srcHead, _srcLeft, _srcRight;
         bool _bound;
 
+        /// <summary>Takip kaynaklari baglandi mi. False ise LateUpdate hicbir sey kopyalamaz:
+        /// agdaki kafa/el transformlari hic guncellenmez ve avatar DONAR. Teshis icin disari
+        /// acik (bkz. SoloVrTest) — "avatar hareket etmiyor" sikayetini olcumle ayirmak icin.</summary>
+        public bool TrackingBound => _bound;
+
         public override void OnNetworkSpawn()
         {
             ApplyVisibility();
