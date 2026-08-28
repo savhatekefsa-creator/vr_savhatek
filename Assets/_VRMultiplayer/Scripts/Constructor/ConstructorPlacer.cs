@@ -1596,7 +1596,7 @@ namespace VRMultiplayer.Constructor
                 // etkinlestigi ANDAKI kok objeleri gizliyor) — kirilgan bir tesaduf.
                 _panel = HeadFollowPanel.Create("~Constructor Panel", "", new Color(0.5f, 0.9f, 1f));
             _panel.gameObject.SetActive(true);
-            _panel.text = text;
+            UITheme.SetText(_panel, text);
             _hidePanelAt = hideAfter > 0f ? Time.time + hideAfter : -1f;
         }
 

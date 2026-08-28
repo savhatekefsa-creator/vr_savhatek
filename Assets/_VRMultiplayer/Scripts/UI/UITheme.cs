@@ -378,6 +378,20 @@ namespace VRMultiplayer.UI
             return tm;
         }
 
+        /// <summary>Yaziyi YALNIZCA degistiyse atar.
+        ///
+        /// TMP'de .text atamasi ucuz DEGIL: zengin metin ayristirmasi, satir kirma, karakter
+        /// basina vertex uretimi ve mesh yeniden olusturma tetikler. Eski TextMesh'te bu
+        /// maliyet cok daha dusuktu, o yuzden kod her kare kosulsuz yaziyordu. TMP gocundan
+        /// sonra ayni desen kare basi gereksiz mesh rebuild demek — cihazda takilma olarak
+        /// hissediliyor. Ayni metinse hicbir sey yapma.</summary>
+        public static void SetText(TMP_Text tm, string value)
+        {
+            if (tm == null) return;
+            if (!string.Equals(tm.text, value, System.StringComparison.Ordinal))
+                tm.text = value;
+        }
+
         /// <summary>TMP yazisini eski TextMesh sozlesmesine oturtur: sarma YOK (satirlar
         /// eskisi gibi \n ile), tasma serbest, SIFIR boyutlu rect — boylece hiza noktalari
         /// eski anchor gibi transform'un kendisinden olculur (Center = konumda ortala,

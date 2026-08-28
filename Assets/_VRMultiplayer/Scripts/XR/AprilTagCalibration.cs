@@ -2298,11 +2298,11 @@ namespace VRMultiplayer
                 // Passthrough istendi ama kamera kalkmadiysa SOYLE. Yoksa oyuncu sanal
                 // dunyayi gorup "isaretci yanlis yerde" sanir; oysa gordugu sey gercek oda
                 // bile degildir.
-                _panel.text = PanelText(true, cameraRunning);
+                VRMultiplayer.UI.UITheme.SetText(_panel, PanelText(true, cameraRunning));
             }
             else
             {
-                _panel.text = PanelText(false, cameraRunning);
+                VRMultiplayer.UI.UITheme.SetText(_panel, PanelText(false, cameraRunning));
             }
         }
 
