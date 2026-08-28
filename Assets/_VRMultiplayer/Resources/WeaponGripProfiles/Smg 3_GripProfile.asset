@@ -152,8 +152,8 @@ MonoBehaviour:
   mainHandLeft:
     wristLocalPosition: {x: 0, y: 0, z: 0}
     wristLocalEuler: {x: 0, y: 0, z: 0}
-    fpWristLocalPosition: {x: -0.08253123, y: -0.04080664, z: 0.014121419}
-    fpWristLocalEuler: {x: 305.03082, y: 57.054993, z: 17.125954}
+    fpWristLocalPosition: {x: -0.09, y: 0, z: -0.024}
+    fpWristLocalEuler: {x: -34, y: 48, z: -5}
     fpCurls: []
     thumbCurl: 0
     indexCurl: 0
@@ -192,8 +192,8 @@ MonoBehaviour:
   supportHandRight:
     wristLocalPosition: {x: 0, y: 0, z: 0}
     wristLocalEuler: {x: 0, y: 0, z: 0}
-    fpWristLocalPosition: {x: 0.10254242, y: 0.11064362, z: -0.111324035}
-    fpWristLocalEuler: {x: 336.60895, y: 327.17685, z: 23.751223}
+    fpWristLocalPosition: {x: 0.175, y: 0.045, z: -0.05}
+    fpWristLocalEuler: {x: -40, y: -45, z: 0}
     fpCurls: []
     thumbCurl: 0
     indexCurl: 0
