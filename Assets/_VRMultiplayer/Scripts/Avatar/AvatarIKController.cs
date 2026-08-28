@@ -215,6 +215,12 @@ namespace VRMultiplayer
         Transform _lElbowHint, _rElbowHint;
         float _maxReachL, _maxReachR;
 
+        /// <summary>Takip kapisi acildi mi. Kapali oldugu surece LateUpdate en basta doner:
+        /// govde konumlanmaz, IK hedefleri surulmez, avatar DONAR. Teshis icin disari acik
+        /// (bkz. SoloVrTest paneli) — "poz degismiyor" sikayetini tahminle degil olcumle
+        /// ayirmak icin.</summary>
+        public bool TrackingValid => _trackingValid;
+
         void SetupHandOrientation(Animator animator)
         {
             if (animator == null || animator.avatar == null || !animator.avatar.isHuman)

@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 
 namespace VRMultiplayer.Weapons
@@ -46,6 +47,19 @@ namespace VRMultiplayer.Weapons
         // the weapon anchor on both engage and release.
         const float WeldBlendSeconds = 0.12f;
 
+        [Header("Govde temizligi (SADECE baskalarinin gordugu kopya)")]
+        [Tooltip("Silah govdenin icine girdiginde disari itilir. YALNIZCA bu avatari SEN " +
+                 "surmuyorsan uygulanir — yani karsindaki oyuncunun ekraninda. Kendi elindeki " +
+                 "silahin konumuna hicbir kosulda dokunulmaz, bkz. VisualOnly.")]
+        public bool bodyClearance = true;
+        [Tooltip("Govde ekseni etrafindaki yaricap (m). Silahin kendi kalinligi buna EKLENIR.")]
+        public float bodyRadius = 0.22f;
+        [Tooltip("Itmenin ust siniri (m). Kol erisimi zaten ikinci bir sinir koyar.")]
+        public float maxBodyPush = 0.35f;
+        [Tooltip("Itmenin yumusama suresi (s). Sadece gorsel oldugu icin serbestce " +
+                 "yumusatilabilir — izleyen oyuncu ani sicrama gormez.")]
+        public float clearanceSmoothing = 0.08f;
+
         HandWeld _left, _right;
         Animator _anim;
         AvatarIKController _ik;
@@ -56,6 +70,41 @@ namespace VRMultiplayer.Weapons
         // olcum zaten kirlenmis olur ve sinir her karede biraz daha genisler.
         Transform _upperL, _upperR;
         float _armLocalL, _armLocalR;
+
+        // Govde ekseni (kalca -> boyun). Bas DISARIDA birakilir: nisan alirken silah yuze
+        // yaklasir, orayi itmek dogrudan nisan hattini bozuk gosterirdi.
+        Transform _hips, _neck;
+
+        // Silahin kaba sekli, tutus basina BIR KEZ olculur (her kare renderer taramak pahali).
+        Vector3 _shapeCenter, _shapeAxis;
+        float _shapeHalfLen, _shapeHalfThick;
+        bool _shapeOK;
+        Transform _shapeOf;
+
+        Vector3 _push, _pushVel;   // yumusatilmis itme
+
+        // Sahiplik: bir kez aranir. Bulunamazsa (editordeki tutus test ortami, ag yok)
+        // gorsel kopya sayilir — orada zaten disaridan bakiyoruz ve oynanis diye bir sey yok.
+        NetworkObject _netObj;
+        bool _netLooked;
+
+        /// <summary>Bu avatar YEREL oyuncu tarafindan surulmuyor mu?
+        ///
+        /// Govde temizligi yalnizca burada calisir. Nedeni: temizlik silahin transformunu
+        /// oynatiyor, o transform da nisani ve elindeki hissi belirliyor. Sahibinin
+        /// makinesinde uygulansa oyuncu silahi govdesine yaklastirdiginda silah kumandasindan
+        /// KAYAR — sahada "birden konum degistiriyor, sikisiyor" diye gorulen buydu. Sahip
+        /// zaten birinci sahista kendi govdesini gormuyor (NetworkVRPlayer gizliyor), yani
+        /// duzeltilecek bir goruntu de yok. Isabet sunucuda silahin gercek transformundan
+        /// hesaplandigi icin bu kaydirma tamamen kozmetiktir.</summary>
+        bool VisualOnly
+        {
+            get
+            {
+                if (!_netLooked) { _netObj = GetComponentInParent<NetworkObject>(); _netLooked = true; }
+                return _netObj == null || !_netObj.IsOwner;
+            }
+        }
 
         void Awake()
         {
@@ -73,6 +122,11 @@ namespace VRMultiplayer.Weapons
                     _armLocalL = lowerL.localPosition.magnitude + _leftBone.localPosition.magnitude;
                 if (lowerR != null && _rightBone != null)
                     _armLocalR = lowerR.localPosition.magnitude + _rightBone.localPosition.magnitude;
+
+                _hips = _anim.GetBoneTransform(HumanBodyBones.Hips);
+                _neck = _anim.GetBoneTransform(HumanBodyBones.Neck);
+                if (_neck == null) _neck = _anim.GetBoneTransform(HumanBodyBones.UpperChest);
+                if (_neck == null) _neck = _anim.GetBoneTransform(HumanBodyBones.Chest);
             }
         }
 
@@ -106,6 +160,11 @@ namespace VRMultiplayer.Weapons
                         ? Time.time - Mathf.Clamp01(1f - (Time.time - prev.fadeOutStart) / WeldBlendSeconds) * WeldBlendSeconds
                         : Time.time,
             };
+            // Taze tutus: onceki silahin itmesi devralinmasin (izleyende bir karelik sicrama).
+            // WeaponGrip her replike durum degisiminde yeniden uyguladigi icin yalnizca
+            // gercekten YENI bir weld'de sifirlanir.
+            if (!prev.active && !isSupport) { _push = Vector3.zero; _pushVel = Vector3.zero; }
+
             if (left) _left = w; else _right = w;
             enabled = true;
         }
@@ -232,6 +291,113 @@ namespace VRMultiplayer.Weapons
             return up.position + d * (maxLen / dist);
         }
 
+        /// <summary>Silahin kaba seklini (merkez, uzun eksen, yari boy, yari kalinlik) silahin
+        /// KENDI yerel uzayinda, tutus basina BIR KEZ olcer.
+        ///
+        /// Renderer.localBounds + kose donusumu kullanilir; Renderer.bounds dunyada eksen-hizali
+        /// oldugu icin donmus bir silahta gercekte olmayan bir sisme uretirdi.
+        ///
+        /// Yari kalinlik neden onemli: onceki denemede yalnizca silahin ORTA CIZGISI test
+        /// ediliyordu, dolayisiyla cizgi govdenin disinda kalirken namlu/sarjor govdenin
+        /// icinde kalabiliyordu — sahada "itme yetersiz" goruntusunun sebebi buydu. Kalinlik
+        /// test yaricapina eklenerek silahin YUZEYI govdeye tegetlenir.</summary>
+        void MeasureWeaponShape(Transform weapon)
+        {
+            _shapeOf = weapon;
+            _shapeOK = false;
+            if (weapon == null) return;
+
+            bool any = false;
+            Vector3 lo = Vector3.zero, hi = Vector3.zero;
+            var rends = weapon.GetComponentsInChildren<Renderer>();
+            for (int i = 0; i < rends.Length; i++)
+            {
+                var r = rends[i];
+                if (!(r is MeshRenderer) && !(r is SkinnedMeshRenderer)) continue;
+                var lb = r.localBounds;
+                Vector3 c = lb.center, e = lb.extents;
+                for (int k = 0; k < 8; k++)
+                {
+                    var corner = c + new Vector3(
+                        (k & 1) == 0 ? -e.x : e.x,
+                        (k & 2) == 0 ? -e.y : e.y,
+                        (k & 4) == 0 ? -e.z : e.z);
+                    Vector3 p = weapon.InverseTransformPoint(r.transform.TransformPoint(corner));
+                    if (!any) { lo = hi = p; any = true; }
+                    else { lo = Vector3.Min(lo, p); hi = Vector3.Max(hi, p); }
+                }
+            }
+            if (!any) return;
+
+            _shapeCenter = (lo + hi) * 0.5f;
+            Vector3 ext = (hi - lo) * 0.5f;
+            int ax = ext.x >= ext.y && ext.x >= ext.z ? 0 : (ext.y >= ext.z ? 1 : 2);
+            _shapeAxis = ax == 0 ? Vector3.right : ax == 1 ? Vector3.up : Vector3.forward;
+            _shapeHalfLen = ext[ax];
+            _shapeHalfThick = (ext[(ax + 1) % 3] + ext[(ax + 2) % 3]) * 0.5f;
+            _shapeOK = _shapeHalfLen > 1e-3f;
+        }
+
+        /// <summary>Silahi govdenin disina cikaracak YATAY itmeyi dondurur (yoksa sifir).
+        ///
+        /// Govde, kalca-boyun dogru parcasi etrafinda bir SILINDIR olarak modellenir. Silindir
+        /// (kapsul degil) cunku uclarin disinda kalan ornekler tamamen yok sayilmali: bacak
+        /// hizasindaki bir silah itilmemeli, yuze yaklastirilan bir silah da itilmemeli —
+        /// nisan alirken silah zaten yanaga gelir ve orayi itmek nisan hattini bozuk gosterir.
+        /// Bu yuzden ust uc BOYUN, bas disarida.
+        ///
+        /// Itme yonu eksene dik oldugu icin silah yukari/asagi kaymaz: izleyen oyuncu silahin
+        /// ayni yukseklikte, govdenin yanina dogru kaydigini gorur.</summary>
+        Vector3 BodyClearPush(Transform weapon, Transform hand)
+        {
+            if (_hips == null || _neck == null || !_shapeOK) return Vector3.zero;
+
+            Vector3 a = _hips.position;
+            Vector3 ab = _neck.position - a;
+            float abLen2 = ab.sqrMagnitude;
+            if (abLen2 < 1e-6f) return Vector3.zero;
+
+            float radius = bodyRadius + _shapeHalfThick * Mathf.Abs(weapon.lossyScale.x);
+
+            const int Samples = 11;
+            float best = 0f;
+            Vector3 bestDir = Vector3.zero;
+            bool hit = false;
+
+            for (int i = 0; i < Samples; i++)
+            {
+                float t = (i / (float)(Samples - 1)) * 2f - 1f;   // -1..1, uzun eksen boyunca
+                Vector3 p = weapon.TransformPoint(_shapeCenter + _shapeAxis * (_shapeHalfLen * t));
+
+                Vector3 rel = p - a;
+                float u = Vector3.Dot(rel, ab) / abLen2;
+                if (u < 0f || u > 1f) continue;                   // govde bandinin disinda
+
+                Vector3 d = rel - ab * u;                          // eksene DIK
+                float dist = d.magnitude;
+                float pen = radius - dist;
+                if (pen <= 0f || pen <= best) continue;
+
+                best = pen;
+                hit = true;
+                bestDir = dist > 1e-4f ? d / dist : Vector3.zero;
+            }
+
+            if (!hit) return Vector3.zero;
+
+            if (bestDir.sqrMagnitude < 1e-6f)
+            {
+                // Silah tam govde ekseninin uzerinde: yon belirsiz. Eli tutan taraf disari.
+                Vector3 fallback = hand != null ? hand.position - (a + ab * 0.5f) : transform.right;
+                Vector3 axis = ab / Mathf.Sqrt(abLen2);
+                fallback -= axis * Vector3.Dot(fallback, axis);
+                if (fallback.sqrMagnitude < 1e-6f) return Vector3.zero;
+                bestDir = fallback.normalized;
+            }
+
+            return bestDir * Mathf.Min(best, maxBodyPush);
+        }
+
         void WeldSide(ref HandWeld w, bool left)
         {
             if (!w.active) return;
@@ -273,6 +439,23 @@ namespace VRMultiplayer.Weapons
             // silah yalnizca kumandanin birkac cm gerisinde durur. Duzeltme her karede
             // sifirdan hesaplanir (HandGrabber silahi kumandadan yeniden konumluyor),
             // dolayisiyla birikmez.
+            // GOVDE TEMIZLIGI. Yalnizca ana el ve yalnizca BASKASININ ekraninda (VisualOnly).
+            // Erisim kistirmasindan ONCE: kol itilen silaha yetisemiyorsa asagidaki kistirma
+            // silahi geri cekiyor, yani itme kolun erisimiyle kendiliginden sinirlanir ve
+            // silah elden kopmus gibi havada kalmaz.
+            if (bodyClearance && !w.isSupport && VisualOnly)
+            {
+                if (_shapeOf != w.weapon) MeasureWeaponShape(w.weapon);
+                Vector3 want = BodyClearPush(w.weapon, w.bone);
+                _push = Vector3.SmoothDamp(_push, want, ref _pushVel,
+                    Mathf.Max(0.01f, clearanceSmoothing));
+                if (_push.sqrMagnitude > 1e-8f)
+                {
+                    w.weapon.position += _push;
+                    targetPos += _push;
+                }
+            }
+
             Vector3 reachClamped = ClampToReach(targetPos, left);
             Vector3 excess = reachClamped - targetPos;
             if (excess.sqrMagnitude > 1e-8f)
