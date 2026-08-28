@@ -543,40 +543,53 @@ namespace VRMultiplayer.Weapons
 
         // ------------------------------ HERKESTE ------------------------------
 
+        /// <summary>Patlamanin YEREL sonucu: gizleme + ses + efekt.
+        ///
+        /// gc null OLABILIR: patlama mesaji ile objenin istemcideki omru yarisir ve mesaj
+        /// gec kalabilir. Efekt buna BAGLI DEGIL (bkz. asagisi), yani yarisi kim kazanirsa
+        /// kazansin patlama gorunur.</summary>
         static void LocalExplode(GrenadeController gc, GrenadeType type, Vector3 pos)
         {
-            // gc null olabilir (obje coktan despawn olduysa) — o nadir yarista fx/ses atlanir,
-            // hasar zaten sunucuda coktan islenmistir.
             if (gc != null)
             {
                 if (gc._exploded) return;
                 gc._exploded = true;
                 gc._live = false;
                 gc.HideSelf();
-                if (gc._cfg != null)
-                {
-                    WeaponAudioPlayer.PlayAt(gc._cfg.explodeClip, pos, gc._cfg.explodeVolume,
-                        0.95f, 1.05f, gc._cfg.explodeMaxDistance, priority: true);
-                    // War FX prefabi kendi rotasyonuyla dogar (duman gibi efektler +90X ister)
-                    // ve CFX_AutoDestructShuriken ile kendini temizler.
-                    if (gc._cfg.explodeFx != null)
-                    {
-                        var fx = Instantiate(gc._cfg.explodeFx, pos, gc._cfg.explodeFx.transform.rotation);
-                        if (gc._cfg.fxScale != 1f) fx.transform.localScale *= gc._cfg.fxScale;
+            }
 
-                        // Duman perdesinin suresi prefabin partikul ayarlarindan degil config'ten
-                        // gelir; emisyon bitince duman dagilir, temizligi auto-destruct yapar.
-                        if (type == GrenadeType.Smoke)
-                            SmokeLifetime.Apply(fx, gc._cfg.smokeDuration);
-                    }
+            // FX VE SES ARTIK gc'YE BAGLI DEGIL.
+            //
+            // Ikisi de eskiden "gc != null" blogunun icindeydi. Yani istemci objeyi
+            // bulamadigi her durumda (despawn yarisi, spawn'i hic ulasmamis obje) patlama
+            // TAMAMEN sessiz ve gorunmez oluyor, ama gizleme/despawn yine calisiyordu —
+            // oyuncunun gordugu "bombayi atiyorum, patlamiyor, sadece yok oluyor" tam olarak
+            // bu. Efektin objeye ihtiyaci yok: konum ve TUR zaten mesajda geliyor, config de
+            // turden cozulebiliyor.
+            var cfg = gc != null && gc._cfg != null ? gc._cfg : GrenadeBinder.FindConfigByType(type);
+            if (cfg != null)
+            {
+                WeaponAudioPlayer.PlayAt(cfg.explodeClip, pos, cfg.explodeVolume,
+                    0.95f, 1.05f, cfg.explodeMaxDistance, priority: true);
+                // War FX prefabi kendi rotasyonuyla dogar (duman gibi efektler +90X ister)
+                // ve CFX_AutoDestructShuriken ile kendini temizler.
+                if (cfg.explodeFx != null)
+                {
+                    var fx = Instantiate(cfg.explodeFx, pos, cfg.explodeFx.transform.rotation);
+                    if (cfg.fxScale != 1f) fx.transform.localScale *= cfg.fxScale;
+
+                    // Duman perdesinin suresi prefabin partikul ayarlarindan degil config'ten
+                    // gelir; emisyon bitince duman dagilir, temizligi auto-destruct yapar.
+                    if (type == GrenadeType.Smoke)
+                        SmokeLifetime.Apply(fx, cfg.smokeDuration);
                 }
             }
 
-            // Korluk YEREL kamerayla hesaplanir (bakis acisi + mesafe + siper) — gc despawn
-            // yarisina yenildiyse varsayilan yaricapla yine uygulanir.
+            // Korluk YEREL kamerayla hesaplanir (bakis acisi + mesafe + siper). Artik yukarida
+            // TURDEN cozulen config kullanilir: obje bulunamadiginda da gercek yaricap gecerli,
+            // sabit varsayilanlar yalnizca config'in kendisi yoksa devreye girer.
             if (type == GrenadeType.Flash)
             {
-                var cfg = gc != null ? gc._cfg : null;
                 UI.FlashBlindEffect.TriggerAt(pos,
                     cfg != null ? cfg.flashRadius : 15f,
                     cfg != null ? cfg.flashHoldSeconds : 0.25f,

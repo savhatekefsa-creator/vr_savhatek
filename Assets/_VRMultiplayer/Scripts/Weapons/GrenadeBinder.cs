@@ -32,6 +32,20 @@ namespace VRMultiplayer.Weapons
             c.Bind(cfg);
         }
 
+        /// <summary>Verilen TURUN ilk config'i (yoksa null).
+        ///
+        /// Patlama efekti icin var: patlama mesajinda TUR geliyor ama objenin kendisi
+        /// istemcide bulunamayabiliyor. Efekt objeye degil ture bagli oldugu icin bu
+        /// yeterlidir — bkz. GrenadeController.LocalExplode.</summary>
+        public static GrenadeConfig FindConfigByType(GrenadeType type)
+        {
+            if (_configs == null)
+                _configs = Resources.LoadAll<GrenadeConfig>("GrenadeConfigs");
+            foreach (var c in _configs)
+                if (c != null && c.type == type) return c;
+            return null;
+        }
+
         /// <summary>Obje adina uyan config: birebir eslesme oncelikli; yoksa obje adi config
         /// adini ICEREN kayit ("Weapon_Grenade 1" gibi onekli spawner prefablari icin —
         /// kemer cantasi bombalari bu adla dogurur). Uymayan icin null.</summary>
