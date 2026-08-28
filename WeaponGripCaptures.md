@@ -382,3 +382,93 @@ Degerler WeaponGripProfile .asset icine oldugu gibi yapistirilabilir.
   wristLocalEuler: {x: 321,8325, y: 274,582, z: 225,601}
 ```
 <!-- ham quaternion — gripLocalRotation: {x: 0,063914, y: 0,838404, z: 0,34594, w: -0,416317} wristLocalRotation: {x: 0,49781, y: -0,469875, z: -0,7261, w: 0,064673} -->
+
+## SOL el — Weapon_Pistol 4(Clone) — 2026-08-26 10:45:03
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: 0.9159, y: -0.5341, z: 0.0205}
+  gripLocalEuler: {x: 326.9326, y: 9.5454, z: 324.8419}
+  wristLocalPosition: {x: -0.7255, y: 0.534, z: 0.0351}
+  wristLocalEuler: {x: 11.2648, y: 47.4147, z: 185.7119}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0.294439, y: 0.009613, z: 0.265957, w: -0.917867} wristLocalRotation: {x: -0.395149, y: 0.109688, z: -0.912026, w: 0.005989} -->
+
+## SAG el — Weapon_Sniper 1(Clone) — 2026-08-26 10:45:04
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: -0.689, y: -0.5389, z: 0.6603}
+  gripLocalEuler: {x: 332.8388, y: 351.0632, z: 65.8812}
+  wristLocalPosition: {x: 0.7825, y: 0.1988, z: 0.0758}
+  wristLocalEuler: {x: 346.143, y: 317.41, z: 155.4971}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0.237645, y: -0.06374, z: -0.511606, w: -0.823239} wristLocalRotation: {x: 0.376158, y: -0.033332, z: -0.894559, w: -0.239082} -->
+
+## SOL el — Weapon_Pistol 4(Clone) — 2026-08-26 10:45:04
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: 0.9159, y: -0.5341, z: 0.0205}
+  gripLocalEuler: {x: 326.9326, y: 9.5454, z: 324.8419}
+  wristLocalPosition: {x: -0.7255, y: 0.534, z: 0.0351}
+  wristLocalEuler: {x: 11.2648, y: 47.4147, z: 185.7119}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0.294439, y: 0.009613, z: 0.265957, w: -0.917867} wristLocalRotation: {x: -0.39515, y: 0.109688, z: -0.912025, w: 0.005989} -->
+
+## SOL el — Weapon_Pistol 4(Clone) — 2026-08-26 10:47:03
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: 1.2639, y: -0.5215, z: -0.613}
+  gripLocalEuler: {x: 280.085, y: 29.9681, z: 308.5141}
+  wristLocalPosition: {x: -0.6588, y: -0.4128, z: 0.6879}
+  wristLocalEuler: {x: 30.1636, y: 86.4414, z: 225.2743}
+```
+<!-- ham quaternion — gripLocalRotation: {x: -0.644889, y: -0.090939, z: -0.172041, w: 0.739088} wristLocalRotation: {x: 0.537302, y: -0.429505, z: 0.717997, w: -0.106361} -->
+
+## SAG el — Weapon_Sniper 1(Clone) — 2026-08-26 10:47:03
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: -0.4258, y: -0.4288, z: 0.1578}
+  gripLocalEuler: {x: 285.042, y: 296.1189, z: 79.1639}
+  wristLocalPosition: {x: 0.0282, y: -0.1705, z: 0.6558}
+  wristLocalEuler: {x: 36.099, y: 278.2797, z: 129.9033}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0.665465, y: -0.005435, z: -0.180998, w: -0.724131} wristLocalRotation: {x: 0.464307, y: 0.475648, z: -0.737281, w: -0.120814} -->
+
+## SOL el — Weapon_Pistol 4(Clone) — 2026-08-26 10:47:03
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: 1.264, y: -0.5209, z: -0.6129}
+  gripLocalEuler: {x: 278.2069, y: 22.6921, z: 316.8015}
+  wristLocalPosition: {x: -0.6404, y: -0.4055, z: 0.7088}
+  wristLocalEuler: {x: 31.2825, y: 88.8254, z: 225.7095}
+```
+<!-- ham quaternion — gripLocalRotation: {x: -0.651569, y: -0.098024, z: -0.153059, w: 0.736493} wristLocalRotation: {x: 0.546199, y: -0.439213, z: 0.707146, w: -0.093296} -->
+
+## SAG el — Weapon_Sniper 1(Clone) — 2026-08-26 10:47:03
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: -0.4232, y: -0.424, z: 0.1597}
+  gripLocalEuler: {x: 282.9066, y: 292.9651, z: 88.065}
+  wristLocalPosition: {x: -0.0159, y: -0.18, z: 0.6487}
+  wristLocalEuler: {x: 30.4156, y: 275.144, z: 127.9067}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0.673694, y: -0.05062, z: -0.20583, w: -0.707961} wristLocalRotation: {x: 0.499894, y: 0.459833, z: -0.717648, w: -0.15376} -->
+
+## SAG el — Weapon_Sniper 1(Clone) — 2026-08-26 10:47:04
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: -0.425, y: -0.4238, z: 0.1591}
+  gripLocalEuler: {x: 282.2229, y: 282.197, z: 100.4408}
+  wristLocalPosition: {x: -0.0304, y: -0.2061, z: 0.6402}
+  wristLocalEuler: {x: 28.7168, y: 272.9252, z: 125.1384}
+```
+<!-- ham quaternion — gripLocalRotation: {x: 0.688259, y: -0.062723, z: -0.213266, w: -0.690567} wristLocalRotation: {x: 0.509468, y: 0.466975, z: -0.702015, w: -0.17191} -->
+
+## SOL el — Weapon_Pistol 4(Clone) — 2026-08-26 10:47:05
+- rol: TUTULMUYOR — silah bostayken olculdu
+```
+  gripLocalPosition: {x: 1.2647, y: -0.5171, z: -0.6122}
+  gripLocalEuler: {x: 277.1909, y: 18.7784, z: 310.356}
+  wristLocalPosition: {x: -0.544, y: -0.5165, z: 0.7137}
+  wristLocalEuler: {x: 20.9622, y: 90.1307, z: 226.1707}
+```
+<!-- ham quaternion — gripLocalRotation: {x: -0.643598, y: -0.162865, z: -0.212729, w: 0.71694} wristLocalRotation: {x: 0.58998, y: -0.391138, z: 0.689393, w: -0.153856} -->

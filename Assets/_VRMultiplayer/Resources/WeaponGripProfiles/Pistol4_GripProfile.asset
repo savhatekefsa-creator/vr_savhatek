@@ -52,12 +52,12 @@ MonoBehaviour:
     leftFingers:
       joints: []
       indexPulled: []
-  supportRailLocalStart: {x: 0.056582157, y: -0.02914846, z: 0.062174212}
-  supportRailLocalEnd: {x: 0.056582157, y: -0.02914846, z: 0.062174212}
+  supportRailLocalStart: {x: 1.2647, y: -0.5171, z: -0.6122}
+  supportRailLocalEnd: {x: 1.2647, y: -0.5171, z: -0.6122}
   supportBreakDistance: 0.3
   supportHand:
-    wristLocalPosition: {x: -0, y: 0, z: -0.079}
-    wristLocalEuler: {x: 335.24277, y: 274.4931, z: 237.48401}
+    wristLocalPosition: {x: 0.6882836, y: 0.29040658, z: 0.7169418}
+    wristLocalEuler: {x: 314.2556, y: 184.01595, z: 132.94742}
     thumbCurl: 0
     indexCurl: 0
     middleCurl: 0

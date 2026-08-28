@@ -14,13 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   weaponNameEquals: Sniper 1
   weaponNameContains: Sniper 1
-  gripLocalPosition: {x: -0.0593, y: 0.1405, z: 0.3329}
-  gripLocalEuler: {x: 314.51587, y: 225.63664, z: 341.64185}
+  gripLocalPosition: {x: -0.425, y: -0.4238, z: 0.1591}
+  gripLocalEuler: {x: 282.22287, y: 282.1972, z: 100.44054}
   barrelLocalDirection: {x: -0, y: -0, z: -1}
   combat: {fileID: 11400000, guid: b728c7c9fdae47c08c50be56c74289fe, type: 2}
   mainHand:
-    wristLocalPosition: {x: 0.0001, y: -0.0001, z: -0.0859}
-    wristLocalEuler: {x: 321.82657, y: 274.5491, z: 225.61804}
+    wristLocalPosition: {x: -0.0304, y: -0.2061, z: 0.6402}
+    wristLocalEuler: {x: 28.716818, y: 272.92514, z: 125.1384}
     thumbCurl: 0
     indexCurl: 0.2
     middleCurl: 0
@@ -56,8 +56,8 @@ MonoBehaviour:
   supportRailLocalEnd: {x: 0.0279, y: 0.0996, z: -0.1227}
   supportBreakDistance: 0.3
   supportHand:
-    wristLocalPosition: {x: 0.045312434, y: 0.07041712, z: -0.01916437}
-    wristLocalEuler: {x: 332.16043, y: 267.5136, z: 234.82872}
+    wristLocalPosition: {x: -0.034694992, y: -0.07333495, z: 0.028236596}
+    wristLocalEuler: {x: 14.060339, y: 73.07949, z: 14.887465}
     thumbCurl: 0
     indexCurl: 0
     middleCurl: 0
