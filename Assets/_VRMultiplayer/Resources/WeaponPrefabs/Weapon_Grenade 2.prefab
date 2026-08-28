@@ -48,9 +48,41 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 3.071
       objectReference: {fileID: 0}
+    - target: {fileID: 1994653149865261026, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2347779646181041520, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3280651433006536803, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4576492545930931505, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6995964625700850871, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7277003235346693276, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
       propertyPath: m_Name
       value: Weapon_Grenade 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 8076276215458617315, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8424354803435335802, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8510371419923970215, guid: 1a4446c294c2a9c4fb15674b5e6329df, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

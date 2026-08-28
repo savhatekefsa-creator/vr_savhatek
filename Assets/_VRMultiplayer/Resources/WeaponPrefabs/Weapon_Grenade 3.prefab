@@ -8,6 +8,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 492086845127790809, guid: ab9ed78823bd2694686c02c0fa34b04c, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 734519592122343443, guid: ab9ed78823bd2694686c02c0fa34b04c, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1372424000914049427, guid: ab9ed78823bd2694686c02c0fa34b04c, type: 3}
       propertyPath: m_LocalPosition.x
       value: 2.456
@@ -51,6 +59,18 @@ PrefabInstance:
     - target: {fileID: 1410561311835142700, guid: ab9ed78823bd2694686c02c0fa34b04c, type: 3}
       propertyPath: m_Name
       value: Weapon_Grenade 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 5274129476470431580, guid: ab9ed78823bd2694686c02c0fa34b04c, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6331443101594984980, guid: ab9ed78823bd2694686c02c0fa34b04c, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7076209147826399045, guid: ab9ed78823bd2694686c02c0fa34b04c, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

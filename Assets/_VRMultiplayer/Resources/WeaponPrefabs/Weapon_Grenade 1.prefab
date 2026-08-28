@@ -8,6 +8,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 123715500393855483, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 549251326917183609, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 1.329
@@ -48,9 +52,53 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0.116
       objectReference: {fileID: 0}
+    - target: {fileID: 684295452029239884, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 759503734422280502, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2611417097465724932, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3533924140559992941, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4263841489773927310, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5577905473961085167, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6127508865745209463, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6175741972350923788, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6399044937972639247, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6680096057882496229, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7162472632385667198, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
       propertyPath: m_Name
       value: Weapon_Grenade 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8366330413667684383, guid: f47f22f99904c864e815cb9aecede77f, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
