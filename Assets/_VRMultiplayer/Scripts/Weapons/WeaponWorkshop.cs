@@ -29,7 +29,22 @@ namespace VRMultiplayer.Weapons
     /// </summary>
     public class WeaponWorkshop : MonoBehaviour
     {
-        [Tooltip("Atolyeyi ac. Sevkiyatta KAPALI olmali.")]
+        // ─── YALNIZCA GELISTIRME BUILD'INDE ───────────────────────────────────────────
+        // Atolye bir SAHNE nesnesi (bkz. WorkshopSetup): sevkiyat build'ine de girer.
+        // Eskiden korumasi "sahneden kaldirmayi unutma" idi - unutulunca oyuncu atolyeyi
+        // aciyor olurdu. Artik bilesen uyanir uyanmaz kendini kapatiyor; sahnede kalmasi
+        // zararsiz.
+        //
+        // Projedeki oteki gelistirme araclariyla ayni kapi: WeaponGripCaptureTool,
+        // WeaponDevSpawner.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        const bool DevBuild = true;
+#else
+        const bool DevBuild = false;
+#endif
+
+        [Tooltip("Atolyeyi ac. YALNIZCA gelistirme build'inde ve editorde etkili; " +
+                 "normal build'de bilesen kendini kapatir.")]
         public bool open;
 
         [Tooltip("Tezgahin oyuncunun onunde duracagi mesafe (metre).")]
@@ -165,6 +180,14 @@ namespace VRMultiplayer.Weapons
             Write(hp);
         }
 
+        void Awake()
+        {
+            if (DevBuild) return;
+            // Normal build: hic uyanma. open sahnede isaretli kalmis olsa bile.
+            open = false;
+            enabled = false;
+        }
+
         // Kip acik kalirken bilesen olurse oyun girisleri SUSTURULMUS kalirdi (kimse silah
         // kapamaz, ates edemez). End() bayragi geri aciyor; iki cikis yolu da ona ugramali.
         void OnDisable() => Teardown();
@@ -207,6 +230,11 @@ namespace VRMultiplayer.Weapons
         // ------------------------------------------------------------------ kurulum
         void Build()
         {
+            // Ikinci kapi: Awake'te kapansak da birinin open'i calisma aninda acmasina
+            // karsi. Panel bir kere kurulursa oyun girisleri susturuluyor, o yuzden
+            // buranin sessizce gecilmemesi onemli.
+            if (!DevBuild) { open = false; enabled = false; return; }
+
             _weapons = Resources.LoadAll<GameObject>(WeaponDir);
             if (_weapons == null || _weapons.Length == 0)
             {

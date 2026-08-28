@@ -6,8 +6,11 @@ namespace VRMultiplayer.EditorTools
 {
     /// <summary>
     /// Silah Atolyesi'ni sahneye ekler. Atolye bir sahne nesnesidir cunku cihazda build
-    /// icinde yasamasi gerekiyor; prefaba gommek yerine sahneye eklemek, sevkiyat build'inde
-    /// unutulup kalma riskini azaltir (nesne sahnede goze carpar).
+    /// icinde yasamasi gerekiyor.
+    ///
+    /// SAHNEDEN KALDIRMAK GEREKMIYOR: WeaponWorkshop yalnizca editorde ve GELISTIRME
+    /// build'inde uyaniyor, normal build'de Awake'te kendini kapatiyor. Eskiden koruma
+    /// "kaldirmayi unutma" idi; unutulunca oyuncu atolyeyi acabiliyordu.
     /// </summary>
     public static class WorkshopSetup
     {
@@ -22,7 +25,8 @@ namespace VRMultiplayer.EditorTools
                 Selection.activeGameObject = existing;
                 EditorUtility.DisplayDialog("Atolye zaten var",
                     "Sahnede " + ObjectName + " zaten duruyor. Acmak icin bileşendeki " +
-                    "\"open\" kutusunu isaretle, sevkiyattan once KALDIR.", "Tamam");
+                    "\"open\" kutusunu isaretle. Sahnede kalmasi zararsiz: atolye " +
+                    "yalnizca editorde ve GELISTIRME build'inde calisir.", "Tamam");
                 return;
             }
 
@@ -32,8 +36,9 @@ namespace VRMultiplayer.EditorTools
             Undo.RegisterCreatedObjectUndo(go, "Silah Atolyesi ekle");
             Selection.activeGameObject = go;
             EditorUtility.SetDirty(go);
-            Debug.Log("[Atolye] Sahneye eklendi ve acildi. Build alip kulaklikta kullan; " +
-                      "sevkiyat build'inden ONCE bu nesneyi sahneden kaldir.");
+            Debug.Log("[Atolye] Sahneye eklendi ve acildi. Kulaklikta kullanmak icin " +
+                      "GELISTIRME build'i (Development Build) al - normal build'de atolye " +
+                      "kendini kapatir.");
         }
     }
 }
