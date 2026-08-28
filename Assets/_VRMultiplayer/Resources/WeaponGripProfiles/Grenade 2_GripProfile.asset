@@ -128,6 +128,71 @@ MonoBehaviour:
       - {x: -0.040360056, y: 0.08766012, z: -0.45155063, w: 0.8870112}
       fpIndexPulledJoints: []
       fpJointsAuthored: 1
+  mainHandLeft:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    fpWristLocalPosition: {x: -0.02, y: 0.145, z: -0.135}
+    fpWristLocalEuler: {x: -15, y: 60, z: -50}
+    fpCurls: []
+    thumbCurl: 0
+    indexCurl: 0
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 0
+    rightFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
+    leftFingers:
+      joints: []
+      indexPulled: []
+      fpJoints:
+      - {x: 0.0130799655, y: -0.00027999928, z: -0.035689905, w: 0.99927735}
+      - {x: 0.0037700029, y: 0.008710006, z: 0.051640037, w: 0.9986207}
+      - {x: 0.0030899944, y: 0.013809975, z: -0.083009854, w: 0.9964482}
+      - {x: 0, y: -0.043350115, z: -0.23940064, w: 0.96995264}
+      - {x: 0, y: -0.07344003, z: -0.56962025, w: 0.8186204}
+      - {x: 0.02227005, y: -0.05822013, z: -0.5870713, w: 0.8071318}
+      - {x: 0, y: -0.02601003, z: -0.2568503, w: 0.9661011}
+      - {x: 0, y: -0.054539885, z: -0.68922853, w: 0.72248846}
+      - {x: 0.00057000195, y: -0.006100021, z: -0.60352206, w: 0.79732275}
+      - {x: 0, y: -0.003029991, z: -0.22884932, w: 0.9734571}
+      - {x: 0, y: 0.038079847, z: -0.7081971, w: 0.70498717}
+      - {x: -0.031770013, y: 0.035600014, z: -0.5719202, w: 0.8189204}
+      - {x: 0, y: -0.0110899815, z: 0.09034985, w: 0.99584836}
+      - {x: 0, y: 0.0745001, z: -0.38708052, w: 0.9190312}
+      - {x: -0.052749954, y: 0.1145799, z: -0.5902295, w: 0.79731935}
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 1
+  supportHandRight:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    fpWristLocalPosition: {x: 0, y: 0, z: 0}
+    fpWristLocalEuler: {x: 0, y: 0, z: 0}
+    fpCurls: []
+    thumbCurl: 0
+    indexCurl: 0
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 0
+    rightFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
+    leftFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
   twoHandAimWeight: 1
   aimDeadzoneDegrees: 0.75
   aimSoftKneeDegrees: 1.5
