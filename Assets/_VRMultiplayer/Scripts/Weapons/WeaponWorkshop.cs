@@ -540,12 +540,14 @@ namespace VRMultiplayer.Weapons
             }
             else
             {
-                // CERCEVE OYUNLA BIREBIR AYNI: konum ham (fiziksel nokta), raki sol-ana
-                // kipinde aynalanmis (ele ait). Ikisi ayrilirsa tezgahta hizaladigin el
-                // oyunda baska yere duser - iki kere yasandi (bkz. WeaponGripProfile).
-                Vector3 localAnchor = sup ? SupportAnchorLocal() : _profile.GripAnchorLocal();
+                // TEZGAH HER ZAMAN HAM CERCEVEDE YAZAR - aynalanmis cerceveye asla girmez.
+                // Aynalama yalnizca "poz yazilmamis" durumun yaklasimi; burada poz YAZILIYOR,
+                // yani kaydettigin an calisma ani da ham cerceveye geciyor (bkz.
+                // WeaponGripProfile.AnchorMirrored). Aynalanmis cerceveyi gostersek ilk
+                // itiste cerceve zipplardi - Rifle 2'de 27.7 cm.
+                Vector3 localAnchor = sup ? SupportAnchorLocal() : _profile.gripLocalPosition;
                 anchor = _weapon.transform.TransformPoint(localAnchor);
-                anchorRot = _weapon.transform.rotation * _profile.AnchorLocalRotation(_leftIsMain);
+                anchorRot = _weapon.transform.rotation * _profile.GripLocalRotation;
             }
 
             var hp = PoseOf(left);

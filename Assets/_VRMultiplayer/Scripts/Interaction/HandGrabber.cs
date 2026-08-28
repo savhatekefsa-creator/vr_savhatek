@@ -211,7 +211,7 @@ namespace VRMultiplayer
             if (weapon == null || grip == null || grip.Profile == null) return -1f;
             if (grip.Profile.supportRailLocalStart.sqrMagnitude < 1e-8f) return -1f; // ankraj yazilmamis
             Vector3 local, railEnd;
-            grip.Profile.SupportRailLocal(out local, out railEnd);
+            grip.Profile.SupportRailLocal(weapon.HolderHand == 0, out local, out railEnd);
             return Vector3.Distance(weapon.transform.TransformPoint(local), handPos);
         }
 
@@ -640,12 +640,12 @@ namespace VRMultiplayer
         // so engaging support never pops. Roll stays 1:1 with the grip hand (up = hand up).
         void FollowProfiled(HandState h, WeaponGripProfile profile)
         {
-            // Cerceve karari PROFILDE - silahin ele gore konumu ile elin silaha gore konumu
-            // AYNI cerceveden gelmezse el silahin yaninda durur. Kabza SOL elde ise ana el
-            // soldur; cipanin KONUMU aynalanmaz (fiziksel nokta), RAKISI aynalanir (ele ait).
+            // Cerceve karari PROFILDE (WeaponGripProfile.AnchorMirrored) - silahin ele gore
+            // konumu ile elin silaha gore konumu AYNI cerceveden gelmezse el silahin yaninda
+            // durur. Kabza SOL elde ise ana el soldur.
             bool leftIsMain = h.index == 0;
-            Vector3 gripLocal = profile.GripAnchorLocal();
-            Quaternion gripLocalRot = profile.AnchorLocalRotation(leftIsMain);
+            Vector3 gripLocal = profile.GripAnchorLocal(leftIsMain);
+            Quaternion gripLocalRot = profile.AnchorLocalRotation(false, leftIsMain);
 
             var sup = Other(h);
             bool hasSupport = sup != null && sup.supporting == h.held;
