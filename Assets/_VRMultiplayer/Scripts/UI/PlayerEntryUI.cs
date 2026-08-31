@@ -4,11 +4,12 @@ namespace VRMultiplayer.UI
 {
     /// <summary>
     /// OYUNCU modunun ilk ekraninin AKISI: <see cref="PlayerEntryPanel"/>'i kurar, lazer
-    /// imleci besler, isim/takim secimini <see cref="PlayerProfile"/>'a yazar ve OYUNA BASLA
-    /// ile baglantiyi baslatir. Kendisinden once MOD SECIMI gelir (<see cref="ModeSelectUI"/>);
+    /// imleci besler, isim/takim secimini <see cref="PlayerProfile"/>'a yazar ve KATIL
+    /// ile baglantiyi baslatir. KARAKTER tusu gorunum duzenleme ekranini acar
+    /// (<see cref="CharacterSelectUI"/>) — zorunlu degil, atlanabilir. Kendisinden once MOD SECIMI gelir (<see cref="ModeSelectUI"/>);
     /// bu ekran ancak <see cref="AppMode.Mode.Player"/> secilince dogar.
     ///
-    /// ISIM VE TAKIM ZORUNLU: ikisi tamamlanmadan OYUNA BASLA pasif; yani oyuna isimsiz ya da
+    /// ISIM VE TAKIM ZORUNLU: ikisi tamamlanmadan KATIL pasif; yani oyuna isimsiz ya da
     /// takimsiz girilemez.
     ///
     /// BAGLANTIDAN ONCE, tamamen YEREL calisir. Uc sebep:
@@ -118,10 +119,38 @@ namespace VRMultiplayer.UI
                     _panel.SetText(string.Empty);
                     break;
 
+                case PlayerEntryPanel.ActionCharacter:
+                    OpenCharacterEditor();
+                    break;
+
                 case PlayerEntryPanel.ActionStart:
                     StartGame(_panel.Text, _panel.SelectedTeam);
                     break;
             }
+        }
+
+        /// <summary>
+        /// KARAKTER DUZENI ekranini acar ve bu ekrani kapatir. Isim/takim once
+        /// HATIRLANIR (bkz. <see cref="PlayerProfile.Remember"/>) — oyuncu karakter
+        /// ekranindan TAMAM ile donunce giris ekrani dolu geri gelir. Isim gecersizse
+        /// gecise izin verilmez: karakter ekranindan donuste "adin yok" surprizi olmasin.
+        /// </summary>
+        void OpenCharacterEditor()
+        {
+            string clean = PlayerProfile.Sanitize(_panel.Text);
+            if (!PlayerProfile.IsValidName(clean))
+            {
+                Message("Önce en az " + PlayerProfile.MinLength + " harflik bir ad gir.");
+                return;
+            }
+
+            // Takim henuz secilmemis olabilir — karakter duzenlemek icin sart degil.
+            // Remember takimsiz kabul etmedigi icin yalnizca takim varken cagriliyor.
+            if (_panel.SelectedTeam != PlayerProfile.TeamNone)
+                PlayerProfile.Remember(clean, _panel.SelectedTeam);
+
+            CharacterSelectUI.Create(_panel.SelectedTeam);
+            Destroy(gameObject);
         }
 
         void StartGame(string rawName, byte team)
@@ -137,6 +166,9 @@ namespace VRMultiplayer.UI
                 return;
             }
 
+            // KATIL = ONAY + BAGLANTI. Karakter duzenleme artik AYRI bir alt ekran
+            // (KARAKTER DÜZENİ tusu) oldugu icin bu tus dogrudan maca sokar; harita
+            // yuklemesi de burada baslar.
             if (!PlayerProfile.Confirm(clean, team))
             {
                 // Reddi SEBEBIYLE birlikte soyle; sessiz reddedilen buton bozuk sanilir.
@@ -148,8 +180,6 @@ namespace VRMultiplayer.UI
 
             Debug.Log($"[PlayerEntryUI] Giris tamam: '{clean}', takim {team}. Baglanti baslatiliyor.");
 
-            // OYUNA BASLA gercekten OYUNA BASLATIR: ayrica B'ye basmak gerekmez. B tusu
-            // LanBootstrap'te yeniden deneme olarak duruyor (baglanti koparsa ise yarar).
             var boot = FindFirstObjectByType<LanBootstrap>();
             if (boot != null) boot.StartCoroutine(boot.JoinAsClient());
             else Debug.LogWarning("[PlayerEntryUI] LanBootstrap yok — baglanti baslatilamadi.");
@@ -178,7 +208,7 @@ namespace VRMultiplayer.UI
             else if (_panel.SelectedTeam == PlayerProfile.TeamNone)
                 _panel.SetHint("Bir takım seç.");
             else
-                _panel.SetHint("Hazırsın — OYUNA BAŞLA'ya bas.");
+                _panel.SetHint("Hazırsın — KATIL'a bas. İstersen KARAKTER DÜZENİ'ne gir.");
         }
 
         void Update()
@@ -267,8 +297,9 @@ namespace VRMultiplayer.UI
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Rastgele")) _panel.SetText(PlayerProfile.NextGeneratedName());
+            if (GUILayout.Button("Karakter")) OpenCharacterEditor();
             GUI.enabled = _panel.Ready;
-            if (GUILayout.Button("OYUNA BASLA")) StartGame(_panel.Text, _panel.SelectedTeam);
+            if (GUILayout.Button("KATIL")) StartGame(_panel.Text, _panel.SelectedTeam);
             GUI.enabled = true;
             GUILayout.EndHorizontal();
             GUILayout.EndArea();

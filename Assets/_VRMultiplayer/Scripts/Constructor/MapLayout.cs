@@ -127,8 +127,14 @@ namespace VRMultiplayer.Constructor
         /// rot'u x3 carparak ayni fiziksel aciya tasir.
         /// v3: serbest prop katmani (<see cref="freeProps"/>) eklendi — eski kayitlarda alan
         /// yok, bos listeyle acilir; tasinacak veri olmadigindan damga yeterli.
+        /// v4: <see cref="paletteId"/> eklendi. Eski kayitlarda alan yok ve JsonUtility onu bos
+        /// birakiyor — "palet secilmemis" demek, ki paletsiz donemde kaydedilmis bir haritanin
+        /// dogru cevabi zaten bu. v3 gibi: tasinacak veri yok, damga yeterli.
+        /// v5: <see cref="themeId"/> eklendi. v4 gibi: eski kayitta alan yok, bos gelir ve
+        /// "tema secilmemis" anlamina gelir — temasiz donemde kaydedilmis bir haritanin dogru
+        /// cevabi bu, cunku o harita sahnenin kendi isiginda kuruldu.
         /// </summary>
-        public const int CurrentVersion = 3;
+        public const int CurrentVersion = 5;
 
         public const float RotationStepDegrees = 5f;
         public const int RotationSteps = 72;          // 360 / 5
@@ -165,6 +171,38 @@ namespace VRMultiplayer.Constructor
         [Tooltip("Harita oyuncu rotasyonunda mi? Havuz, kayitli haritalarin alt kumesidir " +
                  "(bkz. MapCatalog): oyuncu modunda yalnizca bu isaretli olanlar cikar.")]
         public bool inPool;
+
+        /// <summary>
+        /// The palette this map was built with — what the wheel starts on when it is reopened.
+        ///
+        /// A PREFERENCE, not a constraint. It never decides what can be rebuilt: props resolve
+        /// by id (see <see cref="PlacedProp.propId"/>), so a map keeps every piece it was saved
+        /// with even if the builder switched palettes halfway through or the palette was later
+        /// deleted. Storing it only saves the player from re-picking UZAY every time they open
+        /// their space map.
+        /// </summary>
+        [Tooltip("Haritanin paleti — yeniden acildiginda carkin baslayacagi set. Yalnizca bir " +
+                 "tercih: proplar kimlikle cozuldugu icin haritanin icerigini KISITLAMAZ.")]
+        public string paletteId = "";
+
+        /// <summary>
+        /// The world look this map is played under — see <see cref="VRMultiplayer.ThemeDef"/>.
+        ///
+        /// NOT A PREFERENCE, unlike <see cref="paletteId"/>. The palette only decides where the
+        /// build wheel starts; this decides what every player SEES while the match runs, so it
+        /// has to be the same on every peer or two people are fighting in different weather.
+        /// Storing it in the layout is what makes that free: the layout is already shipped whole
+        /// to each client (<see cref="ConstructorSync"/>) and every one of them ends up in
+        /// <see cref="ConstructorSession.Adopt"/>, so the theme travels with the map at no
+        /// network cost and with no separate handshake to keep in sync.
+        ///
+        /// EMPTY MEANS THE SCENE'S OWN LOOK, which is the honest answer for every map saved
+        /// before themes existed — those were built under the scene lighting and should keep it.
+        /// </summary>
+        [Tooltip("Haritanin dunya gorunumu (gokyuzu/gunes/sis) — ThemeLibrary kimligi. " +
+                 "BOS = sahnenin kendi gorunumu. Paletten farkli olarak yalnizca bir tercih " +
+                 "DEGIL: her oyuncunun gordugu sey budur, o yuzden haritayla birlikte tasinir.")]
+        public string themeId = "";
 
         public RoomPlan builtForRoom = new RoomPlan();
 
@@ -356,6 +394,16 @@ namespace VRMultiplayer.Constructor
                 // alan bulunmadigindan liste bos acilir; damga "bu format taninip yazilacak"
                 // kaydidir (Save hep guncel surumu yazar).
                 if (m.version < 3) m.version = 3;
+
+                // v3 -> v4: palet alani eklendi. Tasinacak veri yok — eski kayitta alan
+                // bulunmadigindan bos gelir ve "palet secilmemis" anlamina gelir.
+                if (m.version < 4) m.version = 4;
+                if (m.paletteId == null) m.paletteId = "";
+
+                // v4 -> v5: tema alani eklendi. Tasinacak veri yok — eski kayitta alan
+                // bulunmadigindan bos gelir ve "sahnenin kendi gorunumu" anlamina gelir.
+                if (m.version < 5) m.version = 5;
+                if (m.themeId == null) m.themeId = "";
                 return m;
             }
             catch (Exception e)

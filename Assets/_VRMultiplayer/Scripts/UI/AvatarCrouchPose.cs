@@ -168,6 +168,27 @@ namespace VRMultiplayer.UI
             // KALIBRE ediyor (StandingHeight) ve kilit comelmisken alinmissa kendi kendini
             // yukari onariyor. Onceden burada kendi olcumumuz vardi; iki ayri yer ayni seyi
             // bagimsiz hesaplayinca kacinilmaz olarak celisiyorlar. Tek dogru kaynak onunki.
+            // DUSERKEN HEM COMELME HEM ZEMIN SINIRI GECERSIZ.
+            //
+            // Comelme, kafanin ayakta boyuna oranindan cikiyor. Catidan dusen oyuncunun kafasi
+            // dosemenin 40 m altinda, yani oran eksiye gidiyor ve poz sonuna kadar aciliyor:
+            // avatar comelmis bir heykel gibi duserdi. Asil zarar ise ClampToGround'da: taban
+            // zeminin altina inince kok YUKARI itiliyor, ve dususte bu her karede avatari
+            // catiya geri firlatiyordu — kendi ekraninda duser, digerleri seni yerinde
+            // duruyor gorurdu. Olculdu: kafa -43 m'deyken govde -0,52 m'de asili kaliyordu.
+            //
+            // Sinirin varlik sebebi "kod avatari yanlislikla yere batirmasin". Dusus, batmanin
+            // KASITLI oldugu tek durum; o yuzden burada tamamen cekiliyoruz. Agirligi sifira
+            // almak asagidaki erken cikisi da tetikler, yani ClampToGround hic cagrilmaz.
+            if (_ik.Falling)
+            {
+                _w = 0f;
+                weight = 0f;
+                clampLift = 0f;
+                durum = "dusuyor — poz ve zemin siniri devre disi";
+                return;
+            }
+
             if (!_ik.FitLocked) { durum = "kalibrasyon bekleniyor"; return; }
             float standH = _ik.StandingHeight;
             if (standH < 0.5f) { durum = "StandingHeight gecersiz: " + standH.ToString("F2"); return; }

@@ -90,8 +90,13 @@ namespace VRMultiplayer
         /// </summary>
         public static void Unconfirm() => Confirmed = false;
 
-        /// <summary>Girisi kalicilastirir ve onayli isaretler. Eksik/gecersizse kabul edilmez.</summary>
-        public static bool Confirm(string name, byte team)
+        /// <summary>
+        /// Isim + takimi KALICILASTIR ama onaylama. Giris ekranindan karakter ekranina
+        /// gecerken cagrilir: oyuncu GERI donerse ya da uygulama kapanirsa sectikleri
+        /// kaybolmasin. Onay (baglantiyi baslatan bayrak — bkz. <see cref="Confirmed"/>)
+        /// karakter ekraninda HAZIR'a basilinca <see cref="Confirm"/> ile verilir.
+        /// </summary>
+        public static bool Remember(string name, byte team)
         {
             string clean = Sanitize(name);
             if (!IsReady(clean, team)) return false;
@@ -99,11 +104,18 @@ namespace VRMultiplayer
             Load();
             _name = clean;
             _team = team;
-            Confirmed = true;
 
             PlayerPrefs.SetString(NameKey, clean);
             PlayerPrefs.SetInt(TeamKey, team);
             PlayerPrefs.Save();
+            return true;
+        }
+
+        /// <summary>Girisi kalicilastirir ve onayli isaretler. Eksik/gecersizse kabul edilmez.</summary>
+        public static bool Confirm(string name, byte team)
+        {
+            if (!Remember(name, team)) return false;
+            Confirmed = true;
             return true;
         }
 

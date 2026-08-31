@@ -203,9 +203,9 @@ namespace VRMultiplayer.Constructor
             var rect = grid.FootprintRect(def, p.cellX, p.cellZ, p.rot, p.scalePct);
             Vector3 pos = grid.RectCenter(rect, p.level, levelHeight);
 
-            // LOCAL konum, dunya konumu DEGIL: kok objesi ODA UZAYIDIR. Kok normalde birim
-            // donusumde durur (local == dunya), ama maket modunda kucultulup oyuncunun onune
-            // tasiniyor — dunya konumu verilseydi proplar maketin degil odanin icine dogardi.
+            // LOCAL konum, dunya konumu DEGIL: kok objesi ODA UZAYIDIR. Bugun birim donusumde
+            // duruyor (local == dunya), ama kok bir gun tasinir ya da olceklenirse dunya konumu
+            // yazan her prop haritanin disinda kalirdi.
             var scale = LocalScaleFor(def, prefab, grid.CellSize, p.scalePct, p.heightPct);
 
             var go = UnityEngine.Object.Instantiate(prefab, parent);
@@ -238,8 +238,8 @@ namespace VRMultiplayer.Constructor
         /// would break that round trip (the exact drift <see cref="Spawn"/>'s doc warns about,
         /// avoided by having none).
         ///
-        /// Local space on purpose, like <see cref="Spawn"/>: the root is room space, so the
-        /// dollhouse shrinks free props together with everything else.
+        /// Local space on purpose, like <see cref="Spawn"/>: the root is room space, so free
+        /// props follow it wherever it goes.
         /// </summary>
         public static GameObject SpawnFree(FreePlacedProp f, PropDef def, Transform parent)
         {
