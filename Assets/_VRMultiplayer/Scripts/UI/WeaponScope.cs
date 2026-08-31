@@ -91,12 +91,6 @@ namespace VRMultiplayer.UI
         public int rtSize = 256;
         [Tooltip("Kamera mercekten ne kadar ONDE dursun (namlu yonunde, metre).")]
         public float camForwardOffset = 0.06f;
-        [Tooltip("Durbun bu mesafeden itibaren kararmaya baslar (metre). Duvara yaklastikca " +
-                 "mercek yumusakca soner; sert bir ac/kapa sicramasi olmaz.")]
-        public float dimStartDistance = 0.80f;
-        [Tooltip("Durbun kamerasinin yakin kesme duzlemi (metre). Bundan yakin geometri " +
-                 "CIZILMEZ - silahin kendi govdesi de dahil.")]
-        public float nearClip = 0.30f;
         [Tooltip("Ekran diskinin olcek carpani (1 = olculen mercek boyu).")]
         public float lensScale = 1f;
         [Tooltip("0'dan buyukse OLCUMU EZER: mercek yaricapini metre cinsinden elle ver. " +
@@ -146,8 +140,6 @@ namespace VRMultiplayer.UI
 
         // Duvar emniyeti (bkz. ClampForwardOffset/SetBlocked)
         bool _blockedNow;
-        float _dim = 1f;            // 1 = berrak, 0 = tamamen kararmis
-        bool _dimSnap = true;       // acilisin ILK karesinde yumusatma yok (bkz. Activate)
         int _savedMask;
         CameraClearFlags _savedClear;
         Color _savedBg;
@@ -309,24 +301,8 @@ namespace VRMultiplayer.UI
                 // cizilmiyordu — durbun duvarin ARKASINI gosteriyordu. Ileri kayma onundeki
                 // engele gore kisitlanir; near clip payina bile yer yoksa mercek KARARIR
                 // (gercekte de duvara dayali durbunden bir sey gorunmez).
-                camPos += camDir * ClampForwardOffset(camPos, camDir, out bool blocked,
-                                                      out float clearance);
+                camPos += camDir * ClampForwardOffset(camPos, camDir, out bool blocked);
                 SetBlocked(blocked);
-                // KADEMELI KARARTMA. Sert kesim tek basina yetmiyordu: mercek ancak duvar
-                // merkez ekseninde ~5.5 cm'e girince karariyordu, o mesafeye kadar duvar
-                // goruntuyu doldurup near clip'i kesiyor ve merkezden disa dogru buyuyen
-                // parlak bir bolge birakiyordu (cihazda bildirildi 2026-08-31). Artik boslugu
-                // olcup mercegi yumusakca sonduruyoruz - delik olusabilecek mesafeye
-                // gelmeden ekran zaten kararmis oluyor.
-                float hedef = blocked ? 0f
-                    : Mathf.Clamp01(Mathf.InverseLerp(BlockDistance, Mathf.Max(BlockDistance + 0.01f,
-                                                      dimStartDistance), clearance));
-                // Yumusatma: kamera duvara surtunurken olcum kare kare zipladiginda mercek
-                // titremesin. ACILISTA yumusatma YOK: durbunu duvara dayali acarsan bir anlik
-                // berrak goruntu carpip sonmesin, dogrudan dogru seviyede acilsin.
-                _dim = _dimSnap ? hedef : Mathf.MoveTowards(_dim, hedef, Time.deltaTime * 6f);
-                _dimSnap = false;
-                ApplyDim();
                 _cam.transform.SetPositionAndRotation(camPos, Quaternion.LookRotation(camDir, up));
             }
 
@@ -361,44 +337,23 @@ namespace VRMultiplayer.UI
         /// blocked = kameraya near clip payi kadar bile yer yok (mercek karartilmali).
         /// Namlu ucu bir kolayderin ICINDEyse ileri isin engeli goremez (Unity icten vurusu
         /// raporlamaz) — o durum ufak kure temasiyla yakalanir.</summary>
-        /// <summary>Karartmanin TAM SIYAHA vardigi mesafe; blocked esiginin kendisi.</summary>
-        float BlockDistance => _cam != null ? _cam.nearClipPlane + 0.005f : 0.055f;
-
-        /// <summary>Mercegin ve isaretin parlakligini <see cref="_dim"/> ile olcekler.
-        /// Kamera kapatilmaz — RT'de bayat goruntu kalirdi; goruntu KARARTILIR.</summary>
-        void ApplyDim()
-        {
-            if (_lensMat != null)
-                UITheme.SetMaterialColor(_lensMat, new Color(_dim, _dim, _dim, 1f));
-            if (_reticleMat != null)
-            {
-                var c = reticleColor;
-                UITheme.SetMaterialColor(_reticleMat, new Color(c.r * _dim, c.g * _dim, c.b * _dim, c.a));
-            }
-        }
-
-        float ClampForwardOffset(Vector3 origin, Vector3 dir, out bool blocked, out float clearance)
+        float ClampForwardOffset(Vector3 origin, Vector3 dir, out bool blocked)
         {
             blocked = false;
             float near = _cam.nearClipPlane;
             float offset = Mathf.Max(0f, camForwardOffset);
-            clearance = float.PositiveInfinity;
 
             int t = Physics.OverlapSphereNonAlloc(origin, 0.01f, _touchHits,
                                                   Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < t; i++)
-                if (!_touchHits[i].transform.IsChildOf(_grab.transform)) { blocked = true; clearance = 0f; return 0f; }
+                if (!_touchHits[i].transform.IsChildOf(_grab.transform)) { blocked = true; return 0f; }
 
-            // Tarama karartma bandini da kapsayacak kadar uzun: yalnizca offset kadar
-            // baksaydik duvari ancak kamera dibine gelince gorur, karartmaya vakit kalmazdi.
-            float scan = Mathf.Max(offset + near + 0.01f, dimStartDistance + near);
-            int n = Physics.RaycastNonAlloc(origin, dir, _rayHits, scan,
+            int n = Physics.RaycastNonAlloc(origin, dir, _rayHits, offset + near + 0.01f,
                                             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < n; i++)
             {
                 var h = _rayHits[i];
                 if (h.collider.transform.IsChildOf(_grab.transform)) continue; // silahin kendi parcasi
-                if (h.distance < clearance) clearance = h.distance;
                 float allow = h.distance - near - 0.005f;
                 if (allow < offset)
                 {
@@ -433,7 +388,7 @@ namespace VRMultiplayer.UI
         {
             if (_reticle == null) return;
             if (_builtStyle != reticleStyle) ApplyReticleTexture();   // bicim canli degistiyse
-            ApplyDim();   // isaretin rengi karartmayla birlikte olceklenir (bkz. ApplyDim)
+            if (_reticleMat != null) UITheme.SetMaterialColor(_reticleMat, reticleColor);
             _reticle.localPosition = new Vector3(0f, 0f, -0.003f);
         }
 
@@ -454,7 +409,6 @@ namespace VRMultiplayer.UI
 
         void Activate()
         {
-            _dimSnap = true;   // seviye ilk karede dogrudan kurulsun, yumusayarak degil
             // Derinlik 24 bit: near clip duvar emniyeti icin 0.05'e indi; 16 bitte
             // near/far orani bu kadar acilinca uzak nesnelerde z-catismasi baslardi.
             if (_rt == null)
@@ -466,18 +420,9 @@ namespace VRMultiplayer.UI
                 go.transform.SetParent(transform, false);
                 _cam = go.AddComponent<Camera>();
                 _cam.targetTexture = _rt;
-                // 0.30'a GERI DONULDU (2026-08-31). ad26c2b bunu 0.05'e indirmisti; gerekce
-                // "duvara dayaninca duvar cizimden dusuyor, arkasi gorunuyor" idi. Ama 0.05'te
-                // kameranin 5 cm yakinindaki HER SEY cizilmeye basladi - silahin kendi govdesi
-                // ve durbun tupu dahil. Kamera duvara yaklasip geri cekildikce kadraja giren
-                // miktar artiyor ve mercegin ortasinda buyuyen kare bir bolge biraktiyordu
-                // (cihazda bildirildi ve ekran kaydiyla gosterildi).
-                //
-                // Dusuk near clip'e artik ihtiyac YOK: duvarin cizimden dusmesi sorununu
-                // kademeli karartma cozuyor - duvar bu mesafeye gelmeden mercek zaten siyah.
-                // Bu yuzden dimStartDistance de 0.35'ten 0.80'e cikti; ikisi birlikte
-                // ayarlanmali, yoksa aradaki bantta eski hata geri gelir.
-                _cam.nearClipPlane = Mathf.Max(0.01f, nearClip);
+                // 0.05: dibine kadar yanasilan duvar bile cizilsin (0.3 iken 36 cm'den yakin
+                // duvarlar goruntuden dusuyor, durbun duvar arkasini gosteriyordu).
+                _cam.nearClipPlane = 0.05f;
                 _cam.farClipPlane = 200f;
                 _savedMask = _cam.cullingMask;
                 _savedClear = _cam.clearFlags;
