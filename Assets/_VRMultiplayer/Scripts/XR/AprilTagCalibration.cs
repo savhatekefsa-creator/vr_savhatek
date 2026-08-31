@@ -2172,7 +2172,13 @@ namespace VRMultiplayer
             // sonra oteleme. Tek-tag yolundaki desenin aynisi.
             _rig.RotateAround(mBar, Vector3.up, theta * rate);
             Vector3 delta = oteleme * rate;
-            if (!correctVertical) delta.y = 0f;
+
+            // DUSUS KORUMASI FUZYON YOLUNDA DA GEREKLI. main'den gelen koruma yalnizca
+            // tek-tag yoluna (ContinuousCorrect) eklenmisti; iki yol da rig'i dikeyde
+            // oynatiyor, yani fuzyon acildiginda oyuncu catidan duserken duzeltme onu
+            // yukari cekmeye calisirdi. Git metin olarak dogru birlestirdi, bosluk
+            // ANLAMSALDI. (bkz. FallHazard.SuppressVerticalCalibration)
+            if (!correctVertical || FallHazard.SuppressVerticalCalibration) delta.y = 0f;
             _rig.position += delta;
 
             if (_cm != null) _cm.CompleteFromTag();
