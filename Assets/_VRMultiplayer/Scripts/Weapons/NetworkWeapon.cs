@@ -320,12 +320,22 @@ namespace VRMultiplayer
             if (_bloom > 0f)
                 _bloom *= Mathf.Pow(2f, -Time.deltaTime / Mathf.Max(0.001f, _cv.spreadDecayHalfLife));
 
-            // Tetik yalnizca BU silahi fiilen kullanan ellerden okunur: tutan el + destek eli
-            // (cift-el oyuncu on-el tetigini kullanabilsin). Onceden HER IKI elin tetigi de
-            // okunuyordu; iki elde iki silah tasinirken tek tetik cekisi IKI silahi birden
-            // ateshiyordu (her silah kendi dogrulanmis atisini tuketiyordu).
-            bool rightAllowed = _grab.HolderHand == 1 || _grab.SupportHand == 1;
-            bool leftAllowed = _grab.HolderHand == 0 || _grab.SupportHand == 0;
+            // Tetik YALNIZCA KABZAYI TUTAN ELDEN okunur. Destek eli ates edemez: gercekte
+            // tetigi ceken el kabzayi kavrayan eldir, on el yalnizca namluyu destekler.
+            //
+            // Tarihce: once HER IKI elin tetigi okunuyordu ve iki elde iki silah tasirken
+            // tek cekis IKI silahi birden atesliyordu. Duzeltirken destek eli bilerek
+            // birakilmisti ("cift-el oyuncu on-el tetigini kullanabilsin"), ama cihazda bu
+            // ters teptigi bildirildi (2026-08-31): sol el tufegin kundagindayken o
+            // kumandanin tetigi atesliyordu.
+            //
+            // GIRIS EKRANINDAKI "TETIK ELI" SECIMIYLE ILGISI YOK ve olmamali. O secim
+            // yalnizca buyuk silahin hangi ele ANA olarak girebilecegini belirler
+            // (HandGrabber.OffHand). Silah eline girdikten sonra tetigi kim ceker sorusunun
+            // cevabi her zaman "o silahin kabzasini tutan el"dir - tabanca sol ele
+            // alindiginda sol el, tufek sag elde tutulurken sag el.
+            bool rightAllowed = _grab.HolderHand == 1;
+            bool leftAllowed = _grab.HolderHand == 0;
 
             bool trig = false;
             var firedDev = default(InputDevice);
