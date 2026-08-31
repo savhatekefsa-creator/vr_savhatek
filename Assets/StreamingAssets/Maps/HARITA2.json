@@ -1,13 +1,15 @@
 {
-    "version": 3,
+    "version": 5,
     "name": "HARITA2",
     "createdBy": "HATICE",
-    "savedAt": "2026-08-12 15:54:16",
-    "libraryVersion": 7,
+    "savedAt": "2026-08-31 16:01:48",
+    "libraryVersion": 25,
     "cellSize": 0.0625,
     "levelHeight": 0.5,
     "buildMargin": 25.0,
-    "inPool": false,
+    "inPool": true,
+    "paletteId": "",
+    "themeId": "",
     "builtForRoom": {
         "version": 1,
         "capturedAt": "",
@@ -823,5 +825,5 @@
         }
     ],
     "freeProps": [],
-    "nextInstanceId": 112
+    "nextInstanceId": 113
 }
