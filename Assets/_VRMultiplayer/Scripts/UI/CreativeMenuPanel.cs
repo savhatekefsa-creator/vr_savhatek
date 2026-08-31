@@ -35,13 +35,15 @@ namespace VRMultiplayer.UI
         const float TitleY = 0.132f, TitleHalfSpan = 0.20f;
         const float SubtitleY = 0.082f;
 
-        // CIKIS SERIDI: uc kartin ALTINDA, genis ve alcak. Bilerek KART GIBI DEGIL —
-        // "yeni/mevcut/havuz" bir is secimi, bu ise akistan cikis; ayni boyda dorduncu bir
-        // kart olsaydi esit agirlikta bir secenek gibi okunurdu.
-        // Kartlar CardY=-0.052 merkezli ve 0.20 yuksek, yani -0.152'de bitiyor; panel
-        // -0.22'de. Aradaki 6.8 cm'e 4.4 cm'lik serit ortalanarak sigar.
-        const float ExitY = -0.183f, ExitW = 0.56f, ExitH = 0.044f, ExitR = 0.012f;
-        const float ExitTextSize = 0.021f;
+        // GERI DUGMESI: panelin SOL UST kosesinde kucuk bir ok. Bilerek kart degil ve
+        // bilerek kenarda — "yeni/mevcut/havuz" bir is secimi, bu ise akistan cikis. Once
+        // kartlarin altina genis bir serit konmustu; kullanici onu istemedi, koseye kucuk
+        // bir ikon istedi (2026-08-31).
+        // Panel 0.86 x 0.44, yani sol ust kose (-0.43, +0.22). Baslik x -0.20..+0.20
+        // arasinda, dolayisiyla carpisma yok.
+        const float BackX = -0.375f, BackY = 0.163f;
+        const float BackW = 0.070f, BackH = 0.058f, BackR = 0.012f;
+        const float BackIconW = 0.026f, BackIconH = 0.024f;
 
         const float IconDy = 0.052f, IconW = 0.026f, IconH = 0.030f;
         const float CardTitleDy = -0.004f, CardDescDy = -0.056f;
@@ -99,7 +101,7 @@ namespace VRMultiplayer.UI
             // yanlislikla yaratici mod secildiginde de bu menude kilitli kaliniyordu -
             // oyuna girmenin tek yolu uygulamayi yeniden baslatmakti (cihazda bildirildi
             // 2026-08-31). AppMode.ReturnToModeSelect zaten vardi ama cagiran yoktu.
-            AddExitStrip("OYUNCU MODUNA DÖN", "Mod seçimine döner");
+            AddBackButton();
 
             var h = UITheme.MakeShape(transform, "Hover",
                 UIMesh.RoundedRect(0.01f, 0.01f, 0.002f), HoverCol, QHover);
@@ -162,34 +164,32 @@ namespace VRMultiplayer.UI
             });
         }
 
-        /// <summary>Alttaki genis cikis seridi. Kartlarla AYNI vurgu/tiklama yolunu kullanir
-        /// (ayni _cards listesi), yalnizca gorunumu farkli: ikon yok, tek satir, alcak.</summary>
-        void AddExitStrip(string title, string desc)
+        /// <summary>Sol ust kosedeki geri dugmesi. Kartlarla AYNI vurgu/tiklama yolunu
+        /// kullanir (ayni _cards listesi), yalnizca gorunumu farkli: yazi yok, tek ikon.</summary>
+        void AddBackButton()
         {
-            var c = new Vector2(0f, ExitY);
-            var size = new Vector2(ExitW, ExitH);
+            var c = new Vector2(BackX, BackY);
+            var size = new Vector2(BackW, BackH);
             Color edge = Muted;
 
-            var glow = UITheme.MakeRounded(transform, "Exit Glow", c,
-                size + Vector2.one * 0.010f, ExitR + 0.005f,
+            var glow = UITheme.MakeRounded(transform, "Back Glow", c,
+                size + Vector2.one * 0.010f, BackR + 0.005f,
                 new Color(edge.r, edge.g, edge.b, 0f), ZBorder + 0.001f, QGlow);
-            var border = UITheme.MakeRounded(transform, "Exit Border", c, size, ExitR,
+            var border = UITheme.MakeRounded(transform, "Back Border", c, size, BackR,
                 edge, ZBorder, QBorder);
-            var body = UITheme.MakeRounded(transform, "Exit Fill", c,
-                size - Vector2.one * 0.004f, Mathf.Max(0f, ExitR - 0.002f), CardFill,
+            var body = UITheme.MakeRounded(transform, "Back Fill", c,
+                size - Vector2.one * 0.004f, Mathf.Max(0f, BackR - 0.002f), CardFill,
                 ZFill, QFill);
 
-            var tm = UITheme.MakeText(transform, title, UITheme.TextPrimary, ExitTextSize,
-                TextAnchor.MiddleCenter, QText);
-            tm.transform.localPosition = new Vector3(-0.085f, ExitY, ZText);
-
-            var dt = UITheme.MakeText(transform, desc, Muted, CardDescSize,
-                TextAnchor.MiddleCenter, QText);
-            dt.transform.localPosition = new Vector3(+0.135f, ExitY, ZText);
+            // Ok SAGA bakiyor (UIMesh.Arrow); geri icin X'te aynalanir.
+            var ic = UITheme.MakeShape(transform, "Back Icon", UIMesh.Arrow(),
+                UITheme.TextPrimary, QIcon);
+            ic.localPosition = new Vector3(c.x, c.y, ZIcon);
+            ic.localScale = new Vector3(-BackIconW, BackIconH, 1f);
 
             _cards.Add(new Card
             {
-                center = c, size = size, radius = ExitR, choice = Choice.Exit, edge = edge,
+                center = c, size = size, radius = BackR, choice = Choice.Exit, edge = edge,
                 fillMat = body.GetComponent<MeshRenderer>().sharedMaterial,
                 borderMat = border.GetComponent<MeshRenderer>().sharedMaterial,
                 glowMat = glow.GetComponent<MeshRenderer>().sharedMaterial,
