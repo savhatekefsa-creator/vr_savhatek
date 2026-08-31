@@ -132,6 +132,21 @@ namespace VRMultiplayer
             * Quaternion.AngleAxis(TweakPitch, Vector3.right)
             * Quaternion.AngleAxis(TweakRoll, Vector3.down);
 
+        // ─── BEYAZ NOKTA YALNIZCA GELISTIRME BUILD'INDE ───────────────────────────────
+        // Nokta bir GELISTIRME araci: kumandanin gercek yerini gosterir, boylece tutus
+        // ayarlarken elin silaha ne kadar kaydigini ve kopmanin yaklastigini gorursun.
+        // Oyuncunun oyunda gormesi gereken bir sey degil - istendi ve kaldirildi
+        // (2026-08-31). Projedeki oteki gelistirme araclariyla ayni kapi: WeaponWorkshop,
+        // WeaponGripCaptureTool, WeaponDevSpawner.
+        //
+        // Kapali build'de nokta HIC OLUSTURULMAZ; UpdateDot zaten _dot == null'da cikiyor,
+        // yani ayrica bir kontrol gerekmiyor.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        const bool DevBuild = true;
+#else
+        const bool DevBuild = false;
+#endif
+
         const float DotDiameter = 0.02f;
         const float DotFadeStart = 0.03f;
         const float DotFadeEnd = 0.25f;
@@ -240,23 +255,28 @@ namespace VRMultiplayer
             // Kumandanin GERCEK yeri. Pose'un KARDESI olmali: Pose silaha kayiyor,
             // nokta kumandada kalmali. Root zaten tam kumandanin uzerinde ve donusu
             // identity oldugu icin nokta hicbir sey yazilmadan yerinde durur.
-            var dot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            dot.name = DotName;
-            var dcol = dot.GetComponent<Collider>();
-            if (dcol != null)
+            // YALNIZCA gelistirme build'inde kurulur (bkz. DevBuild).
+            MeshRenderer dmr = null;
+            if (DevBuild)
             {
-                if (Application.isPlaying) Object.Destroy(dcol);
-                else Object.DestroyImmediate(dcol);
+                var dot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                dot.name = DotName;
+                var dcol = dot.GetComponent<Collider>();
+                if (dcol != null)
+                {
+                    if (Application.isPlaying) Object.Destroy(dcol);
+                    else Object.DestroyImmediate(dcol);
+                }
+                dot.transform.SetParent(root.transform, false);
+                dot.transform.localPosition = Vector3.zero;
+                dot.transform.localRotation = Quaternion.identity;
+                dot.transform.localScale = Vector3.one * DotDiameter;
+                dmr = dot.GetComponent<MeshRenderer>();
+                dmr.sharedMaterial = GhostMaterial();
+                dmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                dmr.receiveShadows = false;
+                dmr.enabled = false;   // sapma olmadan gorunmez
             }
-            dot.transform.SetParent(root.transform, false);
-            dot.transform.localPosition = Vector3.zero;
-            dot.transform.localRotation = Quaternion.identity;
-            dot.transform.localScale = Vector3.one * DotDiameter;
-            var dmr = dot.GetComponent<MeshRenderer>();
-            dmr.sharedMaterial = GhostMaterial();
-            dmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            dmr.receiveShadows = false;
-            dmr.enabled = false;   // sapma olmadan gorunmez
 
             BuildHandModel(pose.transform, left);
 
