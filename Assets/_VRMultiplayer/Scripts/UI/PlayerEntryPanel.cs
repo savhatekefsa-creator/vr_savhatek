@@ -108,6 +108,19 @@ namespace VRMultiplayer.UI
         static readonly Color RedFill    = new Color(0.090f, 0.035f, 0.051f, 1f);
         static readonly Color RedText    = UITheme.TeamRedText;
 
+        // KIZIL SECILIYKEN KARTIN ARKASI. Varsayilan yol (dolgudan kenara %38 harman)
+        // kirmizida (0.390, 0.151, 0.191) uretiyordu: teknik olarak kirmizi ama cihazda
+        // "secili" hissi vermiyordu, mavinin yaninda sonuk kaliyordu (bildirildi
+        // 2026-08-31). Istenen renk harman cizgisinin USTUNDE degil - kenara dogru
+        // gidildikce yesil/mavi birlikte yukseliyor ve pembelesiyor - o yuzden kirmiziya
+        // KENDI secili rengi verildi.
+        static readonly Color RedSel     = new Color(184f / 255f, 12f / 255f, 23f / 255f, 1f);
+
+        // Parlak zemin yaziyi yutar: TeamRedText acik pembedir ve RedSel'in uzerinde
+        // okunmuyordu. Secili kizilda yazi BEYAZ. Mavide gerek yok - onun secili zemini
+        // (34,59,108) koyu kaldigi icin acik mavi yazi rahat okunuyor.
+        static readonly Color RedSelText = new Color(1f, 0.93f, 0.93f, 1f);
+
         static readonly Color BlueEdge   = UITheme.TeamBlueEdge;
         static readonly Color BlueFill   = new Color(0.039f, 0.067f, 0.125f, 1f);
         static readonly Color BlueText   = UITheme.TeamBlueText;
@@ -650,7 +663,7 @@ namespace VRMultiplayer.UI
         {
             bool anyChosen = _team != PlayerProfile.TeamNone;
             Paint(_redCard, RedEdge, RedFill, RedText,
-                _team == PlayerProfile.TeamRed, anyChosen);
+                _team == PlayerProfile.TeamRed, anyChosen, RedSel, RedSelText);
             Paint(_blueCard, BlueEdge, BlueFill, BlueText,
                 _team == PlayerProfile.TeamBlue, anyChosen);
         }
@@ -662,7 +675,14 @@ namespace VRMultiplayer.UI
         /// </summary>
         /// <param name="anyChosen">Herhangi bir takim secildi mi? Hicbiri secilmemisken iki
         /// kart da NOTR durur — ikisi de esit derecede davetkar olmali, "biri sonuk" degil.</param>
-        static void Paint(El card, Color edge, Color fill, Color text, bool selected, bool anyChosen)
+        /// <param name="selFill">Secili haldeki dolgu. Verilmezse dolgudan kenara %38
+        /// harmanlanir - cogu kartta yeterli, ama bazi renklerde (bkz. RedSel) yeterince
+        /// okunmuyor ve o karta kendi rengi veriliyor.</param>
+        /// <param name="selText">Secili haldeki yazi rengi. Verilmezse <paramref name="text"/>
+        /// kullanilir; yalnizca zemin parlaklastigi icin kontrastin kaybolduğu kartlarda
+        /// veriliyor (bkz. RedSelText).</param>
+        static void Paint(El card, Color edge, Color fill, Color text, bool selected, bool anyChosen,
+                          Color? selFill = null, Color? selText = null)
         {
             if (card == null) return;
 
@@ -670,14 +690,15 @@ namespace VRMultiplayer.UI
 
             UITheme.SetMaterialColor(card.borderMat, new Color(edge.r, edge.g, edge.b, dim));
             UITheme.SetMaterialColor(card.fillMat,
-                selected ? Color.Lerp(fill, edge, 0.38f) : fill);
+                selected ? (selFill ?? Color.Lerp(fill, edge, 0.38f)) : fill);
 
             // Hale yalnizca secilide; kapaliyken alfa 0, nabzi Tick suruyor.
             UITheme.SetMaterialColor(card.glowMat,
                 new Color(edge.r, edge.g, edge.b, selected ? GlowBase : 0f));
 
+            Color yazi = selected ? (selText ?? text) : text;
             if (card.label != null)
-                card.label.color = new Color(text.r, text.g, text.b,
+                card.label.color = new Color(yazi.r, yazi.g, yazi.b,
                     !anyChosen ? 1f : selected ? 1f : 0.45f);
 
             if (card.sub != null)
@@ -685,7 +706,7 @@ namespace VRMultiplayer.UI
                 // Bos durum yazisi KARTIN KENDISINDEN gelir: takim karti "Takım", tetik eli
                 // karti "El" der. Sabit yazmak tetik eli kartlarinda "Takım" gosteriyordu.
                 card.sub.text = selected ? "SEÇİLDİ" : (card.subIdle ?? string.Empty);
-                card.sub.color = new Color(text.r, text.g, text.b,
+                card.sub.color = new Color(yazi.r, yazi.g, yazi.b,
                     selected ? 1f : !anyChosen ? 0.75f : 0.35f);
             }
         }
