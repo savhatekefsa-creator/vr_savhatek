@@ -93,7 +93,10 @@ namespace VRMultiplayer.UI
         public float camForwardOffset = 0.06f;
         [Tooltip("Durbun bu mesafeden itibaren kararmaya baslar (metre). Duvara yaklastikca " +
                  "mercek yumusakca soner; sert bir ac/kapa sicramasi olmaz.")]
-        public float dimStartDistance = 0.35f;
+        public float dimStartDistance = 0.80f;
+        [Tooltip("Durbun kamerasinin yakin kesme duzlemi (metre). Bundan yakin geometri " +
+                 "CIZILMEZ - silahin kendi govdesi de dahil.")]
+        public float nearClip = 0.30f;
         [Tooltip("Ekran diskinin olcek carpani (1 = olculen mercek boyu).")]
         public float lensScale = 1f;
         [Tooltip("0'dan buyukse OLCUMU EZER: mercek yaricapini metre cinsinden elle ver. " +
@@ -463,9 +466,18 @@ namespace VRMultiplayer.UI
                 go.transform.SetParent(transform, false);
                 _cam = go.AddComponent<Camera>();
                 _cam.targetTexture = _rt;
-                // 0.05: dibine kadar yanasilan duvar bile cizilsin (0.3 iken 36 cm'den yakin
-                // duvarlar goruntuden dusuyor, durbun duvar arkasini gosteriyordu).
-                _cam.nearClipPlane = 0.05f;
+                // 0.30'a GERI DONULDU (2026-08-31). ad26c2b bunu 0.05'e indirmisti; gerekce
+                // "duvara dayaninca duvar cizimden dusuyor, arkasi gorunuyor" idi. Ama 0.05'te
+                // kameranin 5 cm yakinindaki HER SEY cizilmeye basladi - silahin kendi govdesi
+                // ve durbun tupu dahil. Kamera duvara yaklasip geri cekildikce kadraja giren
+                // miktar artiyor ve mercegin ortasinda buyuyen kare bir bolge biraktiyordu
+                // (cihazda bildirildi ve ekran kaydiyla gosterildi).
+                //
+                // Dusuk near clip'e artik ihtiyac YOK: duvarin cizimden dusmesi sorununu
+                // kademeli karartma cozuyor - duvar bu mesafeye gelmeden mercek zaten siyah.
+                // Bu yuzden dimStartDistance de 0.35'ten 0.80'e cikti; ikisi birlikte
+                // ayarlanmali, yoksa aradaki bantta eski hata geri gelir.
+                _cam.nearClipPlane = Mathf.Max(0.01f, nearClip);
                 _cam.farClipPlane = 200f;
                 _savedMask = _cam.cullingMask;
                 _savedClear = _cam.clearFlags;
