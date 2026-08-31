@@ -65,6 +65,29 @@ namespace VRMultiplayer.Audio
         float _accum;
         int _stepIdx;
 
+        // ─── GECICI OLCUM (2026-08-28) ────────────────────────────────────────────────
+        // Adim sesi cihazda duyulmuyor ve statik inceleme suclu bulamadi. Elenenler:
+        // klipler saglam, bilesen her istemcide var, Avatar koku kafayi izliyor,
+        // Camera.main kulu atlaniyor, Head'de Interpolate=True, oyuncular olu degil.
+        // Kalan supheli: MinWalkSpeed esigi + StrideMeters*dt bosaltmasi.
+        //
+        // Bu blok DAVRANISI DEGISTIRMEZ, yalnizca gorunurluk verir. Okumak icin:
+        //   adb logcat -d -s Unity:I | findstr [AdimOlcum]
+        //
+        // SAHIP satiri kendi kafandan, UZAK satiri karsi oyuncunun replike kafasindan
+        // gelir. Tek gozlukte yalniz SAHIP akar ve esigin gecilip gecilmedigini gosterir;
+        // interpolasyon supheci icin IKI gozluk gerekir, kablo DINLEYEN tarafta olmali.
+        //
+        // OLCUM BITINCE SILINECEK.
+        const bool StepDebug = true;
+        float _dbgNext;
+        float _dbgPeak;          // aradaki en yuksek hiz (m/s)
+        int _dbgFrames, _dbgOver;  // toplam kare / esigi gecen kare
+        Vector3 _dbgLast;
+        float _dbgAccum;
+        int _dbgSteps;
+        // ──────────────────────────────────────────────────────────────────────────────
+
         void Awake()
         {
             _health = GetComponent<PlayerHealth>();
@@ -73,6 +96,7 @@ namespace VRMultiplayer.Audio
             // raycast'i yazmaktan hem ucuz hem tutarli.
             _avatar = transform.Find("Avatar");
             _lastPos = _health != null ? _health.HeadPosition : transform.position;
+            _dbgLast = _lastPos;   // GECICI olcum; ilklenmezse ilk kare sahte sicrama sayar
         }
 
         void OnEnable()
@@ -93,11 +117,47 @@ namespace VRMultiplayer.Audio
             WeaponAudioPlayer.Play2D("WeaponSounds/hit_body_" + Random.Range(1, 4), vol, 0.92f, 1.08f);
         }
 
+        /// <summary>GECICI: adim sayacinin girdilerini yarim saniyede bir yazar. Kendi
+        /// birikimini tutar, gercek _accum'a DOKUNMAZ — olcum davranisi degistirmesin.</summary>
+        void DebugSample(bool owner)
+        {
+            Vector3 p = _health.HeadPosition;
+            float dt = Mathf.Max(1e-5f, Time.deltaTime);
+            Vector3 d = p - _dbgLast;
+            _dbgLast = p;
+            d.y = 0f;
+            float dist = d.magnitude;
+            if (dist > TeleportThreshold) { _dbgAccum = 0f; return; }
+
+            float hiz = dist / dt;
+            _dbgFrames++;
+            if (hiz > _dbgPeak) _dbgPeak = hiz;
+
+            if (dist < MinWalkSpeed * dt)
+                _dbgAccum = Mathf.Max(0f, _dbgAccum - StrideMeters * dt);
+            else { _dbgOver++; _dbgAccum += dist; }
+            if (_dbgAccum >= StrideMeters) { _dbgAccum -= StrideMeters; _dbgSteps++; }
+
+            if (Time.time < _dbgNext) return;
+            _dbgNext = Time.time + 0.5f;
+            Debug.Log(string.Format(
+                "[AdimOlcum] {0} tepeHiz {1:F2} m/s  esikUstuKare %{2:F0}  birikim {3:F2}/{4:F2} m  adim {5}  esik {6:F2} m/s",
+                owner ? "SAHIP" : "UZAK", _dbgPeak,
+                _dbgFrames > 0 ? 100f * _dbgOver / _dbgFrames : 0f,
+                _dbgAccum, StrideMeters, _dbgSteps, MinWalkSpeed));
+            _dbgPeak = 0f; _dbgFrames = 0; _dbgOver = 0;
+        }
+
         void Update()
         {
+            if (_health == null) return;
+            // OLCUM: sahip yolunda SES CALINMAZ, yalnizca sayilar toplanir. Boylece tek
+            // gozlukle de esigin gecilip gecilmedigi gorulebiliyor.
+            if (StepDebug) DebugSample(_health.IsOwner);
+
             // Kendi adimimiz calinmaz (gerekcesi sinif aciklamasinda). Vucuda mermi sesi
             // bundan etkilenmez: o Update'te degil, can degisimi olayinda calisir.
-            if (_health == null || _health.IsOwner) return;
+            if (_health.IsOwner) return;
 
             Vector3 p = _health.HeadPosition;   // kok kimildamaz, hareketi kafa tasir
             Vector3 d = p - _lastPos;
