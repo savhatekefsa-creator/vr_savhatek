@@ -433,6 +433,23 @@ namespace VRMultiplayer.Constructor
                 buildMargin = grid.OutsideMargin,
                 builtForRoom = plan,
             };
+
+            // YENI HARITA TERTEMIZ TAG LISTESIYLE BASLAR: yalnizca origin.
+            //
+            // BOS BIRAKILAMAZ. ApplyMapLayout bos listeyi "bu harita tag tasimiyor" sayip
+            // ONYUKLEME yerlesimine doner, o da cihazdaki TagLayout.json'dur -- yani BASKA
+            // BIR MEKANIN olculmus tag'leri. Cihazda yasandi: yepyeni bir haritada tag
+            // kurulumu daha baslamadan sistem eski mekanin tag 1/2'siyle kalibre olmaya
+            // calisiyordu. Geri donus eski haritalar icin dogru (tag'siz kayitlar cerceve
+            // sizsiz kalmasin), ama SIFIRDAN acilan harita icin tam tersi: burada eski
+            // yerlesim bilgi degil, kirlilik.
+            //
+            // TAG 0 ACIK DOGAR, cunku o olculmus bir deger degil origin'in TANIMI: (0, h, 0)
+            // olmasi haritanin kendi sifir noktasini tarif ediyor. Kagidi henuz asilmamis
+            // olabilir ve bu zararsizdir -- GORULMEYEN tag suruklenme uretmez, YANLIS YERDE
+            // duran tag uretir. Plakadan turetilenler ise kapali dogmaya devam ediyor.
+            TagCapture.SetOrigin(layout);
+
             return Adopt(layout, plan);
         }
 
@@ -456,6 +473,26 @@ namespace VRMultiplayer.Constructor
             Layout = layout;
             Grid = grid;
             Root = MapBuilder.EnsureRoot();
+
+            // Carki haritanin kendi setine al. SetPalette() ustunden DEGIL: o, degisikligi
+            // haritaya geri yazip kaydedilmemis-degisiklik bayragini kaldirirdi — yalnizca bir
+            // harita ACMAK haritayi kirletmemeli.
+            string want = Layout.paletteId ?? "";
+            if (ActivePaletteId != want)
+            {
+                ActivePaletteId = want;
+                InvalidatePlaceable();
+            }
+
+            // DUNYA GORUNUMU. Burada duruyor cunku Adopt TEK HUNI: yerel harita acma da
+            // (yukaridaki uc cagri) sunucudan gelen harita da (AdoptJson) buraya dusuyor.
+            // Tema uygulamasini menuye ya da oyuncu moduna koymak, ayni isi iki yerde
+            // tutmak ve birini unutunca "PC'de kiyamet, gozlukte ogle vakti" demek olurdu.
+            //
+            // KOSULSUZ, insa modunda bile: orada passthrough sanal dunyayi zaten gizliyor,
+            // yani gorunur bir etkisi yok — ama insa modundan cikildiginda tema hazir
+            // durur, ayrica bir tetikleyiciye gerek kalmaz.
+            WorldTheme.Apply(Layout.themeId ?? "");
 
             // Once dolulugu isle, SONRA sahneyi kur: boylece kayitli haritadaki cakisan bir
             // yerlestirme (elle duzenlenmis JSON, eski kutuphane) sessizce ust uste binmez.
@@ -1350,8 +1387,12 @@ namespace VRMultiplayer.Constructor
         ///
         /// Raised again for the weapon wall, which is 3.75 m: it is one deliberate object, not
         /// terrain, and the buildable area is roughly 15 x 14 m.
+        ///
+        /// Raised to 5 m for the apocalypse set. Ruined_Wall measures 4.31 m and was landing
+        /// just outside — it is a wall segment, the most ordinary thing a player builds with.
+        /// The line stays well under the paintball marker's 9.26 m, which really is terrain.
         /// </summary>
-        const float MaxPlaceableMetres = 4f;
+        const float MaxPlaceableMetres = 5f;
 
         /// <summary>
         /// Props the player may drop on the floor. Terrain-sized pieces are filtered out — a
@@ -1369,55 +1410,181 @@ namespace VRMultiplayer.Constructor
             {
                 if (_placeable != null) return _placeable;
                 _placeable = new List<PropDef>();
+
+                // Emekliye ayrilmamis olup yine de elenenleri BIRIKTIR ve bir kez bildir.
+                // Bu kapi uzun sure SESSIZDI ve maliyeti soyle oldu: kutuphane penceresi
+                // KIYAMET'te 12 prop gosterirken cark 10 gosteriyordu, ve aradaki iki propun
+                // (Power_Pole 10.4 m, Ruined_Wall 4.31 m) nereye gittigini soyleyen hicbir
+                // yer yoktu — "galiba 10 sinir var" diye okunmasi kacinilmazdi. Bir kutuphane
+                // aracinin bir seyi gizlemesi sorun degil; NEDEN gizledigini sylemamesi sorun.
+                List<string> dropped = null;
+
                 foreach (var p in Library.props)
-                    if (p != null && !p.hiddenInPalette &&
-                        p.snap == PropSnap.Floor && p.category != PropCategory.Ground &&
-                        p.sizeMeters.x <= MaxPlaceableMetres && p.sizeMeters.y <= MaxPlaceableMetres &&
-                        p.Resolve() != null)
-                        _placeable.Add(p);
+                {
+                    string why = WhyNotPlaceable(p);
+                    if (why == null) { _placeable.Add(p); continue; }
+                    if (p == null || p.hiddenInPalette) continue;   // emekli: kasten, sessiz kalsin
+                    (dropped ??= new List<string>()).Add($"{p.id} -> {why}");
+                }
+
+                if (dropped != null)
+                    Debug.LogWarning($"[Constructor] {dropped.Count} prop palete ALINMADI " +
+                                     "(emekli olanlar haric):\n - " + string.Join("\n - ", dropped) +
+                                     "\nAyrinti/onarim: menu 51.");
+
                 return _placeable;
             }
         }
 
         /// <summary>
-        /// Categories that actually contain something placeable, in enum order. The palette
-        /// wheel draws one slice per entry — an empty slice is a slice the player can waste a
-        /// selection on, so empty categories never get one.
+        /// Why <paramref name="p"/> is kept out of the palette, or null when it is offered.
+        ///
+        /// THE SINGLE STATEMENT OF THE RULE. <see cref="Placeable"/>, the warning above and the
+        /// editor report (menu 51) all ask this one method, so what the player sees and what the
+        /// report explains cannot drift apart — which is exactly how a filter becomes folklore.
+        ///
+        /// GROUND IS NO LONGER EXCLUDED. The category used to be a proxy for "terrain-sized":
+        /// every Ground entry was a 40 m landscape tile from the forest pack, so dropping the
+        /// category dropped the tiles. That proxy broke the moment a Ground prop meant a flat
+        /// PATCH you place on purpose — rubble, scorch marks, broken glass — which are among the
+        /// most placeable things in the library. The size limit below already excludes the 40 m
+        /// tiles on their own merits, and it does it by measuring the actual problem.
         /// </summary>
-        public IReadOnlyList<PropCategory> Categories
+        public static string WhyNotPlaceable(PropDef p)
         {
-            get
+            if (p == null) return "girdi bos";
+            if (p.hiddenInPalette) return "emekli (hiddenInPalette acik)";
+            if (p.snap != PropSnap.Floor) return $"zemine oturmuyor (snap={p.snap})";
+            if (p.sizeMeters.x > MaxPlaceableMetres || p.sizeMeters.y > MaxPlaceableMetres)
+                return $"ayak izi cok buyuk ({p.sizeMeters.x:0.00} x {p.sizeMeters.y:0.00} m, " +
+                       $"sinir {MaxPlaceableMetres} m)";
+            if (p.Resolve() == null) return "prefab cozulemedi (prefab/resourcePath bos ya da eksik)";
+            return null;
+        }
+
+        // ------------------------------------------------------------- palette
+
+        /// <summary>
+        /// The wheel slice currently selected. Empty means the "DIGER" slice — props nobody has
+        /// filed into a palette yet.
+        /// </summary>
+        public string ActivePaletteId { get; private set; } = "";
+
+        /// <summary>
+        /// Selects a wheel slice.
+        ///
+        /// NO CACHE INVALIDATION HERE, unlike the earlier two-axis design: the palette does not
+        /// FILTER the placeable set any more, it SLICES it. Every slice is built once and stays
+        /// valid until the library itself changes, so switching slices is free.
+        /// </summary>
+        public void SetPalette(string paletteId)
+        {
+            paletteId = paletteId ?? "";
+            if (ActivePaletteId == paletteId) return;
+            ActivePaletteId = paletteId;
+
+            // Harita hangi dilimde birakildigini hatirlasin: bir uzay haritasi tekrar
+            // acildiginda cark UZAY'da baslar.
+            if (Layout != null && Layout.paletteId != paletteId)
             {
-                if (_categories != null) return _categories;
-                _categories = new List<PropCategory>();
-                foreach (PropCategory c in System.Enum.GetValues(typeof(PropCategory)))
-                    if (PlaceableIn(c).Count > 0) _categories.Add(c);
-                return _categories;
+                Layout.paletteId = paletteId;
+                MarkDirty();
             }
         }
 
-        /// <summary>Placeable props in one category (cached; the list is rebuilt with the library).</summary>
-        public IReadOnlyList<PropDef> PlaceableIn(PropCategory category)
+        // ------------------------------------------------------------- theme
+
+        /// <summary>The world look on screen right now. Empty = the scene's own look.</summary>
+        public string ActiveThemeId => WorldTheme.ActiveId;
+
+        /// <summary>
+        /// Changes the map's world look and puts it on screen immediately.
+        ///
+        /// WRITES THE MAP, unlike a passing view setting: <see cref="MapLayout.themeId"/> is
+        /// what every other peer will read, so a theme that is only applied locally would look
+        /// right to the person who picked it and wrong to everyone else. Marking dirty is the
+        /// same reason — leaving it unsaved means the choice survives until the next map load
+        /// and no longer.
+        ///
+        /// The SERVER is the one that broadcasts (see <see cref="ConstructorSync"/>); a client
+        /// calling this changes only its own view until the layout goes round, which is why the
+        /// theme picker belongs on the host.
+        /// </summary>
+        public void SetTheme(string themeId)
         {
-            if (_byCategory == null) _byCategory = new Dictionary<PropCategory, List<PropDef>>();
-            if (_byCategory.TryGetValue(category, out var list)) return list;
+            themeId = themeId ?? "";
+            if (Layout != null && (Layout.themeId ?? "") != themeId)
+            {
+                Layout.themeId = themeId;
+                MarkDirty();
+            }
+            WorldTheme.Apply(themeId);
+        }
+
+        /// <summary>
+        /// The wheel's slices, in library order, with the unfiled ones last.
+        ///
+        /// ONE AXIS, ON PURPOSE. These used to be <see cref="PropCategory"/> values — a fixed
+        /// enum — while palettes were a second axis reached by a modifier key. That put UZAY
+        /// somewhere the player could not see, and left SIPER/DUVAR/DOGUS un-editable because
+        /// they lived in source. Slicing by palette instead makes every slice the same kind of
+        /// thing: named data, created and deleted in the library window (menu 31).
+        ///
+        /// The category enum SURVIVES and still does real work — it decides what is scenery
+        /// versus ground, what stops a bullet, and where a team spawns. It just no longer
+        /// decides what the wheel looks like.
+        ///
+        /// A palette appears only once it OWNS a placeable prop, so creating one and leaving it
+        /// empty does not put a dead slice in front of the player.
+        /// </summary>
+        public IReadOnlyList<string> Palettes
+        {
+            get
+            {
+                if (_palettes != null) return _palettes;
+                _palettes = new List<string>();
+
+                if (Library.palettes != null)
+                    foreach (var pal in Library.palettes)
+                    {
+                        if (pal == null || string.IsNullOrEmpty(pal.id)) continue;
+                        if (PlaceableIn(pal.id).Count > 0) _palettes.Add(pal.id);
+                    }
+
+                // Hicbir palete atanmamislar EN SONA, kendi dilimlerine. Gizlemek, kutuphaneye
+                // yeni giren bir propu sessizce yok ederdi — palet atamayi unutmak normal.
+                if (PlaceableIn("").Count > 0) _palettes.Add("");
+
+                return _palettes;
+            }
+        }
+
+        /// <summary>Placeable props in one palette (cached; rebuilt with the library).</summary>
+        public IReadOnlyList<PropDef> PlaceableIn(string paletteId)
+        {
+            paletteId = paletteId ?? "";
+            if (_byPalette == null) _byPalette = new Dictionary<string, List<PropDef>>();
+            if (_byPalette.TryGetValue(paletteId, out var list)) return list;
 
             list = new List<PropDef>();
             foreach (var p in Placeable)
-                if (p.category == category) list.Add(p);
-            _byCategory[category] = list;
+                if ((p.paletteId ?? "") == paletteId) list.Add(p);
+            _byPalette[paletteId] = list;
             return list;
         }
 
-        List<PropCategory> _categories;
-        Dictionary<PropCategory, List<PropDef>> _byCategory;
+        /// <summary>Shown name of the active slice — the wheel writes this under it.</summary>
+        public string ActivePaletteName => Library.PaletteName(ActivePaletteId);
 
-        /// <summary>Kutuphane editorde degistiyse (menu 25) filtreleri yeniden kur.</summary>
+        List<string> _palettes;
+        Dictionary<string, List<PropDef>> _byPalette;
+
+        /// <summary>Kutuphane editorde degistiyse (menu 25/31) dilimleri yeniden kur.</summary>
         public void InvalidatePlaceable()
         {
             _placeable = null;
-            _categories = null;
-            _byCategory = null;
+            _palettes = null;
+            _byPalette = null;
         }
     }
 }

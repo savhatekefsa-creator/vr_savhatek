@@ -32,6 +32,8 @@ namespace VRMultiplayer.UI
     public class PlayerEntryPanel : MonoBehaviour
     {
         public const string ActionStart  = "start";
+        /// <summary>KARAKTER DUZENI ekranini acar (bkz. UI.CharacterSelectUI).</summary>
+        public const string ActionCharacter = "character";
         public const string ActionRandom = "random";
         public const string ActionClear  = "clear";
         public const string ActionHandR  = "hand_right";
@@ -109,6 +111,10 @@ namespace VRMultiplayer.UI
         static readonly Color BlueEdge   = UITheme.TeamBlueEdge;
         static readonly Color BlueFill   = new Color(0.039f, 0.067f, 0.125f, 1f);
         static readonly Color BlueText   = UITheme.TeamBlueText;
+
+        static readonly Color CharEdge   = new Color(0.36f, 0.62f, 0.55f, 1f);
+        static readonly Color CharFill   = new Color(0.043f, 0.118f, 0.106f, 1f);
+        static readonly Color CharText   = new Color(0.62f, 0.92f, 0.84f, 1f);
 
         static readonly Color StartOff   = new Color(0.078f, 0.102f, 0.133f, 1f);
         static readonly Color StartOffTx = new Color(0.31f, 0.36f, 0.42f, 1f);
@@ -337,18 +343,32 @@ namespace VRMultiplayer.UI
 
         void BuildTeamPanel()
         {
-            UITheme.MakeOutlined(transform, "TeamPanel", Box(884, 143, 1097, 410),
-                Dim(884, 248, 1097, 517), S(14f), PanelEdge, Backdrop, S(1.5f),
+            // SAG SUTUN UCE BOLUNDU. Iki dal da buraya yeni bir sey koydu: silah-d
+            // TETIK ELI secimini, main KARAKTER dugmesini. Ust uste biniyorlardi;
+            // yukseklikler kisilip ucu de sigacak sekilde yeniden dagitildi:
+            //   takim    143..376
+            //   tetik eli 388..524
+            //   karakter  536..594
+            UITheme.MakeOutlined(transform, "TeamPanel", Box(884, 143, 1097, 320),
+                Dim(884, 143, 1097, 320), S(14f), PanelEdge, Backdrop, S(1.5f),
                 ZBorder, QBorder, QFill);
 
             var lbl = UITheme.MakeText(transform, "TAKIM SEÇ", SectionLbl, 0.016f,
                 TextAnchor.MiddleCenter, QText);
-            lbl.transform.localPosition = new Vector3(X(990f), Y(166f), ZText);
+            lbl.transform.localPosition = new Vector3(X(990f), Y(164f), ZText);
 
-            _redCard = AddChoiceCard(900, 186, 1081, 288, "KIZIL", "Takım", RedEdge, RedFill, RedText,
+            _redCard = AddChoiceCard(900, 180, 1081, 244, "KIZIL", "Takım", RedEdge, RedFill, RedText,
                 PlayerProfile.TeamRed);
-            _blueCard = AddChoiceCard(900, 298, 1081, 400, "MAVİ", "Takım", BlueEdge, BlueFill, BlueText,
+            _blueCard = AddChoiceCard(900, 252, 1081, 316, "MAVİ", "Takım", BlueEdge, BlueFill, BlueText,
                 PlayerProfile.TeamBlue);
+
+            // KARAKTER DUZENI: takim panelinin hemen altinda, kendi kutusunda. Giris
+            // ekraninda durmasinin sebebi akis: oyuncu once kimligini (isim + takim)
+            // belirler, gorunumu istedigi an duzenler ve KATIL'a bastiginda oyuna girer.
+            // Zorunlu bir adim DEGIL — hic dokunmayan oyuncu varsayilan gorunumle girer.
+            var chr = AddButton(Box(884, 522, 1097, 594), Dim(884, 522, 1097, 594), S(12f),
+                "KARAKTER", 0.024f, CharEdge, CharFill, CharText, '\0', ActionCharacter);
+            IconOn(chr, UIMesh.Bolt(), CharText, -S(66f), 0.014f, 0.022f);
         }
 
         /// <summary>
@@ -414,23 +434,26 @@ namespace VRMultiplayer.UI
         /// </summary>
         void BuildHandPanel()
         {
-            UITheme.MakeOutlined(transform, "HandPanel", Box(884, 422, 1097, 594),
-                Dim(884, 422, 1097, 594), S(14f), PanelEdge, Backdrop, S(2f), ZBack, QBack + 1, QBack + 2);
+            // KART YUKSEKLIGI >= 64: alt yazi ("SEÇİLDİ" / "El") kart merkezinden 22 birim
+            // asagida duruyor (bkz. AddChoiceCard). Daha alcak kartta alt yazi disari tasar -
+            // merge sirasinda 46'ya indirilmisti ve tam bu oldu.
+            UITheme.MakeOutlined(transform, "HandPanel", Box(884, 332, 1097, 510),
+                Dim(884, 332, 1097, 510), S(14f), PanelEdge, Backdrop, S(2f), ZBack, QBack + 1, QBack + 2);
 
             var lbl = UITheme.MakeText(transform, "TETİK ELİ", SectionLbl, 0.016f,
                 TextAnchor.MiddleCenter, QText);
-            lbl.transform.localPosition = new Vector3(X(990.5f), Y(445f), ZText);
+            lbl.transform.localPosition = new Vector3(X(990.5f), Y(353f), ZText);
 
-            _handRightCard = AddChoiceCard(900, 462, 1081, 524, "SAĞ", "El",
+            _handRightCard = AddChoiceCard(900, 370, 1081, 434, "SAĞ", "El",
                 HandEdge, HandFill, HandText, 0, ActionHandR);
-            _handLeftCard = AddChoiceCard(900, 532, 1081, 594, "SOL", "El",
+            _handLeftCard = AddChoiceCard(900, 440, 1081, 504, "SOL", "El",
                 HandEdge, HandFill, HandText, 0, ActionHandL);
         }
 
         void BuildStartButton()
         {
             // Sag kenar 872: ustundeki "Temizle" ve ad alaniyla ayni hizada bitiyor, sag
-            // sutun (takim + tetik eli) kesintisiz kaliyor.
+            // sutun (takim + tetik eli + karakter) kesintisiz kaliyor.
             Vector2 c = Box(183, 533, 872, 594), size = Dim(183, 533, 872, 594);
 
             var border = UITheme.MakeRounded(transform, "Start Border", c, size, S(12f),
@@ -442,10 +465,10 @@ namespace VRMultiplayer.UI
 
             _startIcon = UITheme.MakeShape(transform, "Start Icon", UIMesh.Play(), StartOffTx, QIcon);
             _startIcon.localPosition = new Vector3(c.x - S(96f), c.y, ZIcon);
-            _startIcon.localScale = new Vector3(0.020f, 0.024f, 1f);
+            _startIcon.localScale = new Vector3(0.018f, 0.022f, 1f);
             _startIconMat = _startIcon.GetComponent<MeshRenderer>().sharedMaterial;
 
-            _startLabel = UITheme.MakeText(transform, "OYUNA BAŞLA", StartOffTx, 0.034f,
+            _startLabel = UITheme.MakeText(transform, "KATIL", StartOffTx, 0.034f,
                 TextAnchor.MiddleCenter, QText);
             _startLabel.transform.localPosition = new Vector3(c.x + S(14f), c.y, ZText);
 

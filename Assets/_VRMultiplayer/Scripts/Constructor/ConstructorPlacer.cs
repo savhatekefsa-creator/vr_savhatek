@@ -16,8 +16,8 @@ namespace VRMultiplayer.Constructor
     ///
     /// RAY, NOT REACH. The player stands in a real room; walking to the far corner to drop a
     /// crate would make building exhausting. Pointing covers the whole room from wherever they
-    /// happen to be standing, which is why this is the primary interaction and the dollhouse
-    /// view (step 10) is only a convenience on top.
+    /// happen to be standing, which is why this is the ONLY placement interaction — there is no
+    /// second, scaled-down view of the map to keep in sync with it.
     ///
     /// KAPI: insa modu YALNIZCA yaratici modda acilir (bkz. <see cref="OnModeChosen"/>). Modu
     /// secmek editoru kendiliginden acar; ayrica SOL thumbstick TIKI ile kapatilip acilabilir —
@@ -191,7 +191,7 @@ namespace VRMultiplayer.Constructor
         byte _placeLevel;
         string _cursorProblem;
         Vector3 _rayOrigin, _rayHit, _rayHitWorld;
-        bool _tiltArmed, _aimModeArmed, _prevDollhouse;
+        bool _tiltArmed, _aimModeArmed, _prevGrip;
 
         // --- giris kenar takibi ---
         bool _prevTrigger, _prevDelete, _prevToggle, _prevUndo, _prevHeightToggle;
@@ -208,16 +208,6 @@ namespace VRMultiplayer.Constructor
         ConstructorSession Session => ConstructorSession.Instance;
         ConstructorPaletteUI _palette;
 
-        ConstructorDollhouse _dollhouse;
-        ConstructorDollhouse Dollhouse
-        {
-            get
-            {
-                if (_dollhouse == null) _dollhouse = GetComponent<ConstructorDollhouse>();
-                return _dollhouse;
-            }
-        }
-
         ConstructorGridView _gridView;
         ConstructorGridView GridView
         {
@@ -228,23 +218,8 @@ namespace VRMultiplayer.Constructor
             }
         }
 
-        /// <summary>Room space while the dollhouse is on; null means room space == world space.</summary>
-        Transform Space => Dollhouse != null ? Dollhouse.Space : null;
-
-        Ray ToRoomSpace(Ray r)
-        {
-            var sp = Space;
-            if (sp == null) return r;
-            // Yon normalize EDILMEZ: olcek yonun boyunu degistirir ama zemin kesisimi
-            // t = (floorY - o.y) / d.y seklinde oldugu icin sonuc boydan bagimsizdir.
-            return new Ray(sp.InverseTransformPoint(r.origin), sp.InverseTransformDirection(r.direction));
-        }
-
-        Vector3 ToWorld(Vector3 roomPoint)
-        {
-            var sp = Space;
-            return sp == null ? roomPoint : sp.TransformPoint(roomPoint);
-        }
+        // ODA UZAYI == DUNYA UZAYI. Harita koku ve izgara kendi donusumlerini kimlikte tutuyor
+        // (bkz. MapBuilder.Spawn), yani hucre hesabi dogrudan dunya koordinatlarinda calisir.
 
         // ------------------------------------------------------------- loop
 
@@ -328,64 +303,45 @@ namespace VRMultiplayer.Constructor
         }
 
         /// <summary>
-        /// Live tuning of the pointer angle with the LEFT thumbstick.
+        /// Left grip toggles passthrough: real room <-> virtual world, one press.
         ///
-        /// The right correction is not one number: it depends on how a person grips the
-        /// controller. Shipping a constant would leave some players fighting the ray forever,
-        /// and there is no Inspector inside a headset — so the dial is in the game, and the
-        /// value is remembered.
+        /// TEK ISI BU. Eskiden uzun basis "maket modu"nu aciyordu; mod kaldirilinca kisa/uzun
+        /// ayrimi da gitti — basisin ne kadar surdugunu sayan bir tus, tek isi olan bir tustan
+        /// her zaman daha yavas ve daha yanilticidir.
         /// </summary>
+        void HandleLeftGrip()
+        {
+            bool held = GripHeld();
+
+            // Birakista tetiklenir, basista degil: parmak gripte dururken modun tekrar tekrar
+            // donmesini engelleyen sey, kenar takibinin ta kendisi.
+            if (!held && _prevGrip)
+            {
+                var pass = GetComponent<ConstructorPassthrough>();
+                if (pass != null)
+                {
+                    pass.SetActive(!pass.Active);
+                    Show(!pass.Active ? "PASSTHROUGH KAPALI\n\nSanal dunya geri geldi."
+                         : pass.CameraOk ? "PASSTHROUGH ACIK\n\nGercek odani goruyorsun."
+                         : "PASSTHROUGH ACILAMADI\n\nARCameraManager yok ya da OpenXR\nozelligi kapali (menu 23).", 4f);
+                }
+            }
+
+            _prevGrip = held;
+        }
+
         /// <summary>
         /// Left thumbstick, two jobs depending on whether the palette is open.
         ///
         /// PALETTE CLOSED it resizes the prop, because that is the thing you reach for
         /// constantly while building. PALETTE OPEN it edits the aim calibration, which you set
         /// once and then forget — burying it behind a menu keeps the everyday control free.
-        /// </summary>
-        [Tooltip("Sol gripte kisa/uzun bas ayrimi (saniye).")]
-        public float longPressSeconds = 0.55f;
-
-        float _gripDownAt;
-
-        /// <summary>
-        /// Left grip carries two things, split by hold length: a SHORT press toggles
-        /// passthrough, a LONG press toggles the dollhouse.
         ///
-        /// Passthrough gets the short press because it is the one you reach for — seeing the
-        /// real room is the point of building there, and you need to be able to turn it off
-        /// instantly if it misbehaves. The dollhouse is occasional, so it pays the long press.
+        /// The aim correction is not one number: it depends on how a person grips the
+        /// controller. Shipping a constant would leave some players fighting the ray forever,
+        /// and there is no Inspector inside a headset — so the dial is in the game, and the
+        /// value is remembered.
         /// </summary>
-        void HandleLeftGrip()
-        {
-            bool held = DollhouseHeld();
-
-            if (held && !_prevDollhouse) _gripDownAt = Time.time;
-
-            if (!held && _prevDollhouse)
-            {
-                if (Time.time - _gripDownAt >= longPressSeconds)
-                {
-                    if (Dollhouse != null)
-                        Show(Dollhouse.Toggle()
-                            ? "MAKET MODU\n\nHaritanin tamamina yukaridan bak."
-                            : "MAKET KAPALI\n\nHarita odaya geri dondu.", 3f);
-                }
-                else
-                {
-                    var pass = GetComponent<ConstructorPassthrough>();
-                    if (pass != null)
-                    {
-                        pass.SetActive(!pass.Active);
-                        Show(!pass.Active ? "PASSTHROUGH KAPALI\n\nSanal dunya geri geldi."
-                             : pass.CameraOk ? "PASSTHROUGH ACIK\n\nGercek odani goruyorsun."
-                             : "PASSTHROUGH ACILAMADI\n\nARCameraManager yok ya da OpenXR\nozelligi kapali (menu 23).", 4f);
-                    }
-                }
-            }
-
-            _prevDollhouse = held;
-        }
-
         void HandleLiftAdjust()
         {
             Vector2 left = LeftStick();
@@ -449,10 +405,7 @@ namespace VRMultiplayer.Constructor
                 return;
             }
 
-            // Maket modu burada BITIYOR: isini oda uzayina cevirdikten sonra zemin kesisimi,
-            // hucre hesabi, gecerlilik ve hayalet hic degismeden calisiyor. Maket, ayri bir
-            // yerlestirme sistemi degil, tek bir koordinat donusumu.
-            Ray ray = ToRoomSpace(worldRay);
+            Ray ray = worldRay;             // oda uzayi == dunya uzayi
             _rayOrigin = worldRay.origin;   // isin GORSELI dunya uzayinda cizilir
 
             var grid = Session.Grid;
@@ -503,7 +456,7 @@ namespace VRMultiplayer.Constructor
 
             _cursorProblem = null;
             _rayHit = hit;                  // hesaplar ODA uzayinda kalir
-            _rayHitWorld = ToWorld(hit);
+            _rayHitWorld = hit;
 
             _pointedCell = grid.WorldToCell(hit);
             var size = grid.FootprintSize(def, _rot, _widthPct);
@@ -546,7 +499,7 @@ namespace VRMultiplayer.Constructor
         {
             _cursorProblem = null;
             _rayHit = wallPoint;
-            _rayHitWorld = ToWorld(wallPoint);
+            _rayHitWorld = wallPoint;
 
             // Yerel +Z duvarin normaline bakacak sekilde dondur, sonra propun kendi adimina
             // yuvarla: yalnizca ceyrek tur donebilen bir prop duvara ara bir aciyla yaslanamaz.
@@ -854,13 +807,13 @@ namespace VRMultiplayer.Constructor
         {
             if (_palette != null)
             {
-                var inCategory = Session.PlaceableIn(_palette.ActiveCategory);
-                if (inCategory.Count > 0) return inCategory;
+                var inPalette = Session.PlaceableIn(_palette.ActivePaletteId);
+                if (inPalette.Count > 0) return inPalette;
             }
             return Session.Placeable;
         }
 
-        /// <summary>The palette committed a different category — start from its first prop.</summary>
+        /// <summary>The wheel committed a different palette — start from its first prop.</summary>
         public void OnCategoryChanged() => _propIndex = 0;
 
         // ------------------------------------------------------------- build mode
@@ -950,10 +903,6 @@ namespace VRMultiplayer.Constructor
         {
             BuildMode = on;
 
-            // Insa modundan cikarken maketi de kapat: harita kucucuk halde havada asili
-            // kalmasin, odaya gercek boyutunda geri donsun.
-            if (!on && Dollhouse != null) Dollhouse.SetActive(false);
-
             // Passthrough insa moduyla birlikte gelir gider: insa ederken GERCEK odani
             // gorursun, oyuna donunce sanal dunya geri gelir.
             var pass = GetComponent<ConstructorPassthrough>();
@@ -982,7 +931,8 @@ namespace VRMultiplayer.Constructor
             Show(on
                 ? (freeSpace ? "INSA MODU ACIK  (SERBEST ALAN — oda taramasi yok)" : "INSA MODU ACIK") +
                   "\n\nTetik = koy   A = sil   B = geri al\nGrip = palet\n" +
-                  "Stick yatay = dondur   SAG STICK TIK = yukseklik"
+                  "Stick yatay = dondur   SAG STICK TIK = yukseklik\n" +
+                  "SOL GRIP = gercek oda / sanal dunya"
                 : $"INSA MODU KAPALI\n\n{placed} prop.", 4f);
         }
 
@@ -1080,15 +1030,6 @@ namespace VRMultiplayer.Constructor
 
             if (_valid != _lastValid) ApplyGhostMaterial(_valid);
 
-            // Hayalet ODA UZAYINDA yasar. Maket acilinca ayni koke baglanir ve modelin icinde
-            // dogru boyda belirir — konum hesabi hic degismez.
-            var space = Space;
-            if (_ghost.transform.parent != space)
-            {
-                _ghost.transform.SetParent(space, false);
-                _ghostShownOnce = false;   // yeni uzayda sicrayarak degil, dogrudan belirsin
-            }
-
             float yaw = _placeRot * MapLayout.RotationStepDegrees;
             Quaternion targetRot = Quaternion.Euler(0f, yaw, 0f);
 
@@ -1102,8 +1043,12 @@ namespace VRMultiplayer.Constructor
 
             // Hayalet KONULACAK yukseklikte durur. Sabit 0 verilseydi kat secen oyuncu propun
             // nereye gidecegini ancak birakinca ogrenirdi.
-            Vector3 target = Session.Grid.RectCenter(_rect, _placeLevel, Session.Layout.levelHeight)
-                             - MapBuilder.PivotOffset(_ghostDef, ghostScale, yaw);
+            Vector3 center = Session.Grid.RectCenter(_rect, _placeLevel, Session.Layout.levelHeight);
+            Vector3 target = center - MapBuilder.PivotOffset(_ghostDef, ghostScale, yaw);
+
+            // Plakaysa ALACAGI TAG ID'sini goster. Iki daldan da once cagriliyor: asagida
+            // ilk kare icin erken cikis var.
+            UpdateTagLabel(center);
 
             if (!_ghostShownOnce)
             {
@@ -1126,6 +1071,7 @@ namespace VRMultiplayer.Constructor
         {
             if (!show) { _ghostShownOnce = false; }
             if (_ghost != null) _ghost.SetActive(show);
+            if (!show && _tagLabel != null) _tagLabel.gameObject.SetActive(false);
         }
 
         void DestroyGhost()
@@ -1136,6 +1082,88 @@ namespace VRMultiplayer.Constructor
             _ghostPrefab = null;
             _ghostRenderers = null;
             _validSets = _invalidSets = null;
+        }
+
+        // ------------------------------------------------------------- tag id etiketi
+
+        TextMesh _tagLabel;
+
+        /// <summary>
+        /// Plaka koymadan once cercevenin ne kadar taze olmasi gerektigi (sn).
+        ///
+        /// 15 sn OLCULMUS BIR SAYI DEGIL, bilincli bir tahmin: kucuk bir odada tag'den
+        /// tag'e yurumek bu mertebede suruyor ve bu surede biriken suruklenme birkac cm.
+        /// Sahada kagit-plaka farki hala buyukse ONCE bu sayiyi kucultun; kalibrasyonda
+        /// baska bir sey aramadan once en ucuz deney bu.
+        /// </summary>
+        const float FrameStaleSeconds = 15f;
+
+        /// <summary>
+        /// Plaka hayaletinin ustunde ALACAGI TAG ID'sini yazar.
+        ///
+        /// NEDEN GEREKLI: tag ID'si plakanin KOYULMA SIRASINDAN geliyor (TagCapture.Capture,
+        /// instanceId sirasi), kagidin uzerindeki basili ID ise degismez. Ikisi tutmazsa
+        /// kalibrasyon tag'i yanlis yerde arar ve hata tam olarak iki tag'in ARASINDAKI
+        /// mesafe kadar olur -- OFIS2'de 2,6 m. Buyuk mekanda komsu iki tag karisirsa hata
+        /// 30-40 cm'e duser ve "biraz kaymis" diye gecistirilir; sessiz kalan tek hata turu bu.
+        ///
+        /// Sirayi dogrulanabilir kilmanin en ucuz yolu, numarayi KOYARKEN gostermek: kagidi
+        /// asan kisi hangi numarayi asacagini plakadan okur.
+        ///
+        /// HAYALETIN COCUGU DEGIL: plaka olcegi (0.14, 0.14, 0.01) tekduze degil, altina
+        /// konan yazi dondurulunce kayardi (shear). Bagimsiz duruyor ve konumu dunya
+        /// uzayindan aliyor.
+        /// </summary>
+        void UpdateTagLabel(Vector3 centerLocal)
+        {
+            bool plaka = _ghostDef != null && _ghostDef.id == TagCapture.PlateId;
+            if (!plaka || Session == null || Session.Layout == null)
+            {
+                if (_tagLabel != null) _tagLabel.gameObject.SetActive(false);
+                return;
+            }
+
+            if (_tagLabel == null)
+            {
+                // Sari: yerlesim isaretcilerinde "dogrulama bekliyor" rengiyle ayni dil.
+                _tagLabel = UITheme.MakeText(null, "", new Color(1f, 0.85f, 0.15f), 0.07f);
+                _tagLabel.gameObject.name = "~TagIdEtiketi";
+            }
+
+            // EBEVEYNSIZ, yani dunya uzayinda. Bu satirlar main'de etiketi maket (dollhouse)
+            // uzayina bagliyordu; maket modu bu dalda kaldirildi (bkz. 326354b) ve harita artik
+            // dogrudan dunyada oruluyor. Asagidaki konum zaten RectCenter'dan, yani dunya
+            // koordinatinda geliyor — ebeveyn vermek onu ikinci kez donusturmek olurdu.
+
+            // Kurali TagCapture veriyor, burada TEKRARLANMIYOR: etiket "TAG 3" derken cevrim
+            // 4 verirse kagidi asan kisi yanlis numarayi asar ve hatanin kaynagi gorunmez olur.
+            string s = "TAG " + TagCapture.NextTagId(Session.Layout);
+
+            // CERCEVE TAZELIGI. Plaka konuldugu andaki cerceveyi miras aliyor; son
+            // duzeltmeden bu yana ne kadar cok zaman gectiyse suruklenme o kadar birikmis
+            // olur ve kagit plakadan o kadar kayar. Sahada gorulen "plaka yerinde durmuyor"
+            // bunun gorunur hali. Sayiyi burada gosteriyoruz cunku karar tam burada veriliyor.
+            float yas = AprilTagCalibration.FrameAgeSeconds;
+            if (yas < 0f) s += "\nKALIBRE DEGIL";
+            else if (yas > FrameStaleSeconds) s += $"\nTAG'E BAK ({yas:0} sn)";
+            if (_tagLabel.text != s) _tagLabel.text = s;
+
+            // Taze degilse SARI degil KIRMIZI: koymadan once bakilmasi gereken bir sey var.
+            var renk = (yas < 0f || yas > FrameStaleSeconds)
+                ? new Color(1f, 0.35f, 0.25f) : new Color(1f, 0.85f, 0.15f);
+            if (_tagLabel.color != renk) _tagLabel.color = renk;
+
+            _tagLabel.gameObject.SetActive(true);
+            _tagLabel.transform.localPosition = centerLocal + Vector3.up * 0.16f;
+
+            // Kafaya donuk: plaka hangi acida durursa dursun numara okunabilsin. Yalnizca
+            // yatayda donuyor, yoksa yukaridan bakinca yazi yatardi.
+            var head = XRRigReference.HeadOrCamera;
+            if (head == null) return;
+            Vector3 bakis = _tagLabel.transform.position - head.position;
+            bakis.y = 0f;
+            if (bakis.sqrMagnitude > 1e-6f)
+                _tagLabel.transform.rotation = Quaternion.LookRotation(bakis.normalized, Vector3.up);
         }
 
         // ------------------------------------------------------------- pointer beam
@@ -1199,12 +1227,8 @@ namespace VRMultiplayer.Constructor
 
             if (_beamDot != null)
             {
-                // Maket modunda benek de kuculur, yoksa 1:10 modelin ustunde kocaman durur.
-                // Alt sinir var: tam olcekli kuculme onu gorunmez yapardi.
-                var sp = Space;
-                float k = sp != null ? Mathf.Max(0.25f, sp.lossyScale.x) : 1f;
-                _beamDot.position = _rayHitWorld + Vector3.up * 0.008f * k;   // zemine gomulmesin
-                _beamDot.localScale = Vector3.one * 0.07f * k;
+                _beamDot.position = _rayHitWorld + Vector3.up * 0.008f;   // zemine gomulmesin
+                _beamDot.localScale = Vector3.one * 0.07f;
             }
         }
 
@@ -1482,7 +1506,7 @@ namespace VRMultiplayer.Constructor
         }
 
         /// <summary>VR: SOL grip. PC: T. Insa modunda sol grip bostur (HandGrabber susturulmus).</summary>
-        bool DollhouseHeld()
+        bool GripHeld()
         {
             var dev = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
             if (dev.isValid && XRButtons.HeldWithAxisFallback(dev,
@@ -1552,6 +1576,16 @@ namespace VRMultiplayer.Constructor
 
         // ------------------------------------------------------------- panel / hud
 
+        /// <summary>
+        /// Insa modunun kendi panelinde bir ipucu goster. Disaridan (akis ekranlarindan)
+        /// cagrilabilen tek yol.
+        ///
+        /// NEDEN GEREKLI: insa modu acikken CreativeFlowUI butun panellerini kapatiyor
+        /// (ekranin sahibi editor). Yani akisin bir sonraki adimi icin verilecek yonerge
+        /// ancak buradan gosterilebilir — Note ile gosterilse hicbir zaman gorunmezdi.
+        /// </summary>
+        public void ShowHint(string text, float seconds) => Show(text, seconds);
+
         void Show(string text, float hideAfter = -1f)
         {
             if (_panel == null)
@@ -1604,7 +1638,7 @@ namespace VRMultiplayer.Constructor
             _nextStatusAt = Time.time + 0.15f;
 
             string cat = _palette != null
-                ? ConstructorPaletteUI.CategoryName(_palette.ActiveCategory) : "-";
+                ? Session.Library.PaletteName(_palette.ActivePaletteId) : "-";
             var list = CurrentList();
 
             string snap = _snapped ? "  [YAPISTI]" : "";
@@ -1640,7 +1674,7 @@ namespace VRMultiplayer.Constructor
                 $"{cursor}\n" +
                 $"yerlesen: {Session.PlacedCount}   nisan: " +
                 (aimFromEye ? "GOZ-EL" : "KUMANDA") + $" {AimTrim:+0;-0;0}" +
-                (Space != null ? "  [MAKET]" : "") + "  " + PassthroughLabel();
+                "  " + PassthroughLabel();
         }
 
         /// <summary>
@@ -1666,13 +1700,14 @@ namespace VRMultiplayer.Constructor
             }
 
             var def = SelectedProp();
-            GUILayout.BeginArea(new Rect(Screen.width - 340f, 20f, 320f, 250f), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(Screen.width - 340f, 20f, 320f, 272f), GUI.skin.box);
             GUILayout.Label("CONSTRUCTOR — INSA MODU ACIK  [B kapatir]");
             if (PlacementLocked)
                 GUILayout.Label("KOYMA KILITLI [P] — hayalet ve isin gizli");
-            GUILayout.Label("Kategori: " + ConstructorPaletteUI.CategoryName(
-                                _palette != null ? _palette.ActiveCategory : PropCategory.Cover) +
-                            "   [C basili tut + ok tuslari]" + (_palette != null && _palette.IsOpen ? "  <ACIK>" : ""));
+            GUILayout.Label("Palet: " + (_palette != null
+                                ? Session.Library.PaletteName(_palette.ActivePaletteId) : "-") +
+                            "  (" + Session.Palettes.Count + " palet)   [C basili tut + ok tuslari]" +
+                            (_palette != null && _palette.IsOpen ? "  <ACIK>" : ""));
             GUILayout.Label("Prop: " + (def != null ? def.displayName : "-") +
                             "  (" + (_propIndex + 1) + "/" + CurrentList().Count + ")   [Z/X]");
             float cellM = Session != null && Session.Grid != null

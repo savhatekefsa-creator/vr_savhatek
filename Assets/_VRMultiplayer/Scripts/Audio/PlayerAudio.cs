@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.XR;
 
 namespace VRMultiplayer.Audio
 {
@@ -28,6 +29,13 @@ namespace VRMultiplayer.Audio
     ///
     ///    Isinlanma/spawn sicramasi (karede >1.5 m) ve yavas kafa sallantisi (0.6 m/s
     ///    alti) adim SAYILMAZ — durup dururken hayalet adim olmaz.
+    ///
+    ///    ZEMIN FARKINDALIGI: adim aninda ayagin altinda bir <see cref="FootSurface"/> varsa
+    ///    (cam kirigi yamasi gibi) klip, siddet ve MENZIL oradan gelir. Bunun ag maliyeti
+    ///    SIFIR: kaplama her istemcide harita duzeninden yerel kuruluyor ve kokun konumu
+    ///    zaten replike, yani her istemci uzaktaki oyuncunun cama bastigini kendi basina
+    ///    hesapliyor. Yavas yurumek de bedava calisiyor — 0.6 m/s alti zaten adim saymiyor,
+    ///    yani camin uzerinden sessizce gecmek kendiliginden mumkun.
     ///
     /// 2) VUCUDA MERMI SESI ("tik/puf"): can dususu her istemcide replike olsa da ses
     ///    YALNIZ hasari alanin kendi kulakliginda (2D) calar — kisiye ozel geri bildirim.
@@ -82,6 +90,12 @@ namespace VRMultiplayer.Audio
         const float StepRefDistance = 1.5f;    // sesin YARIYA dustugu mesafe
         const float StepMaxDistance = 3.5f;    // burada kesin susar
         const float StepVolume = 0.9f;
+
+        // MAIN'DEN GELEN ZEMIN FARKINDALIGI ICIN VARSAYILANLAR. Ayagin altinda bir
+        // FootSurface yoksa bu degerler kullanilir; varsa klip/siddet/menzil oradan gelir.
+        const int DefaultVariants = 4;         // WeaponSounds/footstep_1..4
+        const float OtherStepVolume = 0.9f;    // yuzey yoksa (= eski StepVolume)
+
 
         PlayerHealth _health;
         Transform _avatar;
@@ -184,9 +198,10 @@ namespace VRMultiplayer.Audio
             // gozlukle de esigin gecilip gecilmedigi gorulebiliyor.
             if (StepDebug) DebugSample(_health.IsOwner);
 
-            // Kendi adimimiz calinmaz (gerekcesi sinif aciklamasinda). Vucuda mermi sesi
-            // bundan etkilenmez: o Update'te degil, can degisimi olayinda calisir.
-            if (_health.IsOwner) return;
+            // SAHIP DE AKISA GIRER ama sesi calmaz - asagida, calma noktasinda ayrilir.
+            // Sebep: main'in getirdigi zemin TITRESIMI (cama basinca) yalniz sahibi
+            // ilgilendiriyor ve adim sayacinin dolmasini bekliyor. Burada donsek titresim
+            // hic tetiklenmezdi.
 
             Vector3 p = _health.HeadPosition;   // kok kimildamaz, hareketi kafa tasir
             Vector3 d = p - _lastPos;
@@ -214,20 +229,57 @@ namespace VRMultiplayer.Audio
             // altinda makul bir noktaya dusulur.
             Vector3 pos = _avatar != null ? _avatar.position : new Vector3(p.x, p.y - 1.6f, p.z);
 
+            // ZEMIN FARKINDALIGI (main'den). Ayagin altinda ozel bir kaplama var mi? Adim
+            // BASINA bir kez soruluyor, her kare degil - sorgu ucuz degil ve adim zaten
+            // saniyede bir-iki kez oluyor.
+            var surf = FootSurface.Under(pos);
+            int variants = surf != null ? Mathf.Max(1, surf.clipVariants) : DefaultVariants;
+
+            // Varyantlar sirayla degil karisik ama ardisik tekrarsiz: ayni klibin arka
+            // arkaya calmasi "makine" hissi verir.
+            _stepIdx = (_stepIdx + Random.Range(1, variants)) % variants;
+            string clip = surf != null
+                ? surf.ClipPath(_stepIdx)
+                : "WeaponSounds/footstep_" + (_stepIdx + 1);
+
+            // KENDI ADIMIMIZ: SES YOK, TITRESIM VAR.
+            //
+            // Sentetik kendi-adim sesi kaldirildi (bkz. sinif aciklamasi): fiziksel olarak
+            // yuruduugumuz icin gercek ayak sesimizi zaten duyuyoruz, sentetik olan onun
+            // yerine gecmez, ustune biner. Ama main'in getirdigi TITRESIM kalmali - o ses
+            // degil, "az once bir seye bastin" bilgisi ve yalniz ozel kaplamada calisiyor.
+            // Her adimda titreyen kumanda VR'da bilek yorgunlugu uretir; nadir oldugunda
+            // bilgi tasir.
+            if (_health.IsOwner)
+            {
+                if (surf != null) Buzz(surf.hapticAmplitude, surf.hapticDuration);
+                return;
+            }
+
             // MESAFE KULU: havuz 16 kaynakli ve silah sesleriyle ORTAK. Menzil disindaki
             // her oyuncunun her adimi, duyulmayacak olmasina ragmen bir slot tuketir ve
             // calan atis seslerini devirirdi. Camera.main = AudioListener'in durdugu yer
             // (bkz. SingleAudioListener); bulunamazsa kulmeden calariz.
+            float menzil = surf != null ? surf.maxDistance : StepMaxDistance;
             var cam = Camera.main;
-            if (cam != null &&
-                (cam.transform.position - pos).sqrMagnitude > StepMaxDistance * StepMaxDistance)
+            if (cam != null && (cam.transform.position - pos).sqrMagnitude > menzil * menzil)
                 return;
 
-            // 4 varyant sirayla degil karisik ama ardisik tekrarsiz: ayni klibin arka
-            // arkaya calmasi "makine" hissi verir.
-            _stepIdx = (_stepIdx + Random.Range(1, 4)) % 4;
-            WeaponAudioPlayer.PlayAt("WeaponSounds/footstep_" + (_stepIdx + 1),
-                pos, StepVolume, 0.93f, 1.07f, StepMaxDistance, false, StepRefDistance);
+            WeaponAudioPlayer.PlayAt(clip, pos,
+                surf != null ? surf.otherVolume : OtherStepVolume,
+                0.93f, 1.07f, menzil, false, StepRefDistance);
+        }
+
+        /// <summary>Iki kumandaya da kisa bir darbe. Cihaz yoksa sessizce gecer.</summary>
+        static void Buzz(float amplitude, float duration)
+        {
+            if (amplitude <= 0f || duration <= 0f) return;
+
+            var left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+            if (left.isValid) left.SendHapticImpulse(0, amplitude, duration);
+
+            var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+            if (right.isValid) right.SendHapticImpulse(0, amplitude, duration);
         }
     }
 }

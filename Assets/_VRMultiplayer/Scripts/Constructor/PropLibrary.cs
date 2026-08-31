@@ -7,6 +7,30 @@ namespace VRMultiplayer.Constructor
     /// <summary>Palette grouping — one ring per category in the in-VR selector wheel.</summary>
     public enum PropCategory { Cover, Wall, Nature, Ground, Spawn, Target }
 
+    /// <summary>
+    /// A named SET of props — "UZAY", "ORMAN" — the second axis of the build palette, crossing
+    /// <see cref="PropCategory"/> rather than replacing it.
+    ///
+    /// Category answers "what does this piece DO" (is it cover, is it a wall); a palette answers
+    /// "which world is it FROM". Both questions are real: folding them together would give the
+    /// wheel one SPACE slice holding walls, crates and consoles at once, and a player looking for
+    /// a wall would have to walk past the consoles to find it.
+    ///
+    /// DATA, NOT AN ENUM. Adding a world is something the person building the game does in the
+    /// library window (menu 31) — naming it, filling it, renaming it later — and an enum would
+    /// have made every one of those a code change plus a recompile.
+    /// </summary>
+    [Serializable]
+    public class PropPalette
+    {
+        [Tooltip("SABIT kimlik — proplar ve kayitli haritalar bunu tutar. Bir kez verildikten " +
+                 "sonra degistirme; gorunen adi degistirmek serbest.")]
+        public string id;
+
+        [Tooltip("Insa modunda carkin ortasinda yazan ad. Serbestce degistirilebilir.")]
+        public string displayName;
+    }
+
     /// <summary>How a prop attaches to the scanned room.</summary>
     public enum PropSnap { Floor, Wall, Free }
 
@@ -25,6 +49,20 @@ namespace VRMultiplayer.Constructor
         public string displayName;
 
         public PropCategory category = PropCategory.Cover;
+
+        /// <summary>
+        /// Which <see cref="PropPalette"/> this prop belongs to. EMPTY MEANS EVERY PALETTE.
+        ///
+        /// The empty default is what keeps this axis free: a library that has never been split
+        /// into palettes behaves exactly as it did, because every prop reads as "belongs
+        /// everywhere". It is also the right answer for pieces that have no world of their own —
+        /// spawn rings, the weapon rack, targets. Hiding those while UZAY is selected would leave
+        /// the map missing the parts the match itself needs.
+        /// </summary>
+        [Tooltip("Ait oldugu palet kimligi. BOS = HER palette gorunur (dogus halkasi, silah " +
+                 "rafi gibi dunyasi olmayan parcalar boyle kalmali). Menu 31'den atanir.")]
+        public string paletteId = "";
+
         public PropSnap snap = PropSnap.Floor;
 
         [Tooltip("Dogrudan referans. Doluysa kutuphane yuklenirken prefab da bellege gelir.")]
@@ -93,6 +131,52 @@ namespace VRMultiplayer.Constructor
         [Tooltip("Acik: yerlestirilince NetworkObject olarak spawn edilir (kirilabilir/etkilesimli). " +
                  "Kapali: duz mesh, ag maliyeti sifir. Cogu prop kapali olmali.")]
         public bool networked;
+
+        /// <summary>
+        /// Lets this prop be placed into cells another prop already holds.
+        /// </summary>
+        /// <remarks>
+        /// WHY THIS EXISTS: the grid's no-overlap rule assumes a MODULAR KIT — pieces authored
+        /// with flat ends on cell multiples, which tile flush because their bounding box IS their
+        /// geometry. The SciFi and wood sets are like that. Scanned/generated art is not: a
+        /// sandbag emplacement is a curve inside its box, a ruined wall has broken ends, a dead
+        /// tree is mostly air. Their footprints reserve the BOX, so two of them side by side sit
+        /// as far apart as their empty corners are wide — and no amount of nudging closes it,
+        /// because the grid is doing exactly what it was told.
+        ///
+        /// THE RULE IS THE PLACED PROP'S. Overlap is allowed when the piece BEING PLACED has this
+        /// on; what is already there does not get a vote — which is what keeps the behaviour
+        /// predictable when a map mixes pieces that have it with pieces that do not.
+        ///
+        /// ON FOR EVERYTHING IN THE LIBRARY, INCLUDING NEW PROPS. It started as an escape hatch
+        /// for irregular art and became the default because the answer kept being "yes" — a
+        /// person building an arena is composing a scene, and every time the grid said no to a
+        /// placement that looked right, the grid was wrong. Turned on where props ENTER the
+        /// library (the folder scan and the drag-drop add), not on the field itself: menu 29's
+        /// self-check builds its own PropDef fixtures precisely to test the occupancy rule, and
+        /// they still need the strict behaviour to be testing anything.
+        ///
+        /// WHAT THE MODULAR KIT GIVES UP by having it on: the accidental-duplicate guard. Those
+        /// pieces already tile flush without help, so overlap buys them nothing, and the only
+        /// change is that two identical walls can now be stacked in the same cell without the
+        /// grid objecting. One tick in menu 31 puts the guard back per prop.
+        ///
+        /// WHAT IT COSTS, so it is a choice and not a surprise:
+        ///  - the cell OWNER map holds one id per cell, so the newer prop wins the shared cells;
+        ///    aiming at those to delete picks the newer one. The older is still reachable through
+        ///    any cell it kept to itself.
+        ///  - removing the older prop frees the shared cells even though the newer still stands
+        ///    there. Reopening the map fixes it: <see cref="ConstructorSession.Adopt"/> rebuilds
+        ///    occupancy from the layout.
+        ///  - two solid meshes really do intersect. That is the point here.
+        /// </remarks>
+        [Tooltip("Acik: bu prop, baska bir propun tuttugu hucrelere de konabilir.\n\n" +
+                 "Kutuphaneye giren HER prop bununla geliyor — tarama da surukle-birak da " +
+                 "acik olarak ekliyor.\n\n" +
+                 "Kapatirsan o prop dolu hucreye konamaz: yanlislikla ust uste yerlestirmeye " +
+                 "karsi koruma geri gelir, ama parcayi baska bir parcaya gecirmek de mumkun " +
+                 "olmaz.")]
+        public bool allowOverlap;
 
         [Tooltip("Modelin yerel yuksekligi (m) — onizleme olceklemesi icin tarama araci doldurur.")]
         public float height = 1f;
@@ -278,6 +362,10 @@ namespace VRMultiplayer.Constructor
         [Tooltip("Tarama aracinin (menu 25) prefab arayacagi klasorler.")]
         public string[] sourceFolders = new string[0];
 
+        [Tooltip("Adlandirilmis prop setleri. Menu 31'den olusturulur; oyuncu insa modunda " +
+                 "carkin ortasindan aralarinda gecis yapar.")]
+        public PropPalette[] palettes = new PropPalette[0];
+
         public PropDef[] props = new PropDef[0];
 
         Dictionary<string, int> _index;
@@ -302,6 +390,52 @@ namespace VRMultiplayer.Constructor
         public PropDef ByIndex(int i) => (i >= 0 && i < props.Length) ? props[i] : null;
 
         public int Count => props != null ? props.Length : 0;
+
+        // ------------------------------------------------------------- palettes
+
+        public int PaletteCount => palettes != null ? palettes.Length : 0;
+
+        public PropPalette PaletteById(string id)
+        {
+            if (string.IsNullOrEmpty(id) || palettes == null) return null;
+            foreach (var p in palettes)
+                if (p != null && p.id == id) return p;
+            return null;
+        }
+
+        /// <summary>
+        /// A palette's shown name, or a readable stand-in.
+        ///
+        /// An unknown id is NOT an error worth hiding: it means a prop points at a palette that
+        /// was deleted, and saying so on the wheel is how anyone finds out.
+        /// </summary>
+        public string PaletteName(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "DIGER";
+            var p = PaletteById(id);
+            return p != null && !string.IsNullOrEmpty(p.displayName)
+                ? p.displayName : "? " + id;
+        }
+
+        /// <summary>Props assigned to <paramref name="id"/> — NOT counting the always-visible ones.</summary>
+        public int OwnedCount(string id)
+        {
+            if (props == null) return 0;
+            int n = 0;
+            foreach (var p in props)
+                if (p != null && p.paletteId == id) n++;
+            return n;
+        }
+
+        /// <summary>Turns a display name into a stable id: lowercase, letters and digits only.</summary>
+        public static string MakePaletteId(string displayName)
+        {
+            if (string.IsNullOrEmpty(displayName)) return "";
+            var sb = new System.Text.StringBuilder(displayName.Length);
+            foreach (char c in displayName.ToLowerInvariant())
+                sb.Append(char.IsLetterOrDigit(c) ? c : '_');
+            return sb.ToString().Trim('_');
+        }
 
         void EnsureIndex()
         {
@@ -344,6 +478,20 @@ namespace VRMultiplayer.Constructor
                 return problems;
             }
 
+            // Paletler once: proplarin isaret ettigi kimlikler buradan dogrulaniyor.
+            var paletteIds = new HashSet<string>();
+            if (palettes != null)
+            {
+                for (int i = 0; i < palettes.Length; i++)
+                {
+                    var pal = palettes[i];
+                    if (pal == null) { problems.Add($"palet[{i}] null girdi."); continue; }
+                    if (string.IsNullOrEmpty(pal.id)) problems.Add($"palet[{i}] kimlik bos.");
+                    else if (!paletteIds.Add(pal.id))
+                        problems.Add($"palet[{i}] kopya kimlik: '{pal.id}'.");
+                }
+            }
+
             var seen = new HashSet<string>();
             for (int i = 0; i < props.Length; i++)
             {
@@ -352,6 +500,12 @@ namespace VRMultiplayer.Constructor
 
                 if (string.IsNullOrEmpty(p.id)) problems.Add($"[{i}] kimlik bos.");
                 else if (!seen.Add(p.id)) problems.Add($"[{i}] kopya kimlik: '{p.id}'.");
+
+                // Silinmis bir palete isaret eden prop HICBIR palette gorunmez — bos
+                // paletteId "her yerde" demek, taninmayan bir kimlik ise "hicbir yerde".
+                if (!string.IsNullOrEmpty(p.paletteId) && !paletteIds.Contains(p.paletteId))
+                    problems.Add($"[{i}] '{p.id}' silinmis/bilinmeyen palete bagli: " +
+                                 $"'{p.paletteId}' — hicbir palette gorunmez.");
 
                 if (p.prefab == null && string.IsNullOrEmpty(p.resourcePath))
                     problems.Add($"[{i}] '{p.id}' icin ne prefab ne resourcePath var.");
