@@ -486,6 +486,10 @@ namespace VRMultiplayer
         AprilTag.TagDetector _detector;
         WebCamTextureManager _camMgr;
         Color32[] _pixels;
+
+        // Tespit suresi olcumu (bkz. TESPIT SURESI satiri). Tek ornek, yeniden kullaniliyor.
+        readonly System.Diagnostics.Stopwatch _olcumSaat = new System.Diagnostics.Stopwatch();
+        float _nextOlcumAt;
         int _texW, _texH;
         float _nextDetectAt;
         bool _alignedNow;   // son olcumde hiza olu bolge icinde miydi (tespit hizini belirler)
@@ -871,7 +875,17 @@ namespace VRMultiplayer
             if (tex == null || tex.width <= 16) { TickPanel(); return; }
 
             EnsureDetector(tex.width, tex.height);
+
+            // ---- TESPIT SURESI OLCUMU -------------------------------------------------
+            // Zincirin tamami ANA THREAD'i blokluyor ve maliyeti hic olculmedi. Kopya ile
+            // tespit AYRI olculuyor cunku cozumleri farkli: maliyet kopyadaysa cevap
+            // AsyncGPUReadback, tespitteyse isi bir sonraki kareye ertelemek ya da arka
+            // plana almak. Tag sayisi da yaziliyor -- poz kestirimi tag basina calisiyor,
+            // sabit maliyeti degisken maliyetten ancak boyle ayirabiliriz.
+            _olcumSaat.Restart();
             tex.GetPixels32(_pixels);
+            double msKopya = _olcumSaat.Elapsed.TotalMilliseconds;
+            _olcumSaat.Restart();
 
             // TAM INTRINSICS. Eskiden yalnizca fy'den bir DIKEY FOV turetilip veriliyordu; poz
             // isi de o tek sayidan fx = fy uretip ana noktayi GORUNTU MERKEZI kabul ediyordu.
@@ -910,6 +924,24 @@ namespace VRMultiplayer
             {
                 LogIntrinsicsOnce(intr, tex.width, tex.height, fx, fyy, cx, cy);
                 _detector.ProcessImage(_pixels, fx, fyy, cx, cy, tagSizeMeters);
+            }
+
+            double msTespit = _olcumSaat.Elapsed.TotalMilliseconds;
+            // Seyrek yazilir: her turda yazmak 3 Hz'de dosyayi sisirir ve olculen seyi
+            // (ana thread yuku) olcum kendisi bozardi.
+            if (Time.time >= _nextOlcumAt)
+            {
+                _nextOlcumAt = Time.time + 5f;
+
+                // Sayim SADECE log aninda: DetectedTags bir IEnumerable, saymak icin
+                // dolasmak gerekiyor ve bu her turda yapilsa olculen yuke kendimiz
+                // eklerdik. Bes saniyede bir fazladan dolasim onemsiz.
+                int tagSayisi = 0;
+                foreach (var _ in _detector.DetectedTags) tagSayisi++;
+
+                WriteDiag($"TESPIT SURESI  kopya {msKopya:0.0} ms  tespit {msTespit:0.0} ms  " +
+                          $"toplam {msKopya + msTespit:0.0} ms  tag {tagSayisi}  " +
+                          $"({tex.width}x{tex.height}, decimation {decimation})");
             }
 
             float now = Time.time;
