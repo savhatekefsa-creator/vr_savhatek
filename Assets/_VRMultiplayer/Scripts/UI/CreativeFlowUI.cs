@@ -194,6 +194,15 @@ namespace VRMultiplayer.UI
                     _managing = true;
                     OpenList();
                     break;
+
+                case CreativeMenuPanel.Choice.Exit:
+                    // MOD SECIMINE DON. CloseAll sart: Update bir sonraki karede
+                    // "!AppMode.IsCreative" gorup bu nesneyi yok edecek, ama paneller
+                    // COCUK DEGIL (kendi GameObject'lerinde duruyorlar) - toplanmazlarsa
+                    // mod ekraninin onunde asili kalirlardi.
+                    CloseAll();
+                    AppMode.ReturnToModeSelect();
+                    break;
             }
         }
 
