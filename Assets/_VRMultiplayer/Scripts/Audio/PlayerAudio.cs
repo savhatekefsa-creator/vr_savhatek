@@ -38,7 +38,31 @@ namespace VRMultiplayer.Audio
     {
         const float StrideMeters = 0.72f;      // iki adim sesi arasi yatay yol
         const float TeleportThreshold = 1.5f;  // karede bundan uzun sicrama = isinlanma, adim degil
-        const float MinWalkSpeed = 0.6f;       // m/s; alti kafa sallantisi/egilme sayilir, birikmez
+
+        // ─── HAREKET AYIKLAMA ─────────────────────────────────────────────────────────
+        // Onceki tasarim iki yerde birden yaniliyordu ve adim sesi CIHAZDA HIC CALMIYORDU.
+        // Olculdu (2026-08-31, [AdimOlcum] loglari, oyuncu normal yuruyusteyken):
+        //   tepeHiz 0.62-0.90 m/s   esikUstuKare %3-7   birikim 0.00/0.72 m
+        //
+        // 1) ESIK COK YUKSEKTI. 0.6 m/s, 3 metrelik bir odayi 5 saniyede KESINTISIZ
+        //    yurumek demek; oda olceginde VR'da kimse oyle hareket etmiyor. Tepe hiz
+        //    esigi geciyordu ama karelerin ancak %3-7'si. Yeni esik 0.28 m/s: oda ici
+        //    hareketi yakalar, dururken kafa sallantisini hala eler (olculen sallanti
+        //    tipik olarak bunun cok altinda).
+        //
+        // 2) BOSALTMA YURUME HIZIYLA AYNI MERTEBEDEYDI. Esigin altindaki her kare
+        //    _accum'u StrideMeters*dt = 0.72 m/s hiziyla siliyordu. Aritmetigi:
+        //      kazanc %5 x 0.7 = +0.035 m/s,  kayip %95 x 0.72 = -0.684 m/s
+        //    Yani sayac 0'da cakili kaliyordu. Iki adim atip bir saniye durmak, kazanilan
+        //    yolun TAMAMINI siliyordu.
+        //
+        // Yeni davranis: sayac YURUNEN YOLU biriktirir (adim sayacinin isi zaten bu) ve
+        // hic sizdirmaz. Hayalet adima karsi koruma bosaltma degil, HAREKETSIZLIK
+        // ZAMANLAYICISI: esigin altinda araliksiz IdleResetSeconds gecerse sayac sifirlanir.
+        // Boylece duraklama ilerlemeyi silmez, ama dakikalarca kipirdamadan durup damla
+        // damla dolmus bir sayac da adim uretmez.
+        const float MinWalkSpeed = 0.28f;      // m/s; alti kafa sallantisi/egilme sayilir
+        const float IdleResetSeconds = 1.2f;   // bu kadar araliksiz hareketsizlik sayaci sifirlar
 
         // ADIM SESI MESAFE MODELI — silahinkinden AYRI ve METRE cinsinden.
         // Eskiden yalnizca maxDistance=22 veriliyordu; egrinin a katsayisi sabit oldugu icin
@@ -63,6 +87,7 @@ namespace VRMultiplayer.Audio
         Transform _avatar;
         Vector3 _lastPos;
         float _accum;
+        float _idle;      // araliksiz hareketsiz gecen sure (bkz. IdleResetSeconds)
         int _stepIdx;
 
         // ─── GECICI OLCUM (2026-08-28) ────────────────────────────────────────────────
@@ -84,7 +109,7 @@ namespace VRMultiplayer.Audio
         float _dbgPeak;          // aradaki en yuksek hiz (m/s)
         int _dbgFrames, _dbgOver;  // toplam kare / esigi gecen kare
         Vector3 _dbgLast;
-        float _dbgAccum;
+        float _dbgAccum, _dbgIdle;
         int _dbgSteps;
         // ──────────────────────────────────────────────────────────────────────────────
 
@@ -133,18 +158,22 @@ namespace VRMultiplayer.Audio
             _dbgFrames++;
             if (hiz > _dbgPeak) _dbgPeak = hiz;
 
+            // Gercek mantigin AYNISI olmali, yoksa log yanlis sey gosterir.
             if (dist < MinWalkSpeed * dt)
-                _dbgAccum = Mathf.Max(0f, _dbgAccum - StrideMeters * dt);
-            else { _dbgOver++; _dbgAccum += dist; }
+            {
+                _dbgIdle += dt;
+                if (_dbgIdle >= IdleResetSeconds) _dbgAccum = 0f;
+            }
+            else { _dbgIdle = 0f; _dbgOver++; _dbgAccum += dist; }
             if (_dbgAccum >= StrideMeters) { _dbgAccum -= StrideMeters; _dbgSteps++; }
 
             if (Time.time < _dbgNext) return;
             _dbgNext = Time.time + 0.5f;
             Debug.Log(string.Format(
-                "[AdimOlcum] {0} tepeHiz {1:F2} m/s  esikUstuKare %{2:F0}  birikim {3:F2}/{4:F2} m  adim {5}  esik {6:F2} m/s",
+                "[AdimOlcum] {0} tepeHiz {1:F2} m/s  esikUstuKare %{2:F0}  birikim {3:F2}/{4:F2} m  adim {5}  bos {6:F1} sn  esik {7:F2} m/s",
                 owner ? "SAHIP" : "UZAK", _dbgPeak,
                 _dbgFrames > 0 ? 100f * _dbgOver / _dbgFrames : 0f,
-                _dbgAccum, StrideMeters, _dbgSteps, MinWalkSpeed));
+                _dbgAccum, StrideMeters, _dbgSteps, _dbgIdle, MinWalkSpeed));
             _dbgPeak = 0f; _dbgFrames = 0; _dbgOver = 0;
         }
 
@@ -165,16 +194,18 @@ namespace VRMultiplayer.Audio
             d.y = 0f; // comelme/egilme dikey oynamasi adim degildir
             float dist = d.magnitude;
 
-            if (dist > TeleportThreshold) { _accum = 0f; return; }
-            if (_health.IsDead) { _accum = 0f; return; }   // olu/bekleyen sessiz
+            if (dist > TeleportThreshold) { _accum = 0f; _idle = 0f; return; }
+            if (_health.IsDead) { _accum = 0f; _idle = 0f; return; }   // olu/bekleyen sessiz
             if (dist < MinWalkSpeed * Time.deltaTime)
             {
-                // Duruyor ya da sallaniyor: birikimi yavasca bosalt ki sallantiyla
-                // damla damla dolan sayac dakikalar sonra hayalet adim uretmesin.
-                _accum = Mathf.Max(0f, _accum - StrideMeters * Time.deltaTime);
+                // Duruyor ya da sallaniyor. Birikim SIZDIRILMAZ - duraklamak ilerlemeyi
+                // silmemeli. Yalnizca hareketsizlik araliksiz surerse sayac sifirlanir.
+                _idle += Time.deltaTime;
+                if (_idle >= IdleResetSeconds) _accum = 0f;
                 return;
             }
 
+            _idle = 0f;
             _accum += dist;
             if (_accum < StrideMeters) return;
             _accum -= StrideMeters;
