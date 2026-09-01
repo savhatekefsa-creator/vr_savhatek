@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.XR;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using UnityEngine.XR.OpenXR.Features.Meta;
@@ -16,10 +17,12 @@ namespace VRMultiplayer
     /// existing LAN link. The server saves Assets/_VRMultiplayer/RoomPlans/RoomPlan.json, which
     /// the editor menus "Import Room Plan" / "Build Walls From Plan" consume.
     ///
-    /// KULLANIM: kumanda tusu YOK. Eskiden sol X tetikliyordu; oda gonderme tek seferlik bir
-    /// kurulum isi oldugu halde tus mac boyunca canliydi ve kazara basis izin istemi / Space
-    /// Setup acabiliyordu (2026-08-11'de kaldirildi). Gerekirse <see cref="TriggerScan"/>
-    /// cagrilir (or. ileride bir menu dugmesi). Once kalibrasyon sart; bir gozlugun bir kez
+    /// KULLANIM: varsayilan olarak kumanda tusu YOK. Eskiden sol X dogrudan tetikliyordu; oda
+    /// gonderme tek seferlik bir kurulum isi oldugu halde tus mac boyunca canliydi ve kazara
+    /// basis izin istemi / Space Setup acabiliyordu (2026-08-11'de kaldirildi). Kisayol
+    /// <see cref="solXKisayolu"/> bayraginin ARKASINDA geri geldi — varsayilan KAPALI, yani
+    /// sol X tag sistemine acik kalir. Kapaliyken tarama <see cref="TriggerScan"/> ile
+    /// baslatilir (or. ileride bir menu dugmesi). Once kalibrasyon sart; bir gozlugun bir kez
     /// gondermesi yeter. Meta OpenXR "Planes" ozelligi + USE_SCENE izni gerekir; oda hic
     /// taranmamissa sistemin Space Setup akisi otomatik baslatilir.
     /// </summary>
@@ -28,8 +31,19 @@ namespace VRMultiplayer
         const string ScenePermission = "com.oculus.permission.USE_SCENE";
         const int ChunkSize = 3000; // stays well under the transport payload limit
 
+        [Tooltip("SOL X kisayolunu ac. VARSAYILAN KAPALI.\n\n" +
+                 "Neden: oda taramasi bu projede kullanilmiyor, ama tus canliydi ve HICBIR " +
+                 "kapinin arkasinda degildi — insa modunda, passthrough'da, kalibrasyon " +
+                 "sirasinda bile X'e basmak taramayi baslatiyordu. Oda hic taranmamissa " +
+                 "sistemin Space Setup akisini aciyor, yani oyuncuyu oyundan disari atiyor.\n\n" +
+                 "Kapali olmasi ayrica SOL X'i tag sistemine birakir: AprilTagCalibration " +
+                 "bu tusu 'RoomScanSync onu tutuyor' diye kullanamamis ve olcum tuslarini " +
+                 "sag A + grip/tetik akorlarina sikistirmisti.")]
+        public bool solXKisayolu;
+
         TextMesh _panel;
         bool _busy;
+        bool _prevX;                 // sol X kenar algilama; yalnizca solXKisayolu acikken okunur
         float _hidePanelAt = -1f;
 
         // Server-side reassembly (one buffer per sender's player object = this instance).
@@ -49,10 +63,21 @@ namespace VRMultiplayer
         void Update()
         {
             if (_hidePanelAt > 0f && Time.time > _hidePanelAt) { HidePanel(); }
+
+            // Panel gizleme YUKARIDA kaldi: kapi kapaliyken de acik kalmis bir panelin
+            // kapanmasi gerekir, yoksa tus kapatildigi anda ekranda asili kalirdi.
+            if (!solXKisayolu) return;
+
+            bool x = XRButtons.Button(XRNode.LeftHand, CommonUsages.primaryButton);
+
+            if (x && !_prevX && !_busy)
+                StartCoroutine(ScanAndSend());
+            _prevX = x;
         }
 
-        /// <summary>Taramayi baslatir (tus bagi yok — bkz. sinif aciklamasi). Sahip degilse
-        /// obje zaten disabled oldugundan cagri ancak sahibin instance'inda ise yarar.</summary>
+        /// <summary>Taramayi baslatir; kisayol KAPALIYKEN de calisir (bkz. sinif aciklamasi).
+        /// Sahip degilse obje zaten disabled oldugundan cagri ancak sahibin instance'inda ise
+        /// yarar.</summary>
         public void TriggerScan()
         {
             if (!_busy) StartCoroutine(ScanAndSend());

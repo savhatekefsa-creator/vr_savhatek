@@ -272,9 +272,12 @@ namespace VRMultiplayer.EditorTools
                         "gercekten gerekiyorsa Inspector'dan, bilerek."),
                     zero != null ? zero.yawDegrees : 0f);
 
-            bool heightOk = _originHeight >= 0.3f && _originHeight <= 3f;
+            // SIFIR GECERLI: tag 0 zemine konabiliyor (bkz. TagCapture.DefaultOriginHeight).
+            // Arasindaki bant hala reddediliyor — 0,05 gibi bir deger neredeyse her zaman
+            // yazim hatasidir, ve yanlis yukseklik butun cerceveyi sessizce dikeyde kaydirir.
+            bool heightOk = _originHeight == 0f || (_originHeight >= 0.3f && _originHeight <= 3f);
             if (!heightOk)
-                EditorGUILayout.HelpBox("Yukseklik 0.3–3 m araliginin disinda — olcumu kontrol edin.",
+                EditorGUILayout.HelpBox("Yukseklik 0 (zemin) ya da 0.3–3 m olmali — olcumu kontrol edin.",
                                         MessageType.Warning);
 
             using (new EditorGUI.DisabledScope(!heightOk || (_prefabCal == null && _sceneCal == null)))
@@ -372,7 +375,7 @@ namespace VRMultiplayer.EditorTools
                         $"tag {t.id}{(t.id == 0 ? " (origin)" : "")}   " +
                         $"{t.position.x:0.000} {t.position.y:0.000} {t.position.z:0.000}   " +
                         $"yaw {t.yawDegrees:0.0}",
-                        GUILayout.MinWidth(280f));
+                        GUILayout.MinWidth(240f));
 
                     // Tek tek acma yalnizca HARITA tag'lerinde: buyuk mekanda kagitlar tek
                     // turda bitmeyebilir, menu 48'in hepsini-birden'i o durumda fazla kaba.

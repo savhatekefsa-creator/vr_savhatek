@@ -25,6 +25,11 @@ namespace VRMultiplayer
     /// </summary>
     public class AprilTagCalibration : MonoBehaviour
     {
+        // ZEMIN MONTAJI KALDIRILDI. Tag'leri yere sermek denendi ve birakildi: yatik
+        // kagida ayakta bakarken gorus acisi 70-80 dereceye cikiyor, o acida karenin
+        // koseleri birbirine yaklasiyor ve poz cozumu bozuluyor. Duvarda 1,50 m'de
+        // duran tag hem cepheden goruluyor hem goz hizasina yakin.
+
         [Serializable]
         public class TagEntry
         {
@@ -148,7 +153,30 @@ namespace VRMultiplayer
         public bool autoCalibrate = true;
 
         [Tooltip("Dikey ekseni de tag'den duzelt. Tag'in yuksekligi olculmus oldugu icin bu, " +
-                 "gozlugun zemin tahminindeki hatayi da duzeltir.")]
+                 "gozlugun zemin tahminindeki hatayi da duzeltir.\n\n" +
+                 "TESHIS BITTI, GERI ACILDI (2026-08-14). Dikey diye bir sorun yokmus: kapali " +
+                 "turda acilis duzeltmesinin dikey bileseni dy +0,013 m cikti (toplam sapma " +
+                 "198,8 cm'nin tamami yatay: dx -1,093 dz +1,661) ve sonraki tum dy'ler ±3 cm " +
+                 "icinde kaldi. Kumanda elde tutularak olculdugunde zemin de -0,009 m okudu. " +
+                 "Yani onceki -0,995 m, kumandayi YERE YATIRMAKTAN gelen takip kopmasiydi — " +
+                 "TickFloor notunun bastan uyardigi hata. Asagidaki (A)/(B) ayrimi (B) cikti.\n\n" +
+                 "ESKI TESHIS NOTU (arsiv):\n" +
+                 "Belirti: kalibrasyondan SONRA kumandayla olculen zemin -0,995 m'ye dusuyor, " +
+                 "yani dunya ~1 m iniyor. Oysa kalibrasyondan ONCE ayni kumanda zemini 0,000'da " +
+                 "ve tag 0'i ~1,6-1,8 m'de gosteriyor; kullanici da tum tag'lerin 150 cm'de " +
+                 "oldugunu metreyle dogruladi. Yani kumanda ile kamera AYNI takip uzayinda " +
+                 "farkli seyler soyluyor.\n\n" +
+                 "Kapali tutmak iki hipotezi ayiriyor:\n" +
+                 "  (A) kamera tag'i ~1 m yuksek goruyor -> dikey duzeltme dunyayi indiriyordu. " +
+                 "Kapaliyken zemin ~0'a doner ve SNAP satirindaki dy ~-1,0 yazar.\n" +
+                 "  (B) kameranin olcumu dogru, -0,995 kumandanin YERDEKI takip kopmasi " +
+                 "(bkz. TickFloor notu: IR halkasi gizlenince poz yarim metre siciyor; " +
+                 "_floorBest EN DUSUK degeri aliyor, tek bozuk kare olcumu asagi cekiyor). " +
+                 "Kapaliyken zemin YINE -0,995 okur ve dy ~0 yazar.\n\n" +
+                 "dy satiri duzeltme UYGULANMADAN once yazildigi icin bu alan kapaliyken de " +
+                 "olculuyor — yani tek turda hem kontrol hem olcum elde ediliyor.\n\n" +
+                 "Kapaliyken eski davranis gecerli: dikey, gozlugun kendi zemin tahminine " +
+                 "birakilir.")]
         public bool correctVertical = true;
 
         [Tooltip("Kalibrasyon icin kac kare ortalanacak. TEK KARE titrek olabilir ve kalibrasyonu " +
@@ -156,8 +184,27 @@ namespace VRMultiplayer
         public int calibrateSampleCount = 15;
 
         [Tooltip("Kalibrasyon yalnizca tag bu mesafeden YAKINken yapilir (m). Jitter mesafeyle " +
-                 "buyudugu icin yakindan kalibre etmek cok daha dogru — spike: 1 m'de 3 mm, 2 m'de 15 mm.")]
-        public float calibrateMaxDistance = 2f;
+                 "buyudugu icin yakindan kalibre etmek cok daha dogru — spike: 1 m'de 3 mm, 2 m'de 15 mm.\n\n" +
+                 "2 -> 3 m (2026-08-14, Adim 5'in ikinci kabul maddesi). Bu kesme, uzak orneklerin " +
+                 "kotu olmasinin bedelini ATARAK oduyordu. Adim 5'ten sonra uzak ornek " +
+                 "agirliklandiriliyor (1/d^4), yani karisik bir pencerede 3 m'deki ornek 1 m'dekinin " +
+                 "1/81'i kadar etkili — atmaya gerek yok.\n\n" +
+                 "NEDEN 3 VE DAHA FAZLASI DEGIL:\n" +
+                 "  * Sistematik hata mesafeyle DOGRUSAL buyuyor ve ortalamayla GECMIYOR. Ana " +
+                 "nokta kaymasi (olculdu: 4,6 px = 0,30 derece) 2 m'de 1,1 cm, 3 m'de ~1,7 cm " +
+                 "yanal hata demek. Olu bolge 1 cm; yani 3 m'de yalnizca uzak orneklerden olusan " +
+                 "bir pencere ~1,7 cm'lik kalici bir duzeltme uygulayabilir. Bu kabul edilebilir " +
+                 "bir tavan, cunku oyuncu yaklastigi anda yakin ornekler 81:1 agirlikla bastirip " +
+                 "kendini onariyor. 4 m'de tavan ~2,3 cm'e cikar ve kazanci yok.\n" +
+                 "  * Rastgele hata sorun DEGIL: 3 m'de sigma ~37 mm ama duzeltme ORTALAMAYA " +
+                 "bakiyor, onun standart hatasi 15 ornekte ~9,6 mm — olu bolgenin altinda.\n\n" +
+                 "AGIRLIKLANDIRMA TEK BASINA YETMEZ, bilerek not: 1/d^4 yalnizca pencere KARISIK " +
+                 "mesafe iceriyorsa koruyor. Oyuncu surekli 3 m'de durursa tum agirliklar esit " +
+                 "olur ve ortalama duz ortalamaya doner. Ustteki tavan hesabi tam da o en kotu " +
+                 "durum icin yapildi.\n\n" +
+                 "YON ZATEN KORUNUYOR: yawCorrectionMaxDistance 1,5 m: uzak ornek konumu duzeltir, " +
+                 "yonu ellemez. Bu kesmeyi gevsetmek yaw'i uzaktan duzeltmeye ACMAZ.")]
+        public float calibrateMaxDistance = 3f;
 
         [Tooltip("Tag olmasi gereken yerden bu kadar SAPINCA rig duzeltilir (m). Altinda dokunulmaz " +
                  "— jitter'dan surekli snap olmasin. Ust sinir yoksa uyku sonrasi buyuk sapmayi da toparlar.")]
@@ -189,6 +236,123 @@ namespace VRMultiplayer
                  "gurultusu 1-3 derece, ve esik oraya yakin konuldugunda gurultuyu kurtarma " +
                  "sanip kacak bir geri besleme kuruyor (cihazda yasandi, 3 derece ile).")]
         public float yawRecoveryDegrees = 10f;
+
+        [Tooltip("Kurtarmanin UST siniri (derece). Bunun ustundeki sapma TEK BASINA kabul " +
+                 "edilmez, TEYIT ister.\n\n" +
+                 "NEDEN VAR: kurtarma bir ISIN degil BANT olmali. Alt esik tek basina " +
+                 "birakildiginda kapi ustten sinirsiz kaliyor ve duzlemsel poz belirsizliginden " +
+                 "gelen buyuk bir flip 'gercek kayip' sayilip mesafe ve referans kisitlarini " +
+                 "birden baypas ediyor.\n\n" +
+                 "TABAN CIZGISINDE YAKALANDI (2026-08-12, EV): referans OLMAYAN tag 1'den gelen " +
+                 "+147,30 derecelik tek bir okuma kabul edildi ve dunyayi 4,96 m kaydirdi. " +
+                 "Log'da kanit: tag 1'in diger butun duzeltmelerinde '(uygulanmadi)' yaziyor, " +
+                 "yalnizca o satirda yazmiyor.\n\n" +
+                 "35 derece SECILDI, olculmedi: ayni turdaki mesru kurtarma +40,29 dereceydi ve " +
+                 "REFERANS tag'den geliyordu, yani bandin ustunde kalmasi sorun degil — teyit " +
+                 "ister, reddedilmez. Bandi daraltmak gerekirse once bu sayi denenir.")]
+        public float yawRecoveryMaxDegrees = 35f;
+
+        [Tooltip("Bandin USTUNDEKI sapmanin kabul edilmesi icin kac ARDISIK olcumde ayni " +
+                 "degeri vermesi gerektigi.\n\n" +
+                 "NEDEN TEYIT, NEDEN RED DEGIL: gercek takip kaybi da bandin ustune cikar. " +
+                 "Ikisini AYIRAN sey tekrarlanabilirlik — duzlemsel belirsizlik flipi kareler " +
+                 "arasi ziplar ve ust uste ayni degeri vermez; gercek kayip verir, cunku dunya " +
+                 "gercekten o kadar donmustur.\n\n" +
+                 "Bedeli: gercek kayipta duzeltme birkac tespit turu (~1 sn) gecikir. Yanlis " +
+                 "kabulun bedeli 5 metrelik bir sicramaydi.")]
+        [Range(2, 6)] public int yawRecoveryConfirmations = 3;
+
+        [Tooltip("Yaw sacilmasi bu dereceyi asarsa YON duzeltmesi birakilir (konum duzeltilmeye " +
+                 "devam eder). 0 = KAPALI, yalnizca log'a yazilir.\n\n" +
+                 "NE OLCUYOR: penceredeki yon olcumlerinin dairesel standart sapmasi. Duzlemsel " +
+                 "poz belirsizliginin flip'i konumu neredeyse hic oynatmadan yonu ziplatiyor — " +
+                 "iki cozum ayni noktayi farkli acilarla goruyor. Konum kararlilik kapisi " +
+                 "(calibStabilitySpread) bu yuzden flip'i hicbir zaman yakalayamadi.\n\n" +
+                 "2 DERECE, IKI TURDA OLCULDU (2026-08-14, ofis):\n" +
+                 "  normal kullanim, tur 1 : 0,08-0,63  (10 olcum, medyan 0,24)\n" +
+                 "  normal kullanim, tur 2 : 0,13-0,69  (8 olcum,  medyan 0,29)\n" +
+                 "  157,8 derecelik gercek yon kaybi ani : 2,77\n" +
+                 "  flip benzetimi (editor, 0/0/+30 derece) : 14,20\n" +
+                 "Esik normal gurultunun (max 0,69) uc kati uzaginda, flip'in (14,2) yedide biri. " +
+                 "Ikisini ayirmak icin genis bir bant var.\n\n" +
+                 "KURTARMA MUAF TUTULUYOR ve bu SART: gercek yon kaybi aninda sacilma 2,77 " +
+                 "olculdu, yani muafiyet olmasaydi kapi tam ihtiyac duyulan anda yonu bloke " +
+                 "eder ve oyuncu 157 derece donuk bir dunyada kalirdi.\n\n" +
+                 "0 = kapali (yalnizca log).")]
+        public float yawSpreadMaxDegrees = 2f;
+
+        [Header("Poz gecerlilik kapisi (Adim 3)")]
+        [Tooltip("SADECE LOG (3a) mi, yoksa gercekten ELESIN mi (3b).\n\n" +
+                 "ACIK = hicbir tespit elenmez, yalnizca 'elenecekti' diye log'a yazilir.\n" +
+                 "Esikler dogrulanmadan kapiyi devreye almak, DOGRU okumalari eleyip sorunu " +
+                 "cozulmus GOSTERIR — en kotu hata turu bu, cunku sessizdir ve iyi gorunur.\n\n" +
+                 "Kapatmadan once bakilacak sayi: log'daki 'ELENECEKTI' orani. Plan %20'nin " +
+                 "altini kabul ediyor; ustundeyse esikler yanlis, kod degil.\n\n" +
+                 "3b'DE KAPATILDI (2026-08-13). Olculen: normal oynanista %0 (198 tespit, " +
+                 "hicbiri elenmeyecekti), kasitli egik bakis turunda %1,0 (199 tespitin 2'si). " +
+                 "Elenen iki tespit de 'normal 89,4 derece egik' — yani tag'in neredeyse YATIK " +
+                 "gorundugu, tartismasiz bozuk bir cozum. Kapi sıradan egik bakisi yakalamiyor " +
+                 "cunku yakalayacak bir sey yok: kestirim 30-45 dereceden bile dogru cozumu " +
+                 "buluyor. Kazanc hassasiyet degil, nadir ama BUYUK bir sicramanin onlenmesi.")]
+        public bool poseGateLogOnly = false;
+
+        [Header("Coklu tag fuzyonu (deneysel)")]
+        [Tooltip("Ayni karede GORULEN tag'leri BIRLIKTE cozsun mu.\n\n" +
+                 "NEDEN: duzlemsel bir isaretcinin en guvenilmez bileseni kendi yaw'idir " +
+                 "(1-3 derece, bakis acisina bagli, ortalamayla gecmiyor) -- konumu ise mm " +
+                 "mertebesinde. Iki tag ayni karede goruluyorsa yonu onlarin KONUMLARINDAN " +
+                 "turetebiliriz: 3 m arayla duran iki tag icin 15 mm'lik konum gurultusu " +
+                 "0,29 derecelik yon gurultusu demek. Yani fuzyon, tag'in zayif olcumunu " +
+                 "kullanmak yerine BAYPAS ediyor.\n\n" +
+                 "KAPALIYKEN eski yol aynen calisir (en yakin tek tag). Tek tag goruluyorsa " +
+                 "acikken de eski yola duser -- fuzyon en az iki tag ister.")]
+        public bool useMultiTagFusion = false;
+
+        [Tooltip("Fuzyon cozumunun kabul edilebilir artik hatasi (m). Ustu REDDEDILIR.\n\n" +
+                 "Bu sayi kendi kendini dogrulayan bir kapi: cozumden sonra her tag'in " +
+                 "olculen yeri ile ilan edilen yeri arasinda kalan fark, tag'lerin BIRBIRIYLE " +
+                 "ve yerlesimle ne kadar uyustugunu dogrudan olcer. Buyukse ya yerlesim " +
+                 "yanlis, ya bir tespit bozuk, ya da flip var -- ucunu de tek sayi yakalar.\n\n" +
+                 "GECIS ile ayni buyuklukte olmali: olculen en iyi GECIS medyani 3,3 cm.")]
+        public float fusionMaxResidual = 0.05f;
+
+        [Tooltip("Bilinmeyen tag'leri OTOMATIK haritalasin mi.\n\n" +
+                 "Cerceve GUVENILIRKEN (ayni karede en az iki BILINEN tag fuzyonla cozulmus, " +
+                 "kalinti esigin altinda) yerlesimde olmayan bir tag gorulurse konumu ve yonu " +
+                 "olculup yerlesime yazilir. Yazilan tag artik BILINEN olur ve sonrakiler icin " +
+                 "temel islevi gorur — harita disari dogru kendiliginden buyur.\n\n" +
+                 "NEDEN GEREKLI: konumlari plaka koyarak tanimlamak, plakanin o andaki " +
+                 "cerceveyi miras almasina dayaniyor; cerceve heNUZ dogrulanmamisken hata " +
+                 "zincirleniyor. Cihazda olculdu: boyle konan tag'ler 1-2,8 m sapti. " +
+                 "Olcerek eklemek o zinciri kesiyor, cunku temel her adimda DOGRULANMIS oluyor.")]
+        public bool autoMapUnknownTags = false;
+
+        [Tooltip("Otomatik haritalama icin kac olcum ortalanacak.")]
+        public int autoMapSampleCount = 20;
+
+        [Tooltip("Otomatik haritalamada orneklerin izin verilen sacilmasi (m). Ustu YAZILMAZ.\n\n" +
+                 "Tek bir bozuk tespit yerlesime kalici olarak islenmesin diye: pencere kendi " +
+                 "icinde tutarli degilse olcum guvenilmez demektir ve beklemek yazmaktan iyidir.")]
+        public float autoMapMaxSpread = 0.03f;
+
+        [Tooltip("Tag'in NORMALI yataydan bu kadar sapabilir (derece). Ustu elenir.\n\n" +
+                 "NEDEN ISE YARAR: kagitlar DUVARA duz yapistirilmis, yani normalleri yatay " +
+                 "olmak ZORUNDA. Duzlemsel poz belirsizliginin yanlis cozumu tag'i one/arkaya " +
+                 "yatirir ve normali yataydan koparir. Yerçekimi yonu IMU'dan geliyor ve tag " +
+                 "tespitinin hicbir hatasini paylasmiyor — ortalamayla gecmeyen sistematik " +
+                 "hatayi eleyebilen elimizdeki TEK bagimsiz kapi bu.\n\n" +
+                 "OLCULDU (2026-08-13, EV): egik bakista tag'ler arasi uyusmazlik 10,2 cm, " +
+                 "karsidan bakista 2,4 cm. Elemek istedigimiz sey tam olarak o egik okumalar.")]
+
+        [Range(5f, 45f)] public float maxNormalTiltDegrees = 20f;
+
+        [Tooltip("Tag'in KENDI dikeyi (yukari ekseni) dunya dikeyinden bu kadar sapabilir " +
+                 "(derece). Ustu elenir.\n\n" +
+                 "Normal yataylığından AYRI bir sinama: kagit duvarda dik durur, yani yalnizca " +
+                 "normali degil KENDI ekseni de dunya dikeyiyle hizalidir. Yanlis cozum ikisini " +
+                 "birden bozar ama farkli miktarlarda; iki bagimsiz olcu tek olcuden daha zor " +
+                 "kandirilir.")]
+        [Range(5f, 45f)] public float maxTagTiltDegrees = 25f;
 
         [Header("Hareket kapisi")]
         [Tooltip("Kafa bu hizdan hizli hareket ederken tespitler kalibrasyona ve olcume " +
@@ -234,10 +398,19 @@ namespace VRMultiplayer
         public bool useAnchorHold = false;
 
         [Tooltip("Kayan pencere bu kadar sure ornek almadiysa TEMIZLENIR (sn).\n\n" +
-                 "Ornekler bir CERCEVEYE aittir; tag gorus alanindan cikip geri geldiginde ya " +
-                 "da gozluk uyuyup uyandiginda cerceve degismis olabilir. Bayat ornekler " +
-                 "ortalamaya karisip sapmayi seyreltir ve sistem hizasizken 'HIZALI' der.")]
-        public float calibWindowMaxGap = 2f;
+                 "Ornekler bir CERCEVEYE aittir; tag gorus alanindan cikip geri geldiginde " +
+                 "cerceve degismis olabilir. Bayat ornekler ortalamaya karisip sapmayi " +
+                 "seyreltir ve sistem hizasizken 'HIZALI' der.\n\n" +
+                 "2 -> 5 SN (2026-08-13, olculdu). Adim 4 turunda pencere 9 kez silindi ve " +
+                 "bosluklar 2,0 / 2,0 / 2,4 / 3,0 / 3,0 / 4,0 / 5,0 / 11,1 / 37,3 sn idi. " +
+                 "Bosta tespit 1 Hz oldugu icin TEK gecikmis kare 2 sn'yi asiyor: 2,0-3,0 sn " +
+                 "araligindaki uc silme sirasiyla 14, 13 ve 13 ornek atti — yani tag'e bakmaya " +
+                 "devam ederken dolu pencereler bosaltildi. Bu, Adim 4'un kaldirdigi beklemeyi " +
+                 "geri getiriyordu. 5 sn, olculen tum surekli-bakis boslukklarinin (max 3,0) " +
+                 "ustunde, gercek bakis kopmalarinin (11,1 / 37,3) altinda.\n\n" +
+                 "UYKU ARTIK BU ESIGE BAGLI DEGIL: pencere uyanista dogrudan temizleniyor " +
+                 "(OnApplicationPause). Esik yalnizca 'tag gorus alanindan cikti' durumu icin.")]
+        public float calibWindowMaxGap = 5f;
 
         [Tooltip("Kazanan tag'i degistirmek icin yeni tag'in bu kadar DAHA YAKIN olmasi gerekir (m).\n\n" +
                  "Tag degisimi kayan pencereyi temizliyor. Iki tag benzer mesafedeyse secim her " +
@@ -245,12 +418,31 @@ namespace VRMultiplayer
                  "Cihazda goruldu: sayac 4'e kadar cikip sifirlaniyordu.")]
         public float calibSwitchMargin = 0.3f;
 
-        [Tooltip("Duzeltmeden once pencerenin ne kadar SIKI olmasi gerektigi (m).\n\n" +
+        [Tooltip("Duzeltmeden once pencerenin ne kadar SIKI olmasi gerektigi — 1 METREDE (m).\n\n" +
                  "Ornek SAYISI tek basina bir sey soylemez: ornekler birbirini tutmuyorsa " +
                  "ortalamalari da tutmaz. Bu kapi sabit bekleme suresinden hem daha hizli " +
                  "(ornekler kararliysa hemen gecer) hem daha guvenli (kararsizsa sayac dolsa " +
-                 "bile bekler). Mikro hareket sayaci sifirlamaz, yalnizca sacilmayi buyutur.")]
+                 "bile bekler). Mikro hareket sayaci sifirlamaz, yalnizca sacilmayi buyutur.\n\n" +
+                 "MESAFEYLE OLCEKLENIR (bkz. calibStabilityScalesWithDistance). Bu deger artik " +
+                 "mutlak sinir degil, 1 metredeki sinir.")]
         public float calibStabilitySpread = 0.02f;
+
+        [Tooltip("Kararlilik esigini mesafenin KARESIYLE olcekle.\n\n" +
+                 "NEDEN: gurultu mesafeyle buyuyor (olculdu: 1 m'de 3 mm, 2 m'de 15 mm) ama esik " +
+                 "SABITTI. Sonuc, dogrulukla ilgisi olmayan bir mesafe duvari: 1,7 m'de 15 " +
+                 "ornegin beklenen max sapmasi ~2,6 cm, esik 2 cm — yani kapi TASARIM GEREGI " +
+                 "kapaniyordu.\n\n" +
+                 "CIHAZDA OLCULDU (2026-08-14, Adim 5 turu): tag 0'a 1,5-1,8 m'den bakilan ilk " +
+                 "110 saniyede kapi ALTI kez tuttu (sacilma 2,8-4,6 cm), hic duzeltme yapilmadi " +
+                 "ve biriken hizasizlik ilk gecislerde 8-12 cm olarak cikti. Ayni turun ikinci " +
+                 "yarisinda (daha yakin bakis) GECIS medyani 2,75 cm'e dustu.\n\n" +
+                 "US 2, cunku olculen sey STANDART SAPMA: sigma ~ d^2. Ornek agirligi 1/d^4 " +
+                 "kullaniyor cunku o VARYANS ile calisiyor — ayni model, ayni us ailesi.\n\n" +
+                 "Gozlenen sekiz KARARSIZ olayina karsi denendi: 1,5-1,8 m'dekilerin besi geciyor " +
+                 "(esik 4,5-6,3 cm), 0,68 m'deki 3,2 cm'lik sacilma hala eleniyor (esik 0,9 cm) " +
+                 "— o mesafede 3,2 cm gercekten anormal.\n\n" +
+                 "Kapatirsan eski sabit esige donulur.")]
+        public bool calibStabilityScalesWithDistance = true;
 
         [Tooltip("Pencere ortalamasindan bu kadar uzak bir olcum AYKIRI sayilir (m).\n\n" +
                  "Cerceve degistiginin gercek isareti, yeni olcumun penceredekilerle taban " +
@@ -272,6 +464,15 @@ namespace VRMultiplayer
         [Range(0.05f, 1f)]
         public float smallCorrectionRate = 0.25f;
 
+        [Tooltip("Kazanc, olculen pencere sacilmasina gore AZALSIN mi (Adim 6).\n\n" +
+                 "KAPALIYKEN kazanc yine hesaplanir ve her duzeltme satirina yazilir, ama " +
+                 "UYGULANMAZ. Adim 3'un iki turlu duzeni: kabul edilen pencerelerin sacilmasi " +
+                 "bugune kadar HIC olculmedi, cunku KARARSIZ satiri yalnizca sinir ASILDIGINDA " +
+                 "yaziliyor. Oran normal kullanimda 0,1 ise bu alan hicbir sey degistirmez; " +
+                 "0,8 ise kazanci neredeyse yariya indirir. Once olcup sonra acilir.\n\n" +
+                 "Log'da bakilacak sutunlar: 'sac/sinir' ve 'kazanc'.")]
+        public bool gainScalesWithSpread = false;
+
         [Tooltip("Bu sapmanin USTU 'buyuk' sayilir ve ANINDA duzeltilir (m). Uyku sonrasi ya da " +
                  "takip kaybinda dunya hemen yerine otursun; suzulerek gelmesi cok daha kotudur.")]
         public float snapThresholdMeters = 0.10f;
@@ -285,6 +486,10 @@ namespace VRMultiplayer
         AprilTag.TagDetector _detector;
         WebCamTextureManager _camMgr;
         Color32[] _pixels;
+
+        // Tespit suresi olcumu (bkz. TESPIT SURESI satiri). Tek ornek, yeniden kullaniliyor.
+        readonly System.Diagnostics.Stopwatch _olcumSaat = new System.Diagnostics.Stopwatch();
+        float _nextOlcumAt;
         int _texW, _texH;
         float _nextDetectAt;
         bool _alignedNow;   // son olcumde hiza olu bolge icinde miydi (tespit hizini belirler)
@@ -363,6 +568,57 @@ namespace VRMultiplayer
         }
 
         /// <summary>Uyariyi log'a bir kez yazar; referans yeniden gorununce sifirlanir.</summary>
+        // ---- UYANIS KAPISI ----------------------------------------------------------------
+        //
+        // OLCULDU (24 Agu, cok oyunculu tur): gozluk uykudan uyandi, dunya 175,8 derece donmus
+        // geldi, tag 0 YEDI DAKIKA boyunca hic gorulmedi ve oyun bastan sona ters bir dunyada
+        // oynandi. Uyku ONCESI olcum dogruydu (fark -0,8), yani donmeyi uyku yaratti.
+        //
+        // Donme ISABETI bozmaz (kamera da kumanda da rig ile birlikte doner) ama GERCEK oda ile
+        // sanal dunyayi ayirir: olmayan yerde siper sanirsin, acikta kalirsin. Cok oyunculuda
+        // iki oyuncu farkli yonlerde dunyalar gorur.
+        bool _wokeNeedsRef;
+        float _wokeAt;
+
+        /// <summary>
+        /// Uyandiktan sonra tag 0 gorulene kadar KALICI uyari gosterir.
+        ///
+        /// TickRefWatch ile ayni yerden cagriliyor cunku ikisi de panelden BAGIMSIZ kosmali:
+        /// teshis paneli oyunda kapali ve olayin gorunmez kalmasinin sebebi tam olarak buydu.
+        /// </summary>
+        void TickWakeGate()
+        {
+            if (!_wokeNeedsRef) return;
+
+            // Referans uyandiktan SONRA goruldu mu? Uyku oncesi gorulme sayilmaz.
+            if (_seenTime.TryGetValue(offsetReferenceTagId, out float t) && t >= _wokeAt)
+            {
+                _wokeNeedsRef = false;
+                WriteDiag($"UYANIS KAPISI ACILDI  tag {offsetReferenceTagId} goruldu " +
+                          $"({Time.time - _wokeAt:0.0} sn sonra)");
+                if (_cm != null) _cm.HideStatus();
+                return;
+            }
+
+            // SANIYEDE BIR YAZ, HER KAREDE DEGIL.
+            //
+            // Panel metni yalnizca saniye sayaci degistiginde degisiyor, ama guncelleme
+            // her karede yapiliyordu: 72 fps'te saniyede 72 dizgi ayirma, 72 TextMesh
+            // yeniden kurulumu ve 72 Debug.Log (SetStatus her cagrida log yaziyor).
+            // Kapinin acik kaldigi olculen sureler 2,5-12 sn; en uzunu ~860 gereksiz
+            // log demekti ve Android'de Debug.Log logcat'e gittigi icin ucuz degil.
+            int saniye = Mathf.FloorToInt(Time.time - _wokeAt);
+            if (saniye == _wokeShownSecond) return;
+            _wokeShownSecond = saniye;
+
+            if (_cm == null) _cm = FindFirstObjectByType<CalibrationManager>();
+            if (_cm != null)
+                _cm.ShowPersistent($"UYKUDAN UYANILDI\n\nYON DOGRULANMADI — TAG {offsetReferenceTagId}'A BAK\n" +
+                                   $"({saniye} sn)");
+        }
+
+        int _wokeShownSecond = -1;
+
         void TickRefWatch()
         {
             string uyari = YawReferenceWarning();
@@ -398,6 +654,9 @@ namespace VRMultiplayer
         float _lastPassTime = -1f;   // tespit turu (Hz hesabi icin)
         float _lastTagTime = -1f;    // YALNIZCA tag gercekten bulundugunda
         float _detectHz;
+
+        /// <summary>Bu turdan once tag'siz gecen sure (sn); hic gorulmediyse -1. Teshis satirlarina yazilir.</summary>
+        float _tagGapSeconds = -1f;
 
         TextMesh _panel;
 
@@ -440,9 +699,13 @@ namespace VRMultiplayer
             // Yerlesim degisti: gorulen tag'lerin eski cerceveye gore biriktirdigi ornekler
             // artik baska bir dunyaya ait. Temizlenmezse ilk duzeltme iki cercevenin
             // ortalamasini uygular ve nereden geldigi anlasilmaz.
+            // Bu silme ADIM 4'TEN SONRA DA GEREKLI: rig-yerel saklama rig'in HAREKETINE karsi
+            // koruyor, YERLESIMIN degismesine karsi degil. Tag'in ilan edilen konumu degistiyse
+            // eski ornekler baska bir haritanin tag'ini olcmus demektir.
             _recentByTag.Clear();
-            _calibPos.Clear();
-            _calibYaw.Clear();
+            _calibLocal.Clear();
+            _calibYawLocal.Clear();
+            _calibWeight.Clear();
             _calibId = -1;
             _lastTagTime = -1f;
 
@@ -516,6 +779,40 @@ namespace VRMultiplayer
         {
             WriteDiag(paused ? "=== UYKU (uygulama duraklatildi) ==="
                              : "=== UYANDI — bundan sonraki ilk tag tespiti belirleyici ===");
+
+            // UYANISTA PENCERE TEMIZLENIR — DOGRUDAN isaret.
+            //
+            // Bayat pencerenin belgelenmis felaketi tam olarak uyku sonrasiydi: gozluk
+            // uyandiginda takip uzayi bambaska bir yere oturmustu, penceredeki 15 bayat ornek
+            // yeni olcumleri bastirdi, sapma olu bolgenin ALTINDA kaldi ve panel surekli
+            // "HIZALI" yazdi. Duzeltme yapilmadigi icin pencere de temizlenmedi — kalici
+            // kilitlenme. Aykiri eleme bunu yakalayamaz: esigi 15 cm, olay ise 1 cm'nin
+            // altinda kalan bir bastirma.
+            //
+            // Bu, calibWindowMaxGap'in asil korudugu durumdu ve zaman esigi onun DOLAYLI
+            // vekiliydi: "uzun sure ornek gelmediyse belki uyumustur". Uyku sinyalinin
+            // kendisi elimizde oldugu icin vekile gerek yok — esik artik yalnizca "tag gorus
+            // alanindan cikti" durumunu kaplıyor ve olculen degere gore gevsetilebiliyor.
+            if (!paused)
+            {
+                _calibLocal.Clear();
+                _calibYawLocal.Clear();
+                _calibWeight.Clear();
+                _calibId = -1;
+
+                // UYANIS KAPISI: takip uzayi uyku boyunca DONMUS olabilir ve bunu yalnizca
+                // tag 0 duzeltebilir. Bayrak, referans tekrar gorulene kadar oyuncuya
+                // KALICI bir uyari gosterir (bkz. TickWakeGate).
+                _wokeNeedsRef = CalibrationManager.Calibrated;
+                _wokeAt = Time.time;
+                _wokeShownSecond = -1;
+
+                // Kapinin DEVREYE GIRDIGI de yazilir, yalnizca acildigi degil. Aksi halde
+                // "uyari cikti mi" sorusu log'dan cevaplanamiyor ve testte tahmin gerekiyor.
+                WriteDiag(_wokeNeedsRef
+                    ? "UYANIS KAPISI DEVREDE — tag " + offsetReferenceTagId + " gorulene kadar uyari"
+                    : "UYANIS KAPISI ATLANDI (henuz kalibre degil — normal akis zaten uyaracak)");
+            }
         }
 
         void OnDestroy()
@@ -578,7 +875,17 @@ namespace VRMultiplayer
             if (tex == null || tex.width <= 16) { TickPanel(); return; }
 
             EnsureDetector(tex.width, tex.height);
+
+            // ---- TESPIT SURESI OLCUMU -------------------------------------------------
+            // Zincirin tamami ANA THREAD'i blokluyor ve maliyeti hic olculmedi. Kopya ile
+            // tespit AYRI olculuyor cunku cozumleri farkli: maliyet kopyadaysa cevap
+            // AsyncGPUReadback, tespitteyse isi bir sonraki kareye ertelemek ya da arka
+            // plana almak. Tag sayisi da yaziliyor -- poz kestirimi tag basina calisiyor,
+            // sabit maliyeti degisken maliyetten ancak boyle ayirabiliriz.
+            _olcumSaat.Restart();
             tex.GetPixels32(_pixels);
+            double msKopya = _olcumSaat.Elapsed.TotalMilliseconds;
+            _olcumSaat.Restart();
 
             // TAM INTRINSICS. Eskiden yalnizca fy'den bir DIKEY FOV turetilip veriliyordu; poz
             // isi de o tek sayidan fx = fy uretip ana noktayi GORUNTU MERKEZI kabul ediyordu.
@@ -619,9 +926,39 @@ namespace VRMultiplayer
                 _detector.ProcessImage(_pixels, fx, fyy, cx, cy, tagSizeMeters);
             }
 
+            double msTespit = _olcumSaat.Elapsed.TotalMilliseconds;
+            // Seyrek yazilir: her turda yazmak 3 Hz'de dosyayi sisirir ve olculen seyi
+            // (ana thread yuku) olcum kendisi bozardi.
+            if (Time.time >= _nextOlcumAt)
+            {
+                _nextOlcumAt = Time.time + 5f;
+
+                // Sayim SADECE log aninda: DetectedTags bir IEnumerable, saymak icin
+                // dolasmak gerekiyor ve bu her turda yapilsa olculen yuke kendimiz
+                // eklerdik. Bes saniyede bir fazladan dolasim onemsiz.
+                int tagSayisi = 0;
+                foreach (var _ in _detector.DetectedTags) tagSayisi++;
+
+                WriteDiag($"TESPIT SURESI  kopya {msKopya:0.0} ms  tespit {msTespit:0.0} ms  " +
+                          $"toplam {msKopya + msTespit:0.0} ms  tag {tagSayisi}  " +
+                          $"({tex.width}x{tex.height}, decimation {decimation})");
+            }
+
             float now = Time.time;
             if (_lastPassTime > 0f) _detectHz = 1f / Mathf.Max(0.0001f, now - _lastPassTime);
             _lastPassTime = now;
+
+            // TAG'SIZ GECEN SURE — tur basina BIR kez, tag'ler islenmeden ONCE olculur
+            // (RecordMeasurement _lastTagTime'i eziyor; sonra bakilsa hep ~0 cikardi).
+            //
+            // NEDEN GEREKLI: buyuk bir duzeltmenin SEBEBINI log'dan okuyabilmek icin.
+            // Iki bambaska olay ayni satiri uretiyor ve ayirt edilemiyordu:
+            //   duzlemsel belirsizlik flipi -> ardisik kareler arasi olur (bosluk ~0,3 sn)
+            //   takip kopmasi/relokalizasyon -> uzun sessizlikten sonra olur (saniyeler)
+            // Taban cizgisinde tam bu karisti: 4,96 m'lik sicramayi flip sandim, oysa
+            // gozluk cikarilip tag 1'e yuruyup takilmisti ve arada 21 saniye tag yoktu.
+            // Bosluk yazilsaydi soru hic sorulmayacakti.
+            _tagGapSeconds = _lastTagTime > 0f ? now - _lastTagTime : -1f;
 
             var camPose = PassthroughCameraUtils.GetCameraPoseInWorld(_camMgr.Eye);
 
@@ -641,6 +978,12 @@ namespace VRMultiplayer
             Quaternion bestRot = Quaternion.identity;
             _nearestId = -1;
             _nearestDist = float.MaxValue;
+
+            // Fuzyon adaylari KARE BASINA toplanir; onceki karenin kalintisi
+            // birikirse artik gorulmeyen tag'ler cozume girer.
+            _fuseMeasured.Clear(); _fuseDeclared.Clear(); _fuseWeight.Clear();
+            _fuseDist.Clear(); _fuseId.Clear();
+            _autoMapId.Clear(); _autoMapPos.Clear(); _autoMapYaw.Clear();
 
             // TESHIS: tag'in GORUNTUDEKI yeri. Hem lens distorsiyonu hem ana nokta hatasi
             // KONUMA BAGLI etkiler — kadrajin ortasindaki tag ile kenarindaki tag farkli
@@ -677,6 +1020,47 @@ namespace VRMultiplayer
                 // Esik MESAFEYE gore: uzaktaki tag ayni donme hizindan cok daha fazla etkilenir.
                 if (!MotionOk(dist)) continue;
 
+                // NORMAL KONVANSIYONU: hareket kapisindan SONRA oylanir — kafa hareket
+                // ederken cikan poz sistematik olarak kaymis, oyu kirletir.
+                ProbeNormalSign(worldRot, worldPos, camPose.position);
+
+                // POZ GECERLILIK KAPISI (Adim 3). 3a'da yalnizca raporluyor, hicbir sey
+                // elemiyor; 3b'de poseGateLogOnly kapatilinca burasi 'continue' eder.
+                if (!PoseGate(tag.ID, worldRot, worldPos, camPose.position, dist)) continue;
+
+                // YAW ENVANTERI — zemin kurulumunda kagidin hangi yone yapistirildigini
+                // OLCEREK ogrenmenin tek yolu. Plakanin gorsel yonu ile sistemin yaw diye
+                // okudugu eksen (zeminde tag'in kendi yukari ekseni, bkz. YawOf) ayni olmak
+                // ZORUNDA DEGIL; ikisi arasindaki sabit kayma ancak burada gorunur.
+                //
+                // Yalnizca poz kapisindan gecmis, hareket kapisindan gecmis olcumler yazilir:
+                // egik ya da hareketli bir okumadan cikan yaw zaten guvenilmez ve envanteri
+                // kirletirdi. Tag basina 5 saniyede bir.
+                {
+                    var yerlesik = Find(tag.ID);
+                    if (yerlesik != null &&
+                        (!_yawEnvanterAt.TryGetValue(tag.ID, out float sonYazim) ||
+                         Time.time - sonYazim >= 5f))
+                    {
+                        _yawEnvanterAt[tag.ID] = Time.time;
+                        float olculen = YawOf(worldRot);
+                        float fark = Mathf.DeltaAngle(yerlesik.yawDegrees, olculen);
+                        WriteDiag($"YAW ENVANTERI  tag {tag.ID}  olculen {olculen:+0.0;-0.0}" +
+                                  $"  ilan {yerlesik.yawDegrees:+0.0;-0.0}  fark {fark:+0.0;-0.0}" +
+                                  $"  d {dist:0.00} m");
+                    }
+                }
+
+                // OTOMATIK HARITALAMA ADAYI: yerlesimde OLMAYAN tag. Kapilardan gecmis
+                // olcum; cercevenin guvenilir olup olmadigina asagida, fuzyon cozuldukten
+                // SONRA bakilacak — o karar burada verilemez.
+                if (autoMapUnknownTags && Find(tag.ID) == null && dist <= calibrateMaxDistance)
+                {
+                    _autoMapId.Add(tag.ID);
+                    _autoMapPos.Add(worldPos);
+                    _autoMapYaw.Add(YawOf(worldRot));
+                }
+
                 if (learnMode)
                     Learn(tag.ID, dist, worldPos, worldRot);
 
@@ -702,6 +1086,20 @@ namespace VRMultiplayer
                         bestRot = worldRot;
                     }
 
+                    // FUZYON ADAYI. Kazanan secimiyle ayni kapilardan gecmis olan HER tag
+                    // toplanir — fuzyon icin "en yakin" diye bir sey yok, hepsi birlikte
+                    // cozuluyor. Mesafe kesmesi burada uygulanir: tek-tag yolunda bu kontrol
+                    // ContinuousCorrect'in icinde, fuzyonun oraya ugramasi gerekmiyor.
+                    if (useMultiTagFusion && entry != null && entry.useForCalibration &&
+                        dist <= calibrateMaxDistance)
+                    {
+                        _fuseMeasured.Add(worldPos);
+                        _fuseDeclared.Add(entry.position);
+                        _fuseWeight.Add(SampleWeight(dist));
+                        _fuseDist.Add(dist);
+                        _fuseId.Add(entry.id);
+                    }
+
                     // KAPALI tag KONTROLU KALDIRILDI. Yeni bir tag'i dogrulamak icin konulmustu:
                     // "plaka kaymis ama NE KADAR" sorusunu cevapliyordu. Yerini dokunus yontemi
                     // aldi — artik sapmayi olcup elle duzeltmiyoruz, konumu dogrudan kumandadan
@@ -722,19 +1120,113 @@ namespace VRMultiplayer
                 _jitterMm = JitterMmFor(_nearestId);
             }
 
-            if (bestEntry != null)
+            // FUZYON ONCE DENENIR, tek-tag yolu YEDEK. Iki yol ayni karede birden
+            // calismaz: ikisi de rig'i oynatiyor ve ikincisi, birincinin tasidigi yeni
+            // cerceveye kendi hesabini uygulardi -- ust uste binen duzeltmeler sapma uretir
+            // (ayni gerekce tek-tag yolunda da yaziyor).
+            bool fuzyonUygulandi = _fuseMeasured.Count >= 2 && FuseCorrect();
+
+            // OTOMATIK HARITALAMA yalnizca fuzyon BASARILI olduysa. Kosul sert bilerek:
+            // fuzyonun uygulanmis olmasi demek, en az iki BILINEN tag'in ayni karede
+            // birbiriyle ve yerlesimle kalinti esiginin altinda uyustugu demek. Cerceve o
+            // anda dogrulanmis durumda; bilinmeyen bir tag'i ancak boyle bir cercevede
+            // olcmek anlamli.
+            if (fuzyonUygulandi && _autoMapId.Count > 0) TickAutoMap();
+
+            if (!fuzyonUygulandi && bestEntry != null)
                 ContinuousCorrect(bestEntry, bestDist, bestPos, bestRot);
 
             TickPanel();
         }
 
-        // Kayan pencere: son yakin olcumler (ortalanir). Duzeltme uygulaninca temizlenir —
-        // cunku duzeltme rig'i oynatir, eski ornekler eski cerceveye aittir.
-        readonly List<Vector3> _calibPos = new List<Vector3>();
-        readonly List<float> _calibYaw = new List<float>();
+        // Kayan pencere: son yakin olcumler (ortalanir). RIG-YEREL saklanir — bkz. ToLocal.
+        readonly List<Vector3> _calibLocal = new List<Vector3>();
+        readonly List<float> _calibYawLocal = new List<float>();
+        readonly List<float> _calibWeight = new List<float>();   // Adim 5 — bkz. SampleWeight
         float _calibLastSampleAt = -999f;   // bkz. calibWindowMaxGap
         int _outlierRun;                    // ust uste kac aykiri ornek geldi
         int _calibId = -1;
+
+        // ---- RIG-YEREL SAKLAMA (Adim 4) ---------------------------------------------------
+        //
+        // NEDEN: olcum aslinda "tag, gozlugun TAKIP UZAYINDA su noktada" diyor. Bunu dunya
+        // uzayina ceviren sey rig transformu; yani dunya koordinati rig'in nerede oldugu
+        // varsayimini ICINDE tasiyor. Rig duzeltilince o varsayim degisiyor ve penceredeki
+        // eski ornekler artik var olmayan bir cerceveyi anlatiyor — bu yuzden her duzeltmeden
+        // sonra pencere SILINMEK ZORUNDAYDI.
+        //
+        // Silinince ne oluyordu: duzeltme -> 5 ornek daha bekle -> duzeltme. Bosta tespit
+        // ~1 Hz oldugu icin bu ~5 saniye. "5 saniye sabit bak" zorunlulugu kaldirilmamis,
+        // yer degistirmisti.
+        //
+        // Rig-yerel koordinat rig'in kendi hareketinden ETKILENMEZ: rig oynayinca ornek de
+        // onunla tasinir ve hala ayni fiziksel noktayi gosterir. Pencere yasamaya devam eder.
+        //
+        // ToWorld(ToLocal(p)) == p oldugu surece olcek onemsiz; rig olcegi 1 ama bagli
+        // degiliz — gidis donus ayni transformu kullaniyor.
+        Vector3 ToLocal(Vector3 world) => _rig != null ? _rig.InverseTransformPoint(world) : world;
+        Vector3 ToWorld(Vector3 local) => _rig != null ? _rig.TransformPoint(local) : local;
+
+        // Rig YALNIZCA Y ekseninde donduruluyor (ApplyCorrection: RotateAround(..., Vector3.up)),
+        // o yuzden yaw icin tek bir aci cikarmak/eklemek yeterli.
+        float RigYaw => _rig != null ? _rig.eulerAngles.y : 0f;
+
+        // ---- ORNEK AGIRLIGI (Adim 5) ------------------------------------------------------
+        //
+        // Pencerede 0,5 m'den ve 1,9 m'den gelen ornekler AYNI agirliktaydi; kendi olcumumuz
+        // bunu yalanliyor: 1 m'de 3 mm, 2 m'de 15 mm jitter.
+        //
+        // Duzlemsel poz kestiriminde konum hatasi mesafenin KARESIYLE buyuyor (tag goruntude
+        // kucüldükçe ayni piksel hatasi daha cok metreye karsilik geliyor). sigma ~ d^2 ise
+        // varyans ~ d^4, ve ters-varyans agirligi 1/d^4 olur. Uydurma bir us degil, olcumun
+        // kendi modeli.
+        //
+        // Bunun bedeli SU AN calibrateMaxDistance ile odeniyordu: uzak ornegi agirliklandirmak
+        // yerine TAMAMEN atmak. Agirlikli ortalamada kesme yumusuyor — uzak ornek hak ettigi
+        // kadar katki veriyor, hiç yoksa da yok sayilmiyor.
+        //
+        // 1 m REFERANS ALINIR: w = (1/d)^4. Boylece 1 m'de w=1, 0,5 m'de 16, 2 m'de 0,0625.
+        // Oranlar 1/d^4 ile ayni, sayilar okunabilir kaliyor ve toplam tasma riski yok.
+        //
+        // MESAFE ALTTAN KIRPILIR: gozluk tag'e 25 cm'den fazla yaklasamaz (kamera odak ve
+        // gorus alani). Kirpmadan, hatali kucuk bir d tek basina butun pencereyi ele gecirirdi.
+        const float WeightRefDistance = 1f;
+        const float WeightMinDistance = 0.25f;
+
+        static float SampleWeight(float distance)
+        {
+            float d = Mathf.Max(WeightMinDistance, distance);
+            float r = WeightRefDistance / d;
+            return r * r * r * r;
+        }
+
+        /// <summary>
+        /// Dairesel standart sapma (derece). <paramref name="dir"/> agirlikli birim vektorlerin
+        /// bileskesi, <paramref name="totalW"/> agirliklarin toplami.
+        ///
+        /// R = |bileske| / toplam agirlik, sonuc sqrt(-2 ln R). R=1 (hepsi ayni yon) -> 0 derece.
+        /// R kucüldükçe sacilma hizla buyur.
+        ///
+        /// R alttan kirpilir: Log(0) eksi sonsuz doner ve tek bir NaN butun kestirimi sessizce
+        /// zehirlerdi. Ustten de kirpilir — kayan nokta yuvarlamasi R'yi 1'in bir tik ustune
+        /// cikarabiliyor ve Log negatif olunca karekok NaN veriyor.
+        /// </summary>
+        static float YawSpreadDegrees(Vector2 dir, float totalW)
+        {
+            if (totalW <= 0f) return 0f;
+            float R = Mathf.Clamp(dir.magnitude / totalW, 1e-6f, 1f);
+            return Mathf.Sqrt(-2f * Mathf.Log(R)) * Mathf.Rad2Deg;
+        }
+
+        /// <summary>Rig'i cozer. ORNEKLEMEDEN ONCE cagrilmali: rig bilinmeden alinan bir ornek
+        /// dunya koordinatinda saklanip sonra yerel sanilirdi.</summary>
+        bool EnsureRig()
+        {
+            if (_rig != null) return true;
+            if (_cm == null) _cm = FindFirstObjectByType<CalibrationManager>();
+            _rig = _cm != null ? _cm.rig : null;
+            return _rig != null;
+        }
 
         /// <summary>
         /// Duzeltme icin gereken EN AZ ornek.
@@ -785,6 +1277,14 @@ namespace VRMultiplayer
         Transform _rig;
         CalibrationManager _cm;   // rig + CompleteFromTag icin; ilk duzeltmede bir kez bulunur
         float _nextStateDiagAt;   // teshis yazimini kisitlar (bkz. ApplyCorrection)
+        float _nextSpreadDiagAt;  // KARARSIZ satirini kisitlar — her karede yazilirdi
+        float _diagYawSpread;     // son olculen yaw sacilmasi (Adim 5) — teshis satirinda
+
+        // ADIM 6'NIN GIRDILERI. Alan olarak tutuluyorlar, parametre olarak degil: ayni desen
+        // _diagYawSpread'de zaten var ve tek cagri yeri (ApplyCorrection) kapinin hemen
+        // ardinda, yani bayatlamalari mumkun degil.
+        float _diagSpreadRatio;   // kabul edilen pencerenin sacilma / sinir orani
+        int _diagSampleCount;     // o penceredeki ornek sayisi
 
         /// <summary>
         /// SUREKLI, kendini onaran hizalama. Tag her gorulduginde:
@@ -796,10 +1296,16 @@ namespace VRMultiplayer
         /// </summary>
         void ContinuousCorrect(TagEntry entry, float distance, Vector3 worldPos, Quaternion worldRot)
         {
+            // Rig ORNEKLEMEDEN once cozulmeli: pencere rig-yerel saklaniyor, rig bilinmezken
+            // alinan bir ornek dunya koordinatinda girip sonra yerel sanilirdi.
+            if (!EnsureRig()) { _calibNote = "rig yok"; return; }
+
             if (distance > calibrateMaxDistance)
             {
                 _calibNote = $"yaklas ({distance:0.00} > {calibrateMaxDistance:0.00} m)";
-                _calibPos.Clear(); _calibYaw.Clear();
+                // PENCERE SILINMEZ. Ornekler rig-yerel, yani uzaklasmak onlari gecersiz
+                // kilmiyor; oyuncu geri yaklastiginda kaldigi yerden devam eder. Eskiden
+                // silinmesinin sebebi dunya-uzayi saklamaydi, o sebep kalkti.
                 _alignedNow = true;   // bu mesafede yapilacak is yok -> tespit hizlanmasin
                 return;
             }
@@ -810,7 +1316,7 @@ namespace VRMultiplayer
             bool justSwitched = _calibId >= 0 && entry.id != _calibId;
             if (justSwitched)
             {
-                _calibPos.Clear(); _calibYaw.Clear();
+                _calibLocal.Clear(); _calibYawLocal.Clear(); _calibWeight.Clear();
                 _switchFrom = _calibId;
                 _switchPending = true;
             }
@@ -827,9 +1333,23 @@ namespace VRMultiplayer
             // "HIZALI" yazdi. Duzeltme yapilmadigi icin pencere de temizlenmedi — kalici
             // kilitlenme. Tag'i gorus alanindan cikarip geri bakmak da ise yaramiyordu, cunku
             // bayat ornekler orada duruyordu.
-            if (_calibPos.Count > 0 && Time.time - _calibLastSampleAt > calibWindowMaxGap)
+            //
+            // ADIM 4'TEN SONRA DA DURUYOR. Rig-yerel saklama bu kapinin BIR sebebini ortadan
+            // kaldirdi (rig'in kendi hareketi), otekini KALDIRMADI: gozlugun takip uzayi
+            // zamanla kayiyor ve uyku sonrasi bambaska bir yere oturuyor. Yukaridaki olay tam
+            // olarak buydu. Silinme artik "her duzeltmeden sonra" degil "tag 2 saniye
+            // gorunmediginde" oluyor — kaldirmak istedigimiz bekleme bu degildi.
+            //
+            // TESHIS SATIRI ADIM 4 ICIN SART. Adim 4'un kabul olcutu "duzeltmeden sonra sayac
+            // 0/5'e dusmuyor". Sayac yine de duserse iki ihtimal var ve ayirt edilebilmeli:
+            // (a) rig-yerel saklama calismiyor, (b) bosta tespit 1 Hz ve bu kapi 2 sn — yani
+            // tek bir gecikmis kare pencereyi siliyor. (b) ise cozum esigi buyutmek, kodu geri
+            // almak degil. Log yazmadan bu ayrim turda yapilamaz.
+            if (_calibLocal.Count > 0 && Time.time - _calibLastSampleAt > calibWindowMaxGap)
             {
-                _calibPos.Clear(); _calibYaw.Clear();
+                WriteDiag($"PENCERE SILINDI  bosluk {Time.time - _calibLastSampleAt:0.0} sn " +
+                          $"> {calibWindowMaxGap:0.0}  ({_calibLocal.Count} ornek atildi)");
+                _calibLocal.Clear(); _calibYawLocal.Clear(); _calibWeight.Clear();
             }
             _calibLastSampleAt = Time.time;
 
@@ -842,23 +1362,29 @@ namespace VRMultiplayer
             //
             // Tek bir aykiri ornek pencereyi bozmaz (bozuk bir tespit olabilir); UST USTE
             // gelirse dunya gercekten oynamis demektir ve pencere atilir.
-            if (_calibPos.Count > 0)
+            // Karsilastirma da YEREL uzayda: pencere yerel saklandigi icin dunya koordinatiyla
+            // kiyaslamak, arada bir duzeltme olduysa her ornegi aykiri gosterirdi.
+            Vector3 localPos = ToLocal(worldPos);
+
+            if (_calibLocal.Count > 0)
             {
                 Vector3 m = Vector3.zero;
-                foreach (var q in _calibPos) m += q;
-                m /= _calibPos.Count;
+                foreach (var q in _calibLocal) m += q;
+                m /= _calibLocal.Count;
 
-                if (Vector3.Distance(worldPos, m) > calibOutlierDistance)
+                if (Vector3.Distance(localPos, m) > calibOutlierDistance)
                 {
                     if (++_outlierRun >= 2)
                     {
-                        _calibPos.Clear(); _calibYaw.Clear();
+                        _calibLocal.Clear(); _calibYawLocal.Clear(); _calibWeight.Clear();
                         _outlierRun = 0;
                     }
                     else
                     {
                         // Tek seferlik sapma: orneği ATLA, pencereyi koru.
-                        _calibNote = $"olculuyor {ProgressBar(_calibPos.Count, CalibNeed)}";
+                        // Burada da pencere eksik kaliyor, yani is var (bkz. sayac kapisi).
+                        _alignedNow = false;
+                        _calibNote = $"olculuyor {ProgressBar(_calibLocal.Count, CalibNeed)}";
                         return;
                     }
                 }
@@ -866,9 +1392,15 @@ namespace VRMultiplayer
             }
 
             // Kayan pencereye ekle, en fazla calibrateSampleCount tut.
-            _calibPos.Add(worldPos);
-            _calibYaw.Add(YawOf(worldRot));
-            while (_calibPos.Count > calibrateSampleCount) { _calibPos.RemoveAt(0); _calibYaw.RemoveAt(0); }
+            // AGIRLIK ORNEKLE BIRLIKTE SAKLANIR: ornegin alindigi andaki mesafe onun kalitesini
+            // belirliyor ve o mesafe sonradan bilinemez (oyuncu hareket ediyor).
+            _calibLocal.Add(localPos);
+            _calibYawLocal.Add(YawOf(worldRot) - RigYaw);
+            _calibWeight.Add(SampleWeight(distance));
+            while (_calibLocal.Count > calibrateSampleCount)
+            {
+                _calibLocal.RemoveAt(0); _calibYawLocal.RemoveAt(0); _calibWeight.RemoveAt(0);
+            }
 
             // ILK hizalamada AZ ornek yeter, sonrakilerde cok.
             // Ilk duzeltme metre mertebesindedir — 3 mm'lik ornekleme hatasi yaninda gurultu
@@ -876,16 +1408,38 @@ namespace VRMultiplayer
             // cm mertebesine iner ve ortalama gercekten degerli olur; orada 5 ornek kalir.
             // Kotu bir ilk hizalama zaten kendini onarir: bir sonraki tespit duzeltir.
             int need = CalibNeed;
-            if (_calibPos.Count < need)
+            if (_calibLocal.Count < need)
             {
-                _calibNote = $"olculuyor {ProgressBar(_calibPos.Count, need)}";
+                // PENCERE DOLDURMAK "IS"TIR — tespit yavaslamamali.
+                //
+                // Bu satir olmadan _alignedNow bir onceki hizalamadan kalma true degerinde
+                // kaliyordu, busy false cikiyordu ve pencere IDLE hizinda (1 Hz) doluyordu:
+                // 5 ornek = 5 saniye. Cihazda olculdu (2026-08-18 drift turu): dokuz bakis
+                // kopmasinin dokuzunda da duzeltme satiri PENCERE SILINDI'den tam 4-5 sn
+                // sonra geldi. detectionsPerSecond zaten 3 idi, yani hiz ayari degil bu kapi
+                // darboğazdi — 5 ornek artik ~1,7 sn'de doluyor.
+                //
+                // Gerekce, satir 750'deki "henuz kalibre degilsek tam hizda tara" notunun
+                // aynisi: oyuncu duvara bakmis bekliyor, tasarruf edilecek bir sey yok.
+                _alignedNow = false;
+                _calibNote = $"olculuyor {ProgressBar(_calibLocal.Count, need)}";
                 return;
             }
 
-            // Ortalanmis olculen tag pozu.
-            Vector3 avgPos = Vector3.zero;
-            foreach (var p in _calibPos) avgPos += p;
-            avgPos /= _calibPos.Count;
+            // AGIRLIKLI ortalama (Adim 5). Ortalama YEREL alinir, sonra dunyaya cevrilir —
+            // asagisi (sapma, GECIS, ApplyCorrection) dunya uzayinda calisiyor.
+            float wTotal = 0f;
+            Vector3 avgLocal = Vector3.zero;
+            for (int i = 0; i < _calibLocal.Count; i++)
+            {
+                avgLocal += _calibLocal[i] * _calibWeight[i];
+                wTotal += _calibWeight[i];
+            }
+            // wTotal sifir olamaz (SampleWeight her zaman pozitif) ama bolme once kontrol
+            // edilir: pencere ile agirlik listesi bir sekilde ayrisirsa sessiz NaN uretmesin.
+            if (wTotal <= 0f) { _calibNote = "agirlik yok"; return; }
+            avgLocal /= wTotal;
+            Vector3 avgPos = ToWorld(avgLocal);
 
             // KARARLILIK KAPISI — sayiyla degil, TUTARLILIKLA olculur.
             //
@@ -896,17 +1450,92 @@ namespace VRMultiplayer
             //
             // Ayrica mikro hareket artik sayaci SIFIRLAMIYOR — yalnizca sacilmayi buyutuyor,
             // yani kendi kendini duzelten yumusak bir ceza.
+            // Sacilma YEREL uzayda olculur. Rigid donusum mesafeleri korudugu icin sayi
+            // dunyadakiyle ayni; yerel kalmasinin sebebi karsilastirmanin ayni uzayda olmasi.
+            //
+            // AGIRLIKSIZ ORTALAMAYA GORE OLCULUR — bilerek. Adim 5'in agirlikli ortalamasi
+            // yakin ornege sonuna kadar yaslaniyor (0,5 m'deki ornek 2 m'dekinden 256 kat agir),
+            // yani uzak ornekler ondan UZAK duser. Sacilmayi o merkeze gore olcseydik uzak
+            // ornekler kapiyi bosuna tetiklerdi — ustelik zaten neredeyse hic katki vermeyen
+            // ornekler yuzunden. Kullanicinin sikayet ettigi "KARARSIZ 15 ornek" durumu
+            // SIKLASIRDI, azalmazdi.
+            //
+            // Kapinin isi degismedi: "pencere kendi icinde tutarli mi". Adim 5 KESTIRIMI
+            // degistiriyor, kapiyi degil — boylece turda hangisinin ne yaptigi ayirt edilebilir.
+            Vector3 plainMean = Vector3.zero;
+            foreach (var p in _calibLocal) plainMean += p;
+            plainMean /= _calibLocal.Count;
+
             float spread = 0f;
-            foreach (var p in _calibPos) spread = Mathf.Max(spread, Vector3.Distance(p, avgPos));
-            if (spread > calibStabilitySpread)
+            foreach (var p in _calibLocal) spread = Mathf.Max(spread, Vector3.Distance(p, plainMean));
+
+            // ESIK MESAFEYLE OLCEKLENIR — sacilma standart sapma oldugu icin us 2 (bkz. alanin
+            // yorumu). Simdiki mesafe kullaniliyor: pencere son birkac saniyeye ait, oyuncu
+            // isinlanmiyor. Karisik mesafeli bir pencerede en buyuk mesafe esigi gevsetiyor,
+            // ki bu da dogru — o pencere gercekten daha genis sacilir.
+            float spreadLimit = calibStabilitySpread;
+            if (calibStabilityScalesWithDistance)
             {
-                _calibNote = $"olculuyor {ProgressBar(_calibPos.Count, need)}  (sabitleniyor {spread * 100f:0.0} cm)";
+                float dn = Mathf.Max(WeightMinDistance, distance) / WeightRefDistance;
+                spreadLimit *= dn * dn;
+            }
+
+            if (spread > spreadLimit)
+            {
+                // SAYI DOLDUKTAN SONRA ILERLEME CUBUGU YAZILMAZ.
+                //
+                // Cihazda goruldu: panel "13/5", "14/5", "15/5" yaziyordu. Pay paydayi gecince
+                // cubuk anlamsizlasiyor ve oyuncuya "sayiyor ama bitmiyor" hissi veriyor; oysa
+                // bekleyen sey SAYI degil TUTARLILIK. Adim 4'ten once pencere her duzeltmede
+                // silindigi icin bu durum nadiren goruluyordu, simdi pencere yasadigi icin
+                // 15'e kadar dolabiliyor.
+                _calibNote = _calibLocal.Count < need
+                    ? $"olculuyor {ProgressBar(_calibLocal.Count, need)}  (sabitleniyor {spread * 100f:0.0} cm)"
+                    : $"KARARSIZ  sacilma {spread * 100f:0.0} cm > {spreadLimit * 100f:0.0}  ({_calibLocal.Count} ornek)";
+
+                // DISKE de yaz — ama yalnizca pencere DOLUYKEN ve seyrek. Dolu pencerede
+                // kapinin tutmasi, Adim 4'un olcmedigimiz yan etkisi: 15 ornek artik daha uzun
+                // bir zamana ve daha genis bir mesafe araligina yayiliyor, sistematik mesafe
+                // hatasi da sacilmaya giriyor. Ne siklikta oldugunu bilmeden esige dokunmayiz.
+                if (_calibLocal.Count >= calibrateSampleCount && Time.time >= _nextSpreadDiagAt)
+                {
+                    _nextSpreadDiagAt = Time.time + 5f;
+                    WriteDiag($"KARARSIZ  tag {entry.id}  sacilma {spread * 100f:0.0} cm > " +
+                              $"{spreadLimit * 100f:0.0}  ({_calibLocal.Count} ornek)  d {distance:0.00} m");
+                }
                 return;
             }
+
+            // ADIM 6 OLCUMU. Buraya kadar gelen pencere KABUL EDILMIS demektir ve sacilmasi
+            // simdiye kadar hicbir yere yazilmiyordu — KARARSIZ satiri yalnizca sinir asilinca
+            // yaziliyor, yani elimizde REDDEDILENLERIN dagilimi vardi, kabul edilenlerin degil.
+            // Kazanci bu sayiya baglamadan once sayinin kendisi olculmeli.
+            _diagSpreadRatio = spreadLimit > 0f ? spread / spreadLimit : 0f;
+            _diagSampleCount = _calibLocal.Count;
+
+            // YAW da AYNI AGIRLIKLA ortalanir: yon kestirimi konumla ayni pozdan geliyor, yani
+            // mesafeyle ayni sekilde bozuluyor.
             Vector2 dir = Vector2.zero;
-            foreach (var y in _calibYaw)
-                dir += new Vector2(Mathf.Sin(y * Mathf.Deg2Rad), Mathf.Cos(y * Mathf.Deg2Rad));
-            float avgYaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
+            for (int i = 0; i < _calibYawLocal.Count; i++)
+            {
+                float y = _calibYawLocal[i] * Mathf.Deg2Rad;
+                dir += new Vector2(Mathf.Sin(y), Mathf.Cos(y)) * _calibWeight[i];
+            }
+            float avgYaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg + RigYaw;
+
+            // YAW SACILMASI — dairesel ortalamadan BEDAVA gelen olcu.
+            //
+            // Dairesel ortalamada birim vektorlerin bileskesinin boyu (R) aynilik olcusudur:
+            // hepsi ayni yonu gosteriyorsa R=1, dagilmissa R kucülür. sqrt(-2 ln R) bunu
+            // standart sapmaya cevirir.
+            //
+            // NEDEN ONEMLI: duzlemsel poz belirsizliginin flip'i, KONUMU neredeyse hic
+            // oynatmadan yon'u ziplatir — iki cozum ayni noktayi farkli acilarla gorur. Bu
+            // yuzden tek bir konum kararlilik kapisi (calibStabilitySpread) flip'i hicbir
+            // zaman yakalayamadi: konum sacilmasi kucuk kaliyordu. Yon sacilmasi flip'in en
+            // dogrudan imzasi.
+            float yawSpread = YawSpreadDegrees(dir, wTotal);
+            _diagYawSpread = yawSpread;   // teshis satirinda yazilacak (ApplyCorrection)
 
             // Tag olmasi gereken yerden ne kadar sapmis?
             float dev = Vector3.Distance(avgPos, entry.position);
@@ -954,10 +1583,15 @@ namespace VRMultiplayer
             // yon GERCEKTEN kaybolabilir ve o zaman duzeltecek baska bir sey yok. Kaybi
             // gurultuden ayiran sey buyukluk -- gercek kayip 10 derece mertebesindedir,
             // gurultu tabaninin cok uzaginda. Esik oraya konuldu.
-            bool yawRecovery = yawDev > yawRecoveryDegrees;
-            bool yawCounts = !yawFromReferenceOnly
-                             || entry.id == offsetReferenceTagId
-                             || yawRecovery;
+            // Kurtarmanin karari yalnizca su iki durumda bir sey DEGISTIRIR:
+            //   referans olmayan tag -> yaw'i zaten hic duzeltemezdi
+            //   referans ama UZAK    -> mesafe kapisi kapatirdi
+            // Digerlerinde referans yolu yaw'i nasilsa uyguluyor; log'un bunu "reddedildi"
+            // diye yazmasi yaniltiyordu (bkz. YawRecoveryAccepted'in etkili parametresi).
+            bool refTag = !yawFromReferenceOnly || entry.id == offsetReferenceTagId;
+            bool uzak = yawCorrectionMaxDistance > 0f && distance > yawCorrectionMaxDistance;
+            bool yawRecovery = YawRecoveryAccepted(yawDev, entry.id, !refTag || uzak);
+            bool yawCounts = refTag || yawRecovery;
 
             // REFERANS TAG'DE BILE yaw yalnizca YAKINDAN duzeltilir. Duzlemsel poz kestiriminde
             // duzlem disi acinin hatasi, tag'in goruntudeki buyuklugu kucüldükce hizla artar;
@@ -968,6 +1602,23 @@ namespace VRMultiplayer
             if (yawCounts && !yawRecovery &&
                 yawCorrectionMaxDistance > 0f && distance > yawCorrectionMaxDistance)
                 yawCounts = false;
+
+            // YAW SACILMA KAPISI (Adim 5) — esik 0 iken KAPALI, yalnizca olculuyor.
+            //
+            // Konum duzeltilmeye DEVAM eder, yalnizca yon birakilir. Mimari bu ayrimi zaten
+            // destekliyor (yawCounts konumdan bagimsiz), cunku ayni ayrim mesafe kapisinda da
+            // var: uzaktan konum guvenilir, yon degil.
+            //
+            // KURTARMA MUAF: yon gercekten kaybolduysa (bkz. YawRecoveryAccepted, uc ardisik
+            // teyit) onu sacilma yuzunden bloke etmek, oyuncuyu 69 derece donuk bir dunyada
+            // birakmak olurdu — cihazda tam o olay yasandi.
+            if (yawCounts && !yawRecovery &&
+                yawSpreadMaxDegrees > 0f && yawSpread > yawSpreadMaxDegrees)
+            {
+                yawCounts = false;
+                WriteDiag($"YAW SACILMA  tag {entry.id}  {yawSpread:0.00} > {yawSpreadMaxDegrees:0.00} derece " +
+                          $"— yon birakildi, konum duzeltiliyor");
+            }
 
             if (dev <= correctionDeadzoneMeters &&
                 (!yawCounts || yawDev <= correctionYawDeadzoneDegrees))
@@ -980,8 +1631,196 @@ namespace VRMultiplayer
             _alignedNow = false;       // duzeltme gerekiyor -> tespit hizlansin
             ApplyCorrection(entry, avgPos, avgYaw, dev, yawCounts, distance);
 
-            // Rig oynadi: pencere artik eski cerceveye ait, temizle — yeni cercevede dolsun.
-            _calibPos.Clear(); _calibYaw.Clear();
+            // ADIM 4'UN ASIL SATIRI: pencere ARTIK TEMIZLENMIYOR.
+            //
+            // Eskiden burada Clear() vardi cunku ornekler dunya uzayindaydi ve rig oynayinca
+            // gecersizlesiyorlardi. Artik rig-yerel: rig oynadi, ornekler de onunla tasindi,
+            // hala ayni fiziksel noktayi gosteriyorlar. Bir sonraki tespit dolu bir pencereye
+            // dusuyor ve duzeltme aninda calisabiliyor.
+            //
+            // Kacak duzeltme korkusu yersiz: duzeltmeden sonra ToWorld(ornekler) tam olarak
+            // entry.position'a oturuyor, yani sapma ~0 ve olu bolge kapisi yukarida donuyor.
+        }
+
+        // ---- NORMAL KONVANSIYONU (Adim 1'in kalani) ---------------------------------------
+        //
+        // Tespit pozunun +Z'si tag'in ONUNE mi ARKASINA mi bakiyor? Uc donusum ust uste
+        // biniyor (native cozucu, PoseEstimationJob'un Y flip'i, PassthroughCameraUtils'in
+        // 180 derece X donusu) ve bileske kagit uzerinde cikarilamadi.
+        //
+        // FIZIK CEVABI ZATEN VERIYOR: opak bir tag'i ancak ON yuzunden gorebilirsiniz. Dogru
+        // isaret, dot(normal, tag->kamera) > 0 verendir. Oylama ilk ~20 tespitte kesinlesir.
+        //
+        // YAW tarafi 2026-08-11'de ayrica olculdu ve yawDegrees'in duvarin ICINI gosterdigi
+        // bulundu; bu oylama onu DOGRULAMALI (isaret negatif cikmali). Cikmazsa ikisinden biri
+        // yanlis demektir ve Adim 3'un yuz yonu sinamasi guvenilmez olur.
+        int _normalSign;        // 0 = bilinmiyor, +1 / -1 = karar
+        int _votesPlus, _votesMinus;
+        const int NormalVotesNeeded = 20;
+
+        /// <summary>Tag pozunun normali (yuzey ekseni) — dunya uzayinda.</summary>
+        static Vector3 TagNormal(Quaternion worldRot) => worldRot * Vector3.forward;
+
+        void ProbeNormalSign(Quaternion worldRot, Vector3 worldPos, Vector3 camPos)
+        {
+            if (_normalSign != 0) return;
+
+            Vector3 tagToCam = camPos - worldPos;
+            if (tagToCam.sqrMagnitude < 1e-6f) return;
+
+            if (Vector3.Dot(TagNormal(worldRot), tagToCam.normalized) > 0f) _votesPlus++;
+            else _votesMinus++;
+
+            int toplam = _votesPlus + _votesMinus;
+            if (toplam < NormalVotesNeeded) return;
+
+            _normalSign = _votesPlus > _votesMinus ? +1 : -1;
+            WriteDiag($"NORMAL KONVANSIYONU: tag ekseni {(_normalSign > 0 ? "+Z kameraya" : "+Z duvara")} " +
+                      $"bakiyor  ({Mathf.Max(_votesPlus, _votesMinus)}/{toplam} oy)");
+            Debug.Log($"[AprilTagCalib] Normal konvansiyonu: isaret {_normalSign:+0;-0} " +
+                      $"({_votesPlus} arti / {_votesMinus} eksi). " +
+                      "Beklenen -1 (yaw olcumu duvarin icini gosteriyordu).");
+        }
+
+        // ---- POZ GECERLILIK KAPISI (Adim 3) -----------------------------------------------
+        //
+        // KONUMU DEGIL DONMEYI siniyor. Konum zaten guvenilir (1 m'de 3 mm); elenemeyen sey
+        // donmeydi. Uc bagimsiz sinama, hepsi FIZIKSEL bir gercege dayaniyor:
+        //   1. Yuz yonu     -> opak kagidi ancak on yuzunden gorebilirsin
+        //   2. Normal yatay -> kagit DUVARDA, normali yatay olmak zorunda
+        //   3. Tag dik      -> kagit duvarda DIK duruyor, kendi ekseni de dunya dikeyiyle hizali
+        //
+        // Ucu de yerçekimine dayaniyor ve yerçekimi IMU'dan geliyor: tag tespitinin hicbir
+        // hatasini paylasmiyor. Ortalamayla gecmeyen sistematik hatayi eleyebilen tek
+        // bagimsiz kapi bu.
+        int _poseChecked, _poseWouldReject;
+
+        bool PoseValid(Quaternion worldRot, Vector3 worldPos, Vector3 camPos,
+                       out string neden)
+        {
+            neden = null;
+            Vector3 normal = TagNormal(worldRot);
+
+            // 1) YUZ YONU. Isaret henuz oylanmadiysa bu sinama ATLANIR — bilinmeyen bir
+            //    isaretle elemek, dogru okumalari elemenin en kolay yolu olurdu.
+            if (_normalSign != 0)
+            {
+                Vector3 tagToCam = camPos - worldPos;
+                if (tagToCam.sqrMagnitude > 1e-6f)
+                {
+                    float d = Vector3.Dot(normal, tagToCam.normalized) * _normalSign;
+                    if (d <= 0f) { neden = $"yuz yonu ters (dot {d:0.00})"; return false; }
+                }
+            }
+
+            // 2) NORMAL YATAY. Kagit DUVARDA, normali yatay olmak zorunda.
+            //    |normal.y| = sin(yataydan sapma).
+            float normalTilt = Mathf.Asin(Mathf.Clamp01(Mathf.Abs(normal.y))) * Mathf.Rad2Deg;
+            if (normalTilt > maxNormalTiltDegrees)
+            {
+                neden = $"normal {normalTilt:0.0} derece egik (sinir {maxNormalTiltDegrees:0})";
+                return false;
+            }
+
+            // 3) TAG EKSENI dunya dikeyiyle hizali olmali (kagit duvarda DIK duruyor).
+            float tagTilt = Vector3.Angle(worldRot * Vector3.up, Vector3.up);
+            if (tagTilt > 90f) tagTilt = 180f - tagTilt;   // bas asagi da olsa EGIKLIK olcuyoruz
+            if (tagTilt > maxTagTiltDegrees)
+            {
+                neden = $"tag ekseni {tagTilt:0.0} derece sapmis (sinir {maxTagTiltDegrees:0})";
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Kapiyi calistirir ve 3a'da yalnizca RAPORLAR. Donen deger "bu tespit kullanilsin mi";
+        /// <see cref="poseGateLogOnly"/> aciksa her zaman true doner.
+        /// </summary>
+        bool PoseGate(int tagId, Quaternion worldRot, Vector3 worldPos, Vector3 camPos, float dist)
+        {
+            _poseChecked++;
+
+            if (PoseValid(worldRot, worldPos, camPos, out string neden)) return true;
+
+            _poseWouldReject++;
+            // Her red YAZILIR: oran bu satirlardan cikacak ve 3b'ye gecip gecmeyecegimize
+            // o oran karar verecek.
+            WriteDiag($"POZ {(poseGateLogOnly ? "ELENECEKTI" : "ELENDI")}  tag {tagId}  {neden}" +
+                      $"  d {dist:0.00} m  ({_poseWouldReject}/{_poseChecked} = " +
+                      $"%{100f * _poseWouldReject / Mathf.Max(1, _poseChecked):0.0})");
+            return poseGateLogOnly;
+        }
+
+        // ---- YAW KURTARMA BANDI -----------------------------------------------------------
+        //
+        // Kurtarma ISIN degil BANT. Eskiden tek bir alt esik vardi
+        // ("yawDev > yawRecoveryDegrees") ve kapi USTTEN SINIRSIZ kaliyordu: ne kadar buyuk
+        // olursa olsun her sapma "gercek kayip" sayilip yawFromReferenceOnly ve
+        // yawCorrectionMaxDistance kisitlarini BIRDEN baypas ediyordu. Yani korunmak istenen
+        // sey kapidan iceri aliniyordu.
+        //
+        // TABAN CIZGISINDE OLCULDU (2026-08-12, EV haritasi, 6,5 dakika, 2 tag):
+        //   [361,6] SNAP tag 1  sapma 496,2 cm  yaw +147,30
+        // Tag 1 referans DEGIL, yani yonu duzeltmemeliydi. 147 > 10 oldugu icin kurtarma
+        // acildi ve tek bir okuma dunyayi 4,96 m kaydirdi. Ayni turda mesru bir kurtarma da
+        // vardi (+40,29, REFERANS tag'den) -- ikisini ayirmak gerekiyordu.
+        //
+        // AYIRAN SEY TEKRARLANABILIRLIK: duzlemsel poz belirsizligi flipi kareler arasi
+        // ziplar, ust uste ayni degeri vermez. Gercek takip kaybi verir, cunku dunya
+        // gercekten o kadar donmustur. Bu yuzden bandin ustu REDDEDILMIYOR, TEYIT istiyor.
+        int _bigYawRun;        // ust uste kac kez ayni buyuk sapma goruldu
+        float _bigYawFirst;    // dizinin ilk degeri -- karsilastirma buna gore
+        int _bigYawTag = -1;   // hangi tag'den; tag degisince dizi bastan baslar
+
+        /// <summary>Teyit dizisinde "ayni deger" sayilma toleransi (derece).</summary>
+        const float BigYawTolerance = 5f;
+
+        /// <summary>
+        /// Bu sapma icin kurtarma kapisi acilsin mi? Sayaci da bu metot yonetiyor — kapiyi
+        /// cagiran yerde tutmak, normal okumalarda sifirlamayi unutturuyordu.
+        /// </summary>
+        /// <param name="etkili">
+        /// Bu kapinin karari yaw'in uygulanip uygulanmayacagini GERCEKTEN degistiriyor mu.
+        ///
+        /// NEDEN GEREKLI: referans tag zaten yaw'i duzeltiyor (yawCounts'un ilk kosulu), yani
+        /// onda kurtarmanin reddedilmesi hicbir seyi engellemiyor. Ilk surumde kapi yine de
+        /// "YAW REDDEDILDI" yaziyordu ve log yalan soyluyordu — cihazda goruldu:
+        ///   [24,0] YAW REDDEDILDI tag 0  97,9 derece
+        ///   [24,0] SNAP tag 0 ... yaw -97,91          <- "(uygulanmadi)" YOK, yani UYGULANDI
+        /// Sayaç yine de islenmeli (dizi surekliligi bozulmasin), yalnizca YAZILMAMALI.
+        /// </param>
+        bool YawRecoveryAccepted(float yawDev, int tagId, bool etkili)
+        {
+            // Kurtarma gerekmiyor: dizi varsa bozulur, cunku arada normal bir okuma gecti.
+            if (yawDev <= yawRecoveryDegrees) { _bigYawRun = 0; return false; }
+
+            // BANT ICI: gercek kayip bu mertebede, dogrudan kabul.
+            if (yawDev <= yawRecoveryMaxDegrees) { _bigYawRun = 0; return true; }
+
+            // BANDIN USTU: teyit iste. Farkli tag ya da farkli buyukluk diziyi bastan baslatir.
+            bool devam = _bigYawRun > 0 && _bigYawTag == tagId &&
+                         Mathf.Abs(yawDev - _bigYawFirst) <= BigYawTolerance;
+            if (devam) _bigYawRun++;
+            else { _bigYawRun = 1; _bigYawFirst = yawDev; _bigYawTag = tagId; }
+
+            if (_bigYawRun >= yawRecoveryConfirmations)
+            {
+                if (etkili)
+                    WriteDiag($"YAW TEYITLI  tag {tagId}  {yawDev:0.0} derece  " +
+                              $"({_bigYawRun} ardisik) — gercek kayip sayildi");
+                _bigYawRun = 0;
+                return true;
+            }
+
+            // REDDEDILEN HER OKUMA YAZILIR — ama YALNIZCA red bir sey degistiriyorsa.
+            // Bu satirlarin SAYISI, sorunun gercekten burada olup olmadiginin cevabi:
+            // sifirsa flip baska yerden geliyor demektir. Etkisiz redleri de yazmak o sayiyi
+            // sisirir ve "engellendi" diye okunur, oysa yaw referans yolundan uygulanmistir.
+            if (etkili)
+                WriteDiag($"YAW REDDEDILDI  tag {tagId}  {yawDev:0.0} derece  " +
+                          $"(bant ustu, {_bigYawRun}/{yawRecoveryConfirmations} teyit)");
+            return false;
         }
 
         /// <summary>
@@ -991,6 +1830,384 @@ namespace VRMultiplayer
         /// referans (anchor tracking'i 'None' oldugunda ise yaramiyordu, ustelik LateUpdate'te
         /// tag'in duzeltmesini eziyordu).
         /// </summary>
+        /// <summary>
+        /// Duzeltme kazancinin carpani (0-1]. 1 = bugunku davranis, yani sabit
+        /// <see cref="smallCorrectionRate"/>.
+        ///
+        /// ADIM 6'NIN YALNIZCA YARISI. Plan kazanci iki belirsizlige baglamayi oneriyordu:
+        /// olcum belirsizligi ve son duzeltmeden bu yana biriken odometri suruklenmesi.
+        /// IKINCISI OLCULDU VE DUSURULDU (2026-08-18, drift turu, ofis): tag 8-56 sn goruus
+        /// disinda birakilip donuldugunde dokuz donusun ALTISINDA sapma olu bolgenin (1 cm)
+        /// altinda kaldi; kalan ucu 38,3 sn -> 1,8 cm, 51,4 sn -> 1,7 cm, 56,4 sn -> 2,6 cm.
+        /// Benzer bosluklar arasindaki sacilma trendin kendisi kadar buyuk (35,2 sn'de
+        /// <=1 cm, 38,3 sn'de 1,8 cm), yani suruklenme gurultuden ayirt edilemiyor; en kotu
+        /// durum bile ~0,05 cm/sn'lik bir UST SINIR veriyor. Ustelik zaman teriminin motive
+        /// edici vakasi olan uyku sonrasi toparlanma bu hesaba hic ugramiyor: uykudan sonra
+        /// sapma <see cref="snapThresholdMeters"/> esigini asar ve rate zaten 1 olur.
+        /// "Olculmemis sayi koda girmez" kuralinin dogal sonucu: driftRatePerSecond YOK.
+        ///
+        /// Kalan yari OLCULU: pencerenin kendi sacilmasi. Ortalamanin standart hatasi
+        /// sacilma/sqrt(N); referans olarak kabul sinirinin dolu penceredeki hali alinir.
+        /// Boylece YENI BIR SABIT GIRMIYOR — calibStabilitySpread ve calibrateSampleCount
+        /// zaten var ve ikisi de olculmus.
+        ///
+        /// KAZANC ASLA BUGUNKUNDEN BUYUK OLMAZ, bilerek. Kucuk sacilma "olcum dogru"
+        /// demek DEGIL: bu dosyanin kendi notuna gore baskin hata bakis acisina bagli
+        /// SISTEMATIK sapma, ve sistematik sapmanin sacilmasi kucuktur. Kazanci sacilma
+        /// kucukken 1'e dogru buyutmek, tam da en emin gorunen anda yanlis cevaba kosmak
+        /// olurdu — planin EKF'i reddetme gerekcesinin aynisi.
+        /// </summary>
+        float CorrectionGain()
+        {
+            if (_diagSampleCount <= 0) return 1f;   // olcum yok: davranis degismesin
+
+            // Sacilma/sinir orani, ornek sayisiyla duzeltilir: yarim dolu bir pencere ayni
+            // sacilmada daha az guvenilir, cunku ortalamanin standart hatasi sqrt(N) ile duser.
+            float oran = _diagSpreadRatio *
+                         Mathf.Sqrt(calibrateSampleCount / (float)Mathf.Max(1, _diagSampleCount));
+
+            // Kalman kazancinin skaler hali. SIFIRA INMEZ ve inmemeli: 5 sn'den uzun her bakis
+            // kopmasinda pencere siliniyor (calibWindowMaxGap) ve 5 ornekle bastan basliyor.
+            // Drift turunda pencere 6,3 dakikada DOKUZ kez silindi — nadir bir durum degil,
+            // ve o anlarda kazanci sifirlamak duzeltmeyi tamamen durdururdu.
+            return 1f / (1f + oran * oran);
+        }
+
+        // ---- COKLU TAG FUZYONU ------------------------------------------------------------
+        //
+        // Kare basina toplanan adaylar. Tek-tag yolunun kayan penceresinden AYRI tutuluyor:
+        // o pencere "tek tag'in zaman icindeki ortalamasi", bu liste "ayni ANDAKI tag'ler".
+        readonly List<Vector3> _fuseMeasured = new List<Vector3>();
+        readonly List<Vector3> _fuseDeclared = new List<Vector3>();
+        readonly List<float> _fuseWeight = new List<float>();
+        readonly List<float> _fuseDist = new List<float>();
+        readonly List<int> _fuseId = new List<int>();
+
+        /// <summary>YAW ENVANTERI icin tag basina son yazim ani — her karede yazmak dosyayi bogar.</summary>
+        readonly Dictionary<int, float> _yawEnvanterAt = new Dictionary<int, float>();
+        float _nextFuseDiagAt;
+
+        /// <summary>Fuzyonun en son karar verdigi an. Panel bunu okuyor — bkz. PanelText.</summary>
+        float _fuseAppliedAt = -999f;
+
+        /// <summary>Son BASARILI fuzyonun RMS kalintisi (m); hic olmadiysa -1.</summary>
+        float _fuseResidual = -1f;
+
+        /// <summary>O fuzyonda kac tag vardi.</summary>
+        int _fuseTagCount;
+
+        /// <summary>Fuzyon SU AN mi suruyor. Tek bir karelik boslukta panelin eski mesaja
+        /// donup yanip sonmemesi icin kisa bir kuyruk birakiliyor.</summary>
+        bool FusionDriving => Time.time - _fuseAppliedAt < 1.5f;
+
+        /// <summary>
+        /// Cerceve SU AN coklu tag fuzyonuyla mi suruluyor, ve son kalintisi ne?
+        ///
+        /// Yerlestirme katmani bunu "plakayi simdi basmak guvenli mi" diye soruyor: plaka
+        /// konuldugu andaki cerceveyi KALICI olarak miras aliyor, yani cerceve o an ne kadar
+        /// sapiksa tag o kadar yanlis kaydediliyor ve hata sonraki tag'lere de tasiniyor.
+        ///
+        /// false donmesi "cerceve kotu" demek DEGIL: tek tag goruluyorsa fuzyon hic calismaz.
+        /// O durumda tazelige bakilmali (bkz. <see cref="SecondsSinceCorrection"/>).
+        /// </summary>
+        public bool FusionQuality(out int tagCount, out float residualMeters)
+        {
+            tagCount = _fuseTagCount;
+            residualMeters = _fuseResidual;
+            return FusionDriving;
+        }
+
+        /// <summary>Kalibrasyon yoksa false; bkz. <see cref="FusionQuality"/>.</summary>
+        public static bool FrameFusion(out int tagCount, out float residualMeters)
+        {
+            if (Instance != null) return Instance.FusionQuality(out tagCount, out residualMeters);
+            tagCount = 0;
+            residualMeters = -1f;
+            return false;
+        }
+
+        /// <summary>
+        /// Ayni karede gorulen tag'leri BIRLIKTE cozer: olculen konumlari ilan edilen
+        /// konumlara en iyi oturtan yaw + oteleme.
+        ///
+        /// NEDEN TEK TAG'DEN IYI: duzlemsel bir isaretcinin en guvenilmez bileseni kendi
+        /// yaw'idir (1-3 derece, bakis acisina bagli, ortalamayla GECMIYOR); konumu ise mm
+        /// mertebesinde. Fuzyon yonu tag'lerin DONUSUNDEN degil KONUMLARINDAN turetiyor,
+        /// yani sistemin zayif olcumunu hic kullanmiyor. 3 m arayla iki tag icin 15 mm'lik
+        /// konum gurultusu 0,29 derecelik yon gurultusu demek.
+        ///
+        /// COZUM: agirlikli Procrustes, yalnizca yaw + oteleme (pitch/roll ASLA — dunyayi
+        /// yan yatirmak mide bulandirir). Agirlik tek-tag yolundakiyle ayni: 1/d^4.
+        ///
+        /// KENDI KENDINI DOGRULAR: cozumden sonra kalan artik hata (RMS), tag'lerin
+        /// birbiriyle ve yerlesimle ne kadar uyustugunu dogrudan olcer. Yerlesim hatasi,
+        /// bozuk tespit ve flip -- ucu de tek sayida gorunur. Esigi asarsa duzeltme
+        /// uygulanmaz ve tek-tag yoluna dusulur.
+        ///
+        /// YAN ETKI, BILINCLI: fuzyon calistigi karede tek-tag yolu calismaz, yani onun
+        /// kayan penceresi DOLMAZ. Surekli iki tag goren bir turda sonra tek tag'e dusulurse
+        /// pencere sifirdan dolar (~1,7 sn). Kabul edildi: fuzyon zaten daha iyi bir cozum
+        /// veriyorken pencereyi bosuna beslemek, ayni kareye iki farkli olcum mantigi sokardi.
+        /// </summary>
+        /// <returns>
+        /// true = fuzyon karari verdi (rig'e dokundu ya da "hizali" dedi);
+        /// false = cozemedi, tek-tag yolu denesin.
+        /// </returns>
+        // ---- OTOMATIK HARITALAMA ------------------------------------------------------
+        //
+        // Kare basina toplanan BILINMEYEN tag'ler (yerlesimde yok).
+        readonly List<int> _autoMapId = new List<int>();
+        readonly List<Vector3> _autoMapPos = new List<Vector3>();
+        readonly List<float> _autoMapYaw = new List<float>();
+
+        /// <summary>Tag basina biriken ornekler. RIG-YEREL saklanir (bkz. ToLocal): rig
+        /// duzeltilince ornekler onunla tasinir ve gecersizlesmez.</summary>
+        class AutoMapOrnek
+        {
+            public readonly List<Vector3> Yerel = new List<Vector3>();
+            public readonly List<float> Yaw = new List<float>();   // rig-yerel yaw
+            public float SonOrnekAt;
+        }
+        readonly Dictionary<int, AutoMapOrnek> _autoMap = new Dictionary<int, AutoMapOrnek>();
+
+        /// <summary>
+        /// Bilinmeyen tag'leri, DOGRULANMIS bir cercevede olcup yerlesime ekler.
+        ///
+        /// YALNIZCA FUZYON BASARILIYKEN cagrilir: en az iki bilinen tag ayni karede
+        /// birbiriyle ve yerlesimle uyusmus demektir. Tek tag'in kurdugu cerceveye
+        /// guvenmek, bu projede olculmus bir hataya yol acti — plakalar oyle konmustu ve
+        /// 1-2,8 m saptilar.
+        ///
+        /// YAW DA OLCULUR. Plakadan turetilen yaw, plakanin donus referansiyla zemin
+        /// tag'inin yaw konvansiyonu arasindaki farka bagliydi ve 180 derece ters cikiyordu.
+        /// Olcerek yazmak o sorunu kokunden kaldiriyor: ne olculduyse o yaziliyor.
+        ///
+        /// YENI TAG ACIK DOGAR — bilerek. Kapali dogsa sonraki tag'ler icin TEMEL olamaz ve
+        /// harita disari dogru buyuyemez; oysa yontemin butun degeri o zincirde. Guvence
+        /// yerine su ikili konuyor: (1) ornekler kendi icinde tutarli olmali
+        /// (autoMapMaxSpread), (2) yazildiktan sonra tag fuzyona girer ve kotu ise
+        /// 'kalinti' satiri onu ADIYLA yazar.
+        /// </summary>
+        void TickAutoMap()
+        {
+            if (!EnsureRig()) return;
+
+            for (int i = 0; i < _autoMapId.Count; i++)
+            {
+                int id = _autoMapId[i];
+
+                if (!_autoMap.TryGetValue(id, out var o))
+                {
+                    o = new AutoMapOrnek();
+                    _autoMap[id] = o;
+                    WriteDiag($"HARITALAMA BASLADI  tag {id}");
+                }
+
+                // Uzun bosluk pencereyi bosaltir: aradan gecen surede oyuncu bambaska bir
+                // yere gitmis olabilir ve eski orneklerle yenileri ayni olcume ait degildir.
+                if (o.Yerel.Count > 0 && Time.time - o.SonOrnekAt > calibWindowMaxGap)
+                {
+                    o.Yerel.Clear();
+                    o.Yaw.Clear();
+                }
+                o.SonOrnekAt = Time.time;
+
+                o.Yerel.Add(ToLocal(_autoMapPos[i]));
+                o.Yaw.Add(_autoMapYaw[i] - RigYaw);
+
+                if (o.Yerel.Count < Mathf.Max(3, autoMapSampleCount)) continue;
+
+                // Sacilma kapisi: pencere kendi icinde tutarli degilse YAZMA. Bir kez
+                // yazilan yanlis konum, sonraki tag'lerin de temeli olur.
+                Vector3 ort = Vector3.zero;
+                foreach (var v in o.Yerel) ort += v;
+                ort /= o.Yerel.Count;
+                float sacilma = 0f;
+                foreach (var v in o.Yerel) sacilma = Mathf.Max(sacilma, Vector3.Distance(v, ort));
+                if (sacilma > autoMapMaxSpread)
+                {
+                    o.Yerel.Clear();
+                    o.Yaw.Clear();
+                    WriteDiag($"HARITALAMA BEKLIYOR  tag {id}  sacilma {sacilma * 100f:0.0} cm > " +
+                              $"{autoMapMaxSpread * 100f:0.0}  — pencere atildi");
+                    continue;
+                }
+
+                // Yaw dairesel ortalanir; aritmetik ortalama 179 ile -179'u 0 yapardi.
+                Vector2 yon = Vector2.zero;
+                foreach (var y in o.Yaw)
+                {
+                    float r = y * Mathf.Deg2Rad;
+                    yon += new Vector2(Mathf.Sin(r), Mathf.Cos(r));
+                }
+                float yaw = Mathf.Atan2(yon.x, yon.y) * Mathf.Rad2Deg + RigYaw;
+                if (yaw > 180f) yaw -= 360f;
+                if (yaw <= -180f) yaw += 360f;
+
+                Vector3 dunya = ToWorld(ort);
+
+                var liste = new List<TagEntry>(tagLayout ?? Array.Empty<TagEntry>());
+                liste.Add(new TagEntry
+                {
+                    id = id,
+                    position = dunya,
+                    yawDegrees = yaw,
+                    useForCalibration = true,
+                    sourceInstanceId = Constructor.TagCapture.ExternalSource,   // plakadan gelmedi
+                });
+                tagLayout = liste.ToArray();
+
+                bool yazildi = PersistLayout();
+                RebuildMarkers();
+                _autoMap.Remove(id);
+
+                WriteDiag($"HARITALANDI  tag {id}  {dunya.x:0.000} {dunya.y:0.000} {dunya.z:0.000}" +
+                          $"  yaw {yaw:+0.0;-0.0}  sacilma {sacilma * 100f:0.0} cm" +
+                          $"  ({o.Yerel.Count} ornek)  {(yazildi ? PersistTarget : "YAZILAMADI")}");
+                _calibNote = $"TAG {id} HARITALANDI";
+            }
+        }
+
+        /// <summary>Fuzyona giren tag kimlikleri, teshis satiri icin.</summary>
+        string FuseIdList()
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < _fuseId.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(_fuseId[i]);
+            }
+            return sb.ToString();
+        }
+
+        bool FuseCorrect()
+        {
+            if (!EnsureRig()) return false;
+
+            int n = _fuseMeasured.Count;
+            float wTop = 0f;
+            Vector3 mBar = Vector3.zero, dBar = Vector3.zero;
+            for (int i = 0; i < n; i++)
+            {
+                float w = _fuseWeight[i];
+                wTop += w;
+                mBar += _fuseMeasured[i] * w;
+                dBar += _fuseDeclared[i] * w;
+            }
+            if (wTop <= 0f) return false;
+            mBar /= wTop;
+            dBar /= wTop;
+
+            // YAW: yatay duzlemde agirlikli Procrustes. Unity'nin Y donusu
+            //   d.x = m.x*cos + m.z*sin ,  d.z = -m.x*sin + m.z*cos
+            // oldugundan pay/payda asagidaki gibi cikiyor.
+            float pay = 0f, payda = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 m = _fuseMeasured[i] - mBar;
+                Vector3 d = _fuseDeclared[i] - dBar;
+                float w = _fuseWeight[i];
+                pay += w * (m.z * d.x - m.x * d.z);
+                payda += w * (m.x * d.x + m.z * d.z);
+            }
+
+            // Tag'ler ust uste dusuyorsa yon belirsiz — cozmeye calismak gurultuyu
+            // yon sanmak olur.
+            if (Mathf.Abs(pay) < 1e-9f && Mathf.Abs(payda) < 1e-9f) return false;
+            float theta = Mathf.Atan2(pay, payda) * Mathf.Rad2Deg;
+
+            // ARTIK HATA. Dikey de dahil: tag'lerin yuksekligi yerlesimde yanlissa kati
+            // donusum onu kapatamaz ve burada gorunur — istenen budur.
+            Quaternion R = Quaternion.Euler(0f, theta, 0f);
+            float kare = 0f;
+            // EN KOTU TAG ADIYLA YAZILIR. Coklu kurulumda "kalinti yuksek" tek basina
+            // "birinde sorun var, bul bakalim" demek; hangi tag oldugunu soylemeyen bir
+            // teshis, tag sayisi arttikca degersizlesiyor.
+            int enKotuId = -1;
+            float enKotu = -1f;
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 kalan = (R * (_fuseMeasured[i] - mBar) + dBar) - _fuseDeclared[i];
+                kare += _fuseWeight[i] * kalan.sqrMagnitude;
+                float m2 = kalan.magnitude;
+                if (m2 > enKotu) { enKotu = m2; enKotuId = _fuseId[i]; }
+            }
+            float rms = Mathf.Sqrt(kare / wTop);
+
+            if (rms > fusionMaxResidual)
+            {
+                // Seyrek yazilir: her karede yazmak dosyayi bogar, ama BU SATIR degerli —
+                // yerlesim hatasinin dogrudan olcusu.
+                if (Time.time >= _nextFuseDiagAt)
+                {
+                    _nextFuseDiagAt = Time.time + 5f;
+                    WriteDiag($"FUZYON RED  {n} tag [{FuseIdList()}]  kalinti {rms * 100f:0.0} cm > " +
+                              $"{fusionMaxResidual * 100f:0.0}  (en kotu tag {enKotuId}: " +
+                              $"{enKotu * 100f:0.0} cm)  yaw {theta:+0.00;-0.00}" +
+                              $"  — tag'ler birbiriyle ya da yerlesimle celisiyor");
+                }
+                _calibNote = $"FUZYON RED (kalinti {rms * 100f:0.0} cm)";
+                return false;   // tek-tag yolu denesin
+            }
+
+            Vector3 oteleme = dBar - mBar;
+            float dev = oteleme.magnitude;
+
+            if (dev <= correctionDeadzoneMeters && Mathf.Abs(theta) <= correctionYawDeadzoneDegrees)
+            {
+                _calibNote = $"HIZALI ({dev * 100f:0.0} cm, {n} tag fuzyon)";
+                _alignedNow = true;
+                _fuseAppliedAt = Time.time;
+                _fuseResidual = rms;
+                _fuseTagCount = n;
+                return true;   // is yok — ama KARAR fuzyonun, tek-tag yolu ayni karede calismasin
+            }
+            _alignedNow = false;
+
+            bool snap = _layoutStale || dev > snapThresholdMeters ||
+                        Mathf.Abs(theta) > snapThresholdDegrees;
+            float rate = snap ? 1f : Mathf.Clamp01(smallCorrectionRate);
+
+            // SIRA: once donme (olculen agirlik merkezi etrafinda, o nokta sabit kalir),
+            // sonra oteleme. Tek-tag yolundaki desenin aynisi.
+            _rig.RotateAround(mBar, Vector3.up, theta * rate);
+            Vector3 delta = oteleme * rate;
+
+            // DUSUS KORUMASI FUZYON YOLUNDA DA GEREKLI. main'den gelen koruma yalnizca
+            // tek-tag yoluna (ContinuousCorrect) eklenmisti; iki yol da rig'i dikeyde
+            // oynatiyor, yani fuzyon acildiginda oyuncu catidan duserken duzeltme onu
+            // yukari cekmeye calisirdi. Git metin olarak dogru birlestirdi, bosluk
+            // ANLAMSALDI. (bkz. FallHazard.SuppressVerticalCalibration)
+            if (!correctVertical || FallHazard.SuppressVerticalCalibration) delta.y = 0f;
+            _rig.position += delta;
+
+            if (_cm != null) _cm.CompleteFromTag();
+            TickAnchorHold();
+            _layoutStale = false;
+            _lastCorrectionAt = Time.time;
+
+            _calibNote = $"FUZYON {n} tag ({dev * 100f:0.0} cm, yaw {theta:0.0})";
+            _fuseAppliedAt = Time.time;
+            _fuseResidual = rms;
+            _fuseTagCount = n;
+
+            if (snap || Time.time >= _nextFuseDiagAt)
+            {
+                _nextFuseDiagAt = Time.time + 5f;
+                float dMin = float.MaxValue, dMax = 0f;
+                for (int i = 0; i < n; i++)
+                {
+                    if (_fuseDist[i] < dMin) dMin = _fuseDist[i];
+                    if (_fuseDist[i] > dMax) dMax = _fuseDist[i];
+                }
+                WriteDiag($"{(snap ? "FUZSNAP" : "FUZYON ")}  {n} tag [{FuseIdList()}]" +
+                          $"  sapma {dev * 100f:0.0} cm  yaw {theta:+0.00;-0.00}" +
+                          $"  kalinti {rms * 100f:0.0} cm (en kotu tag {enKotuId}: {enKotu * 100f:0.0} cm)" +
+                          $"  d {dMin:0.00}-{dMax:0.00} m");
+            }
+            return true;
+        }
+
         void ApplyCorrection(TagEntry entry, Vector3 measuredPos, float measuredYaw, float dev,
                              bool applyYaw, float distance)
         {
@@ -1024,7 +2241,14 @@ namespace VRMultiplayer
             // benzer cercevede) suzulmek oyuncuyu saniyelerce yanlis yerde tutardi.
             bool snap = _layoutStale
                      || dev > snapThresholdMeters || Mathf.Abs(yawDelta) > snapThresholdDegrees;
-            float rate = snap ? 1f : Mathf.Clamp01(smallCorrectionRate);
+            // ADIM 6: kucuk duzeltmenin kazanci olculen sacilmaya gore azalir. SNAP YOLU
+            // DISARIDA: snap zaten "olcume degil, olcumun buyuklugune" tepki veriyor ve uyku
+            // sonrasi toparlanmanin tek yolu o; onu sacilmayla yavaslatmak, kazanci eklemekle
+            // duzeltilmek istenen seyin tam tersi olurdu.
+            float gain = CorrectionGain();
+            float rate = snap ? 1f
+                              : Mathf.Clamp01(smallCorrectionRate) *
+                                (gainScalesWithSpread ? gain : 1f);
 
             // Duzeltmeler saniyede 3'e kadar tetiklenir; hepsini yazmak dosyayi bogar.
             // SNAP her zaman yazilir (nadir ve onemli), normal hiza 5 saniyede bir.
@@ -1044,14 +2268,39 @@ namespace VRMultiplayer
             // bakmak. "sapma/mesafe" orani sabitse acisal, "sapma" sabitse konumsal.
             string dm = $"  d {distance:0.00} m  sapma/d {dev / Mathf.Max(0.01f, distance) * 100f:0.0} cm/m";
 
+            // TAG'SIZ GECEN SURE — buyuk bir duzeltmenin SEBEBINI ayirt eden tek sayi.
+            // Flip ardisik kareler arasi olur (bosluk ~0,3 sn); takip kopmasi saniyeler
+            // suren bir sessizlikten sonra gelir. Taban cizgisinde 4,96 m'lik sicramayi
+            // flip sandim, oysa 21 saniyelik boslugun ardindan gelmisti -- gozluk cikarilip
+            // odanin obur ucunda takilmisti. Bu sayi yazilsaydi soru hic sorulmayacakti.
+            string bosluk = _tagGapSeconds >= 0.5f ? $"  bosluk {_tagGapSeconds:0.0} sn" : "";
+
+            // EKSEN BAZLI SAPMA. Tek bir "sapma 291,8 cm" sayisi ne kadarinin DIKEY oldugunu
+            // gizliyordu ve tam o soru acikta kaldi: kalibrasyondan sonra zemin -0,995 m'ye
+            // dusuyor, yani dunya ~1 m indiriliyor, ama bunun duzeltmenin dikey bileseninden
+            // gelip gelmedigi log'dan okunamiyordu. GECIS satiri dx/dy/dz yaziyor, SNAP/HIZA
+            // yazmiyordu — ayni sayi, iki farkli ayrinti duzeyi.
+            Vector3 d = entry.position - measuredPos;
+            string eksen = $"  dx {d.x:+0.000;-0.000} dy {d.y:+0.000;-0.000} dz {d.z:+0.000;-0.000}";
+
+            // YAW SACILMASI (Adim 5) — esik secilebilmesi icin normal kullanimda ne oldugunu
+            // gormek sart. Plan 2 derece oneriyor ama o sayi olculmedi; bu sutun onu olcuyor.
+            string ysac = $"  yawsac {_diagYawSpread:0.00}";
+
+            // ADIM 6 SUTUNU. Kapali olsa da YAZILIR: acmadan once bu oranin normal kullanimda
+            // ne oldugunu gormek gerekiyor (bkz. gainScalesWithSpread). "(uygulanmadi)" notu,
+            // yaw sutunundaki ayni notun isini gorur — log'un yalan soylememesi icin.
+            string kzn = $"  sac/sinir {_diagSpreadRatio:0.00} ({_diagSampleCount} ornek)" +
+                         $"  kazanc {gain:0.00}" + (gainScalesWithSpread ? "" : " (uygulanmadi)");
+
             if (snap)
             {
-                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}");
+                WriteDiag($"SNAP   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{ysac}{px}{dm}{bosluk}{kzn}");
             }
             else if (Time.time >= _nextStateDiagAt)
             {
                 _nextStateDiagAt = Time.time + 5f;
-                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm  yaw {yawRaw:+0.00;-0.00}{yawNot}{px}{dm}");
+                WriteDiag($"HIZA   tag {entry.id}  sapma {dev * 100f:0.0} cm{eksen}  yaw {yawRaw:+0.00;-0.00}{yawNot}{ysac}{px}{dm}{bosluk}{kzn}");
             }
 
             _rig.RotateAround(measuredPos, Vector3.up, yawDelta * rate);
@@ -1228,33 +2477,23 @@ namespace VRMultiplayer
             // SAG A her iki durumda da guvenli: TeamSelector de A okur ama o AG OYUNCUSUNDA
             // yasar — sunucusuz hic var olmaz, baglandiktan sonra da takim secilince _done ile
             // susar. ConstructorPlacer'in A'si yalnizca insa modunda calisir.
-            // (Sol X artik BOS — RoomScanSync'in tus bagi 2026-08-11'de kaldirildi — ama A'da
-            // kalmak dogru: ogrenme sag elle yapilan bir is, tus da sag elde olmali.)
+            // SOL X ARTIK BOS: RoomScanSync'in kisayolu solXKisayolu bayraginin arkasina
+            // alindi (varsayilan kapali). Buradaki grip/tetik akorlari sadelestirilecekse
+            // hedef tus odur — ama kas hafizasini bir kurulum turunun ortasinda degistirme.
             bool a = XRButtons.Button(UnityEngine.XR.XRNode.RightHand,
                                       UnityEngine.XR.CommonUsages.primaryButton);
             bool pressed = a && !_applyPrev;
             _applyPrev = a;
             if (!pressed) return;
 
-            // SOL GRIP basiliyken A: kalibrasyon iznini cevir. Ayri bir tusa yer yok —
-            // projede bos yuz tusu kalmadi, ikisini ayirmanin yolu degistirici tus.
-            var lh = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
-
-            if (XRButtons.HeldWithAxisFallback(lh, UnityEngine.XR.CommonUsages.gripButton,
-                                               UnityEngine.XR.CommonUsages.grip, 0.5f))
-            {
-                ToggleUseForSeenTag();
-                return;
-            }
-
-            // SOL TETIK + A: konumu KUMANDA DOKUNUSUNDAN yaz. Kamera poz kestirimi hic
-            // kullanilmaz — A/B'nin verdigi guveni tag sistemini bozmadan verir.
-            if (XRButtons.HeldWithAxisFallback(lh, UnityEngine.XR.CommonUsages.triggerButton,
-                                               UnityEngine.XR.CommonUsages.trigger, 0.5f))
-            {
-                ApplyTouchDerived();
-                return;
-            }
+            // SOL GRIP+A (kalibrasyon izni) ve SOL TETIK+A (konumu kumandadan yaz)
+            // KALDIRILDI — ikisi de gozlukten yapilmiyordu:
+            //   izin  -> menu "49. Tag Kurulum Merkezi", tag basina ACIK/KAPALI anahtari;
+            //            ayrica gozlukte harita kaydedilirken Capture+Enable birlikte kosuyor
+            //            (ConstructorSync.HostTagSetup), yani tag'ler zaten ACIK doguyor.
+            //   konum -> plaka yaratici modda tag'in ustune oturtularak tanimlaniyor.
+            // Kumanda dokunusundan gelen OKUMA duruyor (TouchDerived, teshis satirinda):
+            // dokunup yerlesimin ne kadar saptigini hala gorebiliyorsun, sadece YAZMIYOR.
 
             if (!_learnDone)
             {
@@ -1296,7 +2535,7 @@ namespace VRMultiplayer
                 if (s == null || s.Layout == null) return false;
 
                 // DIZIYI GERI BAGLA. Yeni tag eklenince "tagLayout = list.ToArray()" calisiyor
-                // (ApplyTouchDerived / ApplyLearned) ve haritanin dizisiyle paylasim KOPUYOR.
+                // (ApplyLearned) ve haritanin dizisiyle paylasim KOPUYOR.
                 // Baglamazsak Save, yeni tag'i olmayan ESKI diziyi yazar ve olcum sessizce
                 // kaybolur -- duzenleme ekranda gorunur ama dosyaya hic gitmez.
                 s.Layout.tags = tagLayout;
@@ -1312,33 +2551,6 @@ namespace VRMultiplayer
 
         /// <summary>Yazmanin nereye gittigi — panel ve log metinleri icin.</summary>
         string PersistTarget => _fromMap ? "haritaya" : "cihaza";
-
-        /// <summary>Son GORULEN tag'in kalibrasyon iznini cevirir ve kalici hale getirir.</summary>
-        void ToggleUseForSeenTag()
-        {
-            var entry = Find(_lastId);
-            if (entry == null)
-            {
-                _learnNote = $"tag {_lastId} yerlesimde yok — once olcup B ile ekle";
-                return;
-            }
-
-            entry.useForCalibration = !entry.useForCalibration;
-            bool saved = PersistLayout();
-            RebuildMarkers();
-
-            _learnNote = $"tag {entry.id} kalibrasyon " +
-                         (entry.useForCalibration ? "ACIK" : "KAPALI") +
-                         (saved ? "" : $" — {PersistTarget.ToUpperInvariant()} YAZILAMADI");
-
-            Debug.Log($"[AprilTagCalib] Tag {entry.id} useForCalibration = {entry.useForCalibration} " +
-                      $"({(saved ? $"{PersistTarget} yazildi" : $"{PersistTarget.ToUpperInvariant()} YAZILAMADI")}).");
-
-            // Log'a da yazilir: acma/kapama olayi gorunmezse, "neden yazilmadi" sorusunu
-            // cevaplamak icin tahmin yurutmek gerekiyordu.
-            WriteDiag($"IZIN   tag {entry.id} kalibrasyon " +
-                      (entry.useForCalibration ? "ACIK" : "KAPALI"));
-        }
 
         // ---- ELLE INCE AYAR ---------------------------------------------------------------
         //
@@ -1469,7 +2681,6 @@ namespace VRMultiplayer
         // kolunu indirdikten sonra okursun.
         readonly Dictionary<int, Vector3> _touchPos = new Dictionary<int, Vector3>();
         readonly Dictionary<int, Quaternion> _touchRot = new Dictionary<int, Quaternion>();
-        readonly Dictionary<int, float> _touchTime = new Dictionary<int, float>();
         int _approachId = -1;
         float _approachBest;
         Vector3 _approachPos;
@@ -1559,7 +2770,6 @@ namespace VRMultiplayer
             {
                 _touchPos[_approachId] = _approachPos;
                 _touchRot[_approachId] = _approachRot;
-                _touchTime[_approachId] = Time.time;
 
                 // REFERANS tag'e dokunulduysa ofset havuzuna ekle.
                 //
@@ -1597,7 +2807,15 @@ namespace VRMultiplayer
 
                 // Panelde ANLIK geri bildirim: dokunus yakalandi mi, ne kadar yakindi.
                 // Panel sadelestikten sonra dokunus listesi kalkti, bunun yerini bu satir aldi.
-                _learnNote = $"tag {_approachId} dokunuldu ({_approachBest * 100f:0.0} cm)";
+                //
+                // YAKLASMA 15 CM'DEN BUYUKSE BUNU SOYLE. Cihazda yasandi: uc dokunusun ucu de
+                // 29-32 cm'den yapildi, ucu de sessizce reddedildi ve oyuncu olctugunu sandi.
+                // "dokunuldu (29,2 cm)" satiri teknik olarak dogruydu ama reddedildigini
+                // soylemiyordu — sayiyi okuyup esikle karsilastirmak oyuncunun isi degil.
+                bool yeterince = _approachBest <= 0.15f;
+                _learnNote = yeterince
+                    ? $"tag {_approachId} ALINDI ({_approachBest * 100f:0.0} cm)" + TagHeightNote(_approachId)
+                    : $"tag {_approachId} COK UZAK ({_approachBest * 100f:0.0} cm > 15) — tekrar degdir";
 
                 var de = Find(_approachId);
                 string turetilen = TouchDerived(_approachId, out Vector3 dp)
@@ -1700,6 +2918,33 @@ namespace VRMultiplayer
         bool _floorTracking, _hasFloor;
         float _floorY, _floorRaw;
 
+        /// <summary>
+        /// "tag N yerden X cm" — zemin ve tag dokunusu BIR ARADA varsa.
+        ///
+        /// NEDEN: butun dikey tartismasi tek bir sayiya dayaniyor ve o sayi su an yalnizca
+        /// metreyle olculebiliyor. Oysa ikisi de KUMANDAYLA olculuyor, ayni takip uzayinda,
+        /// ve farkları dogrudan tag'in yerden yuksekligi. Kameranin kestirimine hic girmiyor —
+        /// yani kamera ile kumandayi karsilastirmanin bagimsiz yolu bu.
+        ///
+        /// Ikisinden biri yoksa bos doner: eksik bir sayidan uydurma bir yukseklik uretmek,
+        /// hic gostermemekten kotu.
+        /// </summary>
+        string TagHeightNote(int tagId = -1)
+        {
+            if (!_hasFloor) return "";
+            if (tagId < 0) tagId = offsetReferenceTagId;
+            if (!_touchPos.TryGetValue(tagId, out Vector3 raw)) return "";
+
+            // IKI UCU DA AYNI SEKILDE ISLE. Ilk yazimda tag'in HAM konumu, zeminin ise
+            // OFSETLI konumu kullaniliyordu — ofset yalnizca bir tarafa girince kumandanin
+            // izlenen noktasi ile ucu arasindaki fark (olculdu: 5,8-7,8 cm) sonuca oldugu gibi
+            // sizardi. Ayni islemi ikisine de uygulayinca ortak bileseni birbirini goturuyor.
+            float tagY = _touchRot.TryGetValue(tagId, out Quaternion rot)
+                ? ApplyTouchOffset(raw, rot).y : raw.y;
+
+            return $"  |  tag {tagId} yerden {(tagY - _floorY) * 100f:0.0} cm";
+        }
+
         void TickFloor()
         {
             if (_rightHandDiag == null) return;
@@ -1723,6 +2968,15 @@ namespace VRMultiplayer
                 _hasFloor = true;
                 _floorBest = float.MaxValue;
                 WriteDiag($"ZEMIN  ham {_floorRaw:0.000}  ofsetli {_floorY:0.000}");
+
+                // EKRANDA ONAY. Oyuncu olcumu KOR yapiyordu: kumandayi yere degdirip
+                // kaldiriyor, olcum alindi mi alinmadi mi ancak sonradan log cekilince
+                // anlasiliyordu. Olcumu tekrarlamasi gerekip gerekmedigini o anda bilmeli.
+                //
+                // Tag yuksekligi de burada yaziliyor: sorunun tamami "tag yerden kac cm'de"
+                // sorusuna dayaniyor ve iki sayi bir araya gelmeden cevaplanamiyor. Zemin
+                // olculdugunde tag'e zaten dokunulmussa cevap ANINDA ekranda cikiyor.
+                _learnNote = $"ZEMIN alindi {_floorY:0.000} m" + TagHeightNote();
             }
         }
 
@@ -1790,6 +3044,36 @@ namespace VRMultiplayer
 
             if (_headPrevValid)
             {
+                // TAKIP SICRAMASI: kafa pozu bir karede FIZIKSEL OLARAK IMKANSIZ kadar
+                // degistiyse, hareket eden kafa degil TAKIP UZAYININ KENDISIDIR — gozluk
+                // yeniden konumlandi (relocalization) ve dunya kaymis/donmus olabilir.
+                //
+                // NEDEN UYKU SINYALI YETMIYOR: kapiyi once OnApplicationPause'a baglamistim,
+                // ama cihazda ekran kapanma suresi 24 saate ayarli oldugu icin gozlugu
+                // cikarmak uygulamayi DURAKLATMIYOR — sinyal hic gelmiyor. Oysa takip
+                // kopmasi tam da o anda oluyor. Bu yuzden olayin kendisini olcuyoruz.
+                //
+                // ESIKLER: 72 fps'te bir kare 14 ms. Insan kafasi o surede en fazla birkac
+                // santim ve birkac derece gider; 25 cm / 45 derece ancak bir sicrama olur.
+                // Olculen 175,8 ve 153,9 derecelik donmeler bu esigin cok ustunde.
+                float dPos = Vector3.Distance(p, _headPosPrev);
+                float dAng = Quaternion.Angle(r, _headRotPrev);
+                if (dPos > 0.25f || dAng > 45f)
+                {
+                    if (CalibrationManager.Calibrated && !_wokeNeedsRef)
+                    {
+                        _wokeNeedsRef = true;
+                        _wokeAt = Time.time;
+                        _wokeShownSecond = -1;
+                        WriteDiag($"TAKIP SICRAMASI  {dPos * 100f:0} cm / {dAng:0} derece bir karede " +
+                                  $"— UYANIS KAPISI DEVREDE (tag {offsetReferenceTagId} gorulene kadar)");
+                    }
+                    // Hiz olcumune KATMA: sicrama gercek hareket degil, kapiyi yanlis kapatirdi.
+                    _headPosPrev = p;
+                    _headRotPrev = r;
+                    return;
+                }
+
                 // Yumusatma: tek karelik gurultu kapiyi rastgele acip kapatmasin.
                 _headSpeed = Mathf.Lerp(_headSpeed, Vector3.Distance(p, _headPosPrev) / dt, 0.3f);
                 _headAngSpeed = Mathf.Lerp(_headAngSpeed, Quaternion.Angle(r, _headRotPrev) / dt, 0.3f);
@@ -1888,83 +3172,6 @@ namespace VRMultiplayer
                     $"[{Time.time:0.0}] {line}\n");
             }
             catch { /* teshis yazamamak oyunu durdurmamali */ }
-        }
-
-        /// <summary>Son dokunulan (referans olmayan) tag'in konumunu kumandadan yazar.</summary>
-        void ApplyTouchDerived()
-        {
-            // YALNIZCA EN SON dokunulan tag yazilir — uygunsa.
-            //
-            // Eskiden "uygun olanlar arasinda en yeni" seciliyordu ve bu, hedef tag uygun
-            // degilse SESSIZCE BASKA bir tag'i yaziyordu. Cihazda yasandi: tag 1'in yanindayken
-            // (kalibrasyonu o an tag 1 suruyordu) uc kez basildi, ucunde de TAG 2 yazildi,
-            // ustelik bir dakika onceki bayat dokunusuyla. Kullanici tag 1'i olctugunu sandi.
-            //
-            // Yanlis tag'i sessizce yazmaktansa reddedip SEBEBINI soylemek gerekir.
-            int best = -1;
-            float bestT = -1f;
-            foreach (var kv in _touchTime)
-                if (kv.Value > bestT) { bestT = kv.Value; best = kv.Key; }
-
-            if (best < 0) { _learnNote = "once kumandayla bir tag'e degdir"; return; }
-
-            if (best == _calibId)
-            {
-                // Kendi cercevesinde olcmek dongusel olurdu.
-                _learnNote = $"tag {best} SU AN kalibre ediyor — once solGRIP+A ile kapat";
-                return;
-            }
-            if (best == offsetReferenceTagId)
-            {
-                _learnNote = $"tag {best} sifir noktasinin TANIMI — yazilamaz";
-                return;
-            }
-
-            Vector3 pos;
-            if (!TouchDerived(best, out pos))
-            {
-                _learnNote = "once REFERANS tag'e (tag 0) degdir — ofset oradan olculuyor";
-                return;
-            }
-
-            var entry = Find(best);
-            bool isNew = entry == null;
-            if (isNew)
-            {
-                // Yerlesimde HIC OLMAYAN tag: dokunusla sifirdan dogar. Boylece tag 1 ve 2 icin
-                // onceden bir tahmin tutmaya gerek kalmiyor — kagidi nereye asarsan oraya yazilir.
-                // KAPALI dogar: dogrulanmadan kalibrasyona giren yanlis bir tag, dogru olanlarin
-                // kurdugu cerceveyi de bozar.
-                entry = new TagEntry { id = best, useForCalibration = false };
-                var list = new List<TagEntry>(tagLayout ?? Array.Empty<TagEntry>());
-                list.Add(entry);
-                tagLayout = list.ToArray();
-            }
-
-            Vector3 before = entry.position;
-            entry.position = pos;
-
-            // YAW dokunustan gelmez (tek nokta yon tasimaz) — kameradan alinir. Yeni tag'de
-            // sifir birakmak plakayi tamamen yanlis yone cevirir ve dogrulamayi imkansiz kilar.
-            bool yawFromCam = _seenTime.TryGetValue(best, out float st) && Time.time - st < 3f;
-            if (yawFromCam) entry.yawDegrees = _seenYaw[best];
-
-            bool saved = PersistLayout();
-            if (isNew) RebuildMarkers(); else SyncMarkerPoses();
-            NoteWrite(best, pos, entry.yawDegrees);
-
-            _learnNote = (isNew ? $"tag {best} KUMANDADAN olusturuldu"
-                                : $"tag {best} KUMANDADAN yazildi ({(pos - before).magnitude * 100f:0} cm oynadi)")
-                       + (yawFromCam ? "" : "  [yaw YOK — tag'e bak]")
-                       + (saved ? "" : $"  — {PersistTarget.ToUpperInvariant()} YAZILAMADI");
-
-            Debug.Log($"[AprilTagCalib] Tag {best} konumu kumanda dokunusundan turetildi: " +
-                      $"{before} -> {pos}, yaw {entry.yawDegrees:0.0} ({(yawFromCam ? "kameradan" : "eski")}). " +
-                      $"Kamera poz kestirimi konumda kullanilmadi.");
-
-            WriteDiag($"YAZILDI tag {best} {(isNew ? "(YENI)" : "")}  " +
-                      $"{pos.x:0.000} {pos.y:0.000} {pos.z:0.000}  yaw {entry.yawDegrees:0.0}" +
-                      $"  once {before.x:0.000} {before.y:0.000} {before.z:0.000}");
         }
 
         // ---- ANCHOR TUTUSU ----------------------------------------------------------------
@@ -2133,7 +3340,9 @@ namespace VRMultiplayer
             // kapatiyor. Oneksiz birakinca isaretci tam da ise yarayacagi anda kaybolurdu —
             // plakayi gercek tag'le karsilastirmak icin ikisini AYNI ANDA gormek gerekiyor.
             var root = new GameObject($"~TagIsaretci_{t.id}");
-            root.transform.SetPositionAndRotation(t.position, Quaternion.Euler(0f, t.yawDegrees, 0f));
+
+            root.transform.SetPositionAndRotation(t.position,
+                                                 Quaternion.Euler(0f, t.yawDegrees, 0f));
 
             // Yesil = kalibrasyonda kullaniliyor. Sari = dogrulama bekliyor.
             Color c = t.useForCalibration ? new Color(0.2f, 1f, 0.35f) : new Color(1f, 0.85f, 0.15f);
@@ -2152,6 +3361,8 @@ namespace VRMultiplayer
             // gostermez. Simetrik cubuk hangi konvansiyon olursa olsun gorunur kalir.
             MakePart(root.transform, "burun", c,
                      new Vector3(0.008f, 0.008f, tagSizeMeters * 2.5f), Vector3.zero);
+
+            // ZEMINDE AYRI BIR YON CUBUGU SART. Yukaridaki burun tag'in NORMALI boyunca
 
             return root;
         }
@@ -2251,6 +3462,7 @@ namespace VRMultiplayer
             // yalnizca panele baglamak, paneli kapatan kurulumda sorunu tekrar gorunmez
             // yapardi — kapatilan sey teshis, olen sey teshisin kendisi olurdu.
             TickRefWatch();
+            TickWakeGate();
 
             if (!showPanel) { if (_panel != null) _panel.gameObject.SetActive(false); return; }
             if (_panel == null)
@@ -2261,7 +3473,14 @@ namespace VRMultiplayer
                 // gordugun anda kaybederdin.
                 _panel = UI.HeadFollowPanel.Create("~AprilTag Olcum", "", Color.white);
                 var f = _panel.GetComponent<UI.HeadFollowPanel>();
-                if (f != null) f.heightOffset = 0.35f;   // kalibrasyon panelinin USTUNDE
+                if (f != null)
+                {
+                    f.heightOffset = 0.35f;          // kalibrasyon panelinin USTUNDE
+                    // ZEMIN TAG'I ICIN SART: tag yerde oldugunda oyuncu asagi bakiyor ve duz
+                    // duran panel gorus alanindan cikiyor. Olu bolge, duvar tag'indeki
+                    // davranisi bozmadan bunu cozuyor.
+                    f.pitchFollowDeadzone = 10f;
+                }
             }
             _panel.gameObject.SetActive(true);
 
@@ -2332,6 +3551,16 @@ namespace VRMultiplayer
                 string refUyari = YawReferenceWarning();
                 string refSatir = refUyari != null ? refUyari + "\n" : "";
 
+                // YON DOGRULANIYOR — teyit beklerken oyuncuya SEBEBINI soyle.
+                //
+                // Cihazda goruldu: 180 derecelik bir sapmada dunya 2,8 saniye donuk kaldi
+                // (konum hemen duzeldi, yaw teyit bekledi) ve ekranda bunu anlatan hicbir
+                // sey yoktu. Oyuncu icin bu "sistem bozuldu"dan ayirt edilemez. Sayilar
+                // TagDiag.log'a yaziliyor ama oyuncu log okumuyor.
+                string yawSatir = _bigYawRun > 0
+                    ? $"YON DOGRULANIYOR {_bigYawRun}/{yawRecoveryConfirmations}\n" : "";
+                refSatir += yawSatir;
+
                 if (!seen)
                     // Harita yeni degistiyse SEBEBI de yaz: "tag gorunmuyor" tek basina
                     // "bekle" gibi okunuyor, oysa oyuncunun YAPMASI gereken bir sey var.
@@ -2359,6 +3588,15 @@ namespace VRMultiplayer
                     q.Append("bu tag kalibrasyonda KAPALI");
                 else if (!MotionOk(_lastDistance))
                     q.Append($"BEKLE — sabit dur ({MotionError(_lastDistance) * 100f:0.0} cm hata)");
+                // FUZYON SURUYORSA "kazanan tag" DIYE BIR SEY YOK.
+                //
+                // Bu satir tek-tag yolunun mesaji: "baktigin tag degil, su oteki kalibre
+                // ediyor". Fuzyonda hepsi BIRLIKTE cozuluyor, yani _calibId bayat bir sayi.
+                // Cihazda yasandi: panel "tag 3 gorunuyor / tag 2 kalibre ediyor" yaziyor,
+                // sayilar surekli degisiyordu ve kullanici bunu fuzyonun kendisi sandi —
+                // oysa fuzyon dogru calisiyor, panel onu anlatamiyordu.
+                else if (FusionDriving)
+                    q.Append(_calibNote);   // "FUZYON 4 tag (1,3 cm, yaw -0,8)"
                 else if (_lastId != _calibId)
                     q.Append($"tag {_calibId} kalibre ediyor");
                 else
@@ -2376,6 +3614,11 @@ namespace VRMultiplayer
 
             string refUyariTeshis = YawReferenceWarning();
             if (refUyariTeshis != null) p.Append(refUyariTeshis + "\n");
+
+            // Teyit bekleyen buyuk sapma: teshis panelinde SAYISIYLA birlikte.
+            if (_bigYawRun > 0)
+                p.Append($"YON DOGRULANIYOR {_bigYawRun}/{yawRecoveryConfirmations}  " +
+                         $"({_bigYawFirst:0.0} derece, tag {_bigYawTag})\n");
 
             if (!cameraRunning) p.Append("KAMERA YOK (izin?)\n");
             if (showPassthrough && _pt != null && _pt.Active && !_pt.CameraOk)
@@ -2398,7 +3641,7 @@ namespace VRMultiplayer
             }
             else
             {
-                // Ofset yoksa dokunustan konum turetilemez ve solTETIK+A sessizce reddeder.
+                // Ofset yoksa dokunustan konum turetilemez ve teshis satiri bos kalir.
                 p.Append("OFSET YOK — once tag " + offsetReferenceTagId + "'a dokun\n");
             }
 
@@ -2416,19 +3659,34 @@ namespace VRMultiplayer
             if (!string.IsNullOrEmpty(_lastWrite)) p.Append(_lastWrite + "\n");
 
             if (learnMode)
-                p.Append("A=yaz  solGRIP+A=ac/kapat  solTETIK+A=kumandadan  solCUBUK=ince");
+                p.Append("A=yaz  solCUBUK=ince");
 
             return p.ToString();
         }
 
+        /// <summary>
+        /// Poz'un YATAY yonu (derece). Duvardaki tag'de normalin (ileri ekseni) yatay
+        /// izdusumu; ZEMINDEKI tag'de normal dik yukari baktigi icin o izdusum dejenere olur
+        /// ve tag'in KENDI yukari ekseni kullanilir.
+        ///
+        /// ESIK NEDEN 0,25 (yani |yatay| &lt; 0,5): eskiden 1e-8'di ve bu, normalin dikeyden
+        /// 0,006 dereceden az sapmasini sart kosuyordu — gercek bir olcumde ASLA olmaz.
+        /// Sonuc: zemindeki tag geri dususe hic girmiyor, kucuk ama sifirdan buyuk bir
+        /// vektorun yonunu okuyordu ve o yon tamamen olcum gurultusuyle belirleniyordu.
+        /// Belirtisi cihazda goruldu: zemin tag'inin isaretcisi konumu dogru, ACISI rastgele.
+        ///
+        /// 0,5 iki durumu temiz ayirir ve arada bosluk birakir: poz kapisi duvar tag'inin
+        /// normalini yataydan en fazla 20 derece saptirtiyor (|yatay| >= 0,94), zemin
+        /// tag'ininkini dikeyden 20 derece (|yatay| &lt;= 0,34).
+        /// </summary>
         static float YawOf(Quaternion q)
         {
             Vector3 f = q * Vector3.forward;
             f.y = 0f;
-            if (f.sqrMagnitude < 1e-8f)
+            if (f.sqrMagnitude < 0.25f)
             {
                 f = q * Vector3.up; f.y = 0f;
-                if (f.sqrMagnitude < 1e-8f) return 0f;
+                if (f.sqrMagnitude < 1e-8f) return 0f;   // ikisi de dikey: cozulemez
             }
             return Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
         }

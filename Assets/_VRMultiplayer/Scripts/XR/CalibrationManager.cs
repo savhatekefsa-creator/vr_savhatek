@@ -123,7 +123,7 @@ namespace VRMultiplayer
             // tiklaniyor. Kenari simdiki fiziksel duruma esitlemeden baslarsak, henuz
             // birakilmamis o tetik bir sonraki karede "A alindi" diye okunur ve kalibrasyon
             // oyuncunun eli havadayken, menuye nisan alirken baslar.
-            _prevTrigger = ReadRightTrigger();
+            _prevTrigger = !tagOnly && ReadRightTrigger();
 
             SetStatus(tagOnly
                 ? "KALIBRASYON\nDuvardaki TAG'e bak\nve 1-2 metre yaklas."
@@ -138,6 +138,24 @@ namespace VRMultiplayer
             if (status != null) status.gameObject.SetActive(false);
         }
 
+        /// <summary>
+        /// KALICI uyari gosterir (otomatik gizleme YOK). Uyku sonrasi yon dogrulamasi icin.
+        ///
+        /// NEDEN BU PANEL: teshis paneli (AprilTagCalibration.showPanel) oyunda KAPALI
+        /// tutuluyor ve uyku sonrasi donme tam da bu yuzden gorunmez kaldi. CIHAZDA YASANDI:
+        /// gozluk uykudan uyandi, takip uzayi 175,8 derece donmus halde geldi, tag 0 yedi
+        /// dakika boyunca hic gorulmedi ve oyun bastan sona TERS bir dunyada oynandi. Kod
+        /// uyariyi yaziyordu ama yalnizca log'a — oyuncu log okumuyor.
+        ///
+        /// Bu panel showPanel'den BAGIMSIZ ve "~" onekli oldugu icin passthrough acikken de
+        /// gorunur; yani teshis kapatilsa bile uyari kaybolmaz.
+        /// </summary>
+        public void ShowPersistent(string text)
+        {
+            StopAllCoroutines();   // bekleyen otomatik gizlemeyi iptal et — bu uyari kalici
+            SetStatus(text);
+        }
+
         void Update()
         {
             if (!_started) return;
@@ -148,7 +166,10 @@ namespace VRMultiplayer
             // anlamlandiriyor (tetik orada "prop koy"), o yuzden asagida susturuluyorlar — ama
             // okumayi da atlasaydik, mod kapanirken basili duran bir tus hayalet bir basis
             // uretirdi. (ConstructorPlacer'in mod kapisindaki ayni ders.)
-            bool trigger = ReadRightTrigger();
+            // tagOnly acikken tetik HIC OKUNMAZ: asagidaki kapi zaten hicbir sey yapmiyordu,
+            // ama tus her kare yoklaniyordu ve envanterde "kalibrasyon tetigi tutuyor" gibi
+            // gorunuyordu. Kapatirsan (tagOnly = false) A/B yolu tetikle birlikte geri gelir.
+            bool trigger = !tagOnly && ReadRightTrigger();
             bool triggerEdge = trigger && !_prevTrigger;
             _prevTrigger = trigger;
 
@@ -163,11 +184,18 @@ namespace VRMultiplayer
             // yani kayma dosyaya bakarak da anlasilamaz. Tek cerceve = tek sifir.
             if (!tagOnly && triggerEdge && _step < 2) CapturePoint();
 
-            // YENIDEN KALIBRASYON TUSU YOK (eskiden SOL Y idi, 2026-08-11'de kaldirildi):
-            // kalibrasyon artik yalnizca TAG ile ve tag her tespitte cerceveyi ZATEN duzeltiyor —
-            // elle sifirlamanin tek gorunur etkisi, mac ortasinda kazara basilinca Calibrated
-            // bayragini dusurup kafanin onune panel dikmekti. A/B yolu (tagOnly=false) icin de
-            // tekrar yolu yok: botched bir A/B'nin caresi uygulamayi yeniden acmak.
+            // SOL Y (yeniden kalibrasyon) KALDIRILDI.
+            //
+            // Kavram A/B'den kalmaydi: orada sifir tek seferlik yakalaniyordu, yanlissa
+            // bastan almaktan baska care yoktu. Tag'de sifir her tespitte yeniden kuruluyor,
+            // yani "bastan al" diye bir sey yok — Calibrated'i dusurmek yalnizca ilk fix'i
+            // 5 yerine 2 ornege indiriyordu (AprilTagCalibration.CalibNeed).
+            //
+            // Bedeli ise sessizdi: Calibrated'e ConstructorPlacer (insa modu), CreativeFlowUI,
+            // LanBootstrap (yaratici modda katilma), RespawnGuide ve SpawnRouteGuide de
+            // bakiyor. Yanlislikla basilan bir Y, tag yeniden yakalayana kadar insa modunu ve
+            // dogum yonlendirmesini kapatiyordu. Ayrica A/B yolu kapali oldugu icin (tagOnly)
+            // sistemde tanimli bir A noktasi da yok; else dali zaten ulasilamazdi.
         }
 
         // Panel takibi HeadFollowPanel bileseninde (obje inaktifken calismaz — eski
@@ -298,9 +326,20 @@ namespace VRMultiplayer
             // ve "kalibre olmus gibi" sanip yanlis cerceveyle oynardi (yasanmis).
             //
             // "~" oneki: ConstructorPassthrough.HideVirtualWorld cizen kok objeleri gizliyor;
-            // bu panel kalibrasyon durumunu tasidigi icin passthrough acikken de gorunmeli.
+            // bu panel kalibrasyon DURUMUNU tasidigi icin passthrough acikken de gorunmeli
+            // (kalibre olmadan insa moduna girilemez, oyuncunun nedenini gormesi gerekir).
+            // PARANTEZ SART: parantezsiz halde if yalnizca ILK satiri kapsiyordu, yani
+            // GetComponent ve pitchFollowDeadzone panel ZATEN VARKEN de her cagrida
+            // kosuyordu. Girinti aksini soyluyordu — sessiz ve kolay atlanan bir hata.
             if (status == null)
+            {
                 status = UI.HeadFollowPanel.Create("~Calibration Panel", "", Color.white);
+
+                // Panel asagi bakarken de okunabilmeli: duz kalirsa "tag'e bak" talimatini
+                // veren panelin kendisi gorus alanindan cikiyor.
+                var takip = status.GetComponent<UI.HeadFollowPanel>();
+                if (takip != null) takip.pitchFollowDeadzone = 10f;
+            }
 
             status.gameObject.SetActive(true);
             status.text = s + _note;
