@@ -362,9 +362,20 @@ namespace VRMultiplayer.UI
             //   takim    143..376
             //   tetik eli 388..524
             //   karakter  536..594
+            // BOLUM ZEMINI KARTLARIN KUYRUGUNDA OLAMAZ. Burasi QBorder/QFill (3012/3016)
+            // kullaniyordu — yani icindeki KIZIL/MAVI kartlariyla AYNI kuyrukta. Ayni
+            // kuyruktaki saydam yuzeylerin sirasini kuyruk numarasi degil KAMERA UZAKLIGI
+            // belirler; zemin ile kart arasinda 0.5 mm varken iki kart arasinda 7 cm var.
+            // Panele hafif asagi bakildiginda ustteki KIZIL karti gorus ekseninde zeminden
+            // uzaga dusuyor, zeminden ONCE ciziliyor ve zemin onu ortuyordu: kartin dolgusu
+            // da kenarligi da kayboluyor, yalnizca yazisi (3030) kaliyordu. Cihazda olculdu
+            // (2026-09-01): kartin oldugu yerde zeminin rengi (3,11,18) okunuyordu, kizil
+            // yok. Alttaki MAVI kart kameraya yakin kaldigi icin kurtuluyordu — hata tek
+            // karta vurdugu icin uzun sure "kizil rengi tutmuyor" gibi gorundu.
+            // TETIK ELI bolumu (bkz. BuildHandPanel) bu deseni zaten kullaniyor.
             UITheme.MakeOutlined(transform, "TeamPanel", Box(884, 143, 1097, 320),
                 Dim(884, 143, 1097, 320), S(14f), PanelEdge, Backdrop, S(1.5f),
-                ZBorder, QBorder, QFill);
+                ZBack, QBack + 1, QBack + 2);
 
             var lbl = UITheme.MakeText(transform, "TAKIM SEÇ", SectionLbl, 0.016f,
                 TextAnchor.MiddleCenter, QText);
