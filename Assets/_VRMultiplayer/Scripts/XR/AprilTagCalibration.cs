@@ -481,7 +481,18 @@ namespace VRMultiplayer
         public float snapThresholdDegrees = 3f;
 
         [Header("Spike olcum paneli")]
+        [Tooltip("Teshis panelini goster. panelOnlyInCreative aciksa bu bayrak yalnizca " +
+                 "YARATICI modda gecerlidir.")]
         public bool showPanel = true;
+
+        [Tooltip("Panel YALNIZCA yaratici modda gorunsun.\n\n" +
+                 "NEDEN: panel bir KURULUM araci. Harita kurarken 'olculuyor 3/5' sayaci ve " +
+                 "mesafe gerekiyor -- kalibrasyon oturmazsa sebebi orada gorunur, log cekmeye " +
+                 "gerek kalmaz. Oyunda ise ayni panel gorus alanini mesgul eden bir gurultu.\n\n" +
+                 "Elle acip kapatmanin yerine geciyor: kurulumdan once 1, sonra 0 yapmayi " +
+                 "unutmak bu projede iki kez yasandi. Kalibrasyon paneli ve uyanis kapisi " +
+                 "uyarilari bundan BAGIMSIZ -- onlar her modda gorunur.")]
+        public bool panelOnlyInCreative = true;
 
         AprilTag.TagDetector _detector;
         WebCamTextureManager _camMgr;
@@ -3464,7 +3475,10 @@ namespace VRMultiplayer
             TickRefWatch();
             TickWakeGate();
 
-            if (!showPanel) { if (_panel != null) _panel.gameObject.SetActive(false); return; }
+            // MOD KAPISI: panel kurulum araci, oyunda gurultu. Gozcu (TickRefWatch) ve
+            // uyanis kapisi YUKARIDA kaldi -- onlar her modda calismali.
+            bool panelGoster = showPanel && (!panelOnlyInCreative || AppMode.IsCreative);
+            if (!panelGoster) { if (_panel != null) _panel.gameObject.SetActive(false); return; }
             if (_panel == null)
             {
                 // "~" ONEKI SART: ConstructorPassthrough.HideVirtualWorld cizen TUM kok

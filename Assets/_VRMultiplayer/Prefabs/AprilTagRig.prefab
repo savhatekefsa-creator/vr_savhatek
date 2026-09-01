@@ -127,4 +127,4 @@ MonoBehaviour:
   gainScalesWithSpread: 0
   snapThresholdMeters: 0.1
   snapThresholdDegrees: 3
-  showPanel: 0
+  showPanel: 1
