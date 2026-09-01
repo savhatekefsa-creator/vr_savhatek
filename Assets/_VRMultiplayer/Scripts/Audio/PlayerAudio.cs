@@ -118,7 +118,11 @@ namespace VRMultiplayer.Audio
         // interpolasyon supheci icin IKI gozluk gerekir, kablo DINLEYEN tarafta olmali.
         //
         // OLCUM BITINCE SILINECEK.
-        const bool StepDebug = true;
+        //
+        // SIMDILIK KAPALI (2026-09-01): arastirma parkta, ama blok DURUYOR — cihazda iki
+        // gozlukle tekrar bakilacak. const oldugu icin kapaliyken cagri tamamen derlemeden
+        // cikar, yani calisma zamaninda hicbir bedeli yok. Devam ederken true yap.
+        const bool StepDebug = false;
         float _dbgNext;
         float _dbgPeak;          // aradaki en yuksek hiz (m/s)
         int _dbgFrames, _dbgOver;  // toplam kare / esigi gecen kare
