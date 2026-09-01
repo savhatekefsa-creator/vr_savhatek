@@ -272,13 +272,20 @@ namespace VRMultiplayer.EditorTools
                         "gercekten gerekiyorsa Inspector'dan, bilerek."),
                     zero != null ? zero.yawDegrees : 0f);
 
-            // SIFIR GECERLI: tag 0 zemine konabiliyor (bkz. TagCapture.DefaultOriginHeight).
-            // Arasindaki bant hala reddediliyor — 0,05 gibi bir deger neredeyse her zaman
-            // yazim hatasidir, ve yanlis yukseklik butun cerceveyi sessizce dikeyde kaydirir.
-            bool heightOk = _originHeight == 0f || (_originHeight >= 0.3f && _originHeight <= 3f);
+            // SIFIR ARTIK GECERSIZ. Zemin montaji kaldirildi (bkz. AprilTagCalibration,
+            // TagMount notu): poz gecerlilik kapisi artik "kagit DUVARDA, normali yatay"
+            // varsayiyor. Yukseklik 0 girilirse pencere kabul eder ama kalibrasyon o tag'in
+            // HER tespitini eler ve hic baslamaz — cihazda tam bu yasandi (D1 haritasi
+            // origin'i zemine yazdi, saatlerce "tag 0 goruldu ama kalibre etmiyor").
+            //
+            // 0,05 gibi araa degerler de reddediliyor: neredeyse her zaman yazim hatasidir
+            // ve yanlis yukseklik butun cerceveyi sessizce dikeyde kaydirir.
+            bool heightOk = _originHeight >= 0.3f && _originHeight <= 3f;
             if (!heightOk)
-                EditorGUILayout.HelpBox("Yukseklik 0 (zemin) ya da 0.3–3 m olmali — olcumu kontrol edin.",
-                                        MessageType.Warning);
+                EditorGUILayout.HelpBox(
+                    "Yukseklik 0.3–3 m olmali. Tag DUVARDA DIK durmali — zemine yatik konan " +
+                    "tag'in her tespiti poz kapisinda elenir ve kalibrasyon hic baslamaz.",
+                    MessageType.Warning);
 
             using (new EditorGUI.DisabledScope(!heightOk || (_prefabCal == null && _sceneCal == null)))
                 if (GUILayout.Button("Origin'i Yaz (prefab + sahne + harita)"))
