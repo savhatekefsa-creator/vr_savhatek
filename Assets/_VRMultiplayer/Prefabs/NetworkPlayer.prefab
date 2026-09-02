@@ -2522,7 +2522,7 @@ MonoBehaviour:
   leftGripEulerOffset: {x: -12.72, y: -76.3, z: 38.8}
   rightGripPositionOffset: {x: 0, y: 0, z: 0}
   rightGripEulerOffset: {x: -7.99, y: 150, z: -50.6}
-  palmOffset: 0.09
+  palmOffset: 0
   armReachRemap: 0
   driveElbowHints: 1
   elbowDown: 1
@@ -2567,10 +2567,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc09f0931e0d08343a4d3c046e0ddf90, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.ProceduralFingerPoser
-  proximalCurl: 0
-  intermediateCurl: 0
-  distalCurl: 0
-  thumbCurl: 0
+  proximalCurl: 55
+  intermediateCurl: 80
+  distalCurl: 55
+  thumbCurl: 40
   palmRollDegrees: 0
   invertCurl: 0
   smoothing: 14
@@ -4430,6 +4430,8 @@ GameObject:
   - component: {fileID: 7316377061070769038}
   - component: {fileID: 165688490942211547}
   - component: {fileID: 4936700139560549304}
+  - component: {fileID: 6708492322109053427}
+  - component: {fileID: 1328378670932764659}
   - component: {fileID: 5453172061617534047}
   - component: {fileID: 3681761691043345009}
   m_Layer: 0
@@ -4610,7 +4612,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   leftHand: {fileID: 1418947192942783369}
   rightHand: {fileID: 5851630593541469558}
-  grabRadius: 0.3
+  grabRadius: 0.2
 --- !u!114 &1455032696690629462
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4690,7 +4692,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Constructor.ConstructorSync
   ShowTopMostFoldoutHeaderGroup: 1
---- !u!114 &5453172061617534047
+--- !u!114 &6708492322109053427
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -4699,110 +4701,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 5293397041292697250}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7d0b8f831a8e16245a05ee1c16b919ec, type: 3}
+  m_Script: {fileID: 11500000, guid: a61438c7a1f8c8c40a06359427dddcdd, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.CharacterCustomizer
-  headRenderer: {fileID: 4220044762488273386}
-  neckRenderer: {fileID: 5500767704211445798}
-  jacketRenderer: {fileID: 6011857933541497265}
-  pantsRenderer: {fileID: 8565085668502644166}
-  eyeRenderer: {fileID: 7185473220145236971}
-  femaleHeadPart: {fileID: 5978383898407852856}
-  femaleHeadNoBunPart: {fileID: 8558486753362566369}
-  headOptions:
-  - material: {fileID: 2100000, guid: c54494153c686d54a9ca32ec44e2c6c5, type: 2}
-    neckMaterial: {fileID: 2100000, guid: d47acaaeb4ee1654bb4fde2d61fd730f, type: 2}
-    female: 0
-  - material: {fileID: 2100000, guid: 6130959db7a38ff4abfa2aa9c1d45a18, type: 2}
-    neckMaterial: {fileID: 2100000, guid: 5473f4c29241fd3429bca2d6d653e57c, type: 2}
-    female: 0
-  - material: {fileID: 2100000, guid: 41c7c6490b0cf12479617b9ffd785822, type: 2}
-    neckMaterial: {fileID: 2100000, guid: 97b3eb90aeb663b4e96cabaa1f4fbfd1, type: 2}
-    female: 0
-  - material: {fileID: 2100000, guid: dde221d19600ed34a93b7ab0a44a6105, type: 2}
-    neckMaterial: {fileID: 2100000, guid: e00aa48bdc8924e47a2692bf11848b9d, type: 2}
-    female: 0
-  - material: {fileID: 2100000, guid: df0676a3fc5aad1418253d85da138f8b, type: 2}
-    neckMaterial: {fileID: 2100000, guid: aa026ba1dab341648adf9fd1b9dde01b, type: 2}
-    female: 0
-  - material: {fileID: 2100000, guid: 23a5ad9f3fcce5a438e5deb07f32e678, type: 2}
-    neckMaterial: {fileID: 2100000, guid: d47acaaeb4ee1654bb4fde2d61fd730f, type: 2}
-    female: 1
-  - material: {fileID: 2100000, guid: 0185b31a20116424885839fa30189331, type: 2}
-    neckMaterial: {fileID: 2100000, guid: d47acaaeb4ee1654bb4fde2d61fd730f, type: 2}
-    female: 1
-  jacketMaterials:
-  - {fileID: 2100000, guid: b236489e423c26d429e7937aa30f1270, type: 2}
-  - {fileID: 2100000, guid: b1f0c4362ce588a44a827928967b6910, type: 2}
-  - {fileID: 2100000, guid: e20ce4f45362baa4a91fde7d4d676b3c, type: 2}
-  - {fileID: 2100000, guid: 6ccc321574b9f0449bcc29d1940bbae7, type: 2}
-  - {fileID: 2100000, guid: fd2d406fb61b38f4cb8ba6d11411c684, type: 2}
-  - {fileID: 2100000, guid: 0c286e425ab5b7848a4b698f0dbbb764, type: 2}
-  - {fileID: 2100000, guid: 2e2724fe03957844abe84355bfb57395, type: 2}
-  - {fileID: 2100000, guid: 701a7eece6157364aac09f080f9777ac, type: 2}
-  - {fileID: 2100000, guid: 5facee75487632b4296df4ce0379d6c7, type: 2}
-  - {fileID: 2100000, guid: 64d0b446f0f0fe84888cbf08c768ea7b, type: 2}
-  - {fileID: 2100000, guid: e79e6b7c051240b4088b43ba411eee24, type: 2}
-  pantsMaterials:
-  - {fileID: 2100000, guid: 39277c3dbeaf82a4fa8cc771fa629e89, type: 2}
-  - {fileID: 2100000, guid: bf283b47bf9b3a6459ec2cd6498c6a65, type: 2}
-  - {fileID: 2100000, guid: b9a89313566ce3e4e91f0925b29f59a4, type: 2}
-  - {fileID: 2100000, guid: 8525942ce59483b49bf61a0803a3eda8, type: 2}
-  - {fileID: 2100000, guid: 351c27791a991de41a8af9eae2436a30, type: 2}
-  - {fileID: 2100000, guid: 4cbad968192a21a479e698947d9129fa, type: 2}
-  - {fileID: 2100000, guid: d78cd0dbaaddb0549b7c84f81722b01f, type: 2}
-  - {fileID: 2100000, guid: 5ad169c1477f51a49953547de9d26b2c, type: 2}
-  - {fileID: 2100000, guid: b8bbb26b2d41a6640b5f02c575edcdca, type: 2}
-  accessories:
-  - label: KASK A
-    part: {fileID: 1266878957102787157}
-    material: {fileID: 2100000, guid: b9cf3fa8a4a6baa4390720e943f43840, type: 2}
-    hidesHair: 1
-    femaleMesh: {fileID: 0}
-    maleMesh: {fileID: 3255932532944740834, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
-  - label: KASK B
-    part: {fileID: 1266878957102787157}
-    material: {fileID: 2100000, guid: 3578b0978bcb7454c9b42bfb629eb1a2, type: 2}
-    hidesHair: 1
-    femaleMesh: {fileID: 0}
-    maleMesh: {fileID: 3255932532944740834, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
-  - label: "\u015EAPKA A"
-    part: {fileID: 732660938673177038}
-    material: {fileID: 2100000, guid: b5c4c2974a5ef864c8ddbbc5a9851ff4, type: 2}
-    hidesHair: 1
-    femaleMesh: {fileID: 4300000, guid: 0945dc648e2013d46914609b77972809, type: 2}
-    maleMesh: {fileID: 3365645382605875686, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
-  - label: "\u015EAPKA B"
-    part: {fileID: 732660938673177038}
-    material: {fileID: 2100000, guid: 6730c156513cf7746ab1f34d6b0b2be0, type: 2}
-    hidesHair: 1
-    femaleMesh: {fileID: 4300000, guid: 0945dc648e2013d46914609b77972809, type: 2}
-    maleMesh: {fileID: 3365645382605875686, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
-  - label: BOONIE
-    part: {fileID: 2733323210563046770}
-    material: {fileID: 2100000, guid: ae6e7949126bb2445bad80d172d618f4, type: 2}
-    hidesHair: 1
-    femaleMesh: {fileID: 4300000, guid: 00c214a7fa531ea4ab03f4ec051cfaaf, type: 2}
-    maleMesh: {fileID: 3487819381950478204, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
-  - label: "KAR MASKES\u0130 A"
-    part: {fileID: 7444762425677042070}
-    material: {fileID: 2100000, guid: 3baf73e2b3a5a3f46ba37bd2401650f7, type: 2}
-    hidesHair: 0
-    femaleMesh: {fileID: 0}
-    maleMesh: {fileID: -5161475636290840638, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
-  - label: "KAR MASKES\u0130 B"
-    part: {fileID: 7444762425677042070}
-    material: {fileID: 2100000, guid: 2e1dafe40c89f45439019ad3f7da311e, type: 2}
-    hidesHair: 0
-    femaleMesh: {fileID: 0}
-    maleMesh: {fileID: -5161475636290840638, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
-  - label: MASKE
-    part: {fileID: 3998873092273205447}
-    material: {fileID: 2100000, guid: d6b8e67d999f58146a290fb36eb69edb, type: 2}
-    hidesHair: 1
-    femaleMesh: {fileID: 0}
-    maleMesh: {fileID: 6690141603448424749, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
---- !u!114 &3681761691043345009
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.GripDebugRig
+  showOverlay: 0
+  axisLength: 0.1
+  axisThickness: 0.004
+  aimMarkerDistance: 3
+  refreshInterval: 0.1
+  steadySpeed: 0.15
+  mode: 0
+  fileName: grip-olcum
+  saveHoldSeconds: 1.5
+--- !u!114 &1328378670932764659
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -4811,30 +4722,14 @@ MonoBehaviour:
   m_GameObject: {fileID: 5293397041292697250}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 532a616fe94e1034fb45c050b7cd23d5, type: 3}
+  m_Script: {fileID: 11500000, guid: 5fe8085800079114aab7a0075fab7262, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.PlayerAppearance
-  ShowTopMostFoldoutHeaderGroup: 1
-  Head:
-    UpdateTraits:
-      MinSecondsBetweenUpdates: 0
-      MaxSecondsBetweenUpdates: 0
-    m_InternalValue: 0
-  Jacket:
-    UpdateTraits:
-      MinSecondsBetweenUpdates: 0
-      MaxSecondsBetweenUpdates: 0
-    m_InternalValue: 0
-  Pants:
-    UpdateTraits:
-      MinSecondsBetweenUpdates: 0
-      MaxSecondsBetweenUpdates: 0
-    m_InternalValue: 0
-  Accessory:
-    UpdateTraits:
-      MinSecondsBetweenUpdates: 0
-      MaxSecondsBetweenUpdates: 0
-    m_InternalValue: 0
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.Weapons.WeaponGripTuner
+  tuning: 0
+  degreesPerSecond: 12
+  metersPerSecond: 0.05
+  stickDeadzone: 0.2
+  fileName: grip-tune
 --- !u!1 &5518199563869288857
 GameObject:
   m_ObjectHideFlags: 0
@@ -5606,7 +5501,7 @@ SkinnedMeshRenderer:
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
   m_SkinnedMotionVectors: 1
-  m_Mesh: {fileID: -5873653914744133658, guid: d027c9c2f9f60874ea56a0cc5fc3c36c, type: 3}
+  m_Mesh: {fileID: 4300000, guid: d5c8b498666f6c14ba02c39ccfc057fc, type: 2}
   m_Bones:
   - {fileID: 5818209715081988931}
   - {fileID: 6870948268024135893}
@@ -8439,3 +8334,148 @@ Transform:
   - {fileID: 9174701540362102100}
   m_Father: {fileID: 2764736983144439429}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5453172061617534047
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5293397041292697250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d0b8f831a8e16245a05ee1c16b919ec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.CharacterCustomizer
+  headRenderer: {fileID: 4220044762488273386}
+  neckRenderer: {fileID: 5500767704211445798}
+  jacketRenderer: {fileID: 6011857933541497265}
+  pantsRenderer: {fileID: 8565085668502644166}
+  eyeRenderer: {fileID: 7185473220145236971}
+  femaleHeadPart: {fileID: 5978383898407852856}
+  femaleHeadNoBunPart: {fileID: 8558486753362566369}
+  headOptions:
+  - material: {fileID: 2100000, guid: c54494153c686d54a9ca32ec44e2c6c5, type: 2}
+    neckMaterial: {fileID: 2100000, guid: d47acaaeb4ee1654bb4fde2d61fd730f, type: 2}
+    female: 0
+  - material: {fileID: 2100000, guid: 6130959db7a38ff4abfa2aa9c1d45a18, type: 2}
+    neckMaterial: {fileID: 2100000, guid: 5473f4c29241fd3429bca2d6d653e57c, type: 2}
+    female: 0
+  - material: {fileID: 2100000, guid: 41c7c6490b0cf12479617b9ffd785822, type: 2}
+    neckMaterial: {fileID: 2100000, guid: 97b3eb90aeb663b4e96cabaa1f4fbfd1, type: 2}
+    female: 0
+  - material: {fileID: 2100000, guid: dde221d19600ed34a93b7ab0a44a6105, type: 2}
+    neckMaterial: {fileID: 2100000, guid: e00aa48bdc8924e47a2692bf11848b9d, type: 2}
+    female: 0
+  - material: {fileID: 2100000, guid: df0676a3fc5aad1418253d85da138f8b, type: 2}
+    neckMaterial: {fileID: 2100000, guid: aa026ba1dab341648adf9fd1b9dde01b, type: 2}
+    female: 0
+  - material: {fileID: 2100000, guid: 23a5ad9f3fcce5a438e5deb07f32e678, type: 2}
+    neckMaterial: {fileID: 2100000, guid: d47acaaeb4ee1654bb4fde2d61fd730f, type: 2}
+    female: 1
+  - material: {fileID: 2100000, guid: 0185b31a20116424885839fa30189331, type: 2}
+    neckMaterial: {fileID: 2100000, guid: d47acaaeb4ee1654bb4fde2d61fd730f, type: 2}
+    female: 1
+  jacketMaterials:
+  - {fileID: 2100000, guid: b236489e423c26d429e7937aa30f1270, type: 2}
+  - {fileID: 2100000, guid: b1f0c4362ce588a44a827928967b6910, type: 2}
+  - {fileID: 2100000, guid: e20ce4f45362baa4a91fde7d4d676b3c, type: 2}
+  - {fileID: 2100000, guid: 6ccc321574b9f0449bcc29d1940bbae7, type: 2}
+  - {fileID: 2100000, guid: fd2d406fb61b38f4cb8ba6d11411c684, type: 2}
+  - {fileID: 2100000, guid: 0c286e425ab5b7848a4b698f0dbbb764, type: 2}
+  - {fileID: 2100000, guid: 2e2724fe03957844abe84355bfb57395, type: 2}
+  - {fileID: 2100000, guid: 701a7eece6157364aac09f080f9777ac, type: 2}
+  - {fileID: 2100000, guid: 5facee75487632b4296df4ce0379d6c7, type: 2}
+  - {fileID: 2100000, guid: 64d0b446f0f0fe84888cbf08c768ea7b, type: 2}
+  - {fileID: 2100000, guid: e79e6b7c051240b4088b43ba411eee24, type: 2}
+  pantsMaterials:
+  - {fileID: 2100000, guid: 39277c3dbeaf82a4fa8cc771fa629e89, type: 2}
+  - {fileID: 2100000, guid: bf283b47bf9b3a6459ec2cd6498c6a65, type: 2}
+  - {fileID: 2100000, guid: b9a89313566ce3e4e91f0925b29f59a4, type: 2}
+  - {fileID: 2100000, guid: 8525942ce59483b49bf61a0803a3eda8, type: 2}
+  - {fileID: 2100000, guid: 351c27791a991de41a8af9eae2436a30, type: 2}
+  - {fileID: 2100000, guid: 4cbad968192a21a479e698947d9129fa, type: 2}
+  - {fileID: 2100000, guid: d78cd0dbaaddb0549b7c84f81722b01f, type: 2}
+  - {fileID: 2100000, guid: 5ad169c1477f51a49953547de9d26b2c, type: 2}
+  - {fileID: 2100000, guid: b8bbb26b2d41a6640b5f02c575edcdca, type: 2}
+  accessories:
+  - label: KASK A
+    part: {fileID: 1266878957102787157}
+    material: {fileID: 2100000, guid: b9cf3fa8a4a6baa4390720e943f43840, type: 2}
+    hidesHair: 1
+    femaleMesh: {fileID: 0}
+    maleMesh: {fileID: 3255932532944740834, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
+  - label: KASK B
+    part: {fileID: 1266878957102787157}
+    material: {fileID: 2100000, guid: 3578b0978bcb7454c9b42bfb629eb1a2, type: 2}
+    hidesHair: 1
+    femaleMesh: {fileID: 0}
+    maleMesh: {fileID: 3255932532944740834, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
+  - label: "\u015EAPKA A"
+    part: {fileID: 732660938673177038}
+    material: {fileID: 2100000, guid: b5c4c2974a5ef864c8ddbbc5a9851ff4, type: 2}
+    hidesHair: 1
+    femaleMesh: {fileID: 4300000, guid: 0945dc648e2013d46914609b77972809, type: 2}
+    maleMesh: {fileID: 3365645382605875686, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
+  - label: "\u015EAPKA B"
+    part: {fileID: 732660938673177038}
+    material: {fileID: 2100000, guid: 6730c156513cf7746ab1f34d6b0b2be0, type: 2}
+    hidesHair: 1
+    femaleMesh: {fileID: 4300000, guid: 0945dc648e2013d46914609b77972809, type: 2}
+    maleMesh: {fileID: 3365645382605875686, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
+  - label: BOONIE
+    part: {fileID: 2733323210563046770}
+    material: {fileID: 2100000, guid: ae6e7949126bb2445bad80d172d618f4, type: 2}
+    hidesHair: 1
+    femaleMesh: {fileID: 4300000, guid: 00c214a7fa531ea4ab03f4ec051cfaaf, type: 2}
+    maleMesh: {fileID: 3487819381950478204, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
+  - label: "KAR MASKES\u0130 A"
+    part: {fileID: 7444762425677042070}
+    material: {fileID: 2100000, guid: 3baf73e2b3a5a3f46ba37bd2401650f7, type: 2}
+    hidesHair: 0
+    femaleMesh: {fileID: 0}
+    maleMesh: {fileID: -5161475636290840638, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
+  - label: "KAR MASKES\u0130 B"
+    part: {fileID: 7444762425677042070}
+    material: {fileID: 2100000, guid: 2e1dafe40c89f45439019ad3f7da311e, type: 2}
+    hidesHair: 0
+    femaleMesh: {fileID: 0}
+    maleMesh: {fileID: -5161475636290840638, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
+  - label: MASKE
+    part: {fileID: 3998873092273205447}
+    material: {fileID: 2100000, guid: d6b8e67d999f58146a290fb36eb69edb, type: 2}
+    hidesHair: 1
+    femaleMesh: {fileID: 0}
+    maleMesh: {fileID: 6690141603448424749, guid: f1b47da3934f9da47a3e8902194bec4b, type: 3}
+--- !u!114 &3681761691043345009
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5293397041292697250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 532a616fe94e1034fb45c050b7cd23d5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMultiplayer.PlayerAppearance
+  ShowTopMostFoldoutHeaderGroup: 1
+  Head:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  Jacket:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  Pants:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  Accessory:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0

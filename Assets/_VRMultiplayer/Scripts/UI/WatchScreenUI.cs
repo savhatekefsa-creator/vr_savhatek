@@ -24,6 +24,9 @@ namespace VRMultiplayer
         public Vector2 faceStretch = Vector2.one;
 
         [Header("Sabit değer")]
+        /// <summary>Pil yuzdesi icin YEDEK deger. Cihaz gercek pili bildiriyorsa
+        /// (bkz. <see cref="BatteryPercent"/>) bu kullanilmaz; yalnizca masaustu
+        /// Editor gibi pili olmayan ortamlarda ekranda bir sey gorunsun diye durur.</summary>
         [Range(0, 100)] public int batteryPercent = 84;
 
         [Header("Güncelleme")]
@@ -40,12 +43,14 @@ namespace VRMultiplayer
         static readonly Color BevelLo     = new Color(0.00f, 0.00f, 0.00f);     // alt golge (derinlik)
         static readonly Color BarGroove   = new Color(0.015f, 0.03f, 0.028f);   // bar oluk (cukur)
         static readonly Color Accent      = new Color(0.40f, 0.80f, 0.72f);     // teal vurgu (pusula)
-        static readonly Color BatteryCol  = new Color(0.45f, 0.85f, 0.55f);     // pil dolu
 
-        const float BarWidth = 0.55f;
-        const float BarHeight = 0.05f;
-        const float BarLeftX = -0.64f;
-        const float BarY = -0.22f;
+        // Can bari. Eski degerler icerik alani 1.5 x 0.95 iken secilmisti ve bar ekranin
+        // yalnizca sol yarisini kapliyordu (sag yari mermi blokuna ayrilmisti). Yeni duzen
+        // satir tabanli, dolayisiyla bar TAM GENISLIGE yayilir.
+        const float BarWidth = 1.44f;
+        const float BarHeight = 0.055f;
+        const float BarLeftX = -0.72f;
+        const float BarY = 0f;
         const float BarZ = 0f;
 
         // Katmanlar AYNI duzlemde (z=0) durur; hangisinin uste cizilecegini renderQueue belirler.
@@ -56,7 +61,7 @@ namespace VRMultiplayer
         PlayerIdentity _identity;   // K/Ö sayaci icin
         HandGrabber _grabber;
         Transform _face;
-        TextMeshPro _clock, _compass, _battery, _healthT, _ammo, _kd;
+        TMP_Text _clock, _compass, _battery, _healthT, _ammo, _kd;
         Transform _healthBar;
         float _nextRefresh;
 
@@ -91,7 +96,7 @@ namespace VRMultiplayer
         {
             _clock.text = DateTime.Now.ToString("HH:mm");
             _compass.text = CompassText();
-            _battery.text = batteryPercent + "%";
+            _battery.text = BatteryPercent() + "%";
 
             int pct = _health != null
                 ? Mathf.RoundToInt(100f * _health.Health.Value / PlayerHealth.MaxHealth)
@@ -104,7 +109,14 @@ namespace VRMultiplayer
                 _healthBar.localPosition = new Vector3(BarLeftX + BarWidth * r * 0.5f, BarY, BarZ);
             }
 
-            _ammo.text = AmmoText();
+            // SONSUZ SEMBOLU AYRI OLCEKLENIR. "∞" glifi rakamlarin ucte biri yuksekligindedir;
+            // ayni fontSize'da okunmaz hale geliyordu. Okunacak bir SAYI degil taninacak bir
+            // SEMBOL oldugu icin buyutmek duzeni bozmaz — tek karakter, dar. Ayni sey
+            // "silah yok" cizgisi icin de gecerli.
+            string ammo = AmmoText();
+            _ammo.text = ammo;
+            _ammo.fontSize = (ammo == "∞" || ammo == NoWeaponAmmo)
+                           ? TextFontSize * 2.2f : TextFontSize;
 
             // Kisisel skor. Mac/tur mantigi YOK — yalnizca bu oturumdaki sayac.
             _kd.text = _identity != null
@@ -112,12 +124,35 @@ namespace VRMultiplayer
                 : "K 0   Ö 0";
         }
 
-        /// <summary>Elindeki silah mermi sayıyorsa gerçek sayı; saymıyorsa (silahsızsın ya da
-        /// o silahta şarjör kapalı) eskisi gibi ∞.</summary>
+        /// <summary>
+        /// Gozlugun GERCEK pil yuzdesi. Bu alan bugune kadar Inspector'daki sabit 84'u
+        /// gosteriyordu — yani ekranin en dar yerinde uydurma bir sayi, uc okunabilir bilgiyle
+        /// yer yarisiyordu. Quest bir Android cihaz oldugu icin deger dogrudan alinabiliyor.
+        ///
+        /// Pili olmayan ortamlarda (masaustu Editor) API -1 doner; o zaman Inspector'daki
+        /// yedege dusulur.
+        /// </summary>
+        int BatteryPercent()
+        {
+            float lvl = SystemInfo.batteryLevel;      // 0..1, bilinmiyorsa -1
+            return lvl < 0f ? batteryPercent : Mathf.RoundToInt(lvl * 100f);
+        }
+
+        /// <summary>Elde silah yokken mermi alanina yazilan sey. Sayi DEGIL, "veri yok"
+        /// isareti — 0 yazmak "sarjorun bos" demek olurdu ve o baska bir durum.</summary>
+        const string NoWeaponAmmo = "---";
+
+        /// <summary>Elindeki silah mermi sayıyorsa gerçek sayı; saymıyorsa ∞; elin bossa
+        /// <see cref="NoWeaponAmmo"/>.</summary>
         string AmmoText()
         {
             var w = HeldWeapon();
-            if (w == null || !w.UsesAmmo) return "∞";
+            // ELDE SILAH YOKKEN SONSUZ YAZMAK MANTIK HATASIYDI: "sinirsiz mermin var" demek
+            // oluyordu, oysa ortada silah bile yok. Iki durum ayrildi:
+            //   silah YOK          -> cizgi (bilgi yok)
+            //   silah var, saymiyor -> sonsuz (gercekten sinirsiz)
+            if (w == null) return NoWeaponAmmo;
+            if (!w.UsesAmmo) return "∞";
             if (w.IsReloading) return "···";
             return w.Ammo.ToString();
         }
@@ -154,45 +189,79 @@ namespace VRMultiplayer
             _face.localRotation = Quaternion.Euler(faceLocalEuler);
             _face.localScale = FaceScaleVec;
 
-            // --- Katmanlar: hepsi z=0 duzleminde, sira renderQueue ile (arkadan one) ---
+            // --- YERLESIM: KADRANIN KENDI ORANINA GORE ---
+            //
+            // NEDEN DEGISTI: ekran artik saatin GERCEK kadranina oturuyor (bkz. WristWatch.DialFace)
+            // ve kadran 3.5 x 2.8 cm. Eski duzen 6.3 x 4.1 cm'lik bir ekran icin yapilmisti;
+            // oldugu gibi kuculunce yazilar 0.8-1.1 mm'ye dustu. Olculdu: ~25 cm bakis
+            // mesafesinde bu 0.2-0.25 derece eder, VR'da rahat okuma esigi ise kabaca 0.5-1
+            // derece. Yani ekran dogru yerdeydi ama okunmuyordu.
+            //
+            // NOT: dikey kenar sonradan 2.60 -> 2.40 cm'e cekildi (cihazda istendi).
+            // Yatay kenara DOKUNULMADI; yalnizca Y degerleri 0.938 ile olceklendi, yani
+            // satir aralari %6.2 daraldi. YAZI BOYUTLARI AYNI KALDI — faceStretch ile
+            // ezmek daha kolay olurdu ama o glifleri de yassiltir ve TMP'ye gecmenin
+            // amacini (keskin yazi) bozardi.
+            //
+            // IKI DEGISIKLIK: (1) icerik kadranin ENINI de kullaniyor — 0.95 -> 1.19 birim,
+            // cunku eski oran 1.5:0.95 idi ve kadranin 2.8 cm'lik eninde 0.5 cm bos kaliyordu.
+            // (2) sol/sag ikiye bolme birakildi; duzen SATIR tabanli oldu, boylece her satir
+            // tam genisligi kullanir ve yazilar 2-4.5 mm'ye cikar.
             var frame = MakeQuad(_face, "Frame", Bezel, 0);          // ince cerceve
-            frame.localScale = new Vector3(1.57f, 1.02f, 1f);
+            frame.localScale = new Vector3(1.57f, 1.178f, 1f);       // kadranin eni eksi 2 mm
 
             var bg = MakeQuad(_face, "Bg", ScreenBg, 1);             // ekran zemini
-            bg.localScale = new Vector3(1.5f, 0.95f, 1f);
+            bg.localScale = new Vector3(1.50f, 1.116f, 1f);
 
             var top = MakeQuad(_face, "TopStrip", TopStripCol, 2);   // ust bar (cukur ton)
-            top.localScale = new Vector3(1.5f, 0.2f, 1f);
-            top.localPosition = new Vector3(0f, 0.375f, 0f);
+            top.localScale = new Vector3(1.50f, 0.206f, 1f);
+            top.localPosition = new Vector3(0f, 0.441f, 0f);
 
             // Bevel: ust parlak + alt golge (derinlik hissi)
-            Line("BevelTop", new Vector3(0f,  0.468f, 0f), new Vector3(1.5f, 0.012f, 1f), BevelHi, 3);
-            Line("BevelBot", new Vector3(0f, -0.468f, 0f), new Vector3(1.5f, 0.012f, 1f), BevelLo, 3);
+            Line("BevelTop", new Vector3(0f,  0.563f, 0f), new Vector3(1.50f, 0.014f, 1f), BevelHi, 3);
+            Line("BevelBot", new Vector3(0f, -0.563f, 0f), new Vector3(1.50f, 0.014f, 1f), BevelLo, 3);
 
-            // Blok ayirici cizgiler
-            Line("HDiv", new Vector3(0f,  0.27f, 0f), new Vector3(1.5f,  0.014f, 1f), Divider, 4);  // ust bar / orta
-            Line("VDiv", new Vector3(0f, -0.09f, 0f), new Vector3(0.014f, 0.72f, 1f), Divider, 4);  // sol / sag
+            // Satir ayiricilari. Dikey ayirici (VDiv) KALKTI: sol/sag bolme, genisligin yariya
+            // dusmesi demekti ve bu ekranda yazi boyutunu yaristiran asil sey oydu.
+            Line("HDiv1", new Vector3(0f,  0.338f, 0f), new Vector3(1.50f, 0.014f, 1f), Divider, 4);
+            Line("HDiv2", new Vector3(0f, -0.141f, 0f), new Vector3(1.50f, 0.014f, 1f), Divider, 4);
 
             // Can barinin olugu + dolu kismi
             var groove = MakeQuad(_face, "HealthGroove", BarGroove, 5);
-            groove.localScale = new Vector3(BarWidth + 0.03f, BarHeight + 0.035f, 1f);
+            groove.localScale = new Vector3(BarWidth + 0.04f, BarHeight + 0.035f, 1f);
             groove.localPosition = new Vector3(BarLeftX + BarWidth * 0.5f, BarY, 0f);
-
-            BuildBatteryIcon(new Vector3(0.42f, 0.375f, 0f));
 
             _healthBar = MakeQuad(_face, "HealthBar", HealthColor, 9);
             _healthBar.localScale = new Vector3(BarWidth, BarHeight, 1f);
             _healthBar.localPosition = new Vector3(BarLeftX + BarWidth * 0.5f, BarY, BarZ);
 
             // --- Yazilar (renderQueue en yuksek: her zaman en ustte) ---
-            _clock   = MakeText(_face, "00:00", new Vector3(-0.70f, 0.375f, 0f), TextAnchor.MiddleLeft,   ScreenText, 0.10f);
-            _compass = MakeText(_face, "N 0°",  new Vector3( 0.00f, 0.375f, 0f), TextAnchor.MiddleCenter, Accent,     0.10f);
-            _battery = MakeText(_face, "84%",   new Vector3( 0.71f, 0.375f, 0f), TextAnchor.MiddleRight,  ScreenText, 0.095f);
-            _healthT = MakeText(_face, "100%",  new Vector3(-0.64f, 0.06f,  0f), TextAnchor.MiddleLeft,   HealthColor, 0.24f);
-            // Can yazisi ile can barinin ARASINDAKI bos serit: yerlesim degistirmeden sigar.
-            _kd      = MakeText(_face, "K 0   Ö 0", new Vector3(-0.64f, -0.09f, 0f), TextAnchor.MiddleLeft, Muted, 0.105f);
-            MakeText(_face, "MERMI", new Vector3(0.38f, 0.10f, 0f), TextAnchor.MiddleCenter, Muted, 0.095f);
-            _ammo = MakeText(_face, "∞", new Vector3(0.38f, -0.16f, 0f), TextAnchor.MiddleCenter, ScreenText, 0.34f);
+            // Boyutlar OLCULEREK secildi: bu olcekte 1 birim `size` ~11.2 mm harf yuksekligi
+            // veriyor. Birincil bilgi (can, mermi) 4-4.5 mm, ikincil bilgi 2-2.5 mm.
+            // HER SATIRDA IKI OGE. Uc oge denendi ve OLCULDU: ust satirda saat+pusula+pil
+            // yan yana durunca ucu de 1.7-2.3 mm'ye sikisiyordu, yani ikisi okuma esiginin
+            // altinda kaliyordu. Ikiye dusunce ayni satirda 2.7 mm'ye cikiyorlar.
+            //
+            // "MERMI" etiketi KALDIRILDI: 3.5 cm'lik bir ekranda her etiket, yanindaki
+            // DEGERIN boyutundan calar. Can barinin altindaki buyuk sayi zaten mermidir.
+            // UST SATIR EN UZUN OLASI METNE GORE OLCULENDI, gorunen metne gore degil.
+            // Pusula "N 0°" degil "NW 359°" olabilir — 4 yerine 7 karakter. 0.26'da o hal
+            // saatin uzerine biniyordu; 0.25'te 1.5 mm bosluk kaliyor. Bu satiri buyutmenin
+            // tek yolu pusuladan derece SAYISINI atmak (2 karaktere duser, ~1.6x buyur).
+            _clock   = MakeText(_face, "00:00",     new Vector3(-0.72f,  0.441f, 0f), TextAnchor.MiddleLeft,  ScreenText,  0.25f);
+            _compass = MakeText(_face, "N 0°",      new Vector3( 0.72f,  0.441f, 0f), TextAnchor.MiddleRight, Accent,      0.25f);
+            _healthT = MakeText(_face, "100%",      new Vector3(-0.72f,  0.178f, 0f), TextAnchor.MiddleLeft,  HealthColor, 0.40f);
+            _kd      = MakeText(_face, "K 0   Ö 0", new Vector3( 0.72f,  0.178f, 0f), TextAnchor.MiddleRight, Muted,       0.18f);
+            // ALT SATIR EN KOTU DURUMA GORE: mermi "120" olabilir. 0.44'te genisligi 0.987
+            // birime cikip pilin uzerine 0.060 biniyordu (olculdu). 0.40 + pil 0.23 ile
+            // aralarinda 1.7 mm bosluk kaliyor ve ikisi de okuma esiginin uzerinde.
+            // MERMI ETIKETI GERI GELDI, ama YAN YANA degil UST USTE. Yan yana koymak sayinin
+            // boyutundan calıyordu; ustune koyunca ikisi de yerini koruyor ve "bu sayi nedir"
+            // sorusu kalmiyor. Cihazda "ya mermi sembolu gelsin ya ustte MERMI yazsin altta
+            // sayisi" dendi — ikincisi.
+            MakeText(_face, "MERMI",                new Vector3(-0.72f, -0.202f, 0f), TextAnchor.MiddleLeft,  Muted,       0.17f);
+            _ammo    = MakeText(_face, "∞",         new Vector3(-0.72f, -0.427f, 0f), TextAnchor.MiddleLeft,  ScreenText,  0.30f);
+            _battery = MakeText(_face, "84%",       new Vector3( 0.72f, -0.328f, 0f), TextAnchor.MiddleRight, Muted,       0.23f);
 
             Refresh();
         }
@@ -205,44 +274,123 @@ namespace VRMultiplayer
             q.localPosition = pos;
         }
 
-        // Kucuk pil ikonu: govde + ic bosluk + dolu kisim + uc.
-        void BuildBatteryIcon(Vector3 pos)
-        {
-            var body = MakeQuad(_face, "BatBody", Muted, 6);
-            body.localScale = new Vector3(0.17f, 0.09f, 1f);
-            body.localPosition = pos;
-
-            var inner = MakeQuad(_face, "BatInner", ScreenBg, 7);
-            inner.localScale = new Vector3(0.15f, 0.07f, 1f);
-            inner.localPosition = pos;
-
-            float f = Mathf.Clamp01(batteryPercent / 100f);
-            var fill = MakeQuad(_face, "BatFill", BatteryCol, 8);
-            fill.localScale = new Vector3(0.14f * f, 0.055f, 1f);
-            fill.localPosition = pos + new Vector3(-0.07f + 0.14f * f * 0.5f, 0f, 0f);
-
-            var nub = MakeQuad(_face, "BatNub", Muted, 6);
-            nub.localScale = new Vector3(0.016f, 0.04f, 1f);
-            nub.localPosition = pos + new Vector3(0.094f, 0f, 0f);
-        }
-
-        TextMeshPro MakeText(Transform parent, string text, Vector3 pos, TextAnchor anchor, Color color, float size)
+        /// <summary>
+        /// Ekran yazisi. TextMesh yerine TMP: eski yol fontu SABIT bir piksel boyutunda
+        /// (fontSize 72) bir atlasa rasterize ediyordu, saat ise goze 20-30 cm mesafede duruyor;
+        /// yakinlasinca yazi cozunurlugu bitiyor ve bulaniyordu. TMP isaretli mesafe alani (SDF)
+        /// kullanir, yani kenarlar shader'da yeniden kurulur ve her mesafede keskin kalir.
+        ///
+        /// BOYUT DEGISMEDI. Olculdu: eski ayarlarla ("100%", characterSize 0.1, fontSize 72)
+        /// yazi 1.84 x 0.80 yerel birim kapliyordu; TMP'de ayni olcuyu <see cref="TextFontSize"/>
+        /// veriyor (dogrulandi: 1.8414 x 0.8044). Boylece bu adim YALNIZCA cizim kalitesini
+        /// degistirir, yerlesimi degil — boyut/duzen ayari ayri bir adim.
+        /// </summary>
+        TMP_Text MakeText(Transform parent, string text, Vector3 pos, TextAnchor anchor, Color color, float size)
         {
             var go = new GameObject("T_" + text);
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = pos;
-            go.transform.localScale = Vector3.one * size;
-            var tm = go.AddComponent<TextMeshPro>();
-            // Font + materyal tek kaynaktan (bkz. UITheme.DefaultFont). Kuyruk veriliyor ki
-            // yazilar saatin katmanlarinin ustunde kalsin; materyal kuyruk basina PAYLASILIR,
-            // yani ekrandaki 6 yazi eskisi gibi 6 ayri materyal uretmez.
-            VRMultiplayer.UI.UITheme.ApplyFont(tm, QueueBase + 20);
-            VRMultiplayer.UI.UITheme.ConfigureText(tm, anchor);
-            tm.text = text;
-            // eski TextMesh: characterSize 0.1 x punto 72 = 0.72 yerel satir. Ayni boy.
-            tm.fontSize = VRMultiplayer.UI.UITheme.FontSizeForLocalLineHeight(tm, 0.72f);
-            tm.color = color;
-            return tm;
+
+            var tmp = go.AddComponent<TextMeshPro>();
+            var rt = tmp.rectTransform;
+            rt.localPosition = pos;
+            rt.localScale = Vector3.one * size;
+
+            // ANKRAJ: TextMesh'te cipa noktasi dogrudan transform orijiniydi. TMP ise yaziyi bir
+            // RectTransform'un ICINE dizer; ayni davranisi almak icin hizalama ile PIVOT birlikte
+            // ayarlanmali. Pivot, rect'in hizalandigi kenarini orijine getirir — yalnizca
+            // hizalamayi ayarlayip pivotu birakmak butun yazilari rect genisligi kadar kaydirirdi.
+            rt.pivot = PivotOf(anchor);
+            rt.sizeDelta = RectSize;
+
+            tmp.font = FontAsset;
+            tmp.fontSize = TextFontSize;
+            tmp.text = text;
+            tmp.color = color;
+            tmp.alignment = AlignOf(anchor);
+            tmp.textWrappingMode = TextWrappingModes.NoWrap;   // rect yalnizca hizalama icin
+            tmp.overflowMode = TextOverflowModes.Overflow;
+            tmp.raycastTarget = false;
+            // Materyal KUYRUK BASINA paylasilir (UITheme.ApplyFont ile ayni desen): ekrandaki
+            // alti yazi tek materyal kullanir, alti ayri kopya uretmez.
+            tmp.fontSharedMaterial = QueuedFontMaterial(QueueBase + 20);
+
+            var mr = go.GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+            }
+            return tmp;
+        }
+
+        /// <summary>TMP fontSize 1 birimi kac YEREL birim yukseklik verir. Olculdu
+        /// (SavHaTek_SDF, 90pt ornekleme): 0.11172. Buradan TextFontSize turetildi.</summary>
+        const float TmpUnitsPerFontSize = 0.11172f;
+
+        /// <summary>Eski TextMesh ile AYNI fiziksel boyutu veren TMP fontSize'i (0.8044 / 0.11172).
+        /// Sabit gomulu degil, olculerek bulundu; font asset'i yeniden uretilirse
+        /// TmpUnitsPerFontSize ile birlikte yeniden olculmeli.</summary>
+        const float TextFontSize = 7.2f;
+
+        /// <summary>Yazi rect'i. Kirpma YAPMAZ (NoWrap + Overflow) — yalnizca hizalamanin
+        /// dayandigi cerceve. En uzun metin ("K 0   O 0") ~4.1 birim, bol pay birakiliyor.</summary>
+        static readonly Vector2 RectSize = new Vector2(20f, 4f);
+
+        /// <summary>Font asset yolu (Resources). Menu ile LiberationSans.ttf'ten uretildi:
+        /// ASCII + Turkce + derece + sonsuz = 116 glif, TEK atlas, Static populasyon.
+        /// Static onemli: cihazda calisma aninda glif rasterize edilmez.</summary>
+        const string FontAssetPath = "Fonts/SavHaTek_SDF";
+
+        TMP_FontAsset _font;
+        Material _fontMat;
+
+        TMP_FontAsset FontAsset
+        {
+            get
+            {
+                if (_font != null) return _font;
+                _font = Resources.Load<TMP_FontAsset>(FontAssetPath);
+                if (_font == null)
+                {
+                    // Yedek: TMP'nin varsayilani. DIKKAT — onda sonsuz (U+221E) ve Turkce
+                    // i-noktasiz/g-yumusak/s-cedilla YOKTUR, o karakterler kutu cikar.
+                    _font = TMP_Settings.defaultFontAsset;
+                    Debug.LogWarning("[Saat] Font asset yok: Resources/" + FontAssetPath +
+                                     " — TMP varsayilanina dusuldu, bazi karakterler eksik cizilir.");
+                }
+                return _font;
+            }
+        }
+
+        Material QueuedFontMaterial(int queue)
+        {
+            var fa = FontAsset;
+            if (fa == null) return null;
+            if (_fontMat == null || _fontMat.renderQueue != queue)
+                _fontMat = new Material(fa.material) { renderQueue = queue };
+            return _fontMat;
+        }
+
+        /// <summary>TextAnchor -> rect pivotu. Cagri yerleri yalnizca Middle* kullaniyor;
+        /// digerleri guvenli sekilde ortalanir.</summary>
+        static Vector2 PivotOf(TextAnchor a)
+        {
+            switch (a)
+            {
+                case TextAnchor.MiddleLeft:  return new Vector2(0f, 0.5f);
+                case TextAnchor.MiddleRight: return new Vector2(1f, 0.5f);
+                default:                     return new Vector2(0.5f, 0.5f);
+            }
+        }
+
+        static TextAlignmentOptions AlignOf(TextAnchor a)
+        {
+            switch (a)
+            {
+                case TextAnchor.MiddleLeft:  return TextAlignmentOptions.Left;
+                case TextAnchor.MiddleRight: return TextAlignmentOptions.Right;
+                default:                     return TextAlignmentOptions.Center;
+            }
         }
 
         // order = cizim sirasi (buyuk = uste). Katmanlar ayni duzlemde durdugu icin

@@ -7,7 +7,7 @@ namespace VRMultiplayer.UI
 {
     /// <summary>
     /// KARAKTER DUZENI ekraninin yuzeyi: ERKEK/KADIN sekmeleri + mankenin etrafina dizilmis
-    /// ok ciftleri + sayaclar + RASTGELE / TAMAM. <see cref="CharacterSelectUI"/> kurar ve surer; manken bu
+    /// ok ciftleri + sayaclar + RASTGELE / KATIL. <see cref="CharacterSelectUI"/> kurar ve surer; manken bu
     /// panelin ~0.45 m ARKASINDA durur, oklar boylece degistirdikleri parcanin hizasinda
     /// gorunur (aksesuar oklari kafanin ustunde, kafa oklari kafanin yaninda...).
     ///
@@ -26,7 +26,7 @@ namespace VRMultiplayer.UI
 
         /// <summary>Ok tusu: (yuva, yon). Yon -1 = onceki, +1 = sonraki.</summary>
         public event Action<int, int> StepPressed;
-        /// <summary>TAMAM — secim bitti, giris ekranina don.</summary>
+        /// <summary>KATIL — secim bitti, dogrudan maca gir.</summary>
         public event Action ReadyPressed;
         public event Action RandomPressed;
         /// <summary>Cinsiyet sekmesi secildi (true = KADIN).</summary>
@@ -123,12 +123,13 @@ namespace VRMultiplayer.UI
                 TextAnchor.MiddleCenter, QText);
             _accessoryName.transform.localPosition = new Vector3(0f, 2.02f, ZText);
 
-            // TAMAM: secimi bitirir ve GIRIS ekranina doner (oyuna sokmaz — oyuna KATIL
-            // sokar). Tek cikis tusu: ayri bir GERI tusu ayni isi yapan ikinci tus olurdu.
+            // KATIL: secimi bitirir ve DOGRUDAN maca sokar. Ikinci bir giris ekrani yok;
+            // isim ve takim buraya girmeden once belirleniyor, geri donulecek eksik kalmiyor.
+            // Tek cikis tusu: ayri bir GERI tusu ayni isi yapan ikinci tus olurdu.
             AddButton(new Vector2(0f, 0.40f), new Vector2(0.52f, 0.135f), 0.026f,
-                "TAMAM", 0.044f, ReadyEdge, ReadyFill, ReadyText, ActReady);
+                "KATIL", 0.044f, ReadyEdge, ReadyFill, ReadyText, ActReady);
 
-            var hint = UITheme.MakeText(transform, "TAMAM sonrası KATIL ile oyuna girilir.",
+            var hint = UITheme.MakeText(transform, "KATIL ile doğrudan oyuna girilir.",
                 LabelCol, 0.020f, TextAnchor.MiddleCenter, QText);
             hint.transform.localPosition = new Vector3(0f, 0.275f, ZText);
 

@@ -159,7 +159,12 @@ namespace VRMultiplayer.UI
         public void SetState(bool waiting, byte team, bool inZone)
         {
             _team = team;
-            bool guiding = waiting && team != 0 && !inZone;
+
+            // KALIBRE OLMADAN GOSTERILMEZ — <see cref="RespawnGuide"/> ile ayni gerekce.
+            // Cerceve oturmadan bolgenin GERCEK odada nerede oldugu bilinmiyor; zemine cizilen
+            // rota da, ona dusen yon oku da rastgele bir yeri gosterir. Cihazda yasandi: kart
+            // kapatildi ama yerdeki mavi ok kalmisti, cunku kapi yalnizca oraya konmustu.
+            bool guiding = waiting && team != 0 && !inZone && CalibrationManager.Calibrated;
 
             // Yurunebilir alan yoksa SESSIZ kalmiyoruz: gosterge yon okuna duser ve bu bilincli
             // bir dususmedir, gelistirici eksik bake'i gorebilmeli. Uyari erken cikar

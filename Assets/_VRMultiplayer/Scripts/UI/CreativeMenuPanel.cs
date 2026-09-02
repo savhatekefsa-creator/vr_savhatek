@@ -21,7 +21,7 @@ namespace VRMultiplayer.UI
     /// </summary>
     public class CreativeMenuPanel : MonoBehaviour
     {
-        public enum Choice { NewMap, ExistingMap, ManagePool }
+        public enum Choice { NewMap, ExistingMap, ManagePool, Exit }
 
         /// <summary>Bir karta basildi. Panel uygulama durumuna DOKUNMAZ, niyeti bildirir.</summary>
         public event Action<Choice> Selected;
@@ -34,6 +34,16 @@ namespace VRMultiplayer.UI
 
         const float TitleY = 0.132f, TitleHalfSpan = 0.20f;
         const float SubtitleY = 0.082f;
+
+        // GERI DUGMESI: panelin SOL UST kosesinde kucuk bir ok. Bilerek kart degil ve
+        // bilerek kenarda — "yeni/mevcut/havuz" bir is secimi, bu ise akistan cikis. Once
+        // kartlarin altina genis bir serit konmustu; kullanici onu istemedi, koseye kucuk
+        // bir ikon istedi (2026-08-31).
+        // Panel 0.86 x 0.44, yani sol ust kose (-0.43, +0.22). Baslik x -0.20..+0.20
+        // arasinda, dolayisiyla carpisma yok.
+        const float BackX = -0.375f, BackY = 0.163f;
+        const float BackW = 0.070f, BackH = 0.058f, BackR = 0.012f;
+        const float BackIconW = 0.026f, BackIconH = 0.024f;
 
         const float IconDy = 0.052f, IconW = 0.026f, IconH = 0.030f;
         const float CardTitleDy = -0.004f, CardDescDy = -0.056f;
@@ -87,6 +97,12 @@ namespace VRMultiplayer.UI
             AddCard(+CardX, Choice.ManagePool, "HAVUZ", "Oyuna açılanlar",
                 UITheme.TeamBlueEdge, UIMesh.Arrow());
 
+            // Yaratici moddan cikis. Onceden hic yoktu: harita kaydedildikten sonra da,
+            // yanlislikla yaratici mod secildiginde de bu menude kilitli kaliniyordu -
+            // oyuna girmenin tek yolu uygulamayi yeniden baslatmakti (cihazda bildirildi
+            // 2026-08-31). AppMode.ReturnToModeSelect zaten vardi ama cagiran yoktu.
+            AddBackButton();
+
             var h = UITheme.MakeShape(transform, "Hover",
                 UIMesh.RoundedRect(0.01f, 0.01f, 0.002f), HoverCol, QHover);
             _hoverMesh = h.GetComponent<MeshFilter>();
@@ -133,6 +149,38 @@ namespace VRMultiplayer.UI
             _cards.Add(new Card
             {
                 center = c, size = size, radius = CardR, choice = choice, edge = edge,
+                fillMat = body.GetComponent<MeshRenderer>().sharedMaterial,
+                borderMat = border.GetComponent<MeshRenderer>().sharedMaterial,
+                glowMat = glow.GetComponent<MeshRenderer>().sharedMaterial,
+            });
+        }
+
+        /// <summary>Sol ust kosedeki geri dugmesi. Kartlarla AYNI vurgu/tiklama yolunu
+        /// kullanir (ayni _cards listesi), yalnizca gorunumu farkli: yazi yok, tek ikon.</summary>
+        void AddBackButton()
+        {
+            var c = new Vector2(BackX, BackY);
+            var size = new Vector2(BackW, BackH);
+            Color edge = Muted;
+
+            var glow = UITheme.MakeRounded(transform, "Back Glow", c,
+                size + Vector2.one * 0.010f, BackR + 0.005f,
+                new Color(edge.r, edge.g, edge.b, 0f), ZBorder + 0.001f, QGlow);
+            var border = UITheme.MakeRounded(transform, "Back Border", c, size, BackR,
+                edge, ZBorder, QBorder);
+            var body = UITheme.MakeRounded(transform, "Back Fill", c,
+                size - Vector2.one * 0.004f, Mathf.Max(0f, BackR - 0.002f), CardFill,
+                ZFill, QFill);
+
+            // Ok SAGA bakiyor (UIMesh.Arrow); geri icin X'te aynalanir.
+            var ic = UITheme.MakeShape(transform, "Back Icon", UIMesh.Arrow(),
+                UITheme.TextPrimary, QIcon);
+            ic.localPosition = new Vector3(c.x, c.y, ZIcon);
+            ic.localScale = new Vector3(-BackIconW, BackIconH, 1f);
+
+            _cards.Add(new Card
+            {
+                center = c, size = size, radius = BackR, choice = Choice.Exit, edge = edge,
                 fillMat = body.GetComponent<MeshRenderer>().sharedMaterial,
                 borderMat = border.GetComponent<MeshRenderer>().sharedMaterial,
                 glowMat = glow.GetComponent<MeshRenderer>().sharedMaterial,

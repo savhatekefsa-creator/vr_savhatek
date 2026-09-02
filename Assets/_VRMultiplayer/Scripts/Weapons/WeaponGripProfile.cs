@@ -36,6 +36,32 @@ namespace VRMultiplayer.Weapons
         [Tooltip("Namlunun silah-LOKAL yonu (Muzzle forward). Iki elli nisan BU ekseni hedefe hizalar; kabza cipasi egik yakalanmis olsa bile namlu dogru doner.")]
         public Vector3 barrelLocalDirection = Vector3.forward;
 
+        [Header("Atolye tezgahi sunumu (namlusu OLMAYAN nesneler icin)")]
+        // NEDEN AYRI ALANLAR: tezgah durusu bugune kadar barrelLocalDirection'dan turetiliyordu
+        // (bkz. WeaponWorkshop.BenchRotation). Tufekte bu dogru — namlu nesnenin uzun eksenidir
+        // ve tek eksen sunumu yeterince belirler. BOMBADA NAMLU YOKTUR: uc bombanin da
+        // barrelLocalDirection'i (0,0,1) yazili ve bu deger hicbir seyi tarif etmiyor. Sonuc
+        // olculdu — kol/pim halkasi uc bombada UC AYRI yone bakiyordu (G1 -Z, G2 +X+Z, G3 +X-Z),
+        // yani ayni tezgahta ucu de baska turlu duruyordu.
+        //
+        // IKI EKSEN sunumu TAM belirler ve roll'u tanimsiz birakmaz. Ikisi de bos ise
+        // (varsayilan) eski namlu kurali gecerlidir — dokunulmamis 16 silahin durusu birebir
+        // korunur.
+        //
+        // SUNUM VERIYI ETKILEMEZ: el silaha GORE yerlestiriliyor (WeaponWorkshop.Drive:
+        // cipa = weapon.TransformPoint(...)), yani buradaki degerler yalnizca senin nasil
+        // gordugunu degistirir, kaydedilen tutusa dokunmaz.
+        [Tooltip("Tezgahta YUKARI bakacak silah-lokal eksen (bombada govde ekseni: gobek->tapa). Sifir = eski namlu kurali.")]
+        public Vector3 benchUpLocal = Vector3.zero;
+        [Tooltip("Tezgahta OYUNCUYA bakacak silah-lokal eksen (bombada emniyet kolu / pim halkasi tarafi). Sifir = eski namlu kurali.")]
+        public Vector3 benchFrontLocal = Vector3.zero;
+
+        /// <summary>Tezgah sunumu bu profilde ACIKCA yazili mi? Iki eksen de dolu ve
+        /// birbirine paralel DEGIL olmali (paralel olurlarsa LookRotation cozulemez).</summary>
+        public bool HasBenchPose =>
+            benchUpLocal.sqrMagnitude > 1e-6f && benchFrontLocal.sqrMagnitude > 1e-6f &&
+            Vector3.Cross(benchUpLocal.normalized, benchFrontLocal.normalized).sqrMagnitude > 1e-4f;
+
         [Header("Savas config (SUNUCU-OTORITER; doluysa asagidaki eski ates/tepme/sarjor alanlarini ezer)")]
         [Tooltip("Bu silahin savas ayarlari. Bos = asagidaki eski alanlar gecerli (davranis degismez).")]
         public WeaponCombatConfig combat;
@@ -46,11 +72,129 @@ namespace VRMultiplayer.Weapons
         [Header("Destek rayi (kundak; silah-lokal dogru parcasi)")]
         public Vector3 supportRailLocalStart;
         public Vector3 supportRailLocalEnd;
-        [Tooltip("Kumanda raydan bu kadar uzaklasirsa destek eli otomatik birakilir (metre).")]
+        [Tooltip("KULLANILMIYOR (2026-08-17). Kopma esigi artik silah basina degil TEK yerden " +
+                 "geliyor: HandGrabber.SupportBreakReach. Sebep: bu alan 19 profilin hepsinde " +
+                 "0.30 idi ve zaten HandGrabber'daki tabanla eziliyordu — silah basina ayar " +
+                 "izlenimi veren ama hicbir sey yapmayan bir alandi. Gercekten silah basina " +
+                 "kopma esigi gerekirse burasi yeniden baglanabilir.")]
         public float supportBreakDistance = 0.30f;
         public HandPose supportHand = HandPose.Defaults(false);
 
+        [Header("SOL EL ANA (solak oyuncu) — istege bagli")]
+        [Tooltip("Silah SOL elde ANA olarak tutuldugunda kullanilacak pozlar. BOS BIRAKILABILIR: " +
+                 "o zaman sag el pozu aynalanir (eski davranis). Aynalama bir silahta bozuk " +
+                 "duruyorsa atolyede 'SOL EL: ANA' kipiyle bu alanlar doldurulur ve aynalamanin " +
+                 "yerini alir. Yalnizca bozuk olani doldurmak yeterli; ikisi bagimsiz.")]
+        public HandPose mainHandLeft;
+        public HandPose supportHandRight;
+
+        /// <summary>Bir poz ELLE yazildi mi? Bilek konumu ve acisi birlikte sifirsa yazilmamis
+        /// sayilir — atolyeden gecen her poz en az birini sifirdan farkli birakir.</summary>
+        public static bool IsAuthored(HandPose hp) =>
+            hp.fpWristLocalPosition != Vector3.zero || hp.fpWristLocalEuler != Vector3.zero;
+
+        /// <summary>
+        /// Bu rol icin kullanilacak poz — ve cagiranin AYNALAMASI gerekip gerekmedigi.
+        ///
+        /// Pozlar SAG el ana / SOL el destek olacak sekilde yazildi. Silah ters elde
+        /// tutuluyorsa iki secenek var:
+        ///   1) Bu duruma AYRI bir poz yazilmissa onu kullan, aynalama YOK.
+        ///   2) Yazilmamissa eski yola dus: sag-el pozunu aynala.
+        ///
+        /// Ikisini tek yerde toplamak sart: secim ile aynalama ayri yerlerde yapilirsa biri
+        /// digerinden kayar ve el silahin icinde durur.
+        /// </summary>
+        public HandPose PoseFor(bool supportRole, bool leftIsMain, out bool needsMirror)
+        {
+            if (leftIsMain)
+            {
+                HandPose ozel = supportRole ? supportHandRight : mainHandLeft;
+                if (IsAuthored(ozel)) { needsMirror = false; return ozel; }
+                needsMirror = true;
+            }
+            else needsMirror = false;
+
+            return supportRole ? supportHand : mainHand;
+        }
+
+        /// <summary>
+        /// CIPA CERCEVESI - elin uzerine oturdugu silah-yerel nokta ve yonelim.
+        ///
+        /// TEK KARAR NOKTASI, tipki <see cref="PoseFor"/> gibi. Ayni hesap iki yerde
+        /// yapiliyor: calisma aninda WeaponHandWeld.ComputeAnchor, tezgahta
+        /// WeaponWorkshop.Drive. Ikisi ayrildigi anda "atolyede gordugun poz = oyundaki poz"
+        /// sozu bozulur.
+        ///
+        /// CIHAZDA GORULDU (2026-08-27): sol-ana kipinde tezgah HAM cerceveyi, oyun
+        /// AYNALANMIS cerceveyi kullaniyordu. Dmr1'de iki cerceve arasi 37 derece vardi ve
+        /// ayni offset 5.7 cm farkli yere dusuyordu - kullanici "parmaklar tamam ama bilek
+        /// yanlis" diye bildirdi (parmaklar FIZIKSEL ele gore saklandigi icin etkilenmiyor).
+        ///
+        /// NEDEN AYNALANIYOR: kabza rakisi SAG kumandanin gercek tutus acisindan yakalandi.
+        /// Silah sol elde ANA olarak tutulunca ayni raki aynasiyla uygulanmali, yoksa silah
+        /// ters yone yatar. Poz aynalamasindan (bkz. PoseFor) BAGIMSIZDIR: poz elle
+        /// yazilabilir, cerceve yazilamaz - cerceve her zaman aynalanir.
+        /// </summary>
+        /// <summary>
+        /// Kabza RAKISININ ayna esi. Silahin KENDI cercevesinde aynalar: namlu ileri, ust
+        /// yukari kabul edilip x'te aynalanir.
+        ///
+        /// NEDEN MODEL EKSENINDE DEGIL: duz WeaponGripMath.MirrorX, silahin simetri
+        /// duzleminin model x=0 oldugunu varsayar. 17 silahta oyle (namlu ±Z), ama HK416'nin
+        /// namlusu -X ekseninde - onun simetri duzlemi z=0. Model ekseninde aynalayinca
+        /// HK416'nin NAMLUSU aynalaniyordu: olculdu, namlu 141 derece donuyordu ve silah ele
+        /// ters geliyordu (cihazda bildirildi 2026-08-27). Namlu cercevesinde aynalayinca
+        /// HK416 39 dereceye iniyor, yani obur 17 silahla ayni mertebeye; o 17'sinde sonuc
+        /// BIT BIT AYNI kaliyor cunku onlarda iki cerceve zaten ortusuyor.
+        /// </summary>
+        public Quaternion MirrorRake(Quaternion q)
+        {
+            Vector3 bl = barrelLocalDirection.sqrMagnitude > 1e-6f
+                ? barrelLocalDirection.normalized : Vector3.forward;
+            Vector3 up = Mathf.Abs(Vector3.Dot(bl, Vector3.up)) > 0.95f
+                ? Vector3.forward : Vector3.up;
+            Quaternion f = Quaternion.LookRotation(bl, up);
+            return f * WeaponGripMath.MirrorX(Quaternion.Inverse(f) * q);
+        }
+
+        /// <summary>
+        /// Ana el cipasi. HICBIR ZAMAN AYNALANMAZ.
+        ///
+        /// Cipa, silahin uzerindeki FIZIKSEL bir nokta - kabzanin ust-ortasi. El degistirince
+        /// kabza yerinden oynamiyor, dolayisiyla aynalanmasi da anlamsiz. Aynalandiginda nokta
+        /// modelin oteki yanina, 2|x| kadar oteye gidiyordu; model orijini merkezde olmayan
+        /// silahlarda bu felaket: Rifle 2'de 27.7 cm, Smg1'de 24.1 cm. Silah elin yaninda
+        /// duruyordu (cihazda bildirildi 2026-08-27).
+        /// </summary>
+        public Vector3 GripAnchorLocal() => gripLocalPosition;
+
+        /// <summary>
+        /// Cipa yonelimi. Ana el SOL ise HER ZAMAN aynalanir - poz yazilmis olsa bile.
+        ///
+        /// Konumun tersine raki EL'E AIT bir seydir: kabzayi sag elle kavradiginda bilek bir
+        /// yana, sol elle kavradiginda oteki yana yatar. Aynalamayi kaldirdigimda silah sol
+        /// elde sag elin rakisiyla duruyordu ve yamuk goruldu - Dmr1'de ~15 derece (cihazda
+        /// bildirildi 2026-08-27).
+        ///
+        /// Yazilan poz bunu duzeltemez: atolyede ELI silahin uzerinde oynatirsin, silahin
+        /// kumandaya gore acisini degil. O aci burasi.
+        /// </summary>
+        public Quaternion AnchorLocalRotation(bool leftIsMain) =>
+            leftIsMain ? MirrorRake(GripLocalRotation) : GripLocalRotation;
+
+        /// <summary>Destek eli rayinin iki ucu. Cipa gibi bunlar da fiziksel noktalar,
+        /// aynalanmaz.</summary>
+        public void SupportRailLocal(out Vector3 start, out Vector3 end)
+        {
+            start = supportRailLocalStart;
+            end = supportRailLocalEnd;
+        }
+
         [Header("Iki elli nisan filtresi")]
+        [Tooltip("Destek elinin namluyu ne kadar yonettigi. 1 = tam sanal dipcik (tufek), " +
+                 "0 = namluyu YALNIZ ana el yonetir, destek eli gorsel olarak tutunur ama " +
+                 "nisani cevirmez (tabanca). Ara degerler harmanlanir.")]
+        [Range(0f, 1f)] public float twoHandAimWeight = 1f;
         [Tooltip("Bu acinin altindaki el titremesi namluya HIC yansimaz (derece).")]
         public float aimDeadzoneDegrees = 0.75f;
         [Tooltip("Deadzone bitiminden tam takibe yumusak gecis bandi (derece).")]
@@ -165,8 +309,52 @@ namespace VRMultiplayer.Weapons
             [Tooltip("Tetik TAM cekiliyken isaret parmaginin 3 bogumu. Bos = isaret parmagi sabit kalir.")]
             public Quaternion[] indexPulled;
 
+            /// <summary>
+            /// AYNI pozun BIRINCI SAHIS eli icin karsiligi: 15 eklemin dinlenmeden sapmasi,
+            /// FP rig'inin kendi kemik uzayinda.
+            ///
+            /// Neden ayri alan: yukaridaki quaternion'lar AVATARIN humanoid kemiklerinde yazildi,
+            /// FP eli ise Meta'nin Generic rig'ini kullaniyor. Lokal rotasyon iki rig arasinda
+            /// dogrudan TASINMAZ - kemiklerin dinlenme yonelimleri farkli.
+            ///
+            /// Tasima yolu: sapmanin EKSENI ve ACISI. Eksen once avatar kemiginin dinlenme
+            /// cercevesinden EL cercevesine (parmak yonu / avuc normali / yan eksen) cikarilir,
+            /// oradan FP kemiginin dinlenme cercevesine indirilir; aci aynen kalir. Boylece
+            /// yalnizca katlanma degil parmak YAYILMASI ve basparmagin gercek donus yonu de
+            /// korunur. Olculdu: sapmayi tek mentese acisina indirgeyen ilk surumde parmak
+            /// uclari 25-45 mm, basparmak 105 mm kayiyordu. Cevrim editorde bir kez
+            /// yapilir (menu 50), runtime yalnizca uygular.
+            /// </summary>
+            [Tooltip("FP rig'inde 15 eklemin DINLENMEDEN sapmasi. Uretim: menu 50.")]
+            public Quaternion[] fpJoints;
+
+            [Tooltip("Tetik TAM cekiliyken FP eli icin isaret parmaginin 3 sapmasi.")]
+            public Quaternion[] fpIndexPulledJoints;
+
+            /// <summary>
+            /// <see cref="fpJoints"/> ELLE mi pozlandi (atolyedeki parmak kipi), yoksa
+            /// avatardan mi CEVRILDI (menu 50)?
+            ///
+            /// NEDEN BAYRAK GEREKLI: iki kaynak ayni alani doldurdugu halde GUVENILIRLIKLERI
+            /// esit degil. Cevrilmis poz olculdu ve yetersiz bulundu; bu yuzden elle yazilan
+            /// <see cref="HandPose.fpCurls"/> onun ONUNE gecirildi. Elle POZLANAN eklemler ise
+            /// fpCurls'ten de iyidir - fpCurls parmak basina TEK sayidir, bu ise eklem basina
+            /// tam rotasyon. Bayrak olmadan ikisi ayirt edilemez ve elle yapilan poz, parmak
+            /// basina tek sayiya duserdi.
+            ///
+            /// Oncelik (bkz. FirstPersonFingerCurl.LateUpdate):
+            ///   fpJointsAuthored  >  fpCurls  >  fpJoints (cevrilmis)  >  prosedurel
+            /// </summary>
+            [Tooltip("fpJoints atolyede ELLE pozlandi (cevrilmis degil). fpCurls'un onune gecer.")]
+            public bool fpJointsAuthored;
+
+            /// <summary>Elle pozlanmis, uygulanabilir bir eklem seti var mi?</summary>
+            public bool HasAuthoredFpJoints => fpJointsAuthored && HasFpJoints;
+
             public bool HasPose => joints != null && joints.Length == HandPoseBones.JointCount;
             public bool HasIndexPulled => indexPulled != null && indexPulled.Length == HandPoseBones.IndexJointCount;
+            public bool HasFpJoints => fpJoints != null && fpJoints.Length == HandPoseBones.JointCount;
+            public bool HasFpIndexPulled => fpIndexPulledJoints != null && fpIndexPulledJoints.Length == HandPoseBones.IndexJointCount;
         }
 
         /// <summary>Static hand pose: wrist offset + five finger curls (ISDK Fingers Freedom:
@@ -179,6 +367,33 @@ namespace VRMultiplayer.Weapons
             [Tooltip("Bilek kemiginin cipaya gore lokal yonelimi (euler).")]
             public Vector3 wristLocalEuler;
 
+            /// <summary>
+            /// BIRINCI SAHIS elinin cipaya gore yeri. Avatarin bilek offset'inden AYRI
+            /// tutuluyor cunku iki rig'in bilek konvansiyonu ayni degil: FP eli avatarin
+            /// degerini miras alinca cihazda kabzanin yanina dusuyordu.
+            ///
+            /// Sifir = FP bilegi tam kabza cipasinda, silahin kendi yoneliminde. Ayar
+            /// oyun icindeki Silah Atolyesi panelinden yapilir (gorerek), buraya yazilir.
+            /// </summary>
+            public Vector3 fpWristLocalPosition;
+            public Vector3 fpWristLocalEuler;
+
+            public Quaternion FpWristRotation => Quaternion.Euler(fpWristLocalEuler);
+
+            /// <summary>
+            /// FP eli icin PARMAK BASINA kivrim (0..1; sira: bas, isaret, orta, yuzuk, serce).
+            /// Silah Atolyesi'nde elle yaziliyor.
+            ///
+            /// Neden fpJoints'in yaninda ayri bir alan: fpJoints avatardan CEVRILEN pozdur ve
+            /// cevrim guvenilir cikmadi (yuzuk parmaginda 17-19 derece sistematik sapma).
+            /// Buradaki degerler cevrilmiyor - dogrudan FP rig'inin kendi mentese kuralina
+            /// (FingerCurlMath) uygulaniyor, yani gordugun sey yazdigin sey. Doluysa
+            /// fpJoints'in ONUNE gecer.
+            /// </summary>
+            public float[] fpCurls;
+
+            public bool HasFpCurls => fpCurls != null && fpCurls.Length == 5;
+
             [Range(0f, 1f)] public float thumbCurl;
             [Range(0f, 1f)] public float indexCurl;
             [Range(0f, 1f)] public float middleCurl;
@@ -188,7 +403,12 @@ namespace VRMultiplayer.Weapons
             [Tooltip("Isaret parmagi Free: tetik 0..1, indexCurl'den indexTriggerMaxCurl'e surer.")]
             public bool indexFollowsTrigger;
 
-            [Tooltip("Tetik TAM cekiliyken isaret parmaginin kivrim tavani (0..1). Tetik cekisi kucuk bir harekettir — 1.0 tam yumruk yapar. 0 birakilirsa 1 sayilir (eski assetler).")]
+            [Tooltip("Tetik TAM cekiliyken isaret parmaginin kivrim tavani (0..1). Tetik cekisi " +
+                     "kucuk bir harekettir — 1.0 tam yumruk yapar. 0 birakilirsa 1 sayilir " +
+                     "(eski assetler).\n\n" +
+                     "ELLE POZLANMIS tutuslarda (atolye parmak kipi) anlami: tetigin tabana " +
+                     "EKLEYECEGI kivrimin olcegi. Tetik parmak animasyonunun ayar dugmesi budur — " +
+                     "olculdu, 0.55'te ~15 derece, 1.00'de ~30 derece ek kapanma.")]
             [Range(0f, 1f)] public float indexTriggerMaxCurl;
 
             [Header("Authored parmak pozu (doluysa yukaridaki curl'lerin yerine gecer)")]

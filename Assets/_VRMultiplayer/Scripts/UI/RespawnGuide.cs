@@ -205,7 +205,17 @@ namespace VRMultiplayer.UI
             _team = team;
 
             // Takim secilmeden ekran ACILMAZ: o asamada oyuncu daha giris panelinde.
-            bool want = waiting && team != 0;
+            //
+            // KALIBRE OLMADAN DA ACILMAZ. Oyuncu spawn olur olmaz takimi belli oluyor, ama
+            // cerceve henuz oturmamis olabiliyor — tag ilk kez gorulene kadar rig gozlugun
+            // kendi takip cercevesinde duruyor ve haritanin cercevesiyle iliskisi yok. O arada
+            // "dogmak icin takim bolgene git" demek oyuncuyu YANLIS YERE yurutur: bolge harita
+            // cercevesinde tanimli, oyuncunun gercek odadaki yeri ise bilinmiyor. Asagida
+            // yazilan mesafe ve gosterilen ok, aradaki fark kadar sapmis olur.
+            //
+            // Bu asamada dogru talimat kalibrasyon panelinde zaten var: "duvardaki tag'e bak".
+            // Rehber, cerceve oturunca kendiliginden acilir.
+            bool want = waiting && team != 0 && CalibrationManager.Calibrated;
 
             if (!waiting)
             {

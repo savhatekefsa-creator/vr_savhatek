@@ -130,10 +130,14 @@ namespace VRMultiplayer.UI
         }
 
         /// <summary>
-        /// KARAKTER DUZENI ekranini acar ve bu ekrani kapatir. Isim/takim once
-        /// HATIRLANIR (bkz. <see cref="PlayerProfile.Remember"/>) — oyuncu karakter
-        /// ekranindan TAMAM ile donunce giris ekrani dolu geri gelir. Isim gecersizse
-        /// gecise izin verilmez: karakter ekranindan donuste "adin yok" surprizi olmasin.
+        /// KARAKTER DUZENI ekranini acar ve bu ekrani kapatir. Isim/takim HATIRLANIR
+        /// (bkz. <see cref="PlayerProfile.Remember"/>).
+        ///
+        /// ISIM VE TAKIM IKISI DE SART. Onceden yalnizca isim araniyordu, cunku karakter
+        /// ekrani giris ekranina GERI donuyordu ve takim orada seciliyordu. Artik o ekran
+        /// dogrudan maca sokuyor (bkz. CharacterSelectUI.OnDone), yani girmeden once
+        /// oyuna girmek icin gereken her sey tamam olmali - yoksa oyuncu karakterini
+        /// secip "KATIL"a basiyor ve takimsiz oldugu icin geri ceviriliyordu.
         /// </summary>
         void OpenCharacterEditor()
         {
@@ -143,11 +147,13 @@ namespace VRMultiplayer.UI
                 Message("Önce en az " + PlayerProfile.MinLength + " harflik bir ad gir.");
                 return;
             }
+            if (_panel.SelectedTeam == PlayerProfile.TeamNone)
+            {
+                Message("Önce bir takım seç.");
+                return;
+            }
 
-            // Takim henuz secilmemis olabilir — karakter duzenlemek icin sart degil.
-            // Remember takimsiz kabul etmedigi icin yalnizca takim varken cagriliyor.
-            if (_panel.SelectedTeam != PlayerProfile.TeamNone)
-                PlayerProfile.Remember(clean, _panel.SelectedTeam);
+            PlayerProfile.Remember(clean, _panel.SelectedTeam);
 
             CharacterSelectUI.Create(_panel.SelectedTeam);
             Destroy(gameObject);

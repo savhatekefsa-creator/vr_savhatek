@@ -2,7 +2,7 @@
     "version": 5,
     "name": "HARITA2",
     "createdBy": "HATICE",
-    "savedAt": "2026-08-25 12:30:18",
+    "savedAt": "2026-08-31 16:01:48",
     "libraryVersion": 25,
     "cellSize": 0.0625,
     "levelHeight": 0.5,
@@ -784,24 +784,14 @@
             "instanceId": 107
         },
         {
-            "propId": "rack_wall",
-            "cellX": 435,
-            "cellZ": 468,
-            "level": 0,
-            "rot": 18,
-            "scalePct": 100,
-            "heightPct": 100,
-            "instanceId": 112
-        },
-        {
             "propId": "table_low",
-            "cellX": 514,
-            "cellZ": 516,
+            "cellX": 498,
+            "cellZ": 524,
             "level": 0,
             "rot": 0,
             "scalePct": 100,
             "heightPct": 100,
-            "instanceId": 111
+            "instanceId": 108
         },
         {
             "propId": "table_low",
@@ -815,15 +805,25 @@
         },
         {
             "propId": "table_low",
-            "cellX": 498,
+            "cellX": 514,
             "cellZ": 524,
             "level": 0,
             "rot": 0,
             "scalePct": 100,
             "heightPct": 100,
-            "instanceId": 108
+            "instanceId": 110
+        },
+        {
+            "propId": "table_low",
+            "cellX": 514,
+            "cellZ": 516,
+            "level": 0,
+            "rot": 0,
+            "scalePct": 100,
+            "heightPct": 100,
+            "instanceId": 111
         }
     ],
     "freeProps": [],
-    "nextInstanceId": 118
+    "nextInstanceId": 113
 }

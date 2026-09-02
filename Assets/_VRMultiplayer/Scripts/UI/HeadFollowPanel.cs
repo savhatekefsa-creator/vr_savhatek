@@ -27,6 +27,16 @@ namespace VRMultiplayer.UI
                  "yumusakca geri kayar.")]
         public bool lazy;
 
+        [Tooltip("Panel DIKEYDE de takip etsin mi (derece). Bakis yonunden bu kadar sapmaya " +
+                 "izin verilir; asilinca panel asagi/yukari kayip okunur kalir. 0 = KAPALI, " +
+                 "yani panel hep goz hizasinda durur (eski davranis).\n\n" +
+                 "NEDEN VAR: panel bilerek duz tutuluyordu ki bakmak istedigin yeri " +
+                 "kapatmasin. Ama tag ZEMINE konunca bakis yonu asagi doner ve panel gorus " +
+                 "alanindan tamamen cikar — okunamayan bir panel, olmayan bir panelden farksiz. " +
+                 "Olu bolge ikisini uzlastiriyor: normal bakista panel yerinde kalir, " +
+                 "gercekten asagi bakildiginda pesinden gelir.")]
+        public float pitchFollowDeadzone = 0f;
+
         /// <summary>Panel bu acidan fazla yana kalirsa onune geri getirilir. Menulerdeki
         /// (ModeSelectUI / PlayerEntryUI) esikle AYNI — iki farkli his olmasin.</summary>
         const float RecenterAngle = 38f;
@@ -43,8 +53,34 @@ namespace VRMultiplayer.UI
             if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
             fwd.Normalize();
 
-            Vector3 targetPos = head.position + fwd * distance + Vector3.up * heightOffset;
-            Quaternion targetRot = Quaternion.LookRotation(fwd);
+            // DIKEY TAKIP (olu bolgeli). Yatay yon her zaman izlenir; dikeyde ise bakis
+            // acisi olu bolgeyi asana kadar panel duz kalir. Asinca yalnizca ASAN KISIM
+            // kadar egilir, yani panel bakis merkezine yapismaz — hem okunur kalir hem
+            // tam bakilan yeri kapatmaz.
+            Vector3 dir = fwd;
+            Vector3 yukari = Vector3.up;
+            if (pitchFollowDeadzone > 0f)
+            {
+                float pitch = -Mathf.Asin(Mathf.Clamp(head.forward.y, -1f, 1f)) * Mathf.Rad2Deg;
+                float asan = 0f;
+                if (pitch > pitchFollowDeadzone) asan = pitch - pitchFollowDeadzone;
+                else if (pitch < -pitchFollowDeadzone) asan = pitch + pitchFollowDeadzone;
+                if (asan != 0f)
+                {
+                    Vector3 sag = Vector3.Cross(Vector3.up, fwd);   // yatay sag eksen
+                    var egim = Quaternion.AngleAxis(asan, sag);     // + = asagi
+                    dir = egim * fwd;
+
+                    // OFSET DE EGILIR. heightOffset'in isi "bakilan yeri kapatma" — bu bir
+                    // EKRAN UZAYI derdi, dunya uzayi degil. Dunya dikeyine uygulanirsa asagi
+                    // bakista paneli bakisin disina iter: cihazda yasandi, panel egilse bile
+                    // 35 cm'lik ofset onu gorus alaninin ustunde tutuyordu.
+                    yukari = egim * Vector3.up;
+                }
+            }
+
+            Vector3 targetPos = head.position + dir * distance + yukari * heightOffset;
+            Quaternion targetRot = Quaternion.LookRotation(dir);
 
             // Sert takip (varsayilan) ve ILK yerlestirme: dogrudan otur. Ilk kare tembel
             // olamaz — panel origin'den suzulerek gelirdi.

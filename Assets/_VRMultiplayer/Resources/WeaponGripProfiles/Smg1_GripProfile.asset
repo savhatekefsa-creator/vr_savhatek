@@ -15,12 +15,22 @@ MonoBehaviour:
   weaponNameEquals: Smg 1
   weaponNameContains: Smg 1
   gripLocalPosition: {x: 0.1205, y: 0.0915, z: -0.1315}
-  gripLocalEuler: {x: 316.89838, y: 37.975754, z: 358.9693}
+  gripLocalEuler: {x: 300.14252, y: 22.014225, z: 354.7435}
   barrelLocalDirection: {x: 0, y: 0, z: 1}
+  benchUpLocal: {x: 0, y: 0, z: 0}
+  benchFrontLocal: {x: 0, y: 0, z: 0}
   combat: {fileID: 11400000, guid: 2c36fb8d40b64bbbad410ab3c63b3b2f, type: 2}
   mainHand:
     wristLocalPosition: {x: 0, y: 0.0001, z: -0.0848}
     wristLocalEuler: {x: 321.8164, y: 274.51846, z: 225.57954}
+    fpWristLocalPosition: {x: -0.009, y: -0.01, z: -0.072}
+    fpWristLocalEuler: {x: -29, y: -64, z: 28}
+    fpCurls:
+    - 0
+    - 0.38
+    - 1
+    - 0.96
+    - 0.82
     thumbCurl: 0
     indexCurl: 0.2
     middleCurl: 0
@@ -49,15 +59,47 @@ MonoBehaviour:
       - {x: 0.20613255, y: 0.72300905, z: -0.040301133, w: 0.6581361}
       - {x: 0.0059883893, y: 0.014044464, z: 0.12204744, w: 0.99240685}
       - {x: 0.44999632, y: -0.13564767, z: 0.6989493, w: 0.53904825}
+      fpJoints:
+      - {x: 0, y: 0, z: 0, w: 1}
+      - {x: 0, y: 0, z: 0, w: 1}
+      - {x: 0, y: 0, z: 0, w: 1}
+      - {x: 0, y: -0.029020095, z: -0.16029052, w: 0.9866432}
+      - {x: 0, y: -0.06515015, z: -0.50528115, w: 0.860492}
+      - {x: 0.020209916, y: -0.05281978, z: -0.53267777, w: 0.8444265}
+      - {x: 0, y: -0.046520017, z: -0.45940018, w: 0.88701034}
+      - {x: 0, y: -0.050710313, z: -0.6407839, w: 0.76604474}
+      - {x: 0.00043000127, y: -0.004670014, z: -0.46172136, w: 0.8870126}
+      - {x: 0, y: -0.00588, z: -0.4446, w: 0.89571}
+      - {x: 0, y: 0.03336012, z: -0.6202522, w: 0.7836928}
+      - {x: -0.024619991, y: 0.027579991, z: -0.44309986, w: 0.8957097}
+      - {x: 0, y: 0.046709873, z: -0.38062894, w: 0.9235475}
+      - {x: 0, y: 0.102380015, z: -0.5319401, w: 0.84057015}
+      - {x: -0.033519864, y: 0.072799705, z: -0.37501848, w: 0.92354625}
+      fpIndexPulledJoints:
+      - {x: 0.022620507, y: 0.01724461, z: -0.06986432, w: 0.9971509}
+      - {x: -0.028094536, y: -0.093218945, z: -0.04364242, w: 0.99429184}
+      - {x: -0.2524257, y: -0.35702345, z: -0.6921369, w: 0.57424915}
+      fpJointsAuthored: 1
     leftFingers:
       joints: []
       indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
   supportRailLocalStart: {x: 0.0244, y: -0.0818, z: 0.1619}
   supportRailLocalEnd: {x: 0.0244, y: -0.0818, z: 0.1619}
   supportBreakDistance: 0.3
   supportHand:
     wristLocalPosition: {x: 0.04498818, y: -0.000047572972, z: -0.07211846}
     wristLocalEuler: {x: 290.09763, y: 250.47058, z: 298.77753}
+    fpWristLocalPosition: {x: 0.024, y: 0.143, z: -0.001}
+    fpWristLocalEuler: {x: -29, y: 0, z: 3}
+    fpCurls:
+    - 0.3
+    - 0.74
+    - 0.9
+    - 0.94
+    - 0.96
     thumbCurl: 0
     indexCurl: 0
     middleCurl: 0
@@ -68,6 +110,9 @@ MonoBehaviour:
     rightFingers:
       joints: []
       indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
     leftFingers:
       joints:
       - {x: 0.1997105, y: 0.94940025, z: 0.23982513, w: -0.035197046}
@@ -86,6 +131,105 @@ MonoBehaviour:
       - {x: 0.14946784, y: 0.09754528, z: -0.19628969, w: 0.9641653}
       - {x: 0.57841134, y: 0.31078017, z: -0.015778858, w: 0.75406045}
       indexPulled: []
+      fpJoints:
+      - {x: -0.06575007, y: 0.0013900015, z: 0.1793702, w: 0.9815811}
+      - {x: -0.015289948, y: -0.03531988, z: -0.2095193, w: 0.9770467}
+      - {x: 0.0043199905, y: 0.019279959, z: -0.11586975, w: 0.99306786}
+      - {x: 0, y: -0.06195975, z: -0.3421886, w: 0.9375862}
+      - {x: 0, y: -0.06315963, z: -0.48988715, w: 0.8694949}
+      - {x: 0.013119952, y: -0.034289874, z: -0.3458087, w: 0.93758655}
+      - {x: 0, y: -0.042180113, z: -0.41653112, w: 0.90814245}
+      - {x: 0, y: -0.046369977, z: -0.5859497, w: 0.8090196}
+      - {x: 0.00039000085, y: -0.004230009, z: -0.41864088, w: 0.908142}
+      - {x: 0, y: -0.005769989, z: -0.43597916, w: 0.8999383}
+      - {x: 0, y: 0.032760095, z: -0.60926175, w: 0.7922922}
+      - {x: -0.024139937, y: 0.027049929, z: -0.43450886, w: 0.8999376}
+      - {x: 0, y: 0.05414998, z: -0.44132984, w: 0.8957097}
+      - {x: 0, y: 0.11740048, z: -0.6099525, w: 0.7836932}
+      - {x: -0.038860004, y: 0.084410004, z: -0.43482003, w: 0.89571005}
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 1
+  mainHandLeft:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    fpWristLocalPosition: {x: -0.089, y: -0.043, z: -0.052}
+    fpWristLocalEuler: {x: -36, y: 54, z: -20}
+    fpCurls: []
+    thumbCurl: 0
+    indexCurl: 0
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 1
+    indexTriggerMaxCurl: 0.55
+    rightFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
+    leftFingers:
+      joints: []
+      indexPulled: []
+      fpJoints:
+      - {x: 0.05975993, y: -0.0012599985, z: -0.1630298, w: 0.9848088}
+      - {x: -0.004640002, y: -0.010710005, z: -0.06355003, w: 0.99791044}
+      - {x: -0.0063799843, y: -0.02847993, z: 0.17117956, w: 0.98480755}
+      - {x: 0, y: -0.03253987, z: -0.17973927, w: 0.983176}
+      - {x: 0, y: -0.04879006, z: -0.3784105, w: 0.92435116}
+      - {x: 0.022770043, y: -0.05952011, z: -0.6001811, w: 0.7973215}
+      - {x: 0, y: -0.050760105, z: -0.5012511, w: 0.8638118}
+      - {x: 0, y: -0.040079765, z: -0.506437, w: 0.861345}
+      - {x: 0.00057000195, y: -0.006100021, z: -0.60352206, w: 0.79732275}
+      - {x: 0, y: -0.00798002, z: -0.6035015, w: 0.797322}
+      - {x: 0, y: 0.019290078, z: -0.35862145, w: 0.93328375}
+      - {x: -0.03278009, y: 0.0367201, z: -0.5899716, w: 0.8059222}
+      - {x: 0, y: 0.07317001, z: -0.59630007, w: 0.79942006}
+      - {x: 0, y: 0.0493998, z: -0.25666896, w: 0.96523607}
+      - {x: -0.052749954, y: 0.1145799, z: -0.5902295, w: 0.79731935}
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 1
+  supportHandRight:
+    wristLocalPosition: {x: 0, y: 0, z: 0}
+    wristLocalEuler: {x: 0, y: 0, z: 0}
+    fpWristLocalPosition: {x: 0.091, y: 0.199, z: -0.035}
+    fpWristLocalEuler: {x: -22, y: -32, z: 5}
+    fpCurls: []
+    thumbCurl: 0
+    indexCurl: 0
+    middleCurl: 0
+    ringCurl: 0
+    pinkyCurl: 0
+    indexFollowsTrigger: 0
+    indexTriggerMaxCurl: 0
+    rightFingers:
+      joints: []
+      indexPulled: []
+      fpJoints:
+      - {x: -0.078479774, y: 0.0016599952, z: 0.2140794, w: 0.9736572}
+      - {x: -0.003780016, y: -0.008730037, z: -0.05176022, w: 0.99861425}
+      - {x: 0.005030013, y: 0.022470057, z: -0.13504034, w: 0.9905726}
+      - {x: 0, y: -0.049450047, z: -0.27311027, w: 0.96071094}
+      - {x: 0, y: -0.050910253, z: -0.39487198, w: 0.91732454}
+      - {x: 0.021530077, y: -0.056290198, z: -0.56766194, w: 0.82105285}
+      - {x: 0, y: -0.029340014, z: -0.28979012, w: 0.9566404}
+      - {x: 0, y: -0.04734998, z: -0.5982897, w: 0.79987967}
+      - {x: 0.000329999, y: -0.0036099888, z: -0.3567389, w: 0.93419707}
+      - {x: 0, y: -0.0037900063, z: -0.28647047, w: 0.9580816}
+      - {x: 0, y: 0.021930026, z: -0.40777048, w: 0.91282105}
+      - {x: -0.021079991, y: 0.023609988, z: -0.3793798, w: 0.9246996}
+      - {x: 0, y: 0.032699913, z: -0.26650932, w: 0.9632775}
+      - {x: 0, y: 0.0030599956, z: -0.015919978, w: 0.9998686}
+      - {x: -0.052749954, y: 0.1145799, z: -0.5902295, w: 0.79731935}
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 1
+    leftFingers:
+      joints: []
+      indexPulled: []
+      fpJoints: []
+      fpIndexPulledJoints: []
+      fpJointsAuthored: 0
+  twoHandAimWeight: 1
   aimDeadzoneDegrees: 0.75
   aimSoftKneeDegrees: 1.5
   aimHalfLifeMs: 45

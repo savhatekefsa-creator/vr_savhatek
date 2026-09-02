@@ -34,7 +34,9 @@ MonoBehaviour:
   pinNodes: []
   pinHandLocalPosition: {x: 0, y: 0, z: 0}
   pinHandLocalEuler: {x: 0, y: 0, z: 0}
-  pinPullReach: 0.45
+  pinFingerTipOffset: {x: 0, y: 0, z: 0}
+  pinDisplaySize: 0
+  pinPullReach: 0.09
   aimArcSpeed: 9
   pinClip: WeaponSounds/grenade_pin
   bounceClip: WeaponSounds/grenade_bounce

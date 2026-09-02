@@ -3,9 +3,10 @@ using UnityEngine;
 namespace VRMultiplayer.UI
 {
     /// <summary>
-    /// KARAKTER DUZENI ekraninin akisi: giris ekranindaki KARAKTER DÜZENİ tusuyla acilir
-    /// (bkz. <see cref="PlayerEntryUI"/>), TAMAM ile ayni ekrana geri doner. OYUNA SOKMAZ —
-    /// maca girisi giris ekranindaki KATIL tusu yapar. Oyuncunun karsisina manken diker
+    /// KARAKTER DUZENI ekraninin akisi: giris ekranindaki KARAKTER tusuyla acilir
+    /// (bkz. <see cref="PlayerEntryUI"/>) ve KATIL ile DOGRUDAN maca girer. Ikinci bir
+    /// giris ekrani gosterilmiyor: isim ve takim buraya girmeden once belirlenmis oluyor,
+    /// geri donulecek bir eksik yok. Oyuncunun karsisina manken diker
     /// (Resources/CharacterMannequin — CharacterSetupTool uretir), yanina ok panelini koyar
     /// (<see cref="CharacterSelectPanel"/>).
     ///
@@ -18,7 +19,7 @@ namespace VRMultiplayer.UI
     /// oldurur; oyuncu mankenin etrafinda kafasini rahatca oynatabilmeli.
     ///
     /// SECIM ANINDA KALICI (her degisiklikte <see cref="CharacterProfile.Set"/>): ayri bir
-    /// kaydet adimi yok; TAMAM yalnizca ekrani kapatir, uygulamayi kapatan oyuncu bile
+    /// kaydet adimi yok; KATIL yalnizca ekrani kapatip maca sokar, uygulamayi kapatan oyuncu bile
     /// sectigini kaybetmez.
     /// </summary>
     public class CharacterSelectUI : MonoBehaviour
@@ -79,7 +80,7 @@ namespace VRMultiplayer.UI
         void SpawnMannequin()
         {
             // Manken yoksa (kurulum araci calistirilmamis) ekran YINE ACILIR: oklar ve
-            // TAMAM calisir, yalnizca onizleme eksik kalir. Akisi kilitlemek, kozmetik bir
+            // KATIL calisir, yalnizca onizleme eksik kalir. Akisi kilitlemek, kozmetik bir
             // eksik icin oyuncuyu oyundan etmek olurdu.
             var prefab = Resources.Load<GameObject>("CharacterMannequin");
             if (prefab == null)
@@ -237,14 +238,33 @@ namespace VRMultiplayer.UI
         // ------------------------------------------------------------------ cikislar
 
         /// <summary>
-        /// TAMAM — secim bitti, giris ekranina don. ONAY VERMEZ ve BAGLANMAZ: oyuna girisi
-        /// giris ekranindaki KATIL tusu yapiyor. Secimler zaten her degisiklikte
-        /// <see cref="CharacterProfile"/>'a yazildigi icin burada kaydedilecek bir sey yok.
+        /// KATIL — secim bitti, DOGRUDAN maca gir. Ikinci bir giris ekrani gostermiyoruz:
+        /// isim ve takim buraya girmeden ONCE belirlenmis oluyor (bkz.
+        /// PlayerEntryUI.OpenCharacterEditor), yani geri donulecek bir eksik yok.
+        /// Secimler zaten her degisiklikte CharacterProfile'a yaziliyor.
+        ///
+        /// TEK GERI DONUS YOLU isim cakismasi: oyuncu karakterini duzenlerken baskasi ayni
+        /// adi almis olabilir. O zaman giris ekranina donuluyor - orada cakisma zaten
+        /// YAZARKEN goruluyor (bkz. PlayerEntryUI.RefreshHint), yani oyuncu sebebi kendi
+        /// gorur. Sessizce baglanmayi denemek "tus bozuk" hissi verirdi.
         /// </summary>
         void OnDone()
         {
-            // Isim/takim PlayerProfile'da HATIRLI duruyor (Remember) — giris ekrani dolu acilir.
-            PlayerEntryUI.Create();
+            string ad = PlayerProfile.Name;
+
+            if (PlayerProfile.IsNameTaken(ad) || !PlayerProfile.Confirm(ad, _team))
+            {
+                PlayerEntryUI.Create();
+                Destroy(gameObject);
+                return;
+            }
+
+            Debug.Log($"[CharacterSelectUI] Giris tamam: '{ad}', takim {_team}. Baglanti baslatiliyor.");
+
+            var boot = FindFirstObjectByType<LanBootstrap>();
+            if (boot != null) boot.StartCoroutine(boot.JoinAsClient());
+            else Debug.LogWarning("[CharacterSelectUI] LanBootstrap yok — baglanti baslatilamadi.");
+
             Destroy(gameObject);
         }
 
@@ -334,7 +354,7 @@ namespace VRMultiplayer.UI
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Rastgele")) OnRandom();
-            if (GUILayout.Button("TAMAM")) OnDone();
+            if (GUILayout.Button("KATIL")) OnDone();
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }

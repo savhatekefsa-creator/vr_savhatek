@@ -3,8 +3,8 @@ using System.Collections;
 using System.IO;
 using System.Text;
 using Unity.Netcode;
-using TMPro;
 using UnityEngine;
+using TMPro;
 using UnityEngine.XR;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
@@ -18,18 +18,33 @@ namespace VRMultiplayer
     /// existing LAN link. The server saves Assets/_VRMultiplayer/RoomPlans/RoomPlan.json, which
     /// the editor menus "Import Room Plan" / "Build Walls From Plan" consume.
     ///
-    /// Usage (owner only): calibrate first, then press X (left controller). One headset doing
-    /// this once is enough. Requires the Meta OpenXR "Planes" feature + USE_SCENE permission;
-    /// if the room was never scanned, the system Space Setup flow is launched automatically.
+    /// KULLANIM: varsayilan olarak kumanda tusu YOK. Eskiden sol X dogrudan tetikliyordu; oda
+    /// gonderme tek seferlik bir kurulum isi oldugu halde tus mac boyunca canliydi ve kazara
+    /// basis izin istemi / Space Setup acabiliyordu (2026-08-11'de kaldirildi). Kisayol
+    /// <see cref="solXKisayolu"/> bayraginin ARKASINDA geri geldi — varsayilan KAPALI, yani
+    /// sol X tag sistemine acik kalir. Kapaliyken tarama <see cref="TriggerScan"/> ile
+    /// baslatilir (or. ileride bir menu dugmesi). Once kalibrasyon sart; bir gozlugun bir kez
+    /// gondermesi yeter. Meta OpenXR "Planes" ozelligi + USE_SCENE izni gerekir; oda hic
+    /// taranmamissa sistemin Space Setup akisi otomatik baslatilir.
     /// </summary>
     public class RoomScanSync : NetworkBehaviour
     {
         const string ScenePermission = "com.oculus.permission.USE_SCENE";
         const int ChunkSize = 3000; // stays well under the transport payload limit
 
+        [Tooltip("SOL X kisayolunu ac. VARSAYILAN KAPALI.\n\n" +
+                 "Neden: oda taramasi bu projede kullanilmiyor, ama tus canliydi ve HICBIR " +
+                 "kapinin arkasinda degildi — insa modunda, passthrough'da, kalibrasyon " +
+                 "sirasinda bile X'e basmak taramayi baslatiyordu. Oda hic taranmamissa " +
+                 "sistemin Space Setup akisini aciyor, yani oyuncuyu oyundan disari atiyor.\n\n" +
+                 "Kapali olmasi ayrica SOL X'i tag sistemine birakir: AprilTagCalibration " +
+                 "bu tusu 'RoomScanSync onu tutuyor' diye kullanamamis ve olcum tuslarini " +
+                 "sag A + grip/tetik akorlarina sikistirmisti.")]
+        public bool solXKisayolu;
+
         TextMeshPro _panel;
         bool _busy;
-        bool _prevX;
+        bool _prevX;                 // sol X kenar algilama; yalnizca solXKisayolu acikken okunur
         float _hidePanelAt = -1f;
 
         // Server-side reassembly (one buffer per sender's player object = this instance).
@@ -50,11 +65,23 @@ namespace VRMultiplayer
         {
             if (_hidePanelAt > 0f && Time.time > _hidePanelAt) { HidePanel(); }
 
+            // Panel gizleme YUKARIDA kaldi: kapi kapaliyken de acik kalmis bir panelin
+            // kapanmasi gerekir, yoksa tus kapatildigi anda ekranda asili kalirdi.
+            if (!solXKisayolu) return;
+
             bool x = XRButtons.Button(XRNode.LeftHand, CommonUsages.primaryButton);
 
             if (x && !_prevX && !_busy)
                 StartCoroutine(ScanAndSend());
             _prevX = x;
+        }
+
+        /// <summary>Taramayi baslatir; kisayol KAPALIYKEN de calisir (bkz. sinif aciklamasi).
+        /// Sahip degilse obje zaten disabled oldugundan cagri ancak sahibin instance'inda ise
+        /// yarar.</summary>
+        public void TriggerScan()
+        {
+            if (!_busy) StartCoroutine(ScanAndSend());
         }
 
         IEnumerator ScanAndSend()
@@ -63,7 +90,7 @@ namespace VRMultiplayer
 
             if (!CalibrationManager.Calibrated)
             {
-                Show("ODA GONDERME\n\nOnce KALIBRASYON yapmalisin\n(A/B noktalari + tetik).", 4f);
+                Show("ODA GONDERME\n\nOnce KALIBRASYON yapmalisin\n(duvardaki TAG'e bak).", 4f);
                 _busy = false;
                 yield break;
             }
@@ -116,7 +143,7 @@ namespace VRMultiplayer
                 }
                 if (!requested)
                 {
-                    Show("Space Setup baslatilamadi.\nGozluk ayarlarindan 'Alan Kurulumu'\nyapip tekrar dene (X).", 8f);
+                    Show("Space Setup baslatilamadi.\nGozluk ayarlarindan 'Alan Kurulumu'\nyapip tekrar dene.", 8f);
                     _busy = false;
                     yield break;
                 }
@@ -131,7 +158,7 @@ namespace VRMultiplayer
             var plan = ExtractPlan(planeMgr);
             if (plan == null || plan.floorPolygon.Length < 3)
             {
-                Show("Zemin poligonu okunamadi.\nSpace Setup'ta zemin/duvarlari\ntarayip tekrar dene (X).", 8f);
+                Show("Zemin poligonu okunamadi.\nSpace Setup'ta zemin/duvarlari\ntarayip tekrar dene.", 8f);
                 _busy = false;
                 yield break;
             }
@@ -344,7 +371,7 @@ namespace VRMultiplayer
             if (_panel == null)
                 _panel = UI.HeadFollowPanel.Create("~Room Scan Panel", "", new Color(0.5f, 1f, 0.6f));
             _panel.gameObject.SetActive(true);
-            VRMultiplayer.UI.UITheme.SetText(_panel, text);
+            _panel.text = text;
             _hidePanelAt = hideAfter > 0f ? Time.time + hideAfter : -1f;
         }
 

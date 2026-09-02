@@ -35,6 +35,7 @@ namespace VRMultiplayer
 
         const string NameKey = "vrmp_player_name";
         const string TeamKey = "vrmp_player_team";
+        const string HandKey = "vrmp_trigger_hand";
 
         /// <summary>Otomatik isim havuzu. Bilerek ASCII: klavyede Turkce tus yok, ag alani
         /// bayt bazli ve kirik glif riski sifir kalsin. Begenmedigin ismi bu satirlarda
@@ -56,6 +57,7 @@ namespace VRMultiplayer
 
         static string _name;
         static byte _team;
+        static bool _triggerLeft;
         static bool _loaded;
 
         static void Load()
@@ -64,6 +66,7 @@ namespace VRMultiplayer
             _name = Sanitize(PlayerPrefs.GetString(NameKey, string.Empty));
             byte t = (byte)PlayerPrefs.GetInt(TeamKey, TeamNone);
             _team = t <= TeamRed ? t : TeamNone;
+            _triggerLeft = PlayerPrefs.GetInt(HandKey, 0) != 0;
             _loaded = true;
         }
 
@@ -73,6 +76,38 @@ namespace VRMultiplayer
 
         /// <summary>Secili takim: 0 = yok, 1 = MAVI, 2 = KIZIL.</summary>
         public static byte Team { get { Load(); return _team; } }
+
+        /// <summary>
+        /// TETIK ELI sol mu? Yani buyuk silahin kabzasini SOL el kavriyor mu?
+        ///
+        /// ISIM VE TAKIMDAN FARKLI OLARAK ZORUNLU DEGIL: gecerli bir varsayilani var (sag),
+        /// o yuzden <see cref="IsReady"/> buna bakmaz ve "OYUNA BASLA"yi kilitlemez.
+        /// Yine ondan farkli olarak ANINDA kaydedilir — oyuncu girisi yarida birakip donse
+        /// bile secimi durur.
+        ///
+        /// AGA GIRMEZ: bu tamamen YEREL bir kural, yalnizca oyuncunun hangi eliyle silah
+        /// alabildigini belirler. Karsi taraftakiler silahi hangi elde gordugunu zaten
+        /// GrabbableObject.HolderHand uzerinden aliyor, o ag uzerinde mevcut.
+        /// </summary>
+        public static bool TriggerLeft
+        {
+            get { Load(); return _triggerLeft; }
+            set
+            {
+                Load();
+                if (_triggerLeft == value) return;
+                _triggerLeft = value;
+                PlayerPrefs.SetInt(HandKey, value ? 1 : 0);
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>Baskin ELIN indeksi (0 = sol, 1 = sag) — HandGrabber'in el indeksleriyle
+        /// ayni sayilar.</summary>
+        public static byte TriggerHandIndex => (byte)(TriggerLeft ? 0 : 1);
+
+        /// <summary>Baskin OLMAYAN elin indeksi. Buyuk silah bu ele ANA olarak giremez.</summary>
+        public static byte OffHandIndex => (byte)(TriggerLeft ? 1 : 0);
 
         /// <summary>Oyuncu girisi TAMAMLANDI mi? <see cref="LanBootstrap"/> bunu bekler.</summary>
         public static bool Confirmed { get; private set; }

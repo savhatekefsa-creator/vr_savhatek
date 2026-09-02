@@ -100,7 +100,13 @@ namespace VRMultiplayer
             _holderHand.OnValueChanged += OnStateChanged;
             _supportHand.OnValueChanged += OnStateChanged;
             if (IsServer)
+            {
                 NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
+                // Yere dusen esyalarin 30 sn'lik temizligi. Kemer elle doldurulmaya gecince
+                // birakilan silahlar artik yok edilmiyor, sahnede kaliyor — bkz.
+                // Weapons.DroppedItemCleanup sinif basi.
+                Weapons.DroppedItemCleanup.AttachIfNeeded(this);
+            }
             if (!_active.Contains(this)) _active.Add(this);
             AnySpawned?.Invoke(this);
         }

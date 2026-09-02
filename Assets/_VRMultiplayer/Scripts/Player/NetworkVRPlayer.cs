@@ -1,5 +1,4 @@
 using Unity.Netcode;
-using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -11,10 +10,15 @@ namespace VRMultiplayer
     /// every frame. Owner-authoritative <see cref="ClientNetworkTransform"/> components on those
     /// children replicate the motion to everyone; remote clients see it interpolated.
     ///
-    /// Visibility model:
-    ///  - Everyone — including you — sees the full humanoid body (first-person embodiment);
-    ///    only your own head is hidden so the camera isn't inside it.
-    ///  - Others see your full humanoid avatar (driven by <see cref="AvatarIKController"/>).
+    /// Gorunurluk modeli — SAHIP ve UZAK OYUNCU ayri mekanizmadan beslenir, cunku
+    /// gereksinimleri birbirine zit:
+    ///  - SAHIP: avatarin govdesi tamamen kapali. Kendi elini
+    ///    <see cref="FirstPersonHandView"/>'den gorur; el kumanda tasiyicisina rijit
+    ///    bagli oldugu icin kumanda nerede olursa olsun (2 m otede bile) el TAM
+    ///    orasidir. Kol IK'si bu garantiyi veremez, kol ancak boyu kadar uzanir.
+    ///  - UZAK OYUNCU: tam humanoid avatar (<see cref="AvatarIKController"/>). Orada
+    ///    kural terstir: kol uzayamaz, sinirina gelince dumduz kalip hedefe dogru
+    ///    bakar (<see cref="ArmReach"/>).
     /// </summary>
     // Must write the pose carriers BEFORE AvatarIKController (order 0) reads them in LateUpdate;
     // with both at the default order Unity gives no guarantee, and losing the race adds a
@@ -57,9 +61,8 @@ namespace VRMultiplayer
         Transform _srcHead, _srcLeft, _srcRight;
         bool _bound;
 
-        /// <summary>Takip kaynaklari baglandi mi. False ise LateUpdate hicbir sey kopyalamaz:
-        /// agdaki kafa/el transformlari hic guncellenmez ve avatar DONAR. Teshis icin disari
-        /// acik (bkz. SoloVrTest) — "avatar hareket etmiyor" sikayetini olcumle ayirmak icin.</summary>
+        /// <summary>Takip kaynaklari baglandi mi (teshis; bkz. SoloVrTest). False ise
+        /// LateUpdate hicbir transform kopyalamaz ve avatar donuk kalir.</summary>
         public bool TrackingBound => _bound;
 
         public override void OnNetworkSpawn()
@@ -102,57 +105,37 @@ namespace VRMultiplayer
 
                 if (IsOwner)
                 {
-                    // FIRST-PERSON BODY: prefer the dedicated FP_Hands model (capped wrists,
-                    // weights locked to the hand bones — no cuff stretching). When it attaches,
-                    // hide EVERY avatar piece incl. glove|watch and show only the FP renderers.
-                    // If the asset is missing the old glove|watch path below still works.
-                    var fpHands = FirstPersonHands.TryAttach(remoteAvatar);
+                    // BIRINCI SAHIS ELI ARTIK AVATAR ISKELETINDEN GELMIYOR.
+                    // Kumanda neredeyse el ORADA olmak zorunda; kol IK'si bunu
+                    // yapisal olarak veremez (kol ancak boyu kadar uzanir). O yuzden
+                    // sahibin gordugu el dogrudan kumanda tasiyicisina parent'lanir
+                    // (FirstPersonHandView) ve avatarin kendi govdesi tamamen kapatilir.
+                    // Uzak oyuncular tam askeri gormeye devam eder; orada kural terstir,
+                    // kol uzayamaz ve sinirinda dumduz kalir (ArmReach).
+                    // TUM renderer turleri - yalnizca SkinnedMeshRenderer DEGIL. Avatarda
+                    // deri kemiga bagli olmayan parcalar da var (kol saati ekrani, isim
+                    // etiketi); bunlar kapatilmayinca karakterden geriye gorunen bir
+                    // artik kaliyor. Dahasi o parcalar avatarin BILEK kemigini takip
+                    // ediyor, yani kolun erisim siniri yuzunden kumandadan geride
+                    // kalip goruste yuzuyorlar. Tur bazli filtre yerine hepsi.
+                    foreach (var r in remoteAvatar.GetComponentsInChildren<Renderer>(true))
+                        r.enabled = false;
 
-                    // You see only your own hands — no head in the camera, no torso/legs
-                    // blocking the view. Remote players still see the full soldier. Models
-                    // without a glove piece fall back to hiding just the head/eye/neck
-                    // renderers ("nec" also catches this model's "Necck" typo).
-                    var renderers = remoteAvatar.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-                    bool hasHands = false;
-                    foreach (var r in renderers)
-                        if (r.name.ToLowerInvariant().Contains("glove")) { hasHands = true; break; }
+                    // KOL SAATI EKRANI RENDERER KAPATMAYLA SUSMUYOR. Yukaridaki dongu O ANDA
+                    // VAR OLAN renderer'lari kapatiyor; ama WatchScreenUI ekranini Start()'ta
+                    // KURUYOR (Face + ~20 quad + 6 yazi) ve Start bu metottan SONRA calisiyor.
+                    // Yani yeni dogan renderer'lar kapatilmamis kaliyor ve sahibin gorusunde
+                    // sag bilekte bir saat arayuzu asili duruyordu — hem de kolun erisim
+                    // siniri yuzunden kumandadan geride, havada.
+                    //
+                    // Cozum obeyi KOMPLE kapatmak: Start hic calismaz, ekran hic kurulmaz.
+                    // Sahibin saati zaten birinci sahis elinde (bkz. UI.WristWatch).
+                    foreach (var w in remoteAvatar.GetComponentsInChildren<WatchScreenUI>(true))
+                        w.gameObject.SetActive(false);
 
-                    bool hidAny = false;
-                    foreach (var r in renderers)
-                    {
-                        if (fpHands != null)
-                        {
-                            r.enabled = r.transform.IsChildOf(fpHands.transform);
-                            hidAny = true;
-                            continue;
-                        }
-
-                        string rn = r.name.ToLowerInvariant();
-                        bool hide = hasHands
-                            ? !(rn.Contains("glove") || rn.Contains("watch"))
-                            : rn.Contains("head") || rn.Contains("eye") || rn.Contains("nec");
-                        if (hide) { r.enabled = false; hidAny = true; continue; }
-
-                        if (hasHands)
-                        {
-                            // The cuff is an open mesh; single-sided it reads as a hole when you
-                            // look into it. Draw both faces so the glove looks solid.
-                            MaterialDoubleSided.Apply(r);
-                        }
-                    }
-
-                    if (!hasHands && !hidAny)
-                    {
-                        var ik = remoteAvatar.GetComponentInChildren<AvatarIKController>();
-                        if (ik != null) ik.hideHead = true; // no separate head mesh — bone trick
-                    }
-
-                    // Don't show your own floating name tag either.
-                    foreach (var tm in remoteAvatar.GetComponentsInChildren<TextMeshPro>(true))
-                    {
-                        var r = tm.GetComponent<MeshRenderer>();
-                        if (r != null) r.enabled = false;
-                    }
+                    // Tasiyicilarin kendi mesh'leri yukarida HideRenderers ile zaten
+                    // kapatildi; el gorseli ondan SONRA kuruluyor ki kapanmasin.
+                    FirstPersonHandView.Attach(leftHand, rightHand, remoteAvatar);
                 }
             }
         }
