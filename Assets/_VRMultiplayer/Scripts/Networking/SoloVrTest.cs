@@ -62,6 +62,11 @@ namespace VRMultiplayer
                  "acmaz — avatar donar. PREFAB DEGERI DEGISMEZ, yalnizca bu oturum.")]
         public float seatedGateHeight = 0.3f;
 
+        [Tooltip("Govde temizligini KENDI avatarinda da gosterir (dis gorunus dogrulamasi). " +
+                 "ACIKKEN silah GOZLUKTE de kayar - tek silah var, iki goruntu ayni silahi " +
+                 "ciziyor. His testi yaparken ekrandaki kutudan kapat.")]
+        public bool showBodyClearance = true;
+
         Camera _cam;
         Transform _target;         // yerel oyuncunun kafasi
         bool _bodyShown;           // tam govde bir kez geri acilir
@@ -97,6 +102,8 @@ namespace VRMultiplayer
             standingHeadHeight = UnityEditor.EditorPrefs.GetFloat(PrefKey + "standH", standingHeadHeight);
             seatedGateHeight   = UnityEditor.EditorPrefs.GetFloat(PrefKey + "gate", seatedGateHeight);
             orbitDistance      = UnityEditor.EditorPrefs.GetFloat(PrefKey + "orbit", orbitDistance);
+            showBodyClearance  = UnityEditor.EditorPrefs.GetBool(PrefKey + "clear", showBodyClearance);
+            WeaponHandWeld.ForceClearanceLocal = showBodyClearance;
         }
 
         void SavePrefs()
@@ -107,6 +114,7 @@ namespace VRMultiplayer
             UnityEditor.EditorPrefs.SetFloat(PrefKey + "standH", standingHeadHeight);
             UnityEditor.EditorPrefs.SetFloat(PrefKey + "gate", seatedGateHeight);
             UnityEditor.EditorPrefs.SetFloat(PrefKey + "orbit", orbitDistance);
+            UnityEditor.EditorPrefs.SetBool(PrefKey + "clear", showBodyClearance);
         }
 
         /// <summary>Host olarak baslat: sunucu + istemci ayni surecte, avatar spawn olur.</summary>
@@ -544,12 +552,14 @@ namespace VRMultiplayer
         {
             // Game view'i normale dondur, yoksa sonraki Play'de ayna kapali kalir.
             XRSettings.gameViewRenderMode = GameViewRenderMode.LeftEye;
+            // Test kancasi bu bilesenle yasar - birakilmazsa normal oyunda da zorlanirdi.
+            WeaponHandWeld.ForceClearanceLocal = false;
         }
 
         void OnGUI()
         {
             if (_cam == null) return;
-            GUILayout.BeginArea(new Rect(Screen.width - 300, 20, 280, 360), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(Screen.width - 300, 20, 280, 410), GUI.skin.box);
             GUILayout.Label("SOLO VR TEST");
             GUILayout.Label(_target != null
                 ? (_follow ? "Kamera: avatari cerceveliyor" : "Kamera: serbest")
@@ -582,6 +592,17 @@ namespace VRMultiplayer
                     ? "Takip kapisi: ACIK"
                     : "Takip kapisi: KAPALI -> AVATAR DONUK");
             }
+
+            GUILayout.Space(6);
+            bool bc = GUILayout.Toggle(showBodyClearance, "Govde temizligi (dis gorunus)");
+            if (bc != showBodyClearance)
+            {
+                showBodyClearance = bc;
+                WeaponHandWeld.ForceClearanceLocal = bc;
+                SavePrefs();
+            }
+            if (showBodyClearance)
+                GUILayout.Label("(acikken gozlukte de silah kayar)");
 
             if (_rackSlots.Count > 0)
             {
