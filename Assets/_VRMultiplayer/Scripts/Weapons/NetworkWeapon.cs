@@ -732,13 +732,26 @@ namespace VRMultiplayer
             // Kimin duyacagi AG bilgisidir, o yuzden ses WeaponFx'e tasinmadi.
             bool localHolderHere = _grab != null && _grab.IsHeld && NetworkManager != null &&
                 _grab.HolderClientId == NetworkManager.LocalClientId;
+
+            // IZ VE ALEV, BU MAKINEDE CIZILEN silahin namlusundan baslar — replike edilen
+            // "origin" dunya noktasindan degil. Izleyen tarafta silah, govde temizligi ve
+            // erisim cekmesiyle KAYDIRILMIS cizilir; origin'i oldugu gibi kullanmak alevi
+            // gercek namluda, gorunen silahi baska yerde birakiyordu ("ates ettigi yer ile
+            // namlu farkli"). GetAimRay ayni namlu secim mantigini (Smg 1'in ters muzzle
+            // istisnasi dahil) BU makinenin silah transformuna uygular.
+            //
+            // Isabet uclari (ends) OLDUGU GIBI kalir: kivilcim, merminin gercekten degdigi
+            // duvarda durmali. Iz gorunen namludan otoriter isabet noktasina cizilir; isabet
+            // zaten sunucuda coktan hesaplandi, burasi yalnizca gorsel.
+            GetAimRay(out Vector3 seenMuzzle, out _);
+
             if (!localHolderHere)
-                WeaponAudioPlayer.PlayAt(_cv.fireClip, origin, _cv.fireVolume,
+                WeaponAudioPlayer.PlayAt(_cv.fireClip, seenMuzzle, _cv.fireVolume,
                     _cv.firePitchMin, _cv.firePitchMax, _cv.soundMaxDistance);
 
             // Gorseller de ses kuralina uyar: tutan oyuncu KENDI atisini Fire()'daki ongoruyle
             // coktan gordu — burada bir daha cizersek RTT kadar gec ikinci bir alev/iz olur.
-            if (!localHolderHere && _fx != null) _fx.ShowVolley(origin, ends, normals, fleshMask);
+            if (!localHolderHere && _fx != null) _fx.ShowVolley(seenMuzzle, ends, normals, fleshMask);
         }
 
         // ------------------------------------------------------------- sarjor
