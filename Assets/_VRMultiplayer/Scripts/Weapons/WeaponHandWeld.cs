@@ -251,7 +251,7 @@ namespace VRMultiplayer.Weapons
             if (!w.active || w.fadingOut) return false;
             if (w.weapon == null || w.profile == null) return false;
             isSupport = w.isSupport;
-            ComputeAnchor(ref w, left, Vector3.zero, out pos, out rot);
+            ComputeAnchor(ref w, left, Vector3.zero, false, out pos, out rot);
             return true;
         }
 
@@ -294,14 +294,17 @@ namespace VRMultiplayer.Weapons
         void ComputeTarget(ref HandWeld w, bool left, Vector3 shift,
             out Vector3 targetPos, out Quaternion targetRot)
         {
-            ComputeAnchor(ref w, left, shift, out Vector3 anchorPos, out Quaternion anchorRot);
+            ComputeAnchor(ref w, left, shift, true, out Vector3 anchorPos, out Quaternion anchorRot);
             // Anchor on the (scaled) weapon; the wrist offset is authored in meters (hand-sized,
             // independent of the weapon's scale).
             targetPos = anchorPos + anchorRot * w.wristLocalPos;
             targetRot = anchorRot * w.wristLocalRot;
         }
 
-        void ComputeAnchor(ref HandWeld w, bool left, Vector3 shift,
+        /// <summary>slideToReach: destek elinin ray noktasini kolun ERISIMI icinde tutacak
+        /// sekilde ray boyunca kaydir (avatar bilegi). Birinci sahis eli icin kapali: onun
+        /// kolu yok, kumandanin izdusumunde kalmasi dogru.</summary>
+        void ComputeAnchor(ref HandWeld w, bool left, Vector3 shift, bool slideToReach,
             out Vector3 anchorPos, out Quaternion anchorRot)
         {
             // Cerceve karari PROFILDE (bkz. WeaponGripProfile.GripAnchorLocal) - tezgah da
@@ -324,6 +327,20 @@ namespace VRMultiplayer.Weapons
                 Transform carrier = _ik != null ? (left ? _ik.leftHandSource : _ik.rightHandSource) : null;
                 Vector3 probe = carrier != null ? carrier.position : w.bone.position;
                 float t = WeaponGripMath.RailClosestT(s, e, probe);
+
+                // ERISIM DISINDA RAY BOYUNCA KAY. Eski yol: hedef, WeldSide'daki ArmReach
+                // kelepcesiyle omuza dogru RADYAL kistiriliyordu; o nokta rayin DISINDA kalir,
+                // el handguard'dan kopup geriye kayar ("silahi ileri uzatinca ikinci el
+                // yerinden cikip geri gidiyor"). Gercek insan kolu yetmeyince destek elini
+                // ray uzerinde kendine dogru kaydirir - ayni sey. Bilek hedefi t'de dogrusal
+                // (uclardaki iki hedef arasinda Lerp), bu yuzden erisim kisiti dogrudan t
+                // araligina cevrilir. Rayin TAMAMI erisim disindaysa radyal kelepce yine
+                // son care olarak WeldSide'da kalir.
+                if (slideToReach)
+                {
+                    Vector3 wristOff = (w.weapon.rotation * anchorLocalRot) * w.wristLocalPos;
+                    t = SlideWithinReach(s + wristOff, e + wristOff, t, left);
+                }
                 anchorLocal = Vector3.Lerp(rs, re, t);
             }
 
@@ -478,6 +495,36 @@ namespace VRMultiplayer.Weapons
             }
 
             return bestDir * Mathf.Min(best, maxBodyPush);
+        }
+
+        /// <summary>Raydaki t'yi, bilek hedefi (t0..t1 dogrusu) omuzun erisim kuresi ICINDE
+        /// kalacak sekilde kaydirir. Yaricap ArmReach.Clamp ile AYNI formul. Hic kesisim yoksa
+        /// rayin omza en yakin t'si doner (radyal kelepce sonra devreye girer).</summary>
+        float SlideWithinReach(Vector3 t0, Vector3 t1, float tWant, bool left)
+        {
+            Transform up = left ? _leftUpper : _rightUpper;
+            float lenLocal = left ? _leftArmLen : _rightArmLen;
+            if (up == null || lenLocal <= 0.001f) return tWant;
+            float scale = up.lossyScale.x;
+            if (scale <= 0.0001f) scale = 1f;
+            float r = lenLocal * scale * ArmReach.StraightFraction;
+            if (r <= 0.01f) return tWant;
+
+            Vector3 a = t0 - up.position;
+            Vector3 b = t1 - t0;
+            if ((a + b * tWant).sqrMagnitude <= r * r) return tWant;   // istenen zaten erisimde
+
+            // |a + t*b|^2 = r^2: kurenin ray dogrusunu kestigi t araligi (ikinci derece).
+            float bb = Vector3.Dot(b, b);
+            if (bb < 1e-8f) return tWant;                              // ray tek nokta
+            float ab = Vector3.Dot(a, b);
+            float disc = ab * ab - bb * (a.sqrMagnitude - r * r);
+            if (disc <= 0f) return Mathf.Clamp01(-ab / bb);          // hic girmiyor: en yakin
+            float sq = Mathf.Sqrt(disc);
+            float tLo = Mathf.Max(0f, (-ab - sq) / bb);
+            float tHi = Mathf.Min(1f, (-ab + sq) / bb);
+            if (tLo > tHi) return Mathf.Clamp01(-ab / bb);            // kesisim [0,1] disinda
+            return Mathf.Clamp(tWant, tLo, tHi);
         }
 
         void WeldSide(ref HandWeld w, bool left)
