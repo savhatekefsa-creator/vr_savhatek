@@ -90,6 +90,7 @@ namespace VRMultiplayer.Weapons
         int _shiftFrame = -1;
         bool _appliedL, _appliedR;   // silah bu kare itildi mi (cifte uygulama olmasin)
         Transform _pushLogged;       // dogrulama izi: tutus basina bir satir
+        Transform _clampLoggedL, _clampLoggedR;   // GECICI TANI: erisim kelepcesi izi
 
         // Sahiplik bir kez aranir. Bulunamazsa (ag yok: editor tezgahi) gorsel kopya
         // sayilir - orada zaten disaridan bakiliyor, oynanis diye bir sey yok.
@@ -557,9 +558,25 @@ namespace VRMultiplayer.Weapons
             // hicbir sey degismez, yani "destek eli silaha tam guclu kaynakli
             // kalsin" kurali korunur. ROTASYON kelepcelenmez: kol duz kalsa bile
             // el silahin/kumandanin yonune bakmaya devam eder.
+            Vector3 preClamp = targetPos;
             targetPos = ArmReach.Clamp(targetPos,
                 left ? _leftUpper : _rightUpper,
                 left ? _leftArmLen : _rightArmLen);
+
+            // GECICI TANI: kelepce hedefi 2 cm'den fazla oynattiysa tutus basina bir satir.
+            // "Destek eli silaha oturmuyor" sikayetini olcumle ayirmak icin.
+            if ((targetPos - preClamp).sqrMagnitude > 0.0004f &&
+                (left ? _clampLoggedL : _clampLoggedR) != w.weapon)
+            {
+                if (left) _clampLoggedL = w.weapon; else _clampLoggedR = w.weapon;
+                Transform up = left ? _leftUpper : _rightUpper;
+                float len = left ? _leftArmLen : _rightArmLen;
+                float max = up != null ? len * up.lossyScale.x * ArmReach.StraightFraction : 0f;
+                float dist = up != null ? Vector3.Distance(preClamp, up.position) : 0f;
+                Debug.Log($"[Erisim] {w.weapon.name} {(left ? "SOL" : "SAG")} {(w.isSupport ? "destek" : "ana")}: " +
+                          $"hedef omuzdan {dist:0.00} m, kol {max:0.00} m -> {(targetPos - preClamp).magnitude * 100f:0} cm kistirildi " +
+                          $"(sahip degil: {VisualOnly}, olcek {(up != null ? up.lossyScale.x : 0f):0.00})");
+            }
 
             // Engage/release weight. The bone's pose here is this frame's IK/animator result
             // (the weld runs after both), so a partial weight blends between that and the

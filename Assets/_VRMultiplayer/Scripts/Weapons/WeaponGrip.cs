@@ -29,6 +29,7 @@ namespace VRMultiplayer.Weapons
         // driving one hand on the shared per-avatar poser/weld — never wipes the other's hand.
         ProceduralFingerPoser _appPoser;
         WeaponHandWeld _appWeld;
+        bool _dbgHasSupport, _dbgLogged;   // GECICI TANI
         bool _appLeft, _appRight;
 
         public WeaponGripProfile Profile => _profile;
@@ -87,6 +88,13 @@ namespace VRMultiplayer.Weapons
                         bool hasSupport = sup != GrabbableObject.NoHand && (sup == 0) == otherLeft;
                         wantLeft = mainLeft || (hasSupport && otherLeft);
                         wantRight = !mainLeft || (hasSupport && !otherLeft);
+
+                        // GECICI TANI: destek durumu her degistiginde bir satir.
+                        if (hasSupport != _dbgHasSupport || !_dbgLogged)
+                        {
+                            _dbgHasSupport = hasSupport; _dbgLogged = true;
+                            Debug.Log($"[Tutus] {name}: ana el {(mainLeft ? "SOL" : "SAG")}, destek={hasSupport} (sup={sup}), sahip={_grab.IsOwner}");
+                        }
                     }
                 }
             }
