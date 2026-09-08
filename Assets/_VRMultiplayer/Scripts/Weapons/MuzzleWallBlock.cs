@@ -126,6 +126,9 @@ namespace VRMultiplayer.Weapons
             // replike transformundan cikan sonucu kullanir. Istemci kilidi atlatsa bile
             // sunucudaki bu deger atisi keser.
             _weapon.GetAimRay(out Vector3 origin, out Vector3 dir);
+            // Izleyici kaydirmasi (govde itmesi / erisim cekmesi) yalniz GORSEL; bu olcum
+            // sunucuda atisi reddettigi icin mantiksal (replike) konumdan yapilmali.
+            origin -= WeaponHandWeld.VisualShiftOf(transform);
             IsBlocked = Evaluate(origin, dir);
 
             // Geri bildirimlerin TAMAMI sadece silahi fiilen tutan oyuncuya. Bu kontrol

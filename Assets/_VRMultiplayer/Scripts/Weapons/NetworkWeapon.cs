@@ -627,7 +627,8 @@ namespace VRMultiplayer
             // ClientNetworkTransform gecikmesi MESRU sapma uretir — esikler once Quest verisiyle
             // olculur, ret kapisina ancak ondan sonra cevrilir.
             {
-                Vector3 srvOrigin = muzzle != null ? muzzle.position : transform.TransformPoint(_muzzleLocal);
+                Vector3 srvOrigin = (muzzle != null ? muzzle.position : transform.TransformPoint(_muzzleLocal))
+                                    - WeaponHandWeld.VisualShiftOf(transform);   // gorsel kaydirma haric
                 Vector3 srvBarrelLocal = _profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f
                     ? _profile.barrelLocalDirection.normalized
                     : _barrelLocal;
