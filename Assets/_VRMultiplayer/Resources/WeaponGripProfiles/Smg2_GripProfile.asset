@@ -90,8 +90,8 @@ MonoBehaviour:
   supportRailLocalEnd: {x: 0.0468, y: -0.0362, z: -0.1573}
   supportBreakDistance: 0.3
   supportHand:
-    wristLocalPosition: {x: 0.0481169, y: 0.043753564, z: -0.05534944}
-    wristLocalEuler: {x: 310.74725, y: 284.42184, z: 249.67946}
+    wristLocalPosition: {x: -0.019169085, y: 0.07724409, z: -0.028637093}
+    wristLocalEuler: {x: 325.18738, y: 321.61667, z: 235.43459}
     fpWristLocalPosition: {x: -0.016, y: 0.09, z: -0.018}
     fpWristLocalEuler: {x: -32, y: -19, z: 40}
     fpCurls:
