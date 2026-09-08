@@ -59,8 +59,12 @@ namespace VRMultiplayer.Weapons
                  "surmuyorsan uygulanir - yani karsindaki oyuncunun ekraninda. Kendi elindeki " +
                  "silahin konumuna hicbir kosulda dokunulmaz (bkz. VisualOnly).")]
         public bool bodyClearance = true;
-        [Tooltip("Govde ekseni etrafindaki yaricap (m). Silahin kendi kalinligi buna EKLENIR.")]
+        [Tooltip("Govdenin YAN yari genisligi (m, omuz/kaburga). Silahin kalinligi buna EKLENIR.")]
         public float bodyRadius = 0.22f;
+        [Tooltip("Govdenin ON/ARKA yari derinligi (m, gogus + yelek). Daire yerine ELIPS: " +
+                 "gogus onunde tutulan tabanca omurgadan 25 cm'de bile govdenin DISINDADIR; " +
+                 "daire (22 cm) onu iceride sayip 18 cm one itiyordu - tabanca havada kaliyordu.")]
+        public float bodyDepth = 0.14f;
         [Tooltip("Itmenin ust siniri (m). Kol erisimi (ArmReach) zaten ikinci bir sinir koyar.")]
         public float maxBodyPush = 0.35f;
         [Tooltip("Itmenin yumusama suresi (s). Sadece gorsel oldugu icin serbestce " +
@@ -515,10 +519,14 @@ namespace VRMultiplayer.Weapons
             sh.ok = sh.halfLen > 1e-3f;
         }
 
-        /// <summary>Silahi govdenin disina cikaracak YATAY itme (yoksa sifir). Govde, kalca-boyun
-        /// dogru parcasi etrafinda bir SILINDIR: uclarin disindaki ornekler yok sayilir - bacak
-        /// hizasindaki silah itilmez, yuze yaklastirilan silah da itilmez (nisan hatti). Itme
-        /// eksene dik: silah yukari/asagi kaymaz, govdenin yanina kayar.</summary>
+        /// <summary>Silahi govdenin disina cikaracak YATAY itme (yoksa sifir).
+        ///
+        /// Govde: kalca-boyun ekseni etrafinda ELIPS kesitli silindir - yan yari genisligi
+        /// bodyRadius, on/arka yari derinligi bodyDepth (avatar kokunun ileri yonu). Daire
+        /// kesit gogus onunu de "icerisi" sayiyordu: iki elle gogus onunde tutulan tabanca
+        /// 18 cm one itiliyor, sonra erisim cekmesi geri cekiyor, silah havada kaliyordu.
+        /// Uclarin disindaki ornekler yok sayilir (bacak hizasi itilmez, yuze yaklastirilan
+        /// silah da itilmez - nisan hatti). Itme eksene dik: silah yukari/asagi kaymaz.</summary>
         Vector3 BodyClearPush(Transform weapon, Transform hand, in WeaponShape sh)
         {
             if (_hips == null || _neck == null || !sh.ok) return Vector3.zero;
@@ -527,12 +535,23 @@ namespace VRMultiplayer.Weapons
             Vector3 ab = _neck.position - a;
             float abLen2 = ab.sqrMagnitude;
             if (abLen2 < 1e-6f) return Vector3.zero;
+            Vector3 axis = ab / Mathf.Sqrt(abLen2);
 
-            float radius = bodyRadius + sh.halfThick * Mathf.Abs(weapon.lossyScale.x);
+            // Elips cerceveleri: ileri = avatar kokunun ileri yonu (govde kafanin yaw'ini
+            // izliyor), eksene dik duzleme izdusurulmus. Yon guvenilmezse daireye dus.
+            Vector3 fwd = transform.forward;
+            fwd -= axis * Vector3.Dot(fwd, axis);
+            bool ellipse = fwd.sqrMagnitude > 1e-4f;
+            if (ellipse) fwd.Normalize();
+            Vector3 right = ellipse ? Vector3.Cross(axis, fwd).normalized : Vector3.zero;
+
+            float thick = sh.halfThick * Mathf.Abs(weapon.lossyScale.x);
+            float ra = bodyRadius + thick;                          // yan
+            float rb = (ellipse ? bodyDepth : bodyRadius) + thick;  // on/arka
 
             const int Samples = 11;
             float best = 0f;
-            Vector3 bestDir = Vector3.zero;
+            Vector3 bestPush = Vector3.zero;
             bool hit = false;
 
             for (int i = 0; i < Samples; i++)
@@ -545,28 +564,44 @@ namespace VRMultiplayer.Weapons
                 if (u < 0f || u > 1f) continue;              // govde bandinin disinda
 
                 Vector3 d = rel - ab * u;                     // eksene DIK
-                float dist = d.magnitude;
-                float pen = radius - dist;
-                if (pen <= 0f || pen <= best) continue;
+                Vector3 push;
+                float pen;
+                if (ellipse)
+                {
+                    float x = Vector3.Dot(d, right), z = Vector3.Dot(d, fwd);
+                    float e = Mathf.Sqrt((x * x) / (ra * ra) + (z * z) / (rb * rb));   // 1 = yuzey
+                    if (e >= 1f) continue;
+                    if (e < 1e-3f) { push = Vector3.zero; pen = rb; }          // eksenin ustunde
+                    else { push = d * (1f / e - 1f); pen = push.magnitude; }  // yuzeye, elips-radyal
+                }
+                else
+                {
+                    float dist = d.magnitude;
+                    pen = ra - dist;
+                    if (pen <= 0f) continue;
+                    push = dist > 1e-4f ? d * (pen / dist) : Vector3.zero;
+                }
+                if (pen <= best) continue;
 
                 best = pen;
                 hit = true;
-                bestDir = dist > 1e-4f ? d / dist : Vector3.zero;
+                bestPush = push;
             }
 
             if (!hit) return Vector3.zero;
 
-            if (bestDir.sqrMagnitude < 1e-6f)
+            if (bestPush.sqrMagnitude < 1e-8f)
             {
                 // Silah tam eksenin ustunde: yon belirsiz, eli tutan taraf disari.
                 Vector3 fallback = hand != null ? hand.position - (a + ab * 0.5f) : transform.right;
-                Vector3 axis = ab / Mathf.Sqrt(abLen2);
                 fallback -= axis * Vector3.Dot(fallback, axis);
                 if (fallback.sqrMagnitude < 1e-6f) return Vector3.zero;
-                bestDir = fallback.normalized;
+                bestPush = fallback.normalized * best;
             }
 
-            return bestDir * Mathf.Min(best, maxBodyPush);
+            if (bestPush.sqrMagnitude > maxBodyPush * maxBodyPush)
+                bestPush = bestPush.normalized * maxBodyPush;
+            return bestPush;
         }
 
         /// <summary>Raydaki t'yi, bilek hedefi (t0..t1 dogrusu) omuzun erisim kuresi ICINDE
