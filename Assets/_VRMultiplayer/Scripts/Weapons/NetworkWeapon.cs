@@ -627,12 +627,12 @@ namespace VRMultiplayer
             // ClientNetworkTransform gecikmesi MESRU sapma uretir — esikler once Quest verisiyle
             // olculur, ret kapisina ancak ondan sonra cevrilir.
             {
-                Vector3 srvOrigin = (muzzle != null ? muzzle.position : transform.TransformPoint(_muzzleLocal))
-                                    - WeaponHandWeld.VisualShiftOf(transform);   // gorsel kaydirma haric
-                Vector3 srvBarrelLocal = _profile != null && _profile.barrelLocalDirection.sqrMagnitude > 1e-6f
-                    ? _profile.barrelLocalDirection.normalized
-                    : _barrelLocal;
-                Vector3 srvBarrel = (transform.rotation * srvBarrelLocal).normalized;
+                // Istemci ile AYNI namlu secimi (GetAimRay): ham muzzle.position, Smg 1 gibi
+                // araci muzzle'i dipcige koymus silahlarda istemcinin gonderdigi gercek namlu
+                // ucundan silah boyu kadar (0.63 m) sapiyordu - gozlem her atista gurultu
+                // uretiyor, red kapisina cevrilse her atisi reddederdi. Gorsel kaydirma haric.
+                GetAimRay(out Vector3 srvOrigin, out Vector3 srvBarrel);
+                srvOrigin -= WeaponHandWeld.VisualShiftOf(transform);
                 Vector3 obsDir = dirs[0].sqrMagnitude > 0.5f ? dirs[0].normalized : srvBarrel;
                 float originDist = Vector3.Distance(origin, srvOrigin);
                 float aimDelta = Vector3.Angle(srvBarrel, obsDir);
