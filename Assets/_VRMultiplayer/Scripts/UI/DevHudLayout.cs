@@ -27,12 +27,26 @@ namespace VRMultiplayer.UI
         const float Gap = 8f;
 
         static int _frame = -1;
+        static EventType _evt = EventType.Ignore;
         static float _left, _right;
 
+        /// <summary>Imleci her OLAY GECISINDE sifirlar.
+        ///
+        /// DIKKAT — ILK SURUMDEKI HATA: yalnizca Time.frameCount degisince sifirlaniyordu.
+        /// Ama OnGUI kare basina BIRDEN COK kez kosar: once Layout, sonra Repaint, ayrica her
+        /// girdi olayi (fare hareketi, tekerlek, tus) icin ayri bir gecis. Ilk gecis sifirliyor,
+        /// sonraki gecisler imleci asagi itmeye devam ediyordu; sonuc, panellerin kare icinde
+        /// asagi kaymasi ve fare hareket ettikce (olay sayisi arttikca) kaymanin artmasiydi —
+        /// sahada "UI gidip geliyor" diye goruldu.
+        ///
+        /// Kare + olay turu birlikte anahtar: Layout ve Repaint gecisleri ayni cagri sirasini
+        /// izledigi icin ikisi de AYNI dikdortgenleri uretir, yani yerlesim kararli kalir.</summary>
         static void Sync()
         {
-            if (_frame == Time.frameCount) return;
+            EventType e = Event.current != null ? Event.current.type : EventType.Ignore;
+            if (_frame == Time.frameCount && _evt == e) return;
             _frame = Time.frameCount;
+            _evt = e;
             _left = Margin;
             _right = Margin;
         }

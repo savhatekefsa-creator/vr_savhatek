@@ -150,20 +150,21 @@ namespace VRMultiplayer.Weapons
         {
             get
             {
-                // SUNUCUDA ASLA KAYDIRMA. Kaydirma silahin AG KOKUNE yaziliyor, yani collider'i
-                // da tasiyor. Uretim topolojisi adanmis sunucu (LanBootstrap.StartAsServer ->
-                // StartServer(), sunucuya avatar spawn edilmez), dolayisiyla sunucu hicbir
-                // avatarin sahibi degil ve yalnizca IsOwner'a bakan bir kapi orada da aciliyordu:
-                // otoriter fizik sorgulari (WeaponHitscanServer isini, bomba LOS linecast'i)
-                // silahi replike konumundan 0.80 m'ye kadar sapmis goruyordu. VisualShiftOf
-                // yalnizca NAMLU okumalarini telafi ediyor, collider'i telafi etmiyor.
+                // SUNUCUDA DA CALISIR. Bir denemede burada "sunucuda asla kaydirma" kapisi
+                // vardi; gerekce, kaydirmanin silahin AG KOKUNE yazilmasi ve collider'i da
+                // tasimasiydi. Ama PC ekrani (yani izlenen goruntu) SUNUCUNUN kendi render'i:
+                // kapi acikken destek eli kundaktan geride kaliyor ve dis gorunus bozuluyordu.
                 //
-                // Istemcide (IsServer false) kaydirma calismaya devam eder, yani karsindaki
-                // oyuncunun silahi yine govdesinden cikar. Host'ta (solo test) kozmetik duzeltme
-                // kaybolur; fizik dogrulugu kozmetigin onunde.
-                var nm = NetworkManager.Singleton;
-                if (nm != null && nm.IsServer) return false;
-
+                // Collider endisesi bu arada BASKA duzeltmelerle karsilandi: hitscan artik
+                // aticinin tasidigi silahlari atliyor (WeaponHitscanServer.IsHeldBy) ve bomba
+                // siper testi yalnizca KATI dunyayi sayiyor (WorldSolids.IsSolid, rigidbody'liyi
+                // eler) — yani tasinan silahin kaymis collider'i bu iki yolu da etkilemiyor.
+                // Namlu okumalari zaten VisualShiftOf ile telafi ediliyor.
+                //
+                // KALAN PAY: hedefin elindeki silah isini hala fiziksel engel sayiyor ve o silah
+                // sunucuda 0.80 m'ye kadar kaymis olabilir. Bunu tamamen bitirmenin yolu
+                // kaydirmayi ag kokune degil silahin altindaki GORSEL bir cocuk transformuna
+                // uygulamak; o 18 prefabta yapisal degisiklik, ayri bir is.
                 if (!_netLooked) { _netObj = GetComponentInParent<NetworkObject>(); _netLooked = true; }
                 return _netObj == null || !_netObj.IsOwner;
             }

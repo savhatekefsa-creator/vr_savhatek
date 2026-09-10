@@ -130,6 +130,15 @@ namespace VRMultiplayer
         {
             if (_holder.Value == clientId)
                 _holder.Value = NoHolder; // dropped where it was
+
+            // SAHIPLIGI SUNUCUYA AL. Prefablarda DontDestroyWithOwner kapali oldugu icin NGO,
+            // ayrilan istemcinin sahipligindeki HER objeyi yok ediyor: oyuncu oyun boyunca
+            // eline alip yere biraktigi tum silahlari yaninda goturuyordu (kalibi olmayan
+            // sahne silahlari kalici olarak kayboluyordu). Sahiplik yalnizca BURADA iade
+            // edilir - birakis aninda degil, cunku firlatilan objenin fizigi sahipte kosar.
+            if (NetworkObject != null && NetworkObject.IsSpawned &&
+                NetworkObject.OwnerClientId == clientId)
+                NetworkObject.RemoveOwnership();
         }
 
         // Ele alma sesi: _holder NetworkVariable degisimi zaten HER istemcide tetiklenir,
@@ -233,14 +242,12 @@ namespace VRMultiplayer
             if (p.Receive.SenderClientId != _holder.Value) return;
             _holder.Value = NoHolder;
 
-            // SAHIPLIGI SUNUCUYA IADE ET. Eskiden birakilan obje son tutanin sahipliginde
-            // kaliyordu; prefablarda DontDestroyWithOwner kapali oldugu icin o oyuncu maci
-            // terk ettiginde NGO onun sahipligindeki HER objeyi yok ediyordu - yani oyun
-            // boyunca eline alip yere biraktigi tum silahlar haritadan siliniyordu (kalibi
-            // olmayan sahne silahlari kalici olarak). Ayrica bomba sahipligi de birakilmadigi
-            // icin oyuncu yere biraktigi bombayi sonradan uzaktan patlatabiliyordu.
-            if (NetworkObject != null && NetworkObject.IsSpawned && NetworkObject.OwnerClientId != NetworkManager.ServerClientId)
-                NetworkObject.RemoveOwnership();
+            // SAHIPLIK BIRAKISDA IADE EDILMEZ. Bir denemede burada RemoveOwnership cagrildi ve
+            // FIRLATMA BOZULDU: bomba fizigi ve temas haberi SAHIPTE kosuyor (GrenadeController
+            // IsOwner'a bakiyor) ve ClientNetworkTransform yetkisi de sahipte. Sahiplik birakma
+            // aninda sunucuya gecince firlatilan bomba hic hareket etmiyor, patlamiyordu.
+            // Firlatan, obje ucarken sahibi KALMALI. Iade, oyuncu baglantiyi kopardiginda
+            // yapilir (bkz. OnClientDisconnected).
         }
 
         // ReleaseServerRpc'nin sunucudan donmesini beklerken firlatmanin korunacagi sure.
