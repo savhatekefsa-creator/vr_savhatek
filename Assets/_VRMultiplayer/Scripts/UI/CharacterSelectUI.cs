@@ -339,7 +339,7 @@ namespace VRMultiplayer.UI
         {
             if (Application.isMobilePlatform || _panel == null) return;
 
-            GUILayout.BeginArea(new Rect(20, 120, 320, 210), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Left(320, 210), GUI.skin.box);
             GUILayout.Label("Karakter secimi");
 
             DesktopRow("Aksesuar", CharacterSelectPanel.SlotAccessory);

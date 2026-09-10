@@ -160,7 +160,7 @@ namespace VRMultiplayer
                 else if (id.Team.Value == 2) teamB++;
             }
 
-            GUILayout.BeginArea(new Rect(20, 20, 380, 320), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Left(380, 320), GUI.skin.box);
             GUILayout.Label("SUNUCU — Bagli oyuncu: " + connected + "   (A: " + teamA + "  B: " + teamB + ")");
             GUILayout.Label(_topdown ? "[M] 3D gorunum • WASD kaydir • Q/E zoom"
                                      : "[M] harita • WASD + sag fare • Q/E in/cik • Shift hizli");

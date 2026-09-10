@@ -288,7 +288,7 @@ namespace VRMultiplayer.UI
             // IMGUI kulaklikta hicbir sey cizmez ama layout maliyeti odenirdi (bkz. TeamSelector).
             if (Application.isMobilePlatform || _panel == null) return;
 
-            GUILayout.BeginArea(new Rect(20, 120, 320, 190), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Left(320, 190), GUI.skin.box);
             GUILayout.Label("Oyuncu girisi (isim + takim zorunlu)");
 
             string typed = GUILayout.TextField(_guiName ?? "", PlayerProfile.MaxLength);

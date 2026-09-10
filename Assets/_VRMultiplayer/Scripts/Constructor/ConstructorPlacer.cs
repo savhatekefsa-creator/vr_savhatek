@@ -1693,7 +1693,7 @@ namespace VRMultiplayer.Constructor
             if (!BuildMode || Session == null || !Session.IsActive)
             {
                 bool waiting = _wantBuildMode;
-                GUILayout.BeginArea(new Rect(Screen.width - 300f, 20f, 280f, waiting ? 70f : 26f), GUI.skin.box);
+                GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Right(280f, waiting ? 70f : 26f), GUI.skin.box);
                 GUILayout.Label("[B] Constructor" + (waiting ? "  — BEKLIYOR" : ""));
                 if (waiting && _waitingForCalibration) GUILayout.Label("KALIBRASYON bekleniyor (A/B + tetik)");
                 else if (waiting && Session != null) GUILayout.Label(Session.NotStartedReason);
@@ -1702,7 +1702,7 @@ namespace VRMultiplayer.Constructor
             }
 
             var def = SelectedProp();
-            GUILayout.BeginArea(new Rect(Screen.width - 340f, 20f, 320f, 272f), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Right(320f, 272f), GUI.skin.box);
             GUILayout.Label("CONSTRUCTOR — INSA MODU ACIK  [B kapatir]");
             if (PlacementLocked)
                 GUILayout.Label("KOYMA KILITLI [P] — hayalet ve isin gizli");

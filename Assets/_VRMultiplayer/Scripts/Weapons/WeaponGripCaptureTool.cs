@@ -88,7 +88,7 @@ namespace VRMultiplayer.Weapons
         void OnGUI()
         {
             const float w = 460f;
-            GUILayout.BeginArea(new Rect(10f, Screen.height - 370f, w, 360f), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.BottomLeft(w, 360f), GUI.skin.box);
             GUILayout.Label("GRIP YAKALAMA (dev) — silahi birak, eli konumlandir, THUMBSTICK'e BAS");
 
             // IsListening guard: before the session starts, SpawnManager exists but

@@ -426,7 +426,7 @@ namespace VRMultiplayer.UI
         void OnGUI()
         {
             if (Application.isMobilePlatform) return;
-            GUILayout.BeginArea(new Rect(20, 400, 240, 62), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Left(240, 62), GUI.skin.box);
             GUILayout.Label("Skorbord — B" + (holdToShow ? " (basili tut)" : " (ac/kapa)"));
             _guiHeld = GUILayout.RepeatButton(holdToShow ? "GOSTER (bas ve tut)" : "AC / KAPA");
             GUILayout.EndArea();

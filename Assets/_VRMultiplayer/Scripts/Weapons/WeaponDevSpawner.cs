@@ -29,7 +29,7 @@ namespace VRMultiplayer.Weapons
             if (prefabs == null || prefabs.Count == 0) return;
 
             const float w = 230f;
-            GUILayout.BeginArea(new Rect(Screen.width - w - 10f, 10f, w, 320f), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Right(w, 320f), GUI.skin.box);
             GUILayout.Label("SILAH SPAWN (dev / server)");
             for (int i = 0; i < prefabs.Count; i++)
             {

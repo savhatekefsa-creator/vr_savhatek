@@ -348,7 +348,7 @@ namespace VRMultiplayer
             if (nm != null && nm.IsServer) { MatchGui(); return; }
 
             if (_busy) return;
-            GUILayout.BeginArea(new Rect(20, 20, 260, 130), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Left(260, 130), GUI.skin.box);
             GUILayout.Label("LAN VR Multiplayer");
             if (GUILayout.Button("SUNUCU başlat")) StartAsServer();
 #if UNITY_EDITOR
@@ -369,7 +369,7 @@ namespace VRMultiplayer
         {
             var m = Match.MatchManager.Instance;
 
-            GUILayout.BeginArea(new Rect(20, 20, 300, 150), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Left(300, 150), GUI.skin.box);
             GUILayout.Label("SUNUCU AKTIF");
 
             if (m == null)

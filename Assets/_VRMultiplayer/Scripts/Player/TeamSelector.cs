@@ -113,7 +113,7 @@ namespace VRMultiplayer
             // yine de odenirdi — mobilde tamamen kapali.
             if (Application.isMobilePlatform) return;
             if (_done || !IsOwner) return;
-            GUILayout.BeginArea(new Rect(20, 290, 260, 80), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Left(260, 80), GUI.skin.box);
             GUILayout.Label("Takim sec");
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("A Takimi")) Choose(1);

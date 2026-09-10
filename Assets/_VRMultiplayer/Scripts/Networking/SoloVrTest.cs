@@ -550,7 +550,7 @@ namespace VRMultiplayer
         void OnGUI()
         {
             if (_cam == null) return;
-            GUILayout.BeginArea(new Rect(Screen.width - 300, 20, 280, 410), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.Right(280, 410), GUI.skin.box);
             GUILayout.Label("SOLO VR TEST");
             GUILayout.Label(_target != null
                 ? (_follow ? "Kamera: avatari cerceveliyor" : "Kamera: serbest")
