@@ -404,6 +404,23 @@ namespace VRMultiplayer.Constructor
                 // bulunmadigindan bos gelir ve "sahnenin kendi gorunumu" anlamina gelir.
                 if (m.version < 5) m.version = 5;
                 if (m.themeId == null) m.themeId = "";
+
+                // nextInstanceId'yi MEVCUT kimliklerle uzlastir. Artirma yalnizca Add yolunda
+                // yapiliyordu; elle duzenlenmis, birlestirilmis ya da alani 0 gelen bir kayitta
+                // nextInstanceId <= max(instanceId) olabiliyor ve MintInstanceId var olan bir
+                // kimligi IKINCI KEZ dagitiyordu. Remove RemoveAll kullandigi icin o kimlikle
+                // IKI prop birden veriden siliniyor, sahnede yalnizca biri yok ediliyordu
+                // (_instances[id] ezilmis) -> silinemeyen hayalet prop.
+                uint enBuyuk = 0;
+                if (m.props != null)
+                    foreach (var pr in m.props)
+                        if (pr != null && pr.instanceId > enBuyuk) enBuyuk = pr.instanceId;
+                if (m.freeProps != null)
+                    foreach (var fp in m.freeProps)
+                        if (fp != null && fp.instanceId > enBuyuk) enBuyuk = fp.instanceId;
+                if (m.nextInstanceId <= enBuyuk) m.nextInstanceId = enBuyuk + 1;
+                if (m.nextInstanceId == 0) m.nextInstanceId = 1;
+
                 return m;
             }
             catch (Exception e)
@@ -454,7 +471,7 @@ namespace VRMultiplayer.Constructor
             try
             {
                 System.IO.Directory.CreateDirectory(Directory);
-                File.WriteAllText(PathFor(name), ToJson());
+                WriteAtomic(PathFor(name), ToJson());
                 Debug.Log($"[MapLayout] Kaydedildi: {PathFor(name)}  " +
                           $"({Count} izgara + {FreeCount} serbest prop)");
                 return true;
@@ -464,6 +481,25 @@ namespace VRMultiplayer.Constructor
                 Debug.LogError("[MapLayout] Kaydetme hatasi: " + e);
                 return false;
             }
+        }
+
+        /// <summary>Dosyayi ATOMIK yazar: once .tmp'ye, sonra yerine tasir.
+        ///
+        /// File.WriteAllText hedefi ONCE SIFIRLIYOR. Quest uygulamayi yazma ortasinda
+        /// oldurdugunde (kullanici gozlugu cikardi, sistem uygulamayi kapatti) geriye yarim
+        /// JSON kaliyordu; FromJson exception'i yutup null donuyor, RefreshFromDisk o dosyayi
+        /// atliyor ve harita listeden HICBIR UYARI OLMADAN dusuyordu. Ustelik NameAvailable o
+        /// adi bos saydigi icin ayni adla kaydedilince bozuk dosya da eziliyordu.
+        ///
+        /// .tmp + Replace ile hedef ya ESKI ya YENI tam halde olur, asla yarim kalmaz.
+        /// Yedek (.bak) ilk yazmada hedef yoksa Replace kullanilamaz - o durumda dogrudan
+        /// tasinir.</summary>
+        static void WriteAtomic(string path, string contents)
+        {
+            string tmp = path + ".tmp";
+            File.WriteAllText(tmp, contents);
+            if (File.Exists(path)) File.Replace(tmp, path, path + ".bak", true);
+            else File.Move(tmp, path);
         }
 
         public static MapLayout Load(string mapName)

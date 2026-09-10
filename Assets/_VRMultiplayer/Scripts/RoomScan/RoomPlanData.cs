@@ -93,7 +93,9 @@ namespace VRMultiplayer
     {
         public string label;     // e.g. "Couch", "Table" (from scene classifications)
         public Vector3 center;   // world (shared frame)
-        public Quaternion rotation;
+        // BASLATICI SART: alani olmayan bir JSON'da (0,0,0,0) kalir ve Quaternion.Inverse
+        // NaN uretir - mobilya hic hucre kapatmaz.
+        public Quaternion rotation = Quaternion.identity;
         public Vector3 size;     // full extents in meters
     }
 }

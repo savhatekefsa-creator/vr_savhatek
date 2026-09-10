@@ -78,11 +78,25 @@ namespace VRMultiplayer
             }
         }
 
+        /// <summary>ATOMIK yazma: once .tmp, sonra yerine tasi.
+        ///
+        /// File.WriteAllText hedefi ONCE SIFIRLIYOR; Quest uygulamayi yazma ortasinda
+        /// oldururse geriye yarim JSON kaliyor ve okuma sessizce basarisiz oluyordu — yani
+        /// cihazda OLCULMUS kalibrasyon hicbir uyari vermeden prefab yerlesimine donuyordu.
+        /// Ayni gerekce MapLayout.WriteAtomic'te de yazili.</summary>
+        static void WriteAtomic(string path, string contents)
+        {
+            string tmp = path + ".tmp";
+            File.WriteAllText(tmp, contents);
+            if (File.Exists(path)) File.Replace(tmp, path, path + ".bak", true);
+            else File.Move(tmp, path);
+        }
+
         public static bool Save(AprilTagCalibration.TagEntry[] tags, int layoutVersion = 0)
         {
             try
             {
-                File.WriteAllText(FilePath,
+                WriteAtomic(FilePath,
                     JsonUtility.ToJson(new Wrapper { tags = tags, layoutVersion = layoutVersion }, true));
                 return true;
             }
@@ -143,7 +157,7 @@ namespace VRMultiplayer
         {
             try
             {
-                File.WriteAllText(OffsetPath, JsonUtility.ToJson(new OffsetFile
+                WriteAtomic(OffsetPath, JsonUtility.ToJson(new OffsetFile
                 {
                     x = offsetLocal.x, y = offsetLocal.y, z = offsetLocal.z,
                     count = Mathf.Min(count, MaxOffsetSamples),
