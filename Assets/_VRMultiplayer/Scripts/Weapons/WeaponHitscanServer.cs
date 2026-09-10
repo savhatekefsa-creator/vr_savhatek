@@ -45,6 +45,18 @@ namespace VRMultiplayer.Weapons
         static bool IsCarriedWeapon(Collider c)
             => c != null && c.GetComponentInParent<NetworkWeapon>() != null;
 
+        /// <summary>Bu collider, verilen oyuncunun SU AN tuttugu bir silaha mi ait?
+        ///
+        /// Cift tabanca destekleniyor (WeaponInventory tabanca kapasitesi 2): eskiden yalnizca
+        /// ATES EDEN silahin altindakiler atlaniyordu, dolayisiyla sol eldeki silah sag elin
+        /// atisini yiyordu. Isin atıcının tasidigi hicbir silahta durmamali.</summary>
+        static bool IsHeldBy(Collider c, ulong clientId)
+        {
+            if (c == null) return false;
+            var g = c.GetComponentInParent<GrabbableObject>();
+            return g != null && g.IsHeld && g.HolderClientId == clientId;
+        }
+
         public static int RaycastOne(Transform weaponRoot, Vector3 origin, Vector3 dir,
             float range, float pelletDamageScale, System.Func<ZoneType, int> damageFor,
             ulong shooter, byte shooterTeam, out Vector3 end, out Vector3 hitNormal,
@@ -77,7 +89,12 @@ namespace VRMultiplayer.Weapons
             for (int hi = 0; hi < hitCount; hi++)
             {
                 var h = _rayHits[hi];
+                // ATICININ TASIDIGI HICBIR SILAH ISINI DURDURMAZ. Eskiden yalnizca ATES EDEN
+                // silahin altindakiler atlaniyordu; cift tabanca desteklendigi icin sol eldeki
+                // silah sag elin atisini yiyordu. Ayni sekilde hedefin elindeki silah da mermiyi
+                // "siper" gibi kesiyordu.
                 if (h.collider.transform.IsChildOf(weaponRoot)) continue; // own weapon
+                if (IsHeldBy(h.collider, shooter)) continue;              // aticinin oteki silahi
 
                 // Regional damage: the ray hits a HitZone (head/torso/arm/leg); the per-region
                 // amount is resolved on the SERVER (clients can't send damage values — security).

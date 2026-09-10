@@ -557,9 +557,16 @@ namespace VRMultiplayer.Weapons
 
                 // Siper: patlama ile hedef arasinda baska bir sey varsa hasar yok. Aradaki
                 // BASKA oyuncu da siperdir (gercekci). Trigger'lar sorguya girmez.
+                // SIPER YALNIZ KATI DUNYA. Eskiden ~0 maskesiyle vurulan HER collider siper
+                // sayiliyordu: yerdeki birakilmis silahlar, hedefin elindeki silah, baska bir
+                // bomba - hicbiri trigger degil ve hepsi rigidbody tasiyor. Yere comelmis bir
+                // oyuncuya atilan bomba yanindaki dusuk bir prop yuzunden SIFIR hasar veriyordu.
+                // Projenin tek-kaynak kurali WorldSolids.IsSolid rigidbody'liyi zaten eliyor;
+                // burada kullanilmamisti (dosyanin kendi uyardigi "iki yerde iki farkli kural").
                 if (Physics.Linecast(pos + Vector3.up * 0.05f, target, out var lh, ~0,
                         QueryTriggerInteraction.Ignore) &&
-                    lh.collider.GetComponentInParent<PlayerHealth>() != health)
+                    lh.collider.GetComponentInParent<PlayerHealth>() != health &&
+                    WorldSolids.IsSolid(lh.collider))
                     continue;
 
                 int dmg = Mathf.Max(1, Mathf.RoundToInt(_cfg.centerDamage * (1f - dist / _cfg.damageRadius)));

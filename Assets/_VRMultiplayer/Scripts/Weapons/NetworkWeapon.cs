@@ -50,6 +50,8 @@ namespace VRMultiplayer
         float _srvTokens = 1f;
         float _srvLastRefill;
         float _srvLastShot = float.NegativeInfinity;
+        // Kovanin SU ANKI sahibi: el degistiginde sifirlamak icin (bkz. FireServerRpc).
+        ulong _srvBucketHolder = GrabbableObject.NoHolder;
 
         // Sunucu ret sayaci: config-oncesi pencerede sessizce yenen atislar ve olasi kadans
         // hileleri buradan gorunur (teshis + telemetri). Log seli olmasin diye 2 sn'de bir.
@@ -591,6 +593,19 @@ namespace VRMultiplayer
             // atislar arasina ayrica min-gap konur. %15 tolerans dolum hizinda kalir.
             float now = Time.time;
             float cap = _cv.fireMode == FireMode.Burst ? Mathf.Max(1, _cv.burstCount) : 3f;
+
+            // ATICI DEGISTIYSE KOVAYI SIFIRLA. Kova silahin uzerinde duruyordu: bosalttigi
+            // silahi yere atan oyuncunun ardindan silahi kapan IKINCI oyuncunun ilk atislari
+            // "kadans" diye reddediliyordu (tufekte ~0.45 sn). Istemcide ses ve tepme coktan
+            // cikmis olacagi icin bu sessiz bir hasar-desync'i.
+            ulong tutan = _grab.HolderClientId;
+            if (_srvBucketHolder != tutan)
+            {
+                _srvBucketHolder = tutan;
+                _srvTokens = cap;
+                _srvLastRefill = now;
+                _srvLastShot = float.NegativeInfinity;
+            }
             float refill = 1f / Mathf.Max(0.005f, _cv.fireInterval * 0.85f);
             if (_cv.fireMode == FireMode.Burst) refill *= cap; // burst: kuyruk basina dolum
             _srvTokens = Mathf.Min(cap, _srvTokens + (now - _srvLastRefill) * refill);

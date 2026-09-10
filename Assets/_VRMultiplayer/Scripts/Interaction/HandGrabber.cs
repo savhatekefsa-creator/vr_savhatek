@@ -443,7 +443,14 @@ namespace VRMultiplayer
                 return;
             }
 
-            if (g == null || h == null || h.held != null)
+            // IKINCI KAPI: elin BOSLUGU tam olarak EquipIntoHand'daki kadar kontrol edilmeli.
+            // Eskiden yalnizca h.held'e bakiliyordu: kemerden silah istegi yolda giderken (~1 RTT)
+            // oyuncu vazgecip oteki silahin kundagina basarsa el DESTEK eli oluyor, cevap gelince
+            // Adopt calisip ayni el hem tabancayi tutuyor hem tufegi yonlendiriyordu. Release
+            // once destek dalina girip donduğu icin silah bir tam grip dongusu boyunca elde
+            // kilitli kaliyor, ayrica iki WeaponGrip ayni yuvayi sahiplenip birbirinin weld'ini
+            // temizliyordu.
+            if (g == null || h == null || h.held != null || h.supporting != null || h.pinFrom != null)
             {
                 // El bu arada dolmus (ya da hedef kullanilamaz) -> sunucunun spawn'ladigi silah
                 // SAHIPSIZ kalmasin: iade et ki elde-degil silahlar sahnede birikmesin (her
