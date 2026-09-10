@@ -140,6 +140,23 @@ namespace VRMultiplayer
         public string speedParam = "Speed";
         public float speedSmoothing = 6f;
 
+        [Tooltip("Yurume klibinin oynatma hizi 1.0 iken TEMSIL ETTIGI yer hizi (m/s).\n\n" +
+                 "Klip YERINDE sayiyor (Mixamo in-place; olculdu: kok hizi 0.001 m/s), yani " +
+                 "adim temposu yalnizca oynatma hizindan gelir. Avatar gercekte bu hizdan farkli " +
+                 "gidiyorsa ayaklar yerde KAYAR. 1.03 sn'lik dongu ve ~0.7 m adim boyu icin " +
+                 "yaklasik 1.35 m/s.")]
+        public float walkClipSpeed = 1.35f;
+        [Tooltip("Adim temposu olcekleme siniri. Cok dusuk = agir cekim yuruyus, cok yuksek = " +
+                 "kosar gibi cirpinma.")]
+        public float strideRateMin = 0.55f;
+        public float strideRateMax = 1.75f;
+        [Tooltip("Bu hizin altinda YURUMUYOR sayilir (m/s). VR'da kafa sallanmasi ve el " +
+                 "hareketi olcume gurultu katiyor; olu bolge olmadan avatar dururken bile " +
+                 "ayaklarini oynatiyordu.")]
+        public float moveDeadzone = 0.12f;
+        [Tooltip("Kapatilirsa oynatma hizi 1.0'da kalir (eski davranis: ayaklar kayar).")]
+        public bool matchStrideToSpeed = true;
+
         [Header("Crouch")]
         [Tooltip("Crouch blending starts when you drop below this fraction of your standing height. Kept clear of 1.0 so ordinary head bobbing while walking doesn't read as a crouch.")]
         public float crouchStartRatio = 0.88f;
@@ -598,9 +615,26 @@ namespace VRMultiplayer
                 if (_hasLastHead && Time.deltaTime > 0.0001f)
                 {
                     float v = (h - _lastHeadXZ).magnitude / Time.deltaTime;
+                    if (v < moveDeadzone) v = 0f;          // kafa sallanmasi yuruyus sayilmasin
                     _smoothSpeed = Mathf.Lerp(_smoothSpeed, Mathf.Min(v, 5f),
                         speedSmoothing * Time.deltaTime);
                     _animator.SetFloat(_speedHash, _smoothSpeed);
+
+                    // ADIM TEMPOSU = YER HIZI. Yurume klibi YERINDE sayiyor (kok hizi olculdu:
+                    // 0.001 m/s), yani ayaklarin ne kadar hizli attigini SADECE oynatma hizi
+                    // belirliyor ve o sabit 1.0'da kaliyordu: avatar 0.5 m/s giderken bacaklar
+                    // 1.35 m/s'lik tempoda donuyor, ayak yerde KAYIYORDU. Oynatma hizini gercek
+                    // hiza bolerek esitliyoruz - temel "in-place locomotion" kurali.
+                    //
+                    // Dururken 1.0'a doner: Idle ve comelme klipleri normal hizda oynasin.
+                    if (matchStrideToSpeed)
+                    {
+                        float rate = _smoothSpeed <= moveDeadzone
+                            ? 1f
+                            : Mathf.Clamp(_smoothSpeed / Mathf.Max(0.05f, walkClipSpeed),
+                                          strideRateMin, strideRateMax);
+                        if (!Mathf.Approximately(_animator.speed, rate)) _animator.speed = rate;
+                    }
                 }
                 _lastHeadXZ = h;
                 _hasLastHead = true;
