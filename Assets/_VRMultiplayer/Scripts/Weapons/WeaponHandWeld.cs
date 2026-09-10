@@ -124,6 +124,9 @@ namespace VRMultiplayer.Weapons
             return (weapon.position - e.at).sqrMagnitude < 1e-8f ? e.shift : Vector3.zero;
         }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() { _visualShift.Clear(); }
+
         static void RecordVisualShift(Transform weapon, Vector3 shift)
         {
             if (weapon == null) return;
@@ -147,6 +150,20 @@ namespace VRMultiplayer.Weapons
         {
             get
             {
+                // SUNUCUDA ASLA KAYDIRMA. Kaydirma silahin AG KOKUNE yaziliyor, yani collider'i
+                // da tasiyor. Uretim topolojisi adanmis sunucu (LanBootstrap.StartAsServer ->
+                // StartServer(), sunucuya avatar spawn edilmez), dolayisiyla sunucu hicbir
+                // avatarin sahibi degil ve yalnizca IsOwner'a bakan bir kapi orada da aciliyordu:
+                // otoriter fizik sorgulari (WeaponHitscanServer isini, bomba LOS linecast'i)
+                // silahi replike konumundan 0.80 m'ye kadar sapmis goruyordu. VisualShiftOf
+                // yalnizca NAMLU okumalarini telafi ediyor, collider'i telafi etmiyor.
+                //
+                // Istemcide (IsServer false) kaydirma calismaya devam eder, yani karsindaki
+                // oyuncunun silahi yine govdesinden cikar. Host'ta (solo test) kozmetik duzeltme
+                // kaybolur; fizik dogrulugu kozmetigin onunde.
+                var nm = NetworkManager.Singleton;
+                if (nm != null && nm.IsServer) return false;
+
                 if (!_netLooked) { _netObj = GetComponentInParent<NetworkObject>(); _netLooked = true; }
                 return _netObj == null || !_netObj.IsOwner;
             }
@@ -221,8 +238,22 @@ namespace VRMultiplayer.Weapons
             enabled = true;
         }
 
-        public void ClearHand(bool left)
+        /// <summary>Bu elin weld'ini sondurur. <paramref name="weapon"/> verilirse yalnizca
+        /// yuva GERCEKTEN o silaha aitse calisir.
+        ///
+        /// NEDEN: eski imza yalnizca eli aliyordu. A silahi kemere konup (despawn) AYNI karede
+        /// B ayni ele alindiginda, once B'nin WeaponGrip'i SetHand yapiyor, sonra A'nin
+        /// temizligi kosup B'NIN yuvasini fadingOut ediyordu; B'nin grip'i _dirty=false oldugu
+        /// icin bir daha Evaluate etmiyor -> el silaha hic yapismiyor, parmaklar acik kaliyor
+        /// ve tutus bitene kadar duzelmiyordu ("bazen el silaha yapismiyor").</summary>
+        public void ClearHand(bool left, Transform weapon = null)
         {
+            if (weapon != null)
+            {
+                ref HandWeld cur = ref (left ? ref _left : ref _right);
+                if (cur.active && cur.weapon != weapon) return;   // yuva baskasinin
+            }
+
             // Don't cut the weld in one frame — fade the wrist back to its IK/animator pose.
             // The weld stays "active" (and this component enabled) until the fade finishes.
             if (left)
@@ -640,7 +671,7 @@ namespace VRMultiplayer.Weapons
             if (w.weapon == null || w.profile == null || w.bone == null)
             {
                 // Weapon despawned mid-hold/fade: nothing left to weld to.
-                if (w.weapon != null) _visualShift.Remove(w.weapon);
+                if ((object)w.weapon != null) _visualShift.Remove(w.weapon);
                 w.active = false;
                 w.fadingOut = false;
                 if (!_left.active && !_right.active) enabled = false;
@@ -679,7 +710,7 @@ namespace VRMultiplayer.Weapons
                 wgt = 1f - Mathf.Clamp01((Time.time - w.fadeOutStart) / WeldBlendSeconds);
                 if (wgt <= 0f)
                 {
-                    if (!w.isSupport) _visualShift.Remove(w.weapon);
+                    if (!w.isSupport && (object)w.weapon != null) _visualShift.Remove(w.weapon);
                     w.active = false;
                     w.fadingOut = false;
                     if (!_left.active && !_right.active) enabled = false; // empty tick off

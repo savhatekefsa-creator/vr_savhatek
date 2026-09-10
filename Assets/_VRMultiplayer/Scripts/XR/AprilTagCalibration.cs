@@ -841,8 +841,17 @@ namespace VRMultiplayer
             // HER KAREDE okunur. Tespit turu 1-3 Hz'de calisir; buton okumasi o kapinin
             // ARDINDA kalsaydi basislarin cogu kacardi (saniyede bir ornekleme).
             TickLearnInput();
-            TickTouch();   // her karede: en yakin yaklasmayi kacirmamak icin
-            TickFloor();
+
+            // KURULUM ARACLARI YALNIZ OGRENME MODUNDA. Ikisi de esik gecince DISKE YAZIYOR ve
+            // tek kosullari kumandanin yuksekligi/yakinligiydi: oyun sirasinda siperin arkasina
+            // comelen oyuncu (sag kumanda 25 cm altina inip 50 cm ustune cikinca) ZEMIN
+            // kalibrasyonunu yeniden yaziyordu; TickTouch da kalici kumanda ofseti dosyasini
+            // guncelleyebiliyordu. TickLearnInput kendi icinde zaten korunuyordu.
+            if (learnMode && !XRButtons.GameplayInputSuppressed)
+            {
+                TickTouch();   // her karede: en yakin yaklasmayi kacirmamak icin
+                TickFloor();
+            }
             TickHeadMotion();
             TickFrameFreshness();
 

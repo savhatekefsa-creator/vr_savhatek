@@ -19,6 +19,13 @@ namespace VRMultiplayer
     /// Attach to the Humanoid model root (same GameObject as its Animator + RigBuilder).
     /// The Editor wizard wires all references.
     /// </summary>
+    // SIRA 70: silahi HandGrabber (10) ve WeaponRecoil (60) yaziyor; IK hedefi weld'den
+    // (TryGetWristTarget -> silahin transformu) okundugu icin bu ikisinden SONRA calismali.
+    // Sirasiz (0) haliyle IK, silahin BIR ONCEKI karedeki pozuna cozuluyor, weld ise sira
+    // 110'da BU karenin pozuna mutlak yaziyordu -> ust kol bir yere, bilek baska yere; deri
+    // arada geriliyordu (tam otomatik ateste ve hizli el hareketinde gorulen buydu).
+    // WeaponGrip (90) ve WeaponHandWeld (110) hala sonra kalir.
+    [DefaultExecutionOrder(70)]
     public class AvatarIKController : MonoBehaviour
     {
         [Header("Networked sources (the NetworkPlayer's replicated children)")]

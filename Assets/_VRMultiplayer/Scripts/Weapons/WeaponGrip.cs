@@ -109,8 +109,9 @@ namespace VRMultiplayer.Weapons
         void ReleaseSlot(ref bool applied, bool left, bool shouldRelease)
         {
             if (!applied || !shouldRelease) return;
-            if (_appPoser != null) _appPoser.ClearHandOverride(left);
-            if (_appWeld != null) _appWeld.ClearHand(left);
+            // Yuvayi YALNIZCA hala bu silaha aitse birak (bkz. WeaponHandWeld.ClearHand).
+            if (_appPoser != null) _appPoser.ClearHandOverride(left, _profile);
+            if (_appWeld != null) _appWeld.ClearHand(left, transform);
             applied = false;
         }
 

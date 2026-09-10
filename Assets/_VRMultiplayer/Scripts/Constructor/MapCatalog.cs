@@ -372,7 +372,7 @@ namespace VRMultiplayer.Constructor
             if (!m.inPool)
             {
                 m.inPool = true;
-                if (!m.Save(mapName)) { hata = $"'{mapName}' kaydedilemedi."; return false; }
+                if (!m.Save()) { hata = $"'{mapName}' kaydedilemedi."; return false; }
                 SyncOpenSession(mapName, true);
             }
 
@@ -393,7 +393,7 @@ namespace VRMultiplayer.Constructor
             if (m.inPool)
             {
                 m.inPool = false;
-                if (!m.Save(mapName)) return false;
+                if (!m.Save()) return false;
                 SyncOpenSession(mapName, false);
             }
 
@@ -496,7 +496,11 @@ namespace VRMultiplayer.Constructor
             var m = MapLayout.Load(mapName);
             if (m == null) return false;
             m.name = newDisplayName;
-            if (!m.Save(mapName)) return false;
+            // ARGUMANSIZ: MapLayout.Save(mapName) ILK SATIRDA name = mapName yapiyor, yani
+            // az once yazilan gorunen adi eziyordu -> yeniden adlandirma sessiz no-op'ti ve
+            // havuz yollarinda gorunen ad sanitize edilmis dosya anahtariyla degistiriliyordu
+            // ("Uzay Ussu 2" -> "Uzay_Ussu_2", geri alinamaz).
+            if (!m.Save()) return false;
             RefreshAndBroadcast();
             return true;
         }

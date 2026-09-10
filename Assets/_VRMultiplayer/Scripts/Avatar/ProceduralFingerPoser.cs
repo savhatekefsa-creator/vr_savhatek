@@ -140,11 +140,23 @@ namespace VRMultiplayer
             }
         }
 
-        /// <summary>Back to the grip-driven procedural curl for that hand.</summary>
-        public void ClearHandOverride(bool leftHand)
+        /// <summary>Back to the grip-driven procedural curl for that hand.
+        ///
+        /// <paramref name="only"/> verilirse yalnizca o profil hala geceridyse temizler:
+        /// silah takasinda eski silahin temizligi YENI silahin parmak pozunu oldururdu
+        /// (bkz. WeaponHandWeld.ClearHand ayni gerekce).</summary>
+        public void ClearHandOverride(bool leftHand, WeaponGripProfile only = null)
         {
-            if (leftHand) { _ovrProfileL = null; _authSeededL = false; }
-            else { _ovrProfileR = null; _authSeededR = false; }
+            if (leftHand)
+            {
+                if (only != null && _ovrProfileL != only) return;
+                _ovrProfileL = null; _authSeededL = false;
+            }
+            else
+            {
+                if (only != null && _ovrProfileR != only) return;
+                _ovrProfileR = null; _authSeededR = false;
+            }
         }
 
         // Start the override blend from the hand's current curl so the transition is continuous.
