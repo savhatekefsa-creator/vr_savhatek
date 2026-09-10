@@ -483,11 +483,14 @@ namespace VRMultiplayer.Weapons
             }
 
             // Dogrulama izi: tutus basina EN FAZLA BIR satir, yalniz itme gerektiginde.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Dogrulama izi yalniz editor/gelistirme build'inde.
             if (want.sqrMagnitude > 1e-6f && _pushLogged != w.weapon)
             {
                 _pushLogged = w.weapon;
                 Debug.Log($"[GovdeTemizligi] {w.weapon.name}: itme {want.magnitude * 100f:0} cm (sahip degil: {VisualOnly})");
             }
+#endif
             return shift;
         }
 

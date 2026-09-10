@@ -176,11 +176,33 @@ namespace VRMultiplayer.UI
             ft.rotation = transform.rotation * footLocal;
         }
 
+        /// <summary>Zemin sorgusu icin katman maskesi. Adiyla bulunan kati dunya katmanlari;
+        /// hicbiri yoksa varsayilan katmana duser (yerdeki esyalari yine de eler).</summary>
+        static int GroundMask
+        {
+            get
+            {
+                if (_groundMask != 0) return _groundMask;
+                int m = 0;
+                foreach (string ad in new[] { "Default", "Ground", "World", "Solid", "Map" })
+                {
+                    int l = LayerMask.NameToLayer(ad);
+                    if (l >= 0) m |= 1 << l;
+                }
+                _groundMask = m != 0 ? m : ~0;
+                return _groundMask;
+            }
+        }
+        static int _groundMask;
+
         float ProbeGround(Vector3 ankle)
         {
             Vector3 origin = ankle + Vector3.up * groundProbeUp;
+            // MASKELI: Physics.AllLayers ile yerdeki silahlar, bombalar ve tetikleyiciler de
+            // "zemin" sayiliyordu (ayak dusmus bir tufegin ustune oturuyordu) ve oyuncu basina
+            // kare basi 2 maskesiz raycast tum sahneye karsi atiliyordu.
             if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit,
-                    groundProbeUp + groundProbeDown, Physics.AllLayers, QueryTriggerInteraction.Ignore))
+                    groundProbeUp + groundProbeDown, GroundMask, QueryTriggerInteraction.Ignore))
                 return hit.point.y;
             return _ik.groundY; // zemin collider'i yoksa duz dunya varsayimi
         }

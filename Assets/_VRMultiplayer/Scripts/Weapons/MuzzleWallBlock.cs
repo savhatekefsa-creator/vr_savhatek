@@ -145,10 +145,16 @@ namespace VRMultiplayer.Weapons
             _prevBlocked = IsBlocked;
         }
 
+        int _laserTries;
+        Camera _cam;
+
         void ApplyLaser(bool blocked)
         {
             if (!suppressLaser) return;
-            if (_laser == null) _laser = GetComponent<UI.LaserSight>();
+            // NEGATIF SONUC DA ONBELLEKLENIR: lazeri olmayan silahta (yani cogunda) her kare
+            // bos bir GetComponent yapiliyordu - null donen hali en pahalisi. Lazer spawn'da
+            // WeaponLaserBinder tarafindan ekleniyor, o yuzden birkac kare denenip birakilir.
+            if (_laser == null && _laserTries < 120) { _laser = GetComponent<UI.LaserSight>(); _laserTries++; }
             // Lazer spawn'da WeaponLaserBinder tarafindan ekleniyor; ilk karelerde henuz
             // olmayabilir, o yuzden her seferinde arayip null'a tahammul ediyoruz.
             if (_laser != null) _laser.Suppressed = blocked;
@@ -175,7 +181,9 @@ namespace VRMultiplayer.Weapons
             // BILLBOARD: ikon her zaman kameraya doner. Duvarin normaline dikmek daha
             // "fiziksel" olurdu ama duvara yandan yanasinca ucgen cizgiye dusup okunmaz olurdu
             // — namluyu duvara sokmanin en sik hali de tam olarak o.
-            var cam = Camera.main;
+            // Camera.main her cagride etiket taramasi yapar; kilitliyken her kare cagriliyordu.
+            if (_cam == null) _cam = Camera.main;
+            var cam = _cam;
             _marker.position = BlockPoint;
             if (cam != null)
                 _marker.rotation = Quaternion.LookRotation(BlockPoint - cam.transform.position, Vector3.up);

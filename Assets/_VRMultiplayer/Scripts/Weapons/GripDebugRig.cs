@@ -152,12 +152,18 @@ namespace VRMultiplayer.Weapons
 
         void OnDisable() => TearDown();
 
+        NetworkObject _netObj;
+
         void LateUpdate()
         {
             // Her istemci HER avatari simule eder; baskasininki de panel acsa panelller
             // ust uste binerdi. Yalnizca giydigin avatar rapor verir.
-            var netObj = GetComponent<NetworkObject>();
-            if (!showOverlay || _grabber == null || (netObj != null && !netObj.IsOwner))
+            // BAYRAK ONCE. GetComponent bayraktan ONCE cagriliyordu: kapali bir teshis
+            // bileseni bile her avatarda, her LateUpdate'te bir bilesen aramasi yapiyordu.
+            if (!showOverlay || _grabber == null) { TearDown(); return; }
+            if (_netObj == null) _netObj = GetComponent<NetworkObject>();
+            var netObj = _netObj;
+            if (netObj != null && !netObj.IsOwner)
             {
                 TearDown();
                 return;

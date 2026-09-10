@@ -407,6 +407,10 @@ namespace VRMultiplayer.UI
             return (head.transform.position - eyeRef).sqrMagnitude < eyeDistance * eyeDistance;
         }
 
+        /// <summary>Mercekte cizilmeyecek katmanlar. Projede bu adlar yoksa sessizce atlanir.</summary>
+        static readonly string[] ScopeHiddenLayers =
+            { "UI", "HUD", "FX", "Overlay", "PlayerHUD", "Marker", "Ignore Raycast" };
+
         void Activate()
         {
             // Derinlik 24 bit: near clip duvar emniyeti icin 0.05'e indi; 16 bitte
@@ -423,15 +427,34 @@ namespace VRMultiplayer.UI
                 // 0.05: dibine kadar yanasilan duvar bile cizilsin (0.3 iken 36 cm'den yakin
                 // duvarlar goruntuden dusuyor, durbun duvar arkasini gosteriyordu).
                 _cam.nearClipPlane = 0.05f;
-                _cam.farClipPlane = 200f;
+                // 200 -> 60 m. Durbun IKINCI bir tam culling + draw-call submission demek ve
+                // tam nisan alindigi anda devreye giriyor; Quest'te tipik 1.5-4 ms CPU. Harita
+                // olculeri bunun cok altinda, 200 m'lik hacim bosuna taraniyordu.
+                _cam.farClipPlane = 60f;
                 _savedMask = _cam.cullingMask;
                 _savedClear = _cam.clearFlags;
                 _savedBg = _cam.backgroundColor;
+                // MERCEKTE ARAYUZ CIZILMEZ. Maske varsayilan (Everything) geliyordu: HUD,
+                // kemer, kill feed, vinyetler, isaretciler — hepsi ikinci kez cizilip mercege
+                // basiliyordu. Yalnizca dunya katmanlari kalsin diye UI/efekt katmanlari
+                // dusuruluyor; adiyla bulunamayan katman icin sessizce atlaniyor.
+                int mask = _cam.cullingMask;
+                foreach (string ad in ScopeHiddenLayers)
+                {
+                    int l = LayerMask.NameToLayer(ad);
+                    if (l >= 0) mask &= ~(1 << l);
+                }
+                _cam.cullingMask = mask;
+
                 var urp = _cam.GetUniversalAdditionalCameraData();
                 if (urp != null)
                 {
                     urp.renderShadows = false;
                     urp.renderPostProcessing = false;
+                    // Durbun goruntusu icin derinlik/opak kopyasi gerekmiyor; acik kalirsa
+                    // her mercek karesinde fazladan tam ekran kopyasi cikiyor.
+                    urp.requiresDepthOption = UnityEngine.Rendering.Universal.CameraOverrideOption.Off;
+                    urp.requiresColorOption = UnityEngine.Rendering.Universal.CameraOverrideOption.Off;
                 }
             }
             _cam.fieldOfView = scopeFov;

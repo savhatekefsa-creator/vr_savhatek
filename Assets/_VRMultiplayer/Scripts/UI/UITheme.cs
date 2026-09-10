@@ -170,10 +170,17 @@ namespace VRMultiplayer.UI
         /// <summary>
         /// Sets the color on a material, checking for both URP and built-in property names.
         /// </summary>
+        // Shader property ID'leri BIR KEZ cozulur. Eskiden her cagride HasProperty(string) +
+        // SetColor(string) = 4 string->ID hash'i + native gecis yapiliyordu; catismada kare
+        // basina 15-25 cagri (kemer 9, lazer 2, vinyet, duvar fade, hasar flasi 4, dogum
+        // bolgesi 2, killfeed satirlari).
+        static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        static readonly int ColorId = Shader.PropertyToID("_Color");
+
         public static void SetMaterialColor(Material m, Color c)
         {
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
-            if (m.HasProperty("_Color")) m.SetColor("_Color", c);
+            if (m.HasProperty(BaseColorId)) m.SetColor(BaseColorId, c);
+            if (m.HasProperty(ColorId)) m.SetColor(ColorId, c);
         }
 
         public static Color GetHealthColor(float ratio)
@@ -236,6 +243,7 @@ namespace VRMultiplayer.UI
 
             var mr = q.GetComponent<MeshRenderer>();
             mr.sharedMaterial = mat;
+            OwnedMaterial.Attach(q, mat);   // oge yok edilince materyal de yok olsun
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
             return q.transform;
@@ -321,6 +329,7 @@ namespace VRMultiplayer.UI
 
             var mr = q.GetComponent<MeshRenderer>();
             mr.sharedMaterial = m;
+            OwnedMaterial.Attach(q, m);
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
             return q.transform;
@@ -339,6 +348,7 @@ namespace VRMultiplayer.UI
 
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = m;
+            OwnedMaterial.Attach(go, m);
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
             return go.transform;

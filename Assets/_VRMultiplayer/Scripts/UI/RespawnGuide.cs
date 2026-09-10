@@ -302,8 +302,19 @@ namespace VRMultiplayer.UI
                 _body.text = "Doğmak için takım bölgene git";
             }
 
-            _distance.text = _zone.HorizontalDistance(HeadPosition()).ToString("0.0") + " m";
+            // MESAFE YAZISI HER KARE DEGISIYORDU. 0.1 m cozunurlukte oyuncu yururken deger
+            // gercekten her kare oynuyor, yani TMP'nin "ayni string" korumasi hic devreye
+            // girmiyordu: her karede SetVerticesDirty + iki string allocation. Yarim metreye
+            // yuvarlanip yalniz DEGISTIGINDE yaziliyor.
+            int yarimMetre = Mathf.RoundToInt(_zone.HorizontalDistance(HeadPosition()) * 2f);
+            if (yarimMetre != _lastHalfMeters)
+            {
+                _lastHalfMeters = yarimMetre;
+                _distance.text = (yarimMetre * 0.5f).ToString("0.0") + " m";
+            }
         }
+
+        int _lastHalfMeters = int.MinValue;
 
         static Vector3 HeadPosition()
         {

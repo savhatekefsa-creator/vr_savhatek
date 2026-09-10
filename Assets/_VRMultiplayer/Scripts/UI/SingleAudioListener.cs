@@ -20,13 +20,25 @@ namespace VRMultiplayer.UI
             go.AddComponent<SingleAudioListener>();
         }
 
+        int _temiz;
+
         void Update()
         {
             if (Time.time < _next) return;
             _next = Time.time + 1f;
 
+            // BASARILI TARAMADAN SONRA DUR. Bu tarama oturum boyunca 1 Hz calisiyordu ve
+            // runtime'da insa edilen haritada nesne sayisi yuksek oldugu icin duzenli, sabit
+            // ritimli bir spike uretiyordu — VR'da en fark edilen hitch turu.
             var all = FindObjectsByType<AudioListener>(FindObjectsSortMode.None);
-            if (all.Length <= 1) return;
+            if (all.Length <= 1)
+            {
+                // Ust uste iki temiz tarama: is bitti, tarama kapanir. Yeni bir dinleyici
+                // ancak yeni bir oyuncu/kamera dogarsa gelir; o da spawn yolundan gecer.
+                if (++_temiz >= 2) enabled = false;
+                return;
+            }
+            _temiz = 0;
 
             // Tutulacak: Main Camera'ninki; yoksa ilk enabled olan; o da yoksa ilk bulunan.
             AudioListener keep = Camera.main != null ? Camera.main.GetComponent<AudioListener>() : null;

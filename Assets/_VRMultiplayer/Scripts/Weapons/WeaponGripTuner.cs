@@ -83,10 +83,15 @@ namespace VRMultiplayer.Weapons
 
         void OnDisable() => ClosePanel();
 
+        NetworkObject _netObj;
+
         void LateUpdate()
         {
-            var netObj = GetComponent<NetworkObject>();
-            if (!tuning || _grabber == null || (netObj != null && !netObj.IsOwner))
+            // BAYRAK ONCE (bkz. GripDebugRig ayni gerekce).
+            if (!tuning || _grabber == null) { ClosePanel(); return; }
+            if (_netObj == null) _netObj = GetComponent<NetworkObject>();
+            var netObj = _netObj;
+            if (netObj != null && !netObj.IsOwner)
             {
                 ClosePanel();
                 return;

@@ -250,8 +250,17 @@ namespace VRMultiplayer.UI
             }
 
             if (_statusUntil > 0f && Time.time > _statusUntil) { _status.text = ""; _statusUntil = 0f; }
+
+            // 8 Hz. Refresh 13 metin yaziyor, Host.ValueText() string.Format (6 float boxing)
+            // ve 5 parmak icin ToString("F2") uretiyordu — panel acikken kare basina ~8 heap
+            // allocation, surekli GC. Elle ayar icin 8 Hz fazlasiyla yeterli (ayni desen:
+            // ScoreboardUI 2 Hz).
+            if (Time.time < _nextRefresh) return;
+            _nextRefresh = Time.time + 0.125f;
             Refresh();
         }
+
+        float _nextRefresh;
 
         void Run(Btn b)
         {

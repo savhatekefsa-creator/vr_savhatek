@@ -316,14 +316,21 @@ namespace VRMultiplayer
             return _dotGhost;
         }
 
+        float _nextWeldLook, _nextCurlLook;
+
         void LateUpdate()
         {
             if (_pose == null || _carrier == null) return;
 
             // Weld calisma aninda WeaponGrip tarafindan avatara EKLENIYOR, o yuzden
             // bir kere bulup onbellege almak yetmez - yoksa her karede tekrar bak.
-            if (_weld == null && _avatar != null)
+            // THROTTLE: weld runtime'da WeaponGrip tarafindan ekleniyor, yani oyuncu silah
+            // almadan bu arama HIC bitmiyordu — her kare, iki el icin, tum avatar hiyerarsisi.
+            if (_weld == null && _avatar != null && Time.time >= _nextWeldLook)
+            {
+                _nextWeldLook = Time.time + 0.25f;
                 _weld = _avatar.GetComponentInChildren<WeaponHandWeld>();
+            }
 
             // Silah tutarken el, silahin uzerindeki ankraja TAM GUCLE oturur ve orada
             // kalir - kumanda geri cekilse bile. Kumandanin gercek yeri beyaz noktayla
@@ -338,7 +345,13 @@ namespace VRMultiplayer
             // Parmak pozu silahin profilinden gelsin: authored tutus pozu TEK KAYNAK,
             // avatarin elleri de ayni profili kullaniyor. Profil cevrilmis poz tasimiyorsa
             // surucu kendi prosedurel kivrimina devam eder.
-            if (_curl == null && _pose != null) _curl = _pose.GetComponentInChildren<FirstPersonFingerCurl>(true);
+            // Ayni gerekce: el modeli kurulmadiysa (Resources'ta model yok) bu arama omur boyu
+            // her kare kosuyordu.
+            if (_curl == null && _pose != null && Time.time >= _nextCurlLook)
+            {
+                _nextCurlLook = Time.time + 0.25f;
+                _curl = _pose.GetComponentInChildren<FirstPersonFingerCurl>(true);
+            }
             if (_curl != null)
             {
                 WeaponGripProfile heldProfile;
@@ -461,6 +474,12 @@ namespace VRMultiplayer
 
         void LogDiagnostic(bool welded)
         {
+#if !(UNITY_EDITOR || DEVELOPMENT_BUILD)
+            // SURUM BUILD'INDE SESSIZ. Bu tani silah tutuldugu surece EL BASINA SANIYEDE BIR
+            // string.Format + Debug.Log yapiyordu ve #if korumasi yoktu (ayni dosyadaki beyaz
+            // nokta gorseli DevBuild ile korunmusken). Quest'te Debug.Log ucuz degil.
+            return;
+#else
             if (!welded || Time.time < _nextLog) return;
             _nextLog = Time.time + 1f;
 
@@ -488,6 +507,7 @@ namespace VRMultiplayer
                 "tutus_duzeltme={4:0.0}deg silah={5} silah->ankraj={6:0.0}mm",
                 _left ? "SOL" : "SAG", _weight, toAnchor, toCarrier, gripAngle, wname,
                 Vector3.Distance(wpos, _lastAnchor) * 1000f, role));
+#endif
         }
 
         /// <summary>

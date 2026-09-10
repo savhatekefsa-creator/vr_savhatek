@@ -342,7 +342,6 @@ namespace VRMultiplayer
         const string FontAssetPath = "Fonts/SavHaTek_SDF";
 
         TMP_FontAsset _font;
-        Material _fontMat;
 
         TMP_FontAsset FontAsset
         {
@@ -366,9 +365,13 @@ namespace VRMultiplayer
         {
             var fa = FontAsset;
             if (fa == null) return null;
-            if (_fontMat == null || _fontMat.renderQueue != queue)
-                _fontMat = new Material(fa.material) { renderQueue = queue };
-            return _fontMat;
+            // PAYLASILAN materyal (UITheme onbellegi: font + kuyruk basina TEK). Eskiden burada
+            // `new Material(fa.material)` vardi ve bu bilesen HER UZAK OYUNCUNUN avatarinda
+            // kuruluyor (NetworkVRPlayer saati yalnizca IsOwner dalinda, yani KENDI avatarinda
+            // kapatiyor) — yani oyuncu basina benzersiz bir yazi materyali, hicbiri batch'lenmiyor
+            // ve hicbiri yok edilmiyordu. Dosyanin kendi yorumu "materyal kuyruk basina
+            // PAYLASILIR" diyordu; kod bunu yapmiyordu.
+            return VRMultiplayer.UI.UITheme.SharedFontMaterial(fa, queue);
         }
 
         /// <summary>TextAnchor -> rect pivotu. Cagri yerleri yalnizca Middle* kullaniyor;
@@ -408,6 +411,10 @@ namespace VRMultiplayer
             if (m.HasProperty("_ZWrite")) m.SetInt("_ZWrite", 0);
             m.renderQueue = QueueBase + order;
             q.GetComponent<MeshRenderer>().sharedMaterial = m;
+            // Quad'lar oyuncuya ozel renkte oldugu icin paylasilamaz; ama artik SAHIPLENIR:
+            // avatar yok olunca (oyuncu ciktiginda) materyal de yok olur. Eskiden OnDestroy
+            // yoktu ve her cikan oyuncudan geriye materyaller kaliyordu.
+            VRMultiplayer.UI.OwnedMaterial.Attach(q, m);
             return q.transform;
         }
     }
