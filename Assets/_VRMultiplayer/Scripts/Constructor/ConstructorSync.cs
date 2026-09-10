@@ -873,6 +873,22 @@ namespace VRMultiplayer.Constructor
             return true;
         }
 
+        /// <summary>Katalog MUTASYONLARI icin sunucu-dogrulanabilir on kosul.
+        ///
+        /// Mevcut "gonderen == OwnerClientId" kontrolu yalnizca "kendi oyuncu objenden gonder"
+        /// diyor, "buna yetkin var mi" DEMIYOR: bagli her istemci PC'deki harita dosyasini
+        /// kalici silebiliyor, adini degistirebiliyor, havuza sokup cikarabiliyordu. Istemcinin
+        /// modu (AppMode.IsCreative) istemci-yerel oldugu icin sunucu ona guvenemez.
+        ///
+        /// Sunucunun SAHTELENEMEYECEK bilgisi mac fazi: mac OYNANIRKEN harita dosyalarini
+        /// silmek/adlandirmak hicbir mesru akista olmaz. Yaratici modda mac Warmup'ta kaldigi
+        /// icin normal kullanim etkilenmez.</summary>
+        static bool CatalogMutationAllowed()
+        {
+            var m = Match.MatchManager.Instance;
+            return m == null || !m.IsPlaying;
+        }
+
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         void RequestCatalogServerRpc(RpcParams p = default)
         {
@@ -884,6 +900,7 @@ namespace VRMultiplayer.Constructor
         void PoolChangeServerRpc(string mapName, bool add, RpcParams p = default)
         {
             if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (!CatalogMutationAllowed()) { CatalogErrorOwnerRpc("Mac oynanirken harita havuzu degistirilemez."); return; }
 
             string hata = null;
             bool ok = add ? MapCatalog.AddToPool(mapName, out hata) : MapCatalog.RemoveFromPool(mapName);
@@ -894,6 +911,7 @@ namespace VRMultiplayer.Constructor
         void RenameServerRpc(string oldName, string newName, RpcParams p = default)
         {
             if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (!CatalogMutationAllowed()) { CatalogErrorOwnerRpc("Mac oynanirken harita adi degistirilemez."); return; }
 
             if (!MapCatalog.Rename(oldName, newName, out string hata))
                 CatalogErrorOwnerRpc(hata ?? "Yeniden adlandirilamadi.");
@@ -903,6 +921,7 @@ namespace VRMultiplayer.Constructor
         void DeleteServerRpc(string mapName, RpcParams p = default)
         {
             if (p.Receive.SenderClientId != OwnerClientId) return;
+            if (!CatalogMutationAllowed()) { CatalogErrorOwnerRpc("Mac oynanirken harita silinemez."); return; }
 
             if (!MapCatalog.Delete(mapName))
                 CatalogErrorOwnerRpc($"'{mapName}' silinemedi.");

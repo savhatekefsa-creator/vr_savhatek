@@ -194,8 +194,15 @@ namespace VRMultiplayer
         {
             // team = 0 KABUL EDILMEZ: takimsiz oyuncu dost-atesi filtresini bypass ederdi
             // (WeaponHitscanServer yalnizca t != 0 && t == shooterTeam ise engelliyor).
-            if (team >= 1 && team <= 2)
-                Team.Value = team;
+            if (team < 1 || team > 2) return;
+
+            // MAC ORTASINDA TAKIM DEGISTIRILEMEZ. Isim RPC'sindeki tek-sefer kilidinin
+            // karsiligi burada yoktu: karsi takima gecen oyuncu dost-atesi filtresi sayesinde
+            // o takimin tum atesine bagisik oluyor ve dusman isim etiketlerini okuyabiliyordu.
+            // Bir kez secilen takim maci terk edene kadar sabit.
+            if (Team.Value != 0) return;
+
+            Team.Value = team;
         }
 
         /// <summary>

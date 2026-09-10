@@ -293,7 +293,11 @@ namespace VRMultiplayer
             if (ammo >= 0) _ammo.Value = Mathf.Clamp(ammo, 0, MagazineSize);
             // Yedek kaynagi artik cozulmus config (_cv) — profil null olabilir (config'li ama
             // profilsiz silah) ve canli ayar da _cv'den akar. -1 (sinirsiz) ise dokunma.
-            if (spares >= -1 && _cv.spareMagazines >= 0) _spares.Value = spares;
+            // ISTEMCIYE GUVENILMEZ: bu deger kemer HUD'undan, yani istemci-yerel veriden
+            // geliyor (HandGrabber.SwapWeaponServerRpc). Kirpma olmadan -1 gonderen oyuncu
+            // "sinirsiz yedek sarjor" aliyordu.
+            if (spares >= 0 && _cv.spareMagazines >= 0)
+                _spares.Value = Mathf.Clamp(spares, 0, Mathf.Max(0, _cv.spareMagazines));
         }
 
         void Update()
@@ -622,17 +626,23 @@ namespace VRMultiplayer
             ulong shooter = _grab.HolderClientId;
             byte shooterTeam = TeamOf(shooter);
 
-            // GOZLEM (simdilik LOG-ONLY): origin sunucudaki namlu ucundan cok uzaksa ya da yon
-            // sunucudaki namlu ekseninden cok sapmissa kaydet. VR bilek flikleri +
-            // ClientNetworkTransform gecikmesi MESRU sapma uretir — esikler once Quest verisiyle
-            // olculur, ret kapisina ancak ondan sonra cevrilir.
+            // OTORITE NOKTASI: isin SUNUCUNUN kendi namlusundan cikar, istemcinin gonderdigi
+            // origin'den DEGIL. Eskiden RaycastOne dogrudan istemci origin'ini aliyordu ve
+            // tek dogrulama IsFinite'ti; sapma olcumu yalnizca Debug.Log'du. Degistirilmis bir
+            // istemci origin'i duvarin arkasina / rakibin kafasinin icine koyup vurabiliyordu,
+            // ustelik MuzzleWallBlock otoritesi sunucunun KENDI namlusuna baktigi icin o kilidi
+            // de atliyordu. Istemcinin origin'i artik yalnizca sapma olcumunde kullaniliyor.
+            //
+            // Istemci ile AYNI namlu secimi (GetAimRay): ham muzzle.position, Smg 1 gibi araci
+            // muzzle'i dipcige koymus silahlarda gercek namlu ucundan silah boyu kadar sapiyor.
+            // Gorsel kaydirma (izleyici kozmetigi) cikarilir.
+            GetAimRay(out Vector3 srvOrigin, out Vector3 srvBarrel);
+            srvOrigin -= WeaponHandWeld.VisualShiftOf(transform);
+
+            // GOZLEM (LOG-ONLY): istemcinin gonderdigi origin/yon sunucununkinden ne kadar
+            // sapiyor. VR bilek flikleri + ClientNetworkTransform gecikmesi MESRU sapma uretir,
+            // o yuzden bu bir RET kapisi degil - isin zaten srvOrigin'den atiliyor.
             {
-                // Istemci ile AYNI namlu secimi (GetAimRay): ham muzzle.position, Smg 1 gibi
-                // araci muzzle'i dipcige koymus silahlarda istemcinin gonderdigi gercek namlu
-                // ucundan silah boyu kadar (0.63 m) sapiyordu - gozlem her atista gurultu
-                // uretiyor, red kapisina cevrilse her atisi reddederdi. Gorsel kaydirma haric.
-                GetAimRay(out Vector3 srvOrigin, out Vector3 srvBarrel);
-                srvOrigin -= WeaponHandWeld.VisualShiftOf(transform);
                 Vector3 obsDir = dirs[0].sqrMagnitude > 0.5f ? dirs[0].normalized : srvBarrel;
                 float originDist = Vector3.Distance(origin, srvOrigin);
                 float aimDelta = Vector3.Angle(srvBarrel, obsDir);
@@ -650,9 +660,9 @@ namespace VRMultiplayer
             for (int i = 0; i < pellets; i++)
             {
                 Vector3 dir = dirs[i];
-                if (!IsFinite(dir) || dir.sqrMagnitude < 0.5f) { ends[i] = origin; normals[i] = Vector3.zero; continue; }
+                if (!IsFinite(dir) || dir.sqrMagnitude < 0.5f) { ends[i] = srvOrigin; normals[i] = Vector3.zero; continue; }
                 dir.Normalize();
-                hitboxesSeen += WeaponHitscanServer.RaycastOne(transform, origin, dir,
+                hitboxesSeen += WeaponHitscanServer.RaycastOne(transform, srvOrigin, dir,
                     _cv.range, _cv.pelletDamageScale, _damageFor, shooter, shooterTeam,
                     out ends[i], out normals[i], out bool flesh);
                 if (flesh) fleshMask |= 1 << i;

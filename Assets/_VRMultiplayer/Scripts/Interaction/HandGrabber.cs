@@ -372,6 +372,12 @@ namespace VRMultiplayer
         {
             ulong sender = p.Receive.SenderClientId;
 
+            // YALNIZ KENDI AVATARIN ICIN. RPC InvokePermission.Everyone ile acik, yani herhangi
+            // bir istemci BASKASININ HandGrabber'i uzerinden de cagirabiliyordu: silah gonderene
+            // sahiplikle spawn ediliyor (SpawnWithOwnership(sender)) ve RPC tekrar tekrar
+            // cagrilabildigi icin sinirsiz silah uretilebiliyordu.
+            if (sender != OwnerClientId) return;
+
             // OLU OYUNCU KEMERDEN DE SILAH ALAMAZ. Grab RPC'sine engel koymustuk ama kemer HUD'u
             // AYRI yoldan (bu RPC) silah URETIYOR — o kapiyi da kapatiyoruz. Dirilene kadar hicbir
             // silah edinemez; tek yapabildigi dogum bolgesine yurumek.

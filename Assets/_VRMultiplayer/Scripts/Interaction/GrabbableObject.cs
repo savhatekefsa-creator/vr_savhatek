@@ -213,6 +213,11 @@ namespace VRMultiplayer
         public void RequestGrabServerRpc(byte hand, RpcParams p = default)
         {
             if (_holder.Value != NoHolder) return; // someone already holds it
+            // El numarasi yalniz 0 (sol) ya da 1 (sag) olabilir. Dogrulanmadan yazilirsa
+            // (or. 7) NetworkWeapon'daki rightAllowed/leftAllowed ikisi de false kalir -
+            // silah hic ates etmez - ama diger tuketiciler onu "hand == 1 ? sag : sol"
+            // kuralıyla sol el sanar: tutarsiz durum.
+            if (hand > 1) return;
             ulong sender = p.Receive.SenderClientId;
             // OLU OYUNCU HICBIR SEY KAPAMAZ (ekip karari): dirilene kadar tek yapabildigi
             // dogum bolgesine yurumek. Sunucu-otoriter reddediyoruz — istemci ne isterse istesin.
@@ -227,6 +232,15 @@ namespace VRMultiplayer
         {
             if (p.Receive.SenderClientId != _holder.Value) return;
             _holder.Value = NoHolder;
+
+            // SAHIPLIGI SUNUCUYA IADE ET. Eskiden birakilan obje son tutanin sahipliginde
+            // kaliyordu; prefablarda DontDestroyWithOwner kapali oldugu icin o oyuncu maci
+            // terk ettiginde NGO onun sahipligindeki HER objeyi yok ediyordu - yani oyun
+            // boyunca eline alip yere biraktigi tum silahlar haritadan siliniyordu (kalibi
+            // olmayan sahne silahlari kalici olarak). Ayrica bomba sahipligi de birakilmadigi
+            // icin oyuncu yere biraktigi bombayi sonradan uzaktan patlatabiliyordu.
+            if (NetworkObject != null && NetworkObject.IsSpawned && NetworkObject.OwnerClientId != NetworkManager.ServerClientId)
+                NetworkObject.RemoveOwnership();
         }
 
         // ReleaseServerRpc'nin sunucudan donmesini beklerken firlatmanin korunacagi sure.
