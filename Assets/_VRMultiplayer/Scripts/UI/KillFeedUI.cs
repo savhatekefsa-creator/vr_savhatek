@@ -234,7 +234,7 @@ namespace VRMultiplayer.UI
                 row.left.text = info.Victim;
                 row.left.color = TeamColor(info.VictimTeam);
                 row.mid.text = "";
-                row.right.text = info.SelfKill ? "KENDINI OLDURDU" : "OLDU";
+                row.right.text = info.SelfKill ? "KENDİNİ ÖLDÜRDÜ" : "ÖLDÜ";
                 row.right.color = Dim;
             }
         }

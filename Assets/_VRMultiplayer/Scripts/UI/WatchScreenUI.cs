@@ -242,7 +242,7 @@ namespace VRMultiplayer
             // yan yana durunca ucu de 1.7-2.3 mm'ye sikisiyordu, yani ikisi okuma esiginin
             // altinda kaliyordu. Ikiye dusunce ayni satirda 2.7 mm'ye cikiyorlar.
             //
-            // "MERMI" etiketi KALDIRILDI: 3.5 cm'lik bir ekranda her etiket, yanindaki
+            // "MERMİ" etiketi KALDIRILDI: 3.5 cm'lik bir ekranda her etiket, yanindaki
             // DEGERIN boyutundan calar. Can barinin altindaki buyuk sayi zaten mermidir.
             // UST SATIR EN UZUN OLASI METNE GORE OLCULENDI, gorunen metne gore degil.
             // Pusula "N 0°" degil "NW 359°" olabilir — 4 yerine 7 karakter. 0.26'da o hal
@@ -259,7 +259,7 @@ namespace VRMultiplayer
             // boyutundan calıyordu; ustune koyunca ikisi de yerini koruyor ve "bu sayi nedir"
             // sorusu kalmiyor. Cihazda "ya mermi sembolu gelsin ya ustte MERMI yazsin altta
             // sayisi" dendi — ikincisi.
-            MakeText(_face, "MERMI",                new Vector3(-0.72f, -0.202f, 0f), TextAnchor.MiddleLeft,  Muted,       0.17f);
+            MakeText(_face, "MERMİ",                new Vector3(-0.72f, -0.202f, 0f), TextAnchor.MiddleLeft,  Muted,       0.17f);
             _ammo    = MakeText(_face, "∞",         new Vector3(-0.72f, -0.427f, 0f), TextAnchor.MiddleLeft,  ScreenText,  0.30f);
             _battery = MakeText(_face, "84%",       new Vector3( 0.72f, -0.328f, 0f), TextAnchor.MiddleRight, Muted,       0.23f);
 

@@ -56,7 +56,7 @@ namespace VRMultiplayer.UI
         // pozlarini bozmak en kolay hata.
         static readonly Color RoleOn = new Color(0.98f, 0.68f, 0.28f, 1f);
 
-        static readonly string[] FingerNames = { "BASPARMAK", "ISARET", "ORTA", "YUZUK", "SERCE" };
+        static readonly string[] FingerNames = { "BAŞPARMAK", "İŞARET", "ORTA", "YÜZÜK", "SERÇE" };
 
         readonly List<Btn> _btns = new List<Btn>();
         readonly TextMeshPro[] _curlText = new TextMeshPro[5];
@@ -77,21 +77,21 @@ namespace VRMultiplayer.UI
             UITheme.MakeOutlined(transform, "Backdrop", Vector2.zero, new Vector2(PanelW, PanelH),
                 PanelR, UITheme.PanelEdge, UITheme.PanelBg, PanelEdge, 0.006f, 3004, 3008);
 
-            _title = UITheme.MakeText(transform, "SILAH ATOLYESI", UITheme.AccentCyan, 0.034f,
+            _title = UITheme.MakeText(transform, "SİLAH ATÖLYESİ", UITheme.AccentCyan, 0.034f,
                 TextAnchor.MiddleCenter, QText);
             _title.transform.localPosition = new Vector3(0f, 0.395f, ZText);
 
             AddBtn(new Vector2(-0.40f, 0.318f), new Vector2(0.10f, RowH), Cmd.PrevWeapon, "◀", UITheme.AccentCyan);
             AddBtn(new Vector2(-0.14f, 0.318f), new Vector2(0.10f, RowH), Cmd.NextWeapon, "▶", UITheme.AccentCyan);
             _handsLabel = AddBtn(new Vector2(0.10f, 0.318f), new Vector2(0.26f, RowH), Cmd.Hands,
-                "ELLERI KOY", UITheme.AccentPurple);
+                "ELLERİ KOY", UITheme.AccentPurple);
             AddBtn(new Vector2(0.39f, 0.318f), new Vector2(0.24f, RowH), Cmd.Bench,
-                "ONUME GETIR", UITheme.TextMuted);
+                "ÖNÜME GETİR", UITheme.TextMuted);
 
             _sideLabel = AddBtn(new Vector2(-0.30f, 0.246f), new Vector2(0.30f, RowH), Cmd.Side,
-                "DUZENLENEN: SAG", UITheme.AccentCyan);
+                "DÜZENLENEN: SAĞ", UITheme.AccentCyan);
             _stepLabel = AddBtn(new Vector2(0.04f, 0.246f), new Vector2(0.28f, RowH), Cmd.StepSize,
-                "ADIM: INCE", UITheme.TextMuted);
+                "ADIM: İNCE", UITheme.TextMuted);
 
             // SOL ELIN ROLU. Pozlar sag-el-ana varsayimiyla yazildi; solak oyuncuda roller
             // ters doner ve o pozlar AYRI alanlarda durur. Bu dugme hangi alan ciftine
@@ -102,10 +102,10 @@ namespace VRMultiplayer.UI
 
             // --- Sol sutun: bilek
             float y = 0.150f;
-            AddSectionTitle(LeftLabelX, y + 0.048f, "BILEK");
-            AddAxis(y, "ILERI / GERI", 0, false); y -= RowH + RowGap;
-            AddAxis(y, "SAG / SOL", 1, false); y -= RowH + RowGap;
-            AddAxis(y, "YUKARI / ASAGI", 2, false); y -= RowH + RowGap + 0.012f;
+            AddSectionTitle(LeftLabelX, y + 0.048f, "BİLEK");
+            AddAxis(y, "İLERİ / GERİ", 0, false); y -= RowH + RowGap;
+            AddAxis(y, "SAĞ / SOL", 1, false); y -= RowH + RowGap;
+            AddAxis(y, "YUKARI / AŞAĞI", 2, false); y -= RowH + RowGap + 0.012f;
             AddAxis(y, "YAW", 0, true); y -= RowH + RowGap;
             AddAxis(y, "PITCH", 1, true); y -= RowH + RowGap;
             AddAxis(y, "ROLL", 2, true);
@@ -132,9 +132,9 @@ namespace VRMultiplayer.UI
             float kipX = SagKenar - DuzleW - Aralik - KipW / 2f;
 
             _poseLabel = AddBtn(new Vector2(kipX, fy - 0.010f), new Vector2(KipW, RowH), Cmd.FingerPose,
-                "PARMAK KIPI", UITheme.AccentPurple);
+                "PARMAK KİPİ", UITheme.AccentPurple);
             AddBtn(new Vector2(duzleX, fy - 0.010f), new Vector2(DuzleW, RowH), Cmd.FingerReset,
-                "DUZLE", UITheme.TextMuted);
+                "DÜZLE", UITheme.TextMuted);
 
             _poseHint = UITheme.MakeText(transform, "", UITheme.AccentPurple, 0.018f,
                 TextAnchor.MiddleCenter, QText);
@@ -145,7 +145,7 @@ namespace VRMultiplayer.UI
 
             AddBtn(new Vector2(-0.40f, -0.395f), new Vector2(0.24f, RowH), Cmd.Save, "KAYDET", UITheme.AccentCyan);
             AddBtn(new Vector2(-0.11f, -0.395f), new Vector2(0.30f, RowH), Cmd.Revert,
-                "KAYITLIYA DON", UITheme.TextMuted);
+                "KAYITLIYA DÖN", UITheme.TextMuted);
             AddBtn(new Vector2(0.42f, -0.395f), new Vector2(0.18f, RowH), Cmd.Close, "KAPAT", UITheme.TeamRedEdge);
 
             _status = UITheme.MakeText(transform, "", UITheme.AccentCyan, 0.019f, TextAnchor.MiddleCenter, QText);
@@ -269,10 +269,10 @@ namespace VRMultiplayer.UI
                 case Cmd.Bench: Host.PlaceBench(); break;
                 case Cmd.Finger: Host.Curl(b.index, b.sign); break;
                 case Cmd.FingerPose:
-                    if (!Host.HandsPlaced) { Say("once ELLERI KOY"); break; }
+                    if (!Host.HandsPlaced) { Say("önce ELLERİ KOY"); break; }
                     Host.FingerPoseMode = !Host.FingerPoseMode;
                     Say(Host.FingerPoseMode
-                        ? "parmak kipi ACIK — GRIP ile parmagi tut, surukle"
+                        ? "parmak kipi AÇIK — GRIP ile parmağı tut, sürükle"
                         : "parmak kipi kapandi, poz yazildi");
                     break;
                 case Cmd.FingerReset:
@@ -311,11 +311,11 @@ namespace VRMultiplayer.UI
 
         void Refresh()
         {
-            _title.text = Host.WeaponName + (Host.HasProfile ? "" : "   [PROFIL YOK]");
+            _title.text = Host.WeaponName + (Host.HasProfile ? "" : "   [PROFİL YOK]");
             _values.text = Host.ValueText();
-            _handsLabel.text = Host.HandsPlaced ? "ELLERI KALDIR" : "ELLERI KOY";
-            _stepLabel.text = Host.Coarse ? "ADIM: KABA" : "ADIM: INCE";
-            _sideLabel.text = Host.EditLeft ? "DUZENLENEN: SOL" : "DUZENLENEN: SAG";
+            _handsLabel.text = Host.HandsPlaced ? "ELLERİ KALDIR" : "ELLERİ KOY";
+            _stepLabel.text = Host.Coarse ? "ADIM: KABA" : "ADIM: İNCE";
+            _sideLabel.text = Host.EditLeft ? "DÜZENLENEN: SOL" : "DÜZENLENEN: SAĞ";
             _sideLabel.color = Host.EditLeft ? UITheme.AccentPurple : UITheme.AccentCyan;
 
             // Sol-ana kipi ALISILMISIN DISI oldugu icin turuncu; sonmuk griyle yazsak
@@ -324,7 +324,7 @@ namespace VRMultiplayer.UI
             _roleLabel.color = Host.LeftIsMain ? RoleOn : UITheme.TextMuted;
 
             bool posing = Host.FingerPoseMode;
-            _poseLabel.text = posing ? "PARMAK KIPI: ACIK" : "PARMAK KIPI";
+            _poseLabel.text = posing ? "PARMAK KİPİ: AÇIK" : "PARMAK KİPİ";
             _poseLabel.color = posing ? UITheme.AccentCyan : UITheme.AccentPurple;
             _poseHint.text = Host.FingerPoseStatus;
 

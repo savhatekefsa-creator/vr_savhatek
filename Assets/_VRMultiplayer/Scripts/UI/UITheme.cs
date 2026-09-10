@@ -57,9 +57,16 @@ namespace VRMultiplayer.UI
         /// TextMesh doneminin dersi gecerli: font atanmayan yazi editorde gorunse bile
         /// cihazda cizilmez. Tek kaynak burasi — yeni panel yazan herkes ApplyFont cagirmali.
         ///
-        /// NOT: LiberationSans SDF atlasinda Turkce ozel harfler (g-breve, s-cedilla...) YOK.
-        /// Calisma zamani yazilarin ASCII yazilmasi (KALIBRE DEGIL, GORUNMUYOR...) bilincli
-        /// tercih; ekip fontu gelene kadar boyle kalmali.</summary>
+        /// TURKCE HARFLER KULLANILABILIR. Eskiden burada "atlasta Turkce harf YOK, ASCII yaz"
+        /// yaziyordu; o not ekip fontu gelmeden onceki duruma aitti ve BAYATLAMISTI. 2026-09-10'da
+        /// Resources/Fonts/UIFont SDF (Roboto Flex) atlasi dogrulandi: 123 karakter; C-cedilla,
+        /// G-breve, I-nokta, O-umlaut, S-cedilla, U-umlaut ve kucukleri, ayrica inceltme
+        /// isaretlileri TAM. Yalnizca sonsuz isareti (U+221E) yok - kol saati onun icin ayri
+        /// fonta (SavHaTek SDF) bagli.
+        ///
+        /// Bayat not yuzunden ayni ekranda karisik dil olusmustu: skor tablosu "MAVI TAKIM"
+        /// yazarken kill feed "OLDU" yaziyordu. Yeni yazi yazan herkes dogru Turkce
+        /// kullanmali.</summary>
         public static TMP_FontAsset DefaultFont
         {
             get
