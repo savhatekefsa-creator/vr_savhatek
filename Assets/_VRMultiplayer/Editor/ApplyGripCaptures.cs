@@ -35,7 +35,19 @@ namespace VRMultiplayer.EditorTools
     /// </summary>
     public static class ApplyGripCaptures
     {
-        const string HashKey = "ApplyGripCaptures.lastHash";
+        // FILIGRAN: bu damgadan ESKI kayitlar gecmis sayilir, otomatik gecis onlara dokunmaz.
+        // Eskiden dosyanin HASH'i tutuluyordu ve icerik her degistiginde dosyanin TAMAMI yeniden
+        // uygulaniyordu - tek bir yeni yakalama, aylar oncesinin tum kayitlarini o arada elle
+        // ayarlanmis / baska daldan gelmis profillerin uzerine geri yaziyordu.
+        const string StampKey = "ApplyGripCaptures.lastStamp";
+
+        // AKIL SINIRLARI. Yakalama araci EN YAKIN silahi secer (NearestWeapon); el hicbir silahin
+        // yakininda degilken tetiklenirse metrelerce oteki silaha gore olcum yazar. Gecerli
+        // kayitlarda kabza silah govdesi icinde (en uzun silahta 0.35 m) ve bilek kemigi kumanda
+        // tasiyicisindan bir el boyu kadar uzakta (~0.09 m); cop kayitlarda ikisi de 1.1-1.3 m.
+        const float MaxGripDistance = 0.60f;
+        const float MaxWristOffset = 0.30f;
+
         static readonly string[] GoldenProfiles = { "HK416_GripProfile", "Pistol_GripProfile" };
         static int _retries;
 
@@ -67,19 +79,30 @@ namespace VRMultiplayer.EditorTools
             if (!File.Exists(LogPath)) return;
 
             string text = File.ReadAllText(LogPath);
-            string hash = Hash(text);
-            if (EditorPrefs.GetString(HashKey, "") == hash) return; // bu icerik zaten islendi
+            string newest = NewestStamp(text);
+            if (newest == null) return;
 
-            int missing = Apply(text, interactive: false, includeGolden: false);
+            string mark = EditorPrefs.GetString(StampKey, "");
+            if (mark.Length == 0)
+            {
+                // BU MAKINEDE ILK KOSU: dosyanin tamami gecmis sayilir, hicbir sey uygulanmaz.
+                // Yeni bir klon ya da silinmis EditorPrefs, oyuncunun ayarli tutuslarini aylar
+                // oncesinin yakalamalariyla ezmenin gerekcesi degildir.
+                EditorPrefs.SetString(StampKey, newest);
+                return;
+            }
+            if (string.CompareOrdinal(newest, mark) <= 0) return; // yeni kayit yok
+
+            int missing = Apply(text, interactive: false, includeGolden: false, onlyAfter: mark);
             if (missing > 0 && _retries < 30)
             {
                 // Profiller baska bir aracin (WeaponPackSetup) ayni derleme dongusunde uretilmesini
-                // bekliyor olabilir — hash'i YAZMADAN kisa sure sonra yeniden dene.
+                // bekliyor olabilir — filigrani ILERLETMEDEN kisa sure sonra yeniden dene.
                 _retries++;
                 EditorApplication.delayCall += TryAutoRun;
                 return;
             }
-            EditorPrefs.SetString(HashKey, hash);
+            EditorPrefs.SetString(StampKey, newest);
         }
 
         [MenuItem("Tools/VR Multiplayer/37. Yakalama Dosyasini Profillere Uygula")]
@@ -98,14 +121,16 @@ namespace VRMultiplayer.EditorTools
                 return;
             }
             string text = File.ReadAllText(LogPath);
-            Apply(text, interactive: true, includeGolden: true);
-            EditorPrefs.SetString(HashKey, Hash(text));
+            Apply(text, interactive: true, includeGolden: true, onlyAfter: null); // elle: tum dosya
+            EditorPrefs.SetString(StampKey, NewestStamp(text) ?? "");
         }
 
         /// <summary>Dosyayi profillere uygular; profili henuz olmayan silah sayisini dondurur.</summary>
-        static int Apply(string text, bool interactive, bool includeGolden)
+        /// <param name="onlyAfter">Bu zaman damgasindan sonraki kayitlar; null = tum dosya.</param>
+        static int Apply(string text, bool interactive, bool includeGolden, string onlyAfter)
         {
-            var latest = Parse(text); // (silah, el) basina en son kayit
+            var rejects = new List<string>();
+            var latest = Parse(text, onlyAfter, rejects); // (silah, el) basina en son GECERLI kayit
 
             // Silah basina grupla.
             var byWeapon = new Dictionary<string, List<Capture>>();
@@ -116,7 +141,7 @@ namespace VRMultiplayer.EditorTools
             }
 
             var profiles = AllProfiles();
-            var lines = new List<string>();
+            var lines = new List<string>(rejects);
             int applied = 0, missing = 0;
 
             foreach (var kv in byWeapon)
@@ -211,7 +236,9 @@ namespace VRMultiplayer.EditorTools
             AssetDatabase.SaveAssets();
 
             string msg = "Yakalama dosyasi profillere uygulandi: " + applied + " profil guncellendi"
-                + (missing > 0 ? ", " + missing + " profil henuz yok" : "") + ".\n"
+                + (missing > 0 ? ", " + missing + " profil henuz yok" : "")
+                + (rejects.Count > 0 ? ", " + rejects.Count + " kayit AKIL DISI diye reddedildi" : "")
+                + (onlyAfter != null ? " (yalniz " + onlyAfter + " sonrasi)" : "") + ".\n"
                 + string.Join("\n", lines)
                 + "\nTest: her silahi tut; destek elde terslik olursa menu 31 MirrorX. "
                 + "Yeni yakalamadan sonra menu 37'yi tekrar calistir.";
@@ -234,7 +261,7 @@ namespace VRMultiplayer.EditorTools
 
         /// <summary>(silah, el) basina dosyadaki EN SON kaydi cikarir. Dosya kronolojik ekleme
         /// oldugu icin sirayla ustune yazmak yeterli.</summary>
-        static Dictionary<string, Capture> Parse(string text)
+        static Dictionary<string, Capture> Parse(string text, string onlyAfter, List<string> rejects)
         {
             var latest = new Dictionary<string, Capture>();
 
@@ -267,6 +294,23 @@ namespace VRMultiplayer.EditorTools
                 }
                 if (gPos == null || wPos == null || gRot == null || wRot == null) continue;
 
+                string stamp = h.Groups[3].Value;
+                if (onlyAfter != null && string.CompareOrdinal(stamp, onlyAfter) <= 0) continue;
+
+                // AKIL SUZGECI. Aracin kendi "rol" notu ise yaramaz: dosyadaki 49 kaydin 49'u da
+                // "TUTULMUYOR" diyor, cunku tezgah akisinda silah zaten elde degil. Ayirt eden
+                // sey MESAFE. 2026-09-11 09:19'daki iki kayit boyle uretildi (kabza 1.17 m,
+                // bilek 1.24 m) ve profillere girdi: Sniper 1 kimlik rotasyonuna, Rifle 1 destek
+                // rayi govdeden 0.9 m asagiya dustu - silahlar disaridan ters tutulur goruldu.
+                if (gPos.Value.magnitude > MaxGripDistance || wPos.Value.magnitude > MaxWristOffset)
+                {
+                    rejects.Add("  REDDEDILDI " + h.Groups[2].Value.Trim() + " " + h.Groups[1].Value
+                        + " " + stamp + ": el silahtan uzakta yakalanmis (kabza "
+                        + gPos.Value.magnitude.ToString("0.00") + " m, bilek "
+                        + wPos.Value.magnitude.ToString("0.00") + " m)");
+                    continue;
+                }
+
                 var c = new Capture
                 {
                     weapon = TrimCopySuffix(WeaponGripBinder.CleanName(h.Groups[2].Value.Trim())),
@@ -275,7 +319,7 @@ namespace VRMultiplayer.EditorTools
                     wristPos = wPos.Value,
                     gripRot = gRot.Value,
                     wristRot = wRot.Value,
-                    stamp = h.Groups[3].Value,
+                    stamp = stamp,
                 };
                 latest[c.weapon + "|" + (c.left ? "L" : "R")] = c; // sonraki ayni anahtari ezer
             }
@@ -327,15 +371,20 @@ namespace VRMultiplayer.EditorTools
             return best;
         }
 
-        static string Hash(string text)
+        /// <summary>Dosyadaki en yeni yakalama damgasi (yoksa null). Damga
+        /// "yyyy-MM-dd HH:mm:ss" oldugu icin metin siralamasi = zaman siralamasi.</summary>
+        static string NewestStamp(string text)
         {
-            using (var md5 = System.Security.Cryptography.MD5.Create())
+            string best = null;
+            // Tam nitelikli: Unity'de kok seviyede bir 'Match' AD ALANI var, sade ad cakisir.
+            foreach (System.Text.RegularExpressions.Match m in Regex.Matches(text,
+                @"^## (?:SOL|SAG) el — .+? — ([\d\-]+ [\d:]+)\s*$", RegexOptions.Multiline))
             {
-                var bytes = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text));
-                var sb = new System.Text.StringBuilder();
-                foreach (var b in bytes) sb.Append(b.ToString("x2"));
-                return sb.ToString();
+                string s = m.Groups[1].Value;
+                if (best == null || string.CompareOrdinal(s, best) > 0) best = s;
             }
+            return best;
         }
+
     }
 }
