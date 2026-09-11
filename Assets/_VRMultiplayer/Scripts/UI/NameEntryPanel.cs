@@ -33,11 +33,18 @@ namespace VRMultiplayer.UI
         const float PanelW = 0.94f, PanelH = 0.60f, PanelR = 0.020f, PanelEdgeW = 0.0025f;
 
         const float KeyW = 0.070f, KeyH = 0.058f, KeyR = 0.008f, KeyGapX = 0.008f, KeyGapY = 0.008f;
-        const float KeysTopY = 0.070f;
 
         const float FieldY = 0.190f, FieldW = 0.80f, FieldH = 0.080f;
         const float TitleY = 0.262f;
-        const float ActionY = -0.238f;
+
+        // ALT BOLUM ALTTAN YUKARI TURETILIR (bkz. BuildKeys). Eskiden ActionY elle yazilmis
+        // sabit bir sayiydi (-0.238) ve harf satirlarinin kapladigi yerle ILGISIZDI: SIL satiri
+        // -0.223'te bitiyor, KAYDET satiri -0.205'te basliyordu - iki satir 1.8 cm IC ICE
+        // geciyordu. Tek bir olcu degisince (tus boyu, satir sayisi, bosluk) hata geri gelirdi;
+        // turetme bunu yapisal olarak imkansiz kilar.
+        const float ActionH = 0.062f;      // KAYDET / GERI tus yuksekligi
+        const float SectionGap = 0.016f;   // bolumler arasi bosluk (tus araliginin iki kati)
+        const float BottomMargin = 0.020f; // panel kenarindan bosluk
 
         const float TitleSize = 0.030f, NameSize = 0.044f, HintSize = 0.018f,
                     KeySize = 0.026f, ActionSize = 0.024f;
@@ -119,12 +126,20 @@ namespace VRMultiplayer.UI
                 "ZXCVBNM",
             };
 
+            // ALTTAN YUKARI: panelin dibine KAYDET/GERI, uzerine bosluk, sonra
+            // SIL/BOSLUK/TEMIZLE, sonra harf satirlari. Her satir bir oncekinin KENARINDAN
+            // turedigi icin ust uste binme mumkun degil.
+            const float rowPitch = KeyH + KeyGapY;
+            float actionY = -PanelH * 0.5f + BottomMargin + ActionH * 0.5f;
+            float ry = actionY + ActionH * 0.5f + SectionGap + KeyH * 0.5f;   // SIL satiri
+            float keysTopY = ry + rows.Length * rowPitch;
+
             for (int r = 0; r < rows.Length; r++)
             {
                 string row = rows[r];
                 float totalW = row.Length * KeyW + (row.Length - 1) * KeyGapX;
                 float x0 = -totalW * 0.5f + KeyW * 0.5f;
-                float y = KeysTopY - r * (KeyH + KeyGapY);
+                float y = keysTopY - r * rowPitch;
 
                 for (int i = 0; i < row.Length; i++)
                 {
@@ -133,7 +148,6 @@ namespace VRMultiplayer.UI
                 }
             }
 
-            float ry = KeysTopY - rows.Length * (KeyH + KeyGapY);
             AddKey(new Vector2(-0.30f, ry), new Vector2(0.20f, KeyH), "SİL", ActionSize,
                 UITheme.TeamRedEdge, '\0', "sil");
             AddKey(new Vector2(-0.05f, ry), new Vector2(0.26f, KeyH), "BOŞLUK", ActionSize,
@@ -141,9 +155,9 @@ namespace VRMultiplayer.UI
             AddKey(new Vector2(0.24f, ry), new Vector2(0.20f, KeyH), "TEMİZLE", ActionSize,
                 UITheme.SurfaceEdge, '\0', "temizle");
 
-            AddKey(new Vector2(-0.17f, ActionY), new Vector2(0.30f, 0.066f), "KAYDET",
+            AddKey(new Vector2(-0.17f, actionY), new Vector2(0.30f, ActionH), "KAYDET",
                 ActionSize + 0.002f, UITheme.AccentCyan, '\0', "kaydet");
-            AddKey(new Vector2(+0.19f, ActionY), new Vector2(0.24f, 0.066f), "GERİ",
+            AddKey(new Vector2(+0.19f, actionY), new Vector2(0.24f, ActionH), "GERİ",
                 ActionSize, UITheme.TextMuted, '\0', "geri");
         }
 
