@@ -483,6 +483,32 @@ namespace VRMultiplayer.Weapons
                     shift = push + pull.normalized * maxReachPull;
             }
 
+            // SON SOZ ANA ELDE - SINIR ELE DEGIL ITMEYE KONUR.
+            //
+            // Sahada gorulen: "tetik eli yanlis gozukuyor, geride duruyor". Sebep, kaydirmanin
+            // silahi kol erisiminin DISINA tasiyabilmesiydi. Oyle olunca WeldSide'daki
+            // ArmReach.Clamp devreye giriyor ve BILEGI omza dogru geri cekiyor - ama silah
+            // itilmis yerinde kaliyor. Sonuc: el kabzadan kopar, silahin gerisinde havada asili
+            // kalir. Kelepcenin kendisi dogru (kol uzayamaz); yanlis olan, kozmetik bir
+            // duzeltmenin TUTUSU bozabilmesiydi.
+            //
+            // Ustteki iki onlem bunu garanti etmiyordu: govde itmesi yalnizca maxBodyPush ile,
+            // erisim cekmesi yalnizca maxReachPull ile sinirli - ikisi de kola degil sabit bir
+            // sayiya bakan tavanlar. Cekme tavana dayandigi anda artik kalir.
+            //
+            // Burada ana elin erisimi SON kisit olarak uygulanir. Ana el icin hedef, kaydirmanin
+            // AFIN fonksiyonudur (cipa silah-yerel sabit: GripAnchorLocal), yani
+            // hedef(kaydirma) = taban + kaydirma. Bu yuzden kelepce farkini kaydirmaya eklemek
+            // hedefi TAM erisim kuresine oturtur - tek adimda, yinelemesiz. Boylece WeldSide'daki
+            // kelepce ana el icin islevsiz kalir (ayni girdi, zaten kelepcelenmis hedef) ve el
+            // kabzadan kopamaz. Destek eli icin ayni sey gecerli degil: onun cipasi ray uzerinde
+            // kaydigi icin bagimlilik afin degil, o yuzden dongu yukarida kaliyor.
+            //
+            // maxReachPull tavanini asabilir: tutusun bozulmamasi tavandan onceliklidir.
+            ComputeTarget(ref w, left, shift, out Vector3 fin, out _);
+            shift += ArmReach.Clamp(fin, left ? _leftUpper : _rightUpper,
+                                    left ? _leftArmLen : _rightArmLen) - fin;
+
             // Dogrulama izi: tutus basina EN FAZLA BIR satir, yalniz itme gerektiginde.
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             // Dogrulama izi yalniz editor/gelistirme build'inde.
