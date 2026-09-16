@@ -92,7 +92,32 @@ namespace VRMultiplayer
 
         [Tooltip("GARANTI: dirsek govdenin dusey ekseninden en az bu kadar disarida kalir " +
                  "(metre). Omuz zaten ~0.20'de, o yuzden bu deger 'tavuk kanadi' yapmaz.")]
-        public float minElbowRadius = 0.20f;
+        // OLCU ORTAK KAYNAKTAN (BodyVolume.Radius). Eskiden burada elle yazilmis 0.20 vardi,
+        // silah temizligi ise govdeyi 0.22 genisliginde sayiyordu: dirsek, govdenin KENDI
+        // modelinin 2 cm ICINDE durmaya yetkiliydi ve kaburgalara giriyordu.
+        public float minElbowRadius = BodyVolume.Radius;
+
+        [Header("Bos el govde temizligi (SADECE baskalarinin gordugu kopya)")]
+        [Tooltip("Silah tutmayan el govdenin icine girmesin. YALNIZCA bu avatari SEN " +
+                 "surmuyorsan uygulanir - yani karsindaki oyuncunun ekraninda. Kendi elinin " +
+                 "konumuna hicbir kosulda dokunulmaz.\n\n" +
+                 "Neden sadece BOS el: silah tutan elin bilegi silaha KAYNAKLI, onu itmek eli " +
+                 "kabzadan koparir. Silahli durumda govde temizligini silahin kendisi yapiyor " +
+                 "(WeaponHandWeld.bodyClearance).")]
+        public bool freeHandClearance = true;
+        [Tooltip("Elin kendi yari kalinligi (m); govde yaricapina EKLENIR ki el yuzeye " +
+                 "degmesin, disinda dursun.")]
+        public float handThickness = 0.05f;
+        [Tooltip("Bos el, OTEKI elin silahina bu mesafeden yakinsa itilmez (m). Bombanin " +
+                 "pimini cekmek gibi iki elli islerde bos el o nesneden kopmasin diye.")]
+        public float busyHandRadius = 0.25f;
+        [Tooltip("Itme, govde bandinin UCLARINDA (kalca ve boyun) bu oran boyunca sifira " +
+                 "iner. " +
+                 "Sert kesme olsaydi eli kalca hizasinda asagi indirirken itme bir anda " +
+                 "sifirlanir, el sicrardi. Ayrica govde asagida GERCEKTEN daralir: silindir " +
+                 "modeli kalcada fazla genis kalir ve yanlarda rahatca sarkan kolu disari " +
+                 "acardi. Bu payla sarkan kol itilmez, gogus onundeki el tam itilir.")]
+        public float bandEndFade = 0.22f;
 
         [Header("Body")]
         [Tooltip("Feet position relative to the avatar root (measured by the wizard; usually negative).")]
@@ -208,6 +233,8 @@ namespace VRMultiplayer
 
         // TwoBoneIK constraint'lerinden cozulur (prefabta LeftElbowHint / RightElbowHint).
         Transform _lElbowHint, _rElbowHint;
+        // Govde bandinin uclari (bos el temizligi icin).
+        Transform _hips, _neck;
         float _maxReachL, _maxReachR;
         // Erisim kelepcesinin kol boyu (yerel uzayda, bir kere olculur) - bkz. ArmReach.
         float _lArmLen, _rArmLen;
@@ -226,6 +253,12 @@ namespace VRMultiplayer
             _rUpper = animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
             _rLower = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
             _rHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
+
+            // Govde bandi: WeaponHandWeld ile AYNI iki uc (kalca -> boyun).
+            _hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            _neck = animator.GetBoneTransform(HumanBodyBones.Neck);
+            if (_neck == null) _neck = animator.GetBoneTransform(HumanBodyBones.UpperChest);
+            if (_neck == null) _neck = animator.GetBoneTransform(HumanBodyBones.Chest);
 
             // Erisim kelepcesi icin kol boyu: BIR KERE, yerel uzayda. Canli olcum
             // WeaponHandWeld'in mutlak bilek yazmasindan beslenip kayardi.
@@ -261,6 +294,49 @@ namespace VRMultiplayer
             hintDistance = elbowHintDistance,
             minRadius = minElbowRadius,
         };
+
+        Unity.Netcode.NetworkObject _netObj;
+        bool _netLooked;
+
+        /// <summary>Bu avatari BEN surmuyorum (yani bu, baskasinin ekranindaki kopya).
+        /// WeaponHandWeld ile ayni kural: ag nesnesi yoksa da izleyici sayilir (solo test).</summary>
+        bool VisualOnly
+        {
+            get
+            {
+                if (!_netLooked)
+                {
+                    _netObj = GetComponentInParent<Unity.Netcode.NetworkObject>();
+                    _netLooked = true;
+                }
+                return _netObj == null || !_netObj.IsOwner;
+            }
+        }
+
+        /// <summary>Bos elin bilegini govde hacminin disina tasir.
+        ///
+        /// NEDEN GEREKLI: bilek hedefi dogrudan kumandanin konumu - arada hicbir govde kisiti
+        /// yok. Oyuncu elini kendi gogsune dayadiginda avatarin eli avatarin gogsunun ICINE
+        /// girer; oyuncu hicbir sey hissetmez cunku kendi govdesi avatarin montlu govdesinden
+        /// incedir. Kolun tamaminda tek koruma dirsek yonlendirmesiydi, o da yalniz dirsek
+        /// UCUNU disarida tutuyor.
+        ///
+        /// NEDEN YALNIZ BOS EL: silahli elin bilegi silaha kaynakli; onu itmek eli kabzadan
+        /// koparir (bkz. WeaponHandWeld'deki erisim kisiti). Silahli durumda temizligi silahin
+        /// kendisi yapiyor.</summary>
+        Vector3 ClearFreeHand(in BodyVolume.Frame frame, Vector3 wrist,
+                              bool otherWelded, Vector3 otherWrist)
+        {
+            // Oteki el bir silaha kaynakliysa ve bu el ona yakinsa dokunma: bu el o isin
+            // parcasi (pim cekme, sarjor degistirme) ve itilirse nesneden kopar.
+            if (otherWelded && (wrist - otherWrist).sqrMagnitude < busyHandRadius * busyHandRadius)
+                return wrist;
+
+            float pen;
+            return wrist + BodyVolume.PushOut(in frame, wrist,
+                BodyVolume.Radius + handThickness, BodyVolume.Depth + handThickness,
+                out pen, bandEndFade);
+        }
 
         void DriveElbowHint(bool left, Vector3 wrist)
         {
@@ -758,30 +834,60 @@ namespace VRMultiplayer
 
             // Hand IK targets (controller pose + grip offset). Rotation is remapped through the
             // skeleton's own hand axes so the wrist follows the controller naturally.
-            if (leftHandSource != null && ikLeftHandTarget != null)
+            // IKI EL ONCE COZULUR, SONRA YAZILIR. Bos el temizligi "oteki el mesgul mu"
+            // sorusuna bakiyor, dolayisiyla bir eli yazmadan once digerinin durumu bilinmeli.
+            bool haveL = leftHandSource != null && ikLeftHandTarget != null;
+            bool haveR = rightHandSource != null && ikRightHandTarget != null;
+            Vector3 wristL = Vector3.zero, wristR = Vector3.zero;
+            Quaternion rotL = Quaternion.identity, rotR = Quaternion.identity;
+            bool weldedL = false, weldedR = false;
+
+            if (haveL)
             {
-                Vector3 wrist; Quaternion rot;
-                if (!TryWeldedWrist(true, out wrist, out rot))
+                weldedL = TryWeldedWrist(true, out wristL, out rotL);
+                if (!weldedL)
                 {
-                    wrist = HandTargetPos(leftHandSource, true, leftGripPositionOffset);
-                    rot = _leftRotOK ? HandRotation(leftHandSource, true, leftGripEulerOffset)
-                                     : leftHandSource.rotation * Quaternion.Euler(leftGripEulerOffset);
+                    wristL = HandTargetPos(leftHandSource, true, leftGripPositionOffset);
+                    rotL = _leftRotOK ? HandRotation(leftHandSource, true, leftGripEulerOffset)
+                                      : leftHandSource.rotation * Quaternion.Euler(leftGripEulerOffset);
                 }
-                ikLeftHandTarget.SetPositionAndRotation(wrist, rot);
-                DriveElbowHint(true, wrist);
             }
 
-            if (rightHandSource != null && ikRightHandTarget != null)
+            if (haveR)
             {
-                Vector3 wrist; Quaternion rot;
-                if (!TryWeldedWrist(false, out wrist, out rot))
+                weldedR = TryWeldedWrist(false, out wristR, out rotR);
+                if (!weldedR)
                 {
-                    wrist = HandTargetPos(rightHandSource, false, rightGripPositionOffset);
-                    rot = _rightRotOK ? HandRotation(rightHandSource, false, rightGripEulerOffset)
-                                      : rightHandSource.rotation * Quaternion.Euler(rightGripEulerOffset);
+                    wristR = HandTargetPos(rightHandSource, false, rightGripPositionOffset);
+                    rotR = _rightRotOK ? HandRotation(rightHandSource, false, rightGripEulerOffset)
+                                       : rightHandSource.rotation * Quaternion.Euler(rightGripEulerOffset);
                 }
-                ikRightHandTarget.SetPositionAndRotation(wrist, rot);
-                DriveElbowHint(false, wrist);
+            }
+
+            if (freeHandClearance && VisualOnly && (haveL && !weldedL || haveR && !weldedR))
+            {
+                var frame = BodyVolume.Make(_hips, _neck, transform.forward);
+                if (frame.ok)
+                {
+                    // Iki el de bos olabilir; ikisi de AYNI (itilmemis) girdiden cozulsun diye
+                    // once ikisi hesaplanir, sonra atanir.
+                    Vector3 newL = haveL && !weldedL ? ClearFreeHand(in frame, wristL, weldedR, wristR) : wristL;
+                    Vector3 newR = haveR && !weldedR ? ClearFreeHand(in frame, wristR, weldedL, wristL) : wristR;
+                    wristL = newL;
+                    wristR = newR;
+                }
+            }
+
+            if (haveL)
+            {
+                ikLeftHandTarget.SetPositionAndRotation(wristL, rotL);
+                DriveElbowHint(true, wristL);   // dirsek DUZELTILMIS bilege gore yonlendirilir
+            }
+
+            if (haveR)
+            {
+                ikRightHandTarget.SetPositionAndRotation(wristR, rotR);
+                DriveElbowHint(false, wristR);
             }
 
             // Head: copy the HMD look direction onto the head bone (after the rig ran).

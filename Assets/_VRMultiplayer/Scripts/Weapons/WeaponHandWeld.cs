@@ -60,11 +60,11 @@ namespace VRMultiplayer.Weapons
                  "silahin konumuna hicbir kosulda dokunulmaz (bkz. VisualOnly).")]
         public bool bodyClearance = true;
         [Tooltip("Govdenin YAN yari genisligi (m, omuz/kaburga). Silahin kalinligi buna EKLENIR.")]
-        public float bodyRadius = 0.22f;
+        public float bodyRadius = BodyVolume.Radius;
         [Tooltip("Govdenin ON/ARKA yari derinligi (m, gogus + yelek). Daire yerine ELIPS: " +
                  "gogus onunde tutulan tabanca omurgadan 25 cm'de bile govdenin DISINDADIR; " +
                  "daire (22 cm) onu iceride sayip 18 cm one itiyordu - tabanca havada kaliyordu.")]
-        public float bodyDepth = 0.14f;
+        public float bodyDepth = BodyVolume.Depth;
         [Tooltip("Itmenin ust siniri (m). Kol erisimi (ArmReach) zaten ikinci bir sinir koyar.")]
         public float maxBodyPush = 0.35f;
         [Tooltip("Itmenin yumusama suresi (s). Sadece gorsel oldugu icin serbestce " +
@@ -590,25 +590,17 @@ namespace VRMultiplayer.Weapons
         /// silah da itilmez - nisan hatti). Itme eksene dik: silah yukari/asagi kaymaz.</summary>
         Vector3 BodyClearPush(Transform weapon, Transform hand, in WeaponShape sh)
         {
-            if (_hips == null || _neck == null || !sh.ok) return Vector3.zero;
+            if (!sh.ok) return Vector3.zero;
 
-            Vector3 a = _hips.position;
-            Vector3 ab = _neck.position - a;
-            float abLen2 = ab.sqrMagnitude;
-            if (abLen2 < 1e-6f) return Vector3.zero;
-            Vector3 axis = ab / Mathf.Sqrt(abLen2);
-
-            // Elips cerceveleri: ileri = avatar kokunun ileri yonu (govde kafanin yaw'ini
-            // izliyor), eksene dik duzleme izdusurulmus. Yon guvenilmezse daireye dus.
-            Vector3 fwd = transform.forward;
-            fwd -= axis * Vector3.Dot(fwd, axis);
-            bool ellipse = fwd.sqrMagnitude > 1e-4f;
-            if (ellipse) fwd.Normalize();
-            Vector3 right = ellipse ? Vector3.Cross(axis, fwd).normalized : Vector3.zero;
+            // GOVDE OLCUSU TEK YERDEN: BodyVolume. Ayni cerceveyi dirsek yonlendirmesi ve
+            // bos el temizligi de kullaniyor; eskiden her biri kendi sayisini tasidigi icin
+            // olculer sessizce ayrismisti (dirsek 0.20, silah 0.22).
+            var frame = BodyVolume.Make(_hips, _neck, transform.forward);
+            if (!frame.ok) return Vector3.zero;
 
             float thick = sh.halfThick * Mathf.Abs(weapon.lossyScale.x);
-            float ra = bodyRadius + thick;                          // yan
-            float rb = (ellipse ? bodyDepth : bodyRadius) + thick;  // on/arka
+            float ra = bodyRadius + thick;                                // yan
+            float rb = (frame.ellipse ? bodyDepth : bodyRadius) + thick;  // on/arka
 
             const int Samples = 11;
             float best = 0f;
@@ -620,28 +612,8 @@ namespace VRMultiplayer.Weapons
                 float t = (i / (float)(Samples - 1)) * 2f - 1f;
                 Vector3 p = weapon.TransformPoint(sh.center + sh.axis * (sh.halfLen * t));
 
-                Vector3 rel = p - a;
-                float u = Vector3.Dot(rel, ab) / abLen2;
-                if (u < 0f || u > 1f) continue;              // govde bandinin disinda
-
-                Vector3 d = rel - ab * u;                     // eksene DIK
-                Vector3 push;
                 float pen;
-                if (ellipse)
-                {
-                    float x = Vector3.Dot(d, right), z = Vector3.Dot(d, fwd);
-                    float e = Mathf.Sqrt((x * x) / (ra * ra) + (z * z) / (rb * rb));   // 1 = yuzey
-                    if (e >= 1f) continue;
-                    if (e < 1e-3f) { push = Vector3.zero; pen = rb; }          // eksenin ustunde
-                    else { push = d * (1f / e - 1f); pen = push.magnitude; }  // yuzeye, elips-radyal
-                }
-                else
-                {
-                    float dist = d.magnitude;
-                    pen = ra - dist;
-                    if (pen <= 0f) continue;
-                    push = dist > 1e-4f ? d * (pen / dist) : Vector3.zero;
-                }
+                Vector3 push = BodyVolume.PushOut(in frame, p, ra, rb, out pen);
                 if (pen <= best) continue;
 
                 best = pen;
@@ -654,7 +626,10 @@ namespace VRMultiplayer.Weapons
             if (bestPush.sqrMagnitude < 1e-8f)
             {
                 // Silah tam eksenin ustunde: yon belirsiz, eli tutan taraf disari.
-                Vector3 fallback = hand != null ? hand.position - (a + ab * 0.5f) : transform.right;
+                Vector3 axis = frame.axisVec.normalized;
+                Vector3 fallback = hand != null
+                    ? hand.position - (frame.basePoint + frame.axisVec * 0.5f)
+                    : transform.right;
                 fallback -= axis * Vector3.Dot(fallback, axis);
                 if (fallback.sqrMagnitude < 1e-6f) return Vector3.zero;
                 bestPush = fallback.normalized * best;

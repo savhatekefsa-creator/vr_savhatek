@@ -2531,7 +2531,7 @@ MonoBehaviour:
   elbowForwardOnCross: 0.7
   crossBlendMeters: 0.12
   elbowHintDistance: 0.3
-  minElbowRadius: 0.2
+  minElbowRadius: 0.22
   feetOffset: 0.021316923
   groundY: 0
   trackingReadyMinHeight: 1
