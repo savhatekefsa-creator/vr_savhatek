@@ -12,8 +12,7 @@ namespace VRMultiplayer.UI
     ///
     /// NASIL: panel dikdortgenini kendisi yazmak yerine buradan ISTER. Sutun basina bir imlec
     /// tutulur, her istek imleci asagi kaydirir. Cizilmeyen panel yer kaplamaz — kosul
-    /// disariда kaldigi icin istek de gelmez. Imlecler her karede (Event.current sayisi degil,
-    /// Time.frameCount) bir kez sifirlanir.
+    /// disarida kaldigi icin istek de gelmez. Imlecler her karede bir kez sifirlanir.
     ///
     /// SIRA GARANTISI YOK: OnGUI cagri sirasi bilesenler arasinda tanimsizdir, yani panellerin
     /// dikey sirasi kareler arasinda degisebilir. Amac sira degil, CAKISMAMA.
@@ -28,7 +27,16 @@ namespace VRMultiplayer.UI
 
         static int _frame = -1;
         static EventType _evt = EventType.Ignore;
-        static float _left, _right;
+
+        // Sutun imlecleri: Y = sutun icindeki bir sonraki bos yer, X = sutunun kaydirmasi,
+        // W = o sutundaki en genis panel (bir sonraki sutunun nereden baslayacagini belirler).
+        static float _leftY, _leftX, _leftW;
+        static float _rightY, _rightX, _rightW;
+
+        // Alt bant: ekranin dibinden YUKARI dogru yigilir.
+        static float _bottomY;
+        // Alt bandin bir onceki gecisteki toplam yuksekligi. Left() bunu rezerve eder.
+        static float _bottomUsed, _bottomReserved;
 
         /// <summary>Imleci her OLAY GECISINDE sifirlar.
         ///
@@ -47,33 +55,78 @@ namespace VRMultiplayer.UI
             if (_frame == Time.frameCount && _evt == e) return;
             _frame = Time.frameCount;
             _evt = e;
-            _left = Margin;
-            _right = Margin;
+
+            // Alt bandin BU gecisteki yuksekligini daha bilmiyoruz (OnGUI sirasi tanimsiz),
+            // bu yuzden bir onceki gecisin olcusunu rezerve ediyoruz. Paneller kareler
+            // arasinda ayni boyda kaldigi icin bu pratikte tam dogru; degisirse tek karelik
+            // bir cakisma olur ve ertesi karede kendini duzeltir.
+            _bottomReserved = _bottomUsed;
+            _bottomUsed = 0f;
+
+            _leftY = Margin; _leftX = Margin; _leftW = 0f;
+            _rightY = Margin; _rightX = 0f; _rightW = 0f;
+            _bottomY = 0f;
         }
 
-        /// <summary>Sol sutunda bir sonraki bos yer.</summary>
+        /// <summary>Sol sutunda bir sonraki bos yer. Sutun ekranin dibine (veya alt bandin
+        /// ustune) dayandiginda YENI SUTUNA gecer — tasip ekran disinda kaybolmaz.</summary>
         public static Rect Left(float width, float height)
         {
             Sync();
-            var r = new Rect(Margin, _left, width, height);
-            _left += height + Gap;
+
+            // Alt bant yalnizca ILK sutunla ayni x'te durur; sonraki sutunlar onun sagindadir
+            // ve tam yuksekligi kullanabilir.
+            float limit = Screen.height - Margin - (_leftX <= Margin ? _bottomReserved : 0f);
+
+            // Sutun basindaki tek panel limitten uzunsa yine de buraya konur: sonsuz sutun
+            // acmanin alemi yok, kirpilmasi ekran disina tasmasindan iyi.
+            if (_leftY > Margin && _leftY + height > limit)
+            {
+                _leftX += _leftW + Gap;
+                _leftY = Margin;
+                _leftW = 0f;
+            }
+
+            var r = new Rect(_leftX, _leftY, width, height);
+            _leftY += height + Gap;
+            if (width > _leftW) _leftW = width;
             return r;
         }
 
-        /// <summary>Sag sutunda bir sonraki bos yer.</summary>
+        /// <summary>Sag sutunda bir sonraki bos yer. Dolunca SOLA dogru yeni sutun acar.</summary>
         public static Rect Right(float width, float height)
         {
             Sync();
-            var r = new Rect(Screen.width - width - Margin, _right, width, height);
-            _right += height + Gap;
+
+            if (_rightY > Margin && _rightY + height > Screen.height - Margin)
+            {
+                _rightX += _rightW + Gap;
+                _rightY = Margin;
+                _rightW = 0f;
+            }
+
+            var r = new Rect(Screen.width - width - Margin - _rightX, _rightY, width, height);
+            _rightY += height + Gap;
+            if (width > _rightW) _rightW = width;
             return r;
         }
 
-        /// <summary>Sol sutunun ALTINDAN yukari dogru (ekranin dibine sabitlenen paneller).</summary>
+        /// <summary>Ekranin dibine sabitlenen paneller; yukari dogru yigilir.
+        ///
+        /// ONCEDEN HATALIYDI: sabit bir dikdortgen donduruyor, ne kendi imlecini ilerletiyor
+        /// ne de Left()'in nereye kadar indigini biliyordu. Sinifin butun amaci cakismayi
+        /// onlemekken bu fonksiyon mekanizmanin DISINDA kaliyordu: ServerView (320 yuksek)
+        /// tek basina sol sutunu alt banda kadar indiriyor, uzerine MatchGui gelince
+        /// WeaponGripCaptureTool'un 360'lik paneliyle ic ice giriyordu — ikisi de okunmuyordu
+        /// (videoda goruldu). Artik hem kendi arasinda yigiliyor hem de Left()'e yer birakiyor.</summary>
         public static Rect BottomLeft(float width, float height)
         {
             Sync();
-            return new Rect(Margin, Screen.height - height - Margin, width, height);
+
+            float y = Screen.height - Margin - _bottomY - height;
+            _bottomY += height + Gap;
+            _bottomUsed = _bottomY;
+            return new Rect(Margin, y, width, height);
         }
     }
 }
