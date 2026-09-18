@@ -85,11 +85,27 @@ namespace VRMultiplayer.Weapons
             return click;
         }
 
+        // VARSAYILAN KAPALI. Panel 460x360 ve sunucu ekraninin sol yarisini kapatiyordu;
+        // sahneyi izleyen kisi avatari goremiyordu (10 dakikalik kayitta bastan sona).
+        // Arac editor/gelistirme build'inde kalmali (dosya basindaki #if), ama YER KAPLAMASI
+        // istege bagli olmali: kapaliyken tek satirlik baslik, tiklayinca aciliyor.
+        // Statik: sahne gecisleri ve yeniden spawn arasinda secim korunur.
+        static bool _expanded;
+
         void OnGUI()
         {
             const float w = 460f;
+            if (!_expanded)
+            {
+                if (GUI.Button(VRMultiplayer.UI.DevHudLayout.BottomLeft(260f, 24f),
+                               "GRIP YAKALAMA (dev) \u25B8"))
+                    _expanded = true;
+                return;
+            }
+
             GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.BottomLeft(w, 360f), GUI.skin.box);
-            GUILayout.Label("GRIP YAKALAMA (dev) — silahi birak, eli konumlandir, THUMBSTICK'e BAS");
+            if (GUILayout.Button("GRIP YAKALAMA (dev) \u25BE  — kapat")) _expanded = false;
+            GUILayout.Label("silahi birak, eli konumlandir, THUMBSTICK'e BAS");
 
             // IsListening guard: before the session starts, SpawnManager exists but
             // GetLocalPlayerObject() throws internally.

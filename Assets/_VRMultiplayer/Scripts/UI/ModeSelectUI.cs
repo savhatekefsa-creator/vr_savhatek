@@ -166,18 +166,23 @@ namespace VRMultiplayer.UI
             if (Application.isMobilePlatform) return;
             if (AppMode.Current != AppMode.Mode.None) return;
 
-            // ILK EKRAN HICBIR SEYIN ALTINDA KALMAZ. Gelistirici katmanlari ekranin ALT kenarina
-            // gore konumlaniyor (WeaponGripCaptureTool: Screen.height - 370); alcak bir Game
-            // view'da o kutu yukari tirmanip tam buranin uzerine biniyordu — butonlar duruyor
-            // ama okunmuyor ve nisan alinamiyordu, "moda gecemiyorum"un sebebi buydu.
+            // ILK EKRAN HICBIR SEYIN ALTINDA KALMAZ.
             //
-            // Iki onlem birden, cunku ikisi de tek basina kirilgan: konum artik UST-ORTA (iki
-            // dev kutusu da SOL ve SAG kenara yapisik), ve GUI.depth ile bu kutu her seyin
-            // ustunde ciziliyor — ileride eklenen bir katman yine ustune binemesin.
+            // ESKIDEN: dikdortgen ELLE ortalaniyordu ("(Screen.width - w) * 0.5f, 20f") ve
+            // gerekcesi "gelistirici kutulari SOL ve SAG kenara yapisik, orta serbest" idi.
+            // O varsayim coktu: DevHudLayout sutunlari dolunca ORTAYA dogru yeni sutun acmaya
+            // basladi ve sunucu mac paneli tam buranin uzerine bindi — "Bir mod sec", "AKTIF",
+            // "Oyuncu: ... KIZIL ...", "ISINMA ..." satirlari ic ice gecti (10 dakikalik
+            // kayitta 637 saniyenin TAMAMINDA).
+            //
+            // Artik yer ISTENIYOR, varsayilmiyor: TopBanner rezerve bir serit dondurur ve
+            // sutunlar o seridin altindan baslar, yani cakisma yapisal olarak imkansiz.
+            // GUI.depth yine -1000: cizim sirasi da garanti kalsin (o CAKISMAYI onlemez,
+            // yalnizca ustte kalmayi saglar — ikisi ayri sey).
             GUI.depth = -1000;
 
             const float w = 320f, h = 80f;
-            GUILayout.BeginArea(new Rect((Screen.width - w) * 0.5f, 20f, w, h), GUI.skin.box);
+            GUILayout.BeginArea(VRMultiplayer.UI.DevHudLayout.TopBanner(w, h), GUI.skin.box);
             GUILayout.Label("Bir mod sec");
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("YARATICI")) AppMode.Choose(AppMode.Mode.Creative);

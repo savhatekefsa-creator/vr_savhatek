@@ -38,6 +38,10 @@ namespace VRMultiplayer.UI
         // Alt bandin bir onceki gecisteki toplam yuksekligi. Left() bunu rezerve eder.
         static float _bottomUsed, _bottomReserved;
 
+        // Ust bant: ekranin UST-ORTASINDA, sutunlarin ERISEMEYECEGI ayri bir serit.
+        // Alt bantla ayni "onceki gecisi rezerve et" numarasi (bkz. Sync).
+        static float _topUsed, _topReserved;
+
         /// <summary>Imleci her OLAY GECISINDE sifirlar.
         ///
         /// DIKKAT — ILK SURUMDEKI HATA: yalnizca Time.frameCount degisince sifirlaniyordu.
@@ -62,9 +66,12 @@ namespace VRMultiplayer.UI
             // bir cakisma olur ve ertesi karede kendini duzeltir.
             _bottomReserved = _bottomUsed;
             _bottomUsed = 0f;
+            _topReserved = _topUsed;
+            _topUsed = 0f;
 
-            _leftY = Margin; _leftX = Margin; _leftW = 0f;
-            _rightY = Margin; _rightX = 0f; _rightW = 0f;
+            float top = Margin + _topReserved;
+            _leftY = top; _leftX = Margin; _leftW = 0f;
+            _rightY = top; _rightX = 0f; _rightW = 0f;
             _bottomY = 0f;
         }
 
@@ -80,10 +87,10 @@ namespace VRMultiplayer.UI
 
             // Sutun basindaki tek panel limitten uzunsa yine de buraya konur: sonsuz sutun
             // acmanin alemi yok, kirpilmasi ekran disina tasmasindan iyi.
-            if (_leftY > Margin && _leftY + height > limit)
+            if (_leftY > Margin + _topReserved && _leftY + height > limit)
             {
                 _leftX += _leftW + Gap;
-                _leftY = Margin;
+                _leftY = Margin + _topReserved;
                 _leftW = 0f;
             }
 
@@ -98,16 +105,50 @@ namespace VRMultiplayer.UI
         {
             Sync();
 
-            if (_rightY > Margin && _rightY + height > Screen.height - Margin)
+            if (_rightY > Margin + _topReserved && _rightY + height > Screen.height - Margin)
             {
                 _rightX += _rightW + Gap;
-                _rightY = Margin;
+                _rightY = Margin + _topReserved;
                 _rightW = 0f;
             }
 
             var r = new Rect(Screen.width - width - Margin - _rightX, _rightY, width, height);
             _rightY += height + Gap;
             if (width > _rightW) _rightW = width;
+            return r;
+        }
+
+        /// <summary>UST BANT: ekranin ust-ortasinda, HICBIR sutunun giremedigi serit.
+        ///
+        /// NEDEN VAR: mod secme kutusu (ModeSelectUI) ekrani elle ortalayan sabit bir
+        /// dikdortgen kullaniyordu. Gerekcesi "gelistirici kutulari SOL ve SAG kenara
+        /// yapisik, orta serbest" idi — ama sutunlar dolunca ortaya dogru yeni sutun acmaya
+        /// baslayinca o varsayim coktu: sunucu mac paneli kutunun tam ustune bindi ve
+        /// "Bir mod sec", "AKTIF", "ISINMA ..." satirlari ic ice gecti (videoda goruldu,
+        /// 637 saniyenin tamaminda).
+        ///
+        /// Cozum kutuyu baska bir bos koseye tasimak DEGIL — o da bir sonraki panelde yine
+        /// bozulurdu. Serit ARTIK REZERVE: sutunlar bu bandin altindan basliyor, yani
+        /// ust-orta kutunun uzerine yapisal olarak binemiyorlar.</summary>
+        public static Rect TopBanner(float width, float height)
+        {
+            Sync();
+            var r = new Rect((Screen.width - width) * 0.5f, Margin + _topUsed, width, height);
+            _topUsed += height + Gap;
+
+            // AYNI GECISTE DE YER AC. Alt bant gibi yalnizca "onceki gecisi rezerve et"
+            // deseydik, bant ilk belirdigi karede sutunlar hala yukaridan baslar ve o tek
+            // karede uzerine binerdi. OnGUI cagri sirasi tanimsiz oldugu icin bunu tamamen
+            // bitiremeyiz, ama TopBanner sutunlardan ONCE kostugunda (vakalarin yarisi)
+            // cakisma ILK kareden itibaren olmaz: henuz panel almamis sutunlari simdi itiyoruz.
+            // Sonra kostugunda bir sonraki gecis _topReserved ile zaten dogruyu bulur.
+            if (_topUsed > _topReserved)
+            {
+                float top = Margin + _topUsed;
+                if (_leftY <= Margin + _topReserved) _leftY = top;
+                if (_rightY <= Margin + _topReserved) _rightY = top;
+                _topReserved = _topUsed;
+            }
             return r;
         }
 
