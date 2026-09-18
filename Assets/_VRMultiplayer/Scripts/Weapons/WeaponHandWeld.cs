@@ -719,25 +719,51 @@ namespace VRMultiplayer.Weapons
             ComputeTarget(ref w, left, PendingShift(ref w, left),
                 out Vector3 targetPos, out Quaternion targetRot);
 
+            // KOL UZAYAMAZ. Bu yazma mutlak (rig'den sonra), dolayisiyla kelepce olmadan
+            // bilek silaha isinlaniyor ve el koldan kopmus gorunuyordu. Kelepce yalnizca
+            // hedef kol boyunu ASTIGINDA calisir; normal tutusta hicbir sey degismez.
+            // ROTASYON kelepcelenmez: kol duz kalsa bile el silahin yonune bakar.
+            Vector3 kelepce = ArmReach.Clamp(targetPos,
+                left ? _leftUpper : _rightUpper,
+                left ? _leftArmLen : _rightArmLen) - targetPos;
+
+            // SON KELEPCEYI EL DEGIL SILAH ODER (yalniz izleyen kopyada, yalniz ana el).
+            //
+            // SolveShift (sira 70) kaydirmayi, ana elin hedefi TAM erisim kuresine otursun
+            // diye coziyor - yani buradaki kelepcenin islevsiz kalmasi gerekirdi. Ama arada
+            // OMUZ OYNUYOR: AvatarCrouchPose (sira 90) comelme pozunu yaziyor ve ardindan
+            // ayagi zemine oturtmak icin KOKU dusey kaydiriyor (ClampToGround). 70'te
+            // verilen garanti 110'a gelindiginde gecersiz; kelepce devreye girip BILEGI
+            // omza cekiyor, silah ise itilmis yerinde kaliyor -> el kabzadan kopuyor.
+            // (Kesin yer: AvatarCrouchPose.ClampToGround, "transform.position += up * lift" -
+            // bacak pozu degisince kok yukari itiliyor, omuz da onunla birlikte.)
+            // Sahada "tetik eli yine bozuldu" diye goruldu; govde derinligi olculen degere
+            // cekilince itmeler 3 cm'den 23 cm'e ciktigi icin artik gozle gorulur oldu.
+            //
+            // Cozum sirayi degistirmek DEGIL (comelme pozunun weld'den once kosmasi dogru).
+            // Izleyen kopyada silahin gorunen konumu ZATEN bizim elimizde: kalan tasmayi
+            // silaha yazariz, el de silahla birlikte gelir. Iki sart da korunur - kol
+            // erisimin icinde, el kabzada.
+            //
+            // Sahibin kopyasinda ve DESTEK elinde eski yol gecerli: orada silahin konumu
+            // bizim degil (VisualOnly false), destek elinin cipasi ise ray uzerinde kaydigi
+            // icin zaten kendi kacisina sahip (SlideWithinReach).
+            bool kelepceyiSilahaYaz = !w.isSupport && !w.fadingOut && VisualOnly &&
+                                      kelepce.sqrMagnitude > 1e-10f;
+
             // GOVDE ITMESI silaha BIR KEZ uygulanir (SolveShift bu karede hesapladi, IK ayni
             // degeri gordu). Yalniz ana el, yalniz sonmuyorsa: birakilan silaha dokunulmaz.
             if (!w.isSupport && !w.fadingOut && !(left ? _appliedL : _appliedR))
             {
-                Vector3 shift = left ? _shiftL : _shiftR;
+                Vector3 shift = (left ? _shiftL : _shiftR) + (kelepceyiSilahaYaz ? kelepce : Vector3.zero);
                 if (shift.sqrMagnitude > 1e-10f) w.weapon.position += shift;
                 RecordVisualShift(w.weapon, shift);
                 if (left) _appliedL = true; else _appliedR = true;
             }
 
-            // KOL UZAYAMAZ. Bu yazma mutlak (rig'den sonra), dolayisiyla kelepce
-            // olmadan bilek silaha isinlaniyor ve el koldan kopmus gorunuyordu.
-            // Kelepce yalnizca hedef kol boyunu ASTIGINDA calisir; normal tutusta
-            // hicbir sey degismez, yani "destek eli silaha tam guclu kaynakli
-            // kalsin" kurali korunur. ROTASYON kelepcelenmez: kol duz kalsa bile
-            // el silahin/kumandanin yonune bakmaya devam eder.
-            targetPos = ArmReach.Clamp(targetPos,
-                left ? _leftUpper : _rightUpper,
-                left ? _leftArmLen : _rightArmLen);
+            // Hedef her iki yolda da kelepce kadar kayar: silaha yazildiysa el silahla
+            // birlikte gitti, yazilmadiysa klasik kelepce (el kabzadan kopar) uygulandi.
+            targetPos += kelepce;
 
             // Engage/release weight. The bone's pose here is this frame's IK/animator result
             // (the weld runs after both), so a partial weight blends between that and the
