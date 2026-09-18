@@ -70,6 +70,14 @@ namespace VRMultiplayer.Weapons
         [Tooltip("Itmenin yumusama suresi (s). Sadece gorsel oldugu icin serbestce " +
                  "yumusatilabilir - izleyen oyuncu ani sicrama gormez.")]
         public float clearanceSmoothing = 0.08f;
+        [Tooltip("Itme, govde bandinin UCLARINDA (ust bacak ve boyun) bu oran boyunca sifira " +
+                 "iner.\n\n" +
+                 "Bant artik kalcanin altina uzaniyor (BodyVolume.HipExtend) ki kalca hizasinda " +
+                 "tutulan silah kapsama girsin - eskiden orasi bandin DISINDAYDI ve silah hic " +
+                 "itilmiyordu. Uzatilan kisim bacak hizasi oldugu icin govde orada daha dar: " +
+                 "0.18 ile itme kalcadan asagi dogru sonuyor, kalca hizasinda tam guc kaliyor. " +
+                 "Ust uc de sonuyor - nisan hattindaki silah yuze dogru itilmemeli.")]
+        public float bandEndFade = 0.18f;
 
         [Tooltip("IZLEYICI TARAFI: kol silaha yetismiyorsa eli silahtan koparmak (radyal " +
                  "kelepce) yerine GORUNEN silahi tasma kadar govdeye yaklastirir - iki el de " +
@@ -595,7 +603,7 @@ namespace VRMultiplayer.Weapons
             // GOVDE OLCUSU TEK YERDEN: BodyVolume. Ayni cerceveyi dirsek yonlendirmesi ve
             // bos el temizligi de kullaniyor; eskiden her biri kendi sayisini tasidigi icin
             // olculer sessizce ayrismisti (dirsek 0.20, silah 0.22).
-            var frame = BodyVolume.Make(_hips, _neck, transform.forward);
+            var frame = BodyVolume.Make(_hips, _neck, transform.forward, BodyVolume.HipExtend);
             if (!frame.ok) return Vector3.zero;
 
             float thick = sh.halfThick * Mathf.Abs(weapon.lossyScale.x);
@@ -613,7 +621,7 @@ namespace VRMultiplayer.Weapons
                 Vector3 p = weapon.TransformPoint(sh.center + sh.axis * (sh.halfLen * t));
 
                 float pen;
-                Vector3 push = BodyVolume.PushOut(in frame, p, ra, rb, out pen);
+                Vector3 push = BodyVolume.PushOut(in frame, p, ra, rb, out pen, bandEndFade);
                 if (pen <= best) continue;
 
                 best = pen;

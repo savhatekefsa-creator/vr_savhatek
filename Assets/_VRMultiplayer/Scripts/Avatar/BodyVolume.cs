@@ -27,6 +27,15 @@ namespace VRMultiplayer
         /// <summary>Govdenin ON/ARKA yari derinligi (m, gogus + yelek).</summary>
         public const float Depth = 0.14f;
 
+        /// <summary>Bandin kalcanin ALTINA uzatildigi mesafe (m, ust bacak).
+        ///
+        /// NEDEN: bant kalca-boyun arasiydi ve disi hic test edilmiyordu. Kalca hizasinda
+        /// tutulan silah (VR'da en sik duran "dusuk hazir" durusu) tam bandin dibinde kaliyor,
+        /// HIC itilmiyordu: 10 dakikalik kayitta tufek de onu tutan kol da govdenin icinde
+        /// kayboluyordu. Bandi ust bacak boyunca asagi uzatmak bu boslugu kapatir; uclardaki
+        /// yumusatma (endFade) da bacak govdeden dar oldugu icin zaten gerekiyordu.</summary>
+        public const float HipExtend = 0.18f;
+
         /// <summary>Govde bandinin bir karelik cercevesi. Bir kez kurulur, cok kez sorgulanir:
         /// silah temizligi uzun eksen boyunca 11 ornek atiyor, hepsi ayni cerceveyi kullanir.</summary>
         public struct Frame
@@ -41,13 +50,22 @@ namespace VRMultiplayer
 
         /// <summary>Govde cercevesini kurar. <paramref name="bodyForward"/> avatar kokunun ileri
         /// yonudur (govde kafanin yaw'ini izler); eksene dik bileseni alinir.</summary>
-        public static Frame Make(Transform hips, Transform neck, Vector3 bodyForward)
+        /// <param name="extendBelow">Bandin kalcanin ALTINA uzatildigi mesafe (m). 0 =
+        /// eski davranis (bant tam kalcada biter).</param>
+        public static Frame Make(Transform hips, Transform neck, Vector3 bodyForward,
+                                 float extendBelow = 0f)
         {
             Frame f = default(Frame);
             if (hips == null || neck == null) return f;
 
-            f.basePoint = hips.position;
-            f.axisVec = neck.position - hips.position;
+            Vector3 top = neck.position;
+            Vector3 span = top - hips.position;
+            if (span.sqrMagnitude < 1e-6f) return f;
+
+            // Taban kalcadan govde EKSENI boyunca asagi kaydirilir (dunya -Y degil: egilen
+            // oyuncuda eksen de egilir, bant govdeyle birlikte doner).
+            f.basePoint = hips.position - span.normalized * extendBelow;
+            f.axisVec = top - f.basePoint;
             f.axisLen2 = f.axisVec.sqrMagnitude;
             if (f.axisLen2 < 1e-6f) return f;
 

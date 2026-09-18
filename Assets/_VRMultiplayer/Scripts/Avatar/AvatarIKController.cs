@@ -111,13 +111,29 @@ namespace VRMultiplayer
         [Tooltip("Bos el, OTEKI elin silahina bu mesafeden yakinsa itilmez (m). Bombanin " +
                  "pimini cekmek gibi iki elli islerde bos el o nesneden kopmasin diye.")]
         public float busyHandRadius = 0.25f;
-        [Tooltip("Itme, govde bandinin UCLARINDA (kalca ve boyun) bu oran boyunca sifira " +
-                 "iner. " +
-                 "Sert kesme olsaydi eli kalca hizasinda asagi indirirken itme bir anda " +
-                 "sifirlanir, el sicrardi. Ayrica govde asagida GERCEKTEN daralir: silindir " +
-                 "modeli kalcada fazla genis kalir ve yanlarda rahatca sarkan kolu disari " +
-                 "acardi. Bu payla sarkan kol itilmez, gogus onundeki el tam itilir.")]
+        [Tooltip("Itme, govde bandinin UCLARINDA bu oran boyunca sifira iner.\n\n" +
+                 "Sert kesme olsaydi eli asagi indirirken itme bir anda sifirlanir, el " +
+                 "sicrardi. Ayrica govde asagida GERCEKTEN daralir: yanlarda rahatca sarkan " +
+                 "kol disari acilmamali.\n\n" +
+                 "Silah tarafiyla ayni sayi DEGIL ve bant da farkli (orasi kalca altina " +
+                 "uzatildi, burasi kalcada biter) - bkz. ClearFreeHand'deki not.")]
         public float bandEndFade = 0.22f;
+
+        [Header("Omurga egilmesi (kafa govdeye gomulmesin)")]
+        [Tooltip("Kafa acisinin insan boynunu asan kismi OMURGAYA devredilir.\n\n" +
+                 "Kapatilirsa eski davranis: kafa kemigine HMD'nin tam acisi yazilir ve " +
+                 "oyuncu 70 derece asagi bakinca kafatasi gogus kafesinin icine doner.")]
+        public bool spineFollowsHead = true;
+        [Tooltip("Boynun TEK BASINA asagi bakabilecegi azami aci (derece). Insanda ~45; " +
+                 "fazlasini omurga yapar.")]
+        public float headPitchDownMax = 45f;
+        [Tooltip("Boynun tek basina yukari bakabilecegi azami aci (derece). Geriye bukulme " +
+                 "asagi bakmaktan daha kisitlidir.")]
+        public float headPitchUpMax = 35f;
+        [Tooltip("Omurganin toplam egilme siniri (derece).")]
+        public float maxSpineLean = 45f;
+        [Tooltip("Egilmenin yumusama hizi. Dusuk = agir, yuksek = ani.")]
+        public float leanSmoothing = 12f;
 
         [Header("Body")]
         [Tooltip("Feet position relative to the avatar root (measured by the wizard; usually negative).")]
@@ -235,6 +251,9 @@ namespace VRMultiplayer
         Transform _lElbowHint, _rElbowHint;
         // Govde bandinin uclari (bos el temizligi icin).
         Transform _hips, _neck;
+        // Omurga zinciri (kalcadan yukari: Spine -> Chest -> UpperChest). Rigde olmayanlar atlanir.
+        Transform[] _spineChain = System.Array.Empty<Transform>();
+        float _smoothLean;
         float _maxReachL, _maxReachR;
         // Erisim kelepcesinin kol boyu (yerel uzayda, bir kere olculur) - bkz. ArmReach.
         float _lArmLen, _rArmLen;
@@ -259,6 +278,16 @@ namespace VRMultiplayer
             _neck = animator.GetBoneTransform(HumanBodyBones.Neck);
             if (_neck == null) _neck = animator.GetBoneTransform(HumanBodyBones.UpperChest);
             if (_neck == null) _neck = animator.GetBoneTransform(HumanBodyBones.Chest);
+
+            // Omurga zinciri KALCADAN YUKARI sirali olmali: egilme paylari sirayla ustune
+            // biniyor (bkz. LeanSpine). Rigde eksik olan halka sessizce atlanir.
+            var zincir = new System.Collections.Generic.List<Transform>(3);
+            foreach (var b in new[] { HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest })
+            {
+                var tr = animator.GetBoneTransform(b);
+                if (tr != null) zincir.Add(tr);
+            }
+            _spineChain = zincir.ToArray();
 
             // Erisim kelepcesi icin kol boyu: BIR KERE, yerel uzayda. Canli olcum
             // WeaponHandWeld'in mutlak bilek yazmasindan beslenip kayardi.
@@ -336,6 +365,48 @@ namespace VRMultiplayer
             return wrist + BodyVolume.PushOut(in frame, wrist,
                 BodyVolume.Radius + handThickness, BodyVolume.Depth + handThickness,
                 out pen, bandEndFade);
+        }
+
+        /// <summary>Kafa acisinin boynu asan kismini OMURGAYA devreder.
+        ///
+        /// SORUN: kafa kemigine HMD'nin acisi OLDUGU GIBI yaziliyordu (driveHeadRotation) ve
+        /// govde hic egilmiyordu. Oyuncu masaya/silaha bakmak icin 70 derece asagi baktiginda
+        /// bu acinin tamami boyun eklemine biniyor, kafatasi gogus kafesinin ICINE doniyordu -
+        /// 10 dakikalik kayitta kafa yelegin yakasinin icinde kalmisti (7:50, 8:50, 9:10).
+        ///
+        /// Insan bu aciyi PAYLASTIRIR: gozler 70 derece asagi = boyun ~45 + omurga ~25.
+        /// Burada da oyle: boynun payi headPitchDownMax'ta kesilir, FAZLASI omurga halkalarina
+        /// esit dagitilir. Kafanin DUNYA acisi degismez (asagida yine mutlak yaziliyor), yani
+        /// oyuncu nereye bakiyorsa avatar da oraya bakmaya devam eder - degisen tek sey,
+        /// gogsun de o yone donmesi ve kafaya yer acmasi.
+        ///
+        /// SIRA: eller COZULMEDEN once cagrilir, cunku egilme omuzlari tasir ve hem dirsek
+        /// yonlendirmesi hem de weld'deki erisim kelepcesi omuz konumunu okur.
+        ///
+        /// Birikme yok: animator her kare omurgayi klipten yeniden pozluyor, bu yazma onun
+        /// USTUNE biniyor.</summary>
+        void LeanSpine(Quaternion headWant)
+        {
+            if (!spineFollowsHead || _spineChain.Length == 0) return;
+
+            // Kafanin ileri yonu GOVDE cercevesinde: +y yukari bakmak, -y asagi bakmak.
+            Vector3 fwd = Quaternion.Inverse(transform.rotation) * (headWant * Vector3.forward);
+            float asagi = Mathf.Asin(Mathf.Clamp(-fwd.y, -1f, 1f)) * Mathf.Rad2Deg;
+
+            float fazla = asagi > headPitchDownMax ? asagi - headPitchDownMax
+                        : asagi < -headPitchUpMax ? asagi + headPitchUpMax
+                        : 0f;
+            fazla = Mathf.Clamp(fazla, -maxSpineLean, maxSpineLean);
+
+            _smoothLean = Mathf.Lerp(_smoothLean, fazla, leanSmoothing * Time.deltaTime);
+            if (Mathf.Abs(_smoothLean) < 0.05f) return;
+
+            // Halka basina esit pay. Ust halkalar alttakilerin donusunu ZATEN tasidigi icin
+            // (cocuk transformlar) paylar birikir: zincirin tepesinde toplam tam "fazla" olur.
+            float pay = _smoothLean / _spineChain.Length;
+            Vector3 eksen = transform.right;
+            for (int i = 0; i < _spineChain.Length; i++)
+                _spineChain[i].rotation = Quaternion.AngleAxis(pay, eksen) * _spineChain[i].rotation;
         }
 
         void DriveElbowHint(bool left, Vector3 wrist)
@@ -834,6 +905,11 @@ namespace VRMultiplayer
 
             // Hand IK targets (controller pose + grip offset). Rotation is remapped through the
             // skeleton's own hand axes so the wrist follows the controller naturally.
+            // OMURGA ELLERDEN ONCE: egilme omuzlari tasir, dirsek yonlendirmesi ve weld'in
+            // erisim kelepcesi omuz konumunu okur.
+            Quaternion kafaHedef = headSource.rotation * Quaternion.Euler(headEulerOffset);
+            LeanSpine(kafaHedef);
+
             // IKI EL ONCE COZULUR, SONRA YAZILIR. Bos el temizligi "oteki el mesgul mu"
             // sorusuna bakiyor, dolayisiyla bir eli yazmadan once digerinin durumu bilinmeli.
             bool haveL = leftHandSource != null && ikLeftHandTarget != null;
@@ -866,6 +942,11 @@ namespace VRMultiplayer
 
             if (freeHandClearance && VisualOnly && (haveL && !weldedL || haveR && !weldedR))
             {
+                // EL BANDI KALCADA BITER (uzatma YOK) — silah bandindan bilincli olarak farkli.
+                // Olculdu: bant kalca altina uzatilinca kemer hizasindaki BOS el 0.8 cm yerine
+                // 11.4 cm itiliyordu, yani rahat duran kol yana aciliyordu. Kalca altindaki
+                // SILAH itilmeli (govdeden geciyor), kalca altindaki EL itilmemeli (bacaga
+                // degmesi dogru duruyor). Ayni hacim, iki ayri tolerans.
                 var frame = BodyVolume.Make(_hips, _neck, transform.forward);
                 if (frame.ok)
                 {
@@ -891,8 +972,10 @@ namespace VRMultiplayer
             }
 
             // Head: copy the HMD look direction onto the head bone (after the rig ran).
+            // Kafa MUTLAK yazilir: omurga egilse de egilmese de oyuncunun baktigi yone bakar.
+            // Egilme kafanin ACISINI degil, altindaki gogsun yerini degistirdi.
             if (driveHeadRotation && headBone != null)
-                headBone.rotation = headSource.rotation * Quaternion.Euler(headEulerOffset);
+                headBone.rotation = kafaHedef;
 
             // First-person: collapse the local player's own head so it isn't in front of the camera.
             if (hideHead && headBone != null)
