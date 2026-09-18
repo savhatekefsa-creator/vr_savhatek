@@ -123,7 +123,13 @@ namespace VRMultiplayer
         [Tooltip("Kafa acisinin insan boynunu asan kismi OMURGAYA devredilir.\n\n" +
                  "Kapatilirsa eski davranis: kafa kemigine HMD'nin tam acisi yazilir ve " +
                  "oyuncu 70 derece asagi bakinca kafatasi gogus kafesinin icine doner.")]
-        public bool spineFollowsHead = true;
+        // VARSAYILAN KAPALI. Egilme kafanin gogse gomulmesini duzeltiyor ama omurgayi
+        // dondurdugu icin OMUZLARI da tasiyor, yani silah tutan kolun durusunu degistiriyor.
+        // Sahada "dun hepsi duzgundu, yeni commitler her seyi kotulestirdi" denildi; bu yuzden
+        // kol/el davranisina dokunan her sey dunku haline geri alindi. Kafa duzeltmesini geri
+        // istersen tek yapman gereken bunu true yapmak - kod duruyor, olculeri de duruyor
+        // (3 halka, halka basina 8.3 derece, gogus kemiginde toplam 25 derece).
+        public bool spineFollowsHead = false;
         [Tooltip("Boynun TEK BASINA asagi bakabilecegi azami aci (derece). Insanda ~45; " +
                  "fazlasini omurga yapar.")]
         public float headPitchDownMax = 45f;
