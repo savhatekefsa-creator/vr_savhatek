@@ -113,6 +113,7 @@ namespace VRMultiplayer.Weapons
         int _shiftFrame = -1;
         bool _appliedL, _appliedR;   // silah bu kare itildi mi (cifte uygulama olmasin)
         float _pushLogAt;            // dogrulama izi: en son ne zaman yazildi (saniye)
+        float _lateLogAt;            // gec kelepce izi
 
         // GORSEL KAYDIRMA KAYDI. Izleyici kaydirmasi (govde itmesi + erisim cekmesi) silahin
         // transformuna yaziliyor; sunucu da bir izleyici ve MuzzleWallBlock/NetworkWeapon
@@ -764,6 +765,22 @@ namespace VRMultiplayer.Weapons
             // Hedef her iki yolda da kelepce kadar kayar: silaha yazildiysa el silahla
             // birlikte gitti, yazilmadiysa klasik kelepce (el kabzadan kopar) uygulandi.
             targetPos += kelepce;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // GEC KELEPCE IZI. SolveShift'teki kirpma (sira 70) ile BU kelepce (sira 110)
+            // AYRI seylerdir: aradaki omuz hareketi yuzunden ikincisi sifir olmayabilir ve
+            // tetik elinin kabzadan kopup kopmadigini belirleyen sayi tam olarak budur.
+            // "silaha yazildi" ise el kabzada kalmistir; "ELE yazildi" ise kopmustur.
+            float gec = kelepce.magnitude * 100f;
+            if (gec > 1f && Time.time - _lateLogAt > 1f)
+            {
+                _lateLogAt = Time.time;
+                Debug.Log($"[GecKelepce] {w.weapon.name} ({(left ? "sol" : "sag")} el, " +
+                          $"{(w.isSupport ? "destek" : "ANA")}): {gec:0} cm — " +
+                          (kelepceyiSilahaYaz ? "silaha yazildi (el kabzada kalir)"
+                                              : "ELE yazildi (el kabzadan kopar)"));
+            }
+#endif
 
             // Engage/release weight. The bone's pose here is this frame's IK/animator result
             // (the weld runs after both), so a partial weight blends between that and the
