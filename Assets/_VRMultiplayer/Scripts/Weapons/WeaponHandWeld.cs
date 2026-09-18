@@ -79,7 +79,7 @@ namespace VRMultiplayer.Weapons
                  "itilmiyordu. Uzatilan kisim bacak hizasi oldugu icin govde orada daha dar: " +
                  "0.18 ile itme kalcadan asagi dogru sonuyor, kalca hizasinda tam guc kaliyor. " +
                  "Ust uc de sonuyor - nisan hattindaki silah yuze dogru itilmemeli.")]
-        public float bandEndFade = 0.18f;
+        public float bandEndFade = 0f;
 
         [Tooltip("IZLEYICI TARAFI: kol silaha yetismiyorsa eli silahtan koparmak (radyal " +
                  "kelepce) yerine GORUNEN silahi tasma kadar govdeye yaklastirir - iki el de " +
@@ -629,7 +629,10 @@ namespace VRMultiplayer.Weapons
             // GOVDE OLCUSU TEK YERDEN: BodyVolume. Ayni cerceveyi dirsek yonlendirmesi ve
             // bos el temizligi de kullaniyor; eskiden her biri kendi sayisini tasidigi icin
             // olculer sessizce ayrismisti (dirsek 0.20, silah 0.22).
-            var frame = BodyVolume.Make(_hips, _neck, transform.forward, BodyVolume.HipExtend);
+            // Bant KALCADA biter (HipExtend kullanilmiyor): uzatma denendi, itmeleri buyuttu
+            // ve tutusun tamami oyuncunun elinden uzaklasti. Kalca hizasindaki silahin govdeye
+            // girmesi kabul ediliyor.
+            var frame = BodyVolume.Make(_hips, _neck, transform.forward);
             if (!frame.ok) return Vector3.zero;
 
             float thick = sh.halfThick * Mathf.Abs(weapon.lossyScale.x);
@@ -647,7 +650,7 @@ namespace VRMultiplayer.Weapons
                 Vector3 p = weapon.TransformPoint(sh.center + sh.axis * (sh.halfLen * t));
 
                 float pen;
-                Vector3 push = BodyVolume.PushOut(in frame, p, ra, rb, out pen, bandEndFade);
+                Vector3 push = BodyVolume.PushOut(in frame, p, ra, rb, out pen);
                 if (pen <= best) continue;
 
                 best = pen;
@@ -749,8 +752,11 @@ namespace VRMultiplayer.Weapons
             // Sahibin kopyasinda ve DESTEK elinde eski yol gecerli: orada silahin konumu
             // bizim degil (VisualOnly false), destek elinin cipasi ise ray uzerinde kaydigi
             // icin zaten kendi kacisina sahip (SlideWithinReach).
-            bool kelepceyiSilahaYaz = !w.isSupport && !w.fadingOut && VisualOnly &&
-                                      kelepce.sqrMagnitude > 1e-10f;
+            // GERI ALINDI. Bir tur boyunca kalan tasma silaha yaziliyordu ("el kabzada kalsin")
+            // ama olcum gosterdi ki el zaten kopmuyordu: sapma 0.000 m. Yanlis hastaligi tedavi
+            // ediyordu ve silahi oyuncunun elinden daha da uzaklastiriyordu. Kelepce yine
+            // klasik yoldan ELE uygulanir.
+            bool kelepceyiSilahaYaz = false;
 
             // GOVDE ITMESI silaha BIR KEZ uygulanir (SolveShift bu karede hesapladi, IK ayni
             // degeri gordu). Yalniz ana el, yalniz sonmuyorsa: birakilan silaha dokunulmaz.

@@ -39,7 +39,12 @@ namespace VRMultiplayer
         /// omurgadan 0.35 m+ uzakta duruyor ve 0.19'da da 0.22'de de HIC itilmiyor, yani
         /// eskiden sikayet edilen "gogus onundeki tabanca one itiliyor" hatasi geri gelmiyor
         /// (0.30 m'de 1.4 cm, 0.25 m'de 6.4 cm - o mesafede tabanca gercekten montun icinde).</summary>
-        public const float Depth = 0.19f;
+        // GERI ALINDI (0.19 -> 0.14). Mesh olcumu 0.19-0.24 diyor ve model o anlamda hala
+        // kucuk; ama 0.19 ile itmeler 3 cm'den 11-23 cm'e cikti ve silah oyuncunun GERCEK
+        // elinden 12-15 cm oteye dustu. Olculdu: el kabzaya kusursuz oturuyordu (sapma 0.000 m,
+        // rotasyon 0.0 derece, parmak uclari 0.5-3.9 cm) ama TUTUSUN TAMAMI yanlis yerdeydi.
+        // Silahin govdeye biraz girmesi, silahin elden 15 cm uzakta durmasindan iyi.
+        public const float Depth = 0.14f;
 
         /// <summary>Bandin kalcanin ALTINA uzatildigi mesafe (m, ust bacak).
         ///
