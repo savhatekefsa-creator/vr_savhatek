@@ -516,8 +516,9 @@ namespace VRMultiplayer.Weapons
             //
             // maxReachPull tavanini asabilir: tutusun bozulmamasi tavandan onceliklidir.
             ComputeTarget(ref w, left, shift, out Vector3 fin, out _);
-            shift += ArmReach.Clamp(fin, left ? _leftUpper : _rightUpper,
-                                    left ? _leftArmLen : _rightArmLen) - fin;
+            Vector3 kirpma = ArmReach.Clamp(fin, left ? _leftUpper : _rightUpper,
+                                            left ? _leftArmLen : _rightArmLen) - fin;
+            shift += kirpma;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             // DOGRULAMA IZI — yalniz editor/gelistirme build'inde.
@@ -527,25 +528,27 @@ namespace VRMultiplayer.Weapons
             // "itme 0-1 cm" gorunmesinin sebebi buydu; silahin kemerde govdeyi kestigi an hic
             // loglanmamisti. Artik itme ISTENDIGI surece saniyede bir yaziliyor.
             //
-            // IKI SAYI AYRI: "istenen" govde temizliginin talebi, "uygulanan" ise ana elin
-            // erisim kisitindan sonra geriye kalan. Ikisi arasindaki fark, kolun yetismedigi
-            // icin FEDA EDILEN temizliktir - "silah govdede kaliyor" sikayetinin olculebilir
-            // hali. Ayni satirda olmalari sart: ayri ayri bakinca hangisinin sinirladigi
-            // anlasilmiyor.
-            // GURULTU ESIGI: saniyede bir yazmak konsolu boguyordu (10 dakikalik oturumda
-            // ~600 satir). Netcode uyarilari bu satirlarin arasinda kayboldu - once yasandi,
-            // sonra duzeltildi. Artik yalnizca ILGINC olan yaziliyor: kol temizligi gercekten
-            // kisitliyorsa hemen, kisitlamiyorsa seyrek bir nabiz.
+            // OLCU DOGRUDAN OLMALI. Ilk surumde "feda" diye istenen-uygulanan farki
+            // yaziliyordu ve bu YANLIS SEYI olcuyordu: aradaki farkin buyuk kismi erisim
+            // kirpmasi degil, itmenin SmoothDamp gecikmesiydi (push, want'a 0.08 s'de yetisir).
+            // Sahada her satirda sabit "feda 3 cm" cikmasinin sebebi buydu - buyuklukten
+            // bagimsiz sabit bir fark, kirpma degil gecikme imzasidir. Ustelik reachPull
+            // ekleme de yapabildigi icin uygulanan bazen istenenden BUYUK cikiyor ve fark
+            // negatife dusuyordu.
+            //
+            // Artik kirpma, hesaplandigi yerden dogrudan aliniyor (yukaridaki "kirpma").
+            // Gecikmeyi de ayrica gostermek ise gereksiz: onemli olan kolun ne kadarini
+            // yuttugu.
             float istenen = want.magnitude * 100f;
             float uygulanan = shift.magnitude * 100f;
-            float feda = Mathf.Max(0f, istenen - uygulanan);
-            float bekle = feda > 3f ? 1f : 10f;
+            float erisimKirpmasi = kirpma.magnitude * 100f;
+            float bekle = erisimKirpmasi > 3f ? 1f : 10f;
             if (istenen > 2f && Time.time - _pushLogAt > bekle)
             {
                 _pushLogAt = Time.time;
                 Debug.Log($"[GovdeTemizligi] {w.weapon.name} ({(left ? "sol" : "sag")} el): " +
                           $"istenen {istenen:0} cm, uygulanan {uygulanan:0} cm, " +
-                          $"erisim yuzunden feda {feda:0} cm");
+                          $"kol kirpmasi {erisimKirpmasi:0} cm");
             }
 #endif
             return shift;
