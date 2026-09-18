@@ -61,9 +61,11 @@ namespace VRMultiplayer.Weapons
         public bool bodyClearance = true;
         [Tooltip("Govdenin YAN yari genisligi (m, omuz/kaburga). Silahin kalinligi buna EKLENIR.")]
         public float bodyRadius = BodyVolume.Radius;
-        [Tooltip("Govdenin ON/ARKA yari derinligi (m, gogus + yelek). Daire yerine ELIPS: " +
-                 "gogus onunde tutulan tabanca omurgadan 25 cm'de bile govdenin DISINDADIR; " +
-                 "daire (22 cm) onu iceride sayip 18 cm one itiyordu - tabanca havada kaliyordu.")]
+        [Tooltip("Govdenin ON/ARKA yari derinligi (m, gogus + yelek). Daire yerine ELIPS, " +
+                 "cunku gogus onu yanlardan dardir - daire (22 cm) nisan alinan tabancayi " +
+                 "iceride sayip one itiyordu.\n\n" +
+                 "Deger avatar mesh'inden OLCULDU (bkz. BodyVolume.Depth): 0.14 fazla kucuktu, " +
+                 "elips montun icinde kaliyor ve karna dayali tufek hic itilmiyordu.")]
         public float bodyDepth = BodyVolume.Depth;
         [Tooltip("Itmenin ust siniri (m). Kol erisimi (ArmReach) zaten ikinci bir sinir koyar.")]
         public float maxBodyPush = 0.35f;
@@ -110,7 +112,7 @@ namespace VRMultiplayer.Weapons
         Vector3 _shiftL, _shiftR;                        // bu karenin TOPLAM kaydirmasi: itme + erisim cekmesi
         int _shiftFrame = -1;
         bool _appliedL, _appliedR;   // silah bu kare itildi mi (cifte uygulama olmasin)
-        Transform _pushLogged;       // dogrulama izi: tutus basina bir satir
+        float _pushLogAt;            // dogrulama izi: en son ne zaman yazildi (saniye)
 
         // GORSEL KAYDIRMA KAYDI. Izleyici kaydirmasi (govde itmesi + erisim cekmesi) silahin
         // transformuna yaziliyor; sunucu da bir izleyici ve MuzzleWallBlock/NetworkWeapon
@@ -517,13 +519,27 @@ namespace VRMultiplayer.Weapons
             shift += ArmReach.Clamp(fin, left ? _leftUpper : _rightUpper,
                                     left ? _leftArmLen : _rightArmLen) - fin;
 
-            // Dogrulama izi: tutus basina EN FAZLA BIR satir, yalniz itme gerektiginde.
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            // Dogrulama izi yalniz editor/gelistirme build'inde.
-            if (want.sqrMagnitude > 1e-6f && _pushLogged != w.weapon)
+            // DOGRULAMA IZI — yalniz editor/gelistirme build'inde.
+            //
+            // ESKI HALI YANILTICIYDI: tutus basina TEK satir yaziyordu (_pushLogged), yani
+            // silahin govdeye EN COK girdigi ani degil, ILK degdigi ani kaydediyordu. Kayitta
+            // "itme 0-1 cm" gorunmesinin sebebi buydu; silahin kemerde govdeyi kestigi an hic
+            // loglanmamisti. Artik itme ISTENDIGI surece saniyede bir yaziliyor.
+            //
+            // IKI SAYI AYRI: "istenen" govde temizliginin talebi, "uygulanan" ise ana elin
+            // erisim kisitindan sonra geriye kalan. Ikisi arasindaki fark, kolun yetismedigi
+            // icin FEDA EDILEN temizliktir - "silah govdede kaliyor" sikayetinin olculebilir
+            // hali. Ayni satirda olmalari sart: ayri ayri bakinca hangisinin sinirladigi
+            // anlasilmiyor.
+            if (want.magnitude > 0.02f && Time.time - _pushLogAt > 1f)
             {
-                _pushLogged = w.weapon;
-                Debug.Log($"[GovdeTemizligi] {w.weapon.name}: itme {want.magnitude * 100f:0} cm (sahip degil: {VisualOnly})");
+                _pushLogAt = Time.time;
+                float istenen = want.magnitude * 100f;
+                float uygulanan = shift.magnitude * 100f;
+                Debug.Log($"[GovdeTemizligi] {w.weapon.name} ({(left ? "sol" : "sag")} el): " +
+                          $"istenen {istenen:0} cm, uygulanan {uygulanan:0} cm, " +
+                          $"erisim yuzunden feda {Mathf.Max(0f, istenen - uygulanan):0} cm");
             }
 #endif
             return shift;

@@ -24,8 +24,22 @@ namespace VRMultiplayer
         /// <summary>Govdenin YAN yari genisligi (m, omuz/kaburga hizasi).</summary>
         public const float Radius = 0.22f;
 
-        /// <summary>Govdenin ON/ARKA yari derinligi (m, gogus + yelek).</summary>
-        public const float Depth = 0.14f;
+        /// <summary>Govdenin ON/ARKA yari derinligi (m, gogus + yelek).
+        ///
+        /// AVATAR MESH'INDEN OLCULDU (skinned mesh bake, vertex dagilimi):
+        ///   kemer  y 1.07-1.13 : 0.221 m
+        ///   karin  y 1.20-1.33 : 0.243 -> 0.221 m
+        ///   gogus  y 1.40-1.53 : 0.206 -> 0.191 m
+        /// Eski deger 0.14 idi, yani elips montun 5-8 cm ICINDE kaliyordu: karnina dayali
+        /// bir tufek "govdenin disinda" sayilip HIC itilmiyordu. Oyun kaydinda silahin
+        /// karindan gectigi anlarda teshis izi 0-1 cm gosteriyordu - sebep buydu.
+        ///
+        /// 0.19 gogus olcusu; karin biraz daha genis ama silahin kendi kalinligi zaten
+        /// ustune EKLENIYOR. Ust sinir tabanca ile denendi: iki elle nisan alinan tabanca
+        /// omurgadan 0.35 m+ uzakta duruyor ve 0.19'da da 0.22'de de HIC itilmiyor, yani
+        /// eskiden sikayet edilen "gogus onundeki tabanca one itiliyor" hatasi geri gelmiyor
+        /// (0.30 m'de 1.4 cm, 0.25 m'de 6.4 cm - o mesafede tabanca gercekten montun icinde).</summary>
+        public const float Depth = 0.19f;
 
         /// <summary>Bandin kalcanin ALTINA uzatildigi mesafe (m, ust bacak).
         ///
