@@ -532,14 +532,20 @@ namespace VRMultiplayer.Weapons
             // icin FEDA EDILEN temizliktir - "silah govdede kaliyor" sikayetinin olculebilir
             // hali. Ayni satirda olmalari sart: ayri ayri bakinca hangisinin sinirladigi
             // anlasilmiyor.
-            if (want.magnitude > 0.02f && Time.time - _pushLogAt > 1f)
+            // GURULTU ESIGI: saniyede bir yazmak konsolu boguyordu (10 dakikalik oturumda
+            // ~600 satir). Netcode uyarilari bu satirlarin arasinda kayboldu - once yasandi,
+            // sonra duzeltildi. Artik yalnizca ILGINC olan yaziliyor: kol temizligi gercekten
+            // kisitliyorsa hemen, kisitlamiyorsa seyrek bir nabiz.
+            float istenen = want.magnitude * 100f;
+            float uygulanan = shift.magnitude * 100f;
+            float feda = Mathf.Max(0f, istenen - uygulanan);
+            float bekle = feda > 3f ? 1f : 10f;
+            if (istenen > 2f && Time.time - _pushLogAt > bekle)
             {
                 _pushLogAt = Time.time;
-                float istenen = want.magnitude * 100f;
-                float uygulanan = shift.magnitude * 100f;
                 Debug.Log($"[GovdeTemizligi] {w.weapon.name} ({(left ? "sol" : "sag")} el): " +
                           $"istenen {istenen:0} cm, uygulanan {uygulanan:0} cm, " +
-                          $"erisim yuzunden feda {Mathf.Max(0f, istenen - uygulanan):0} cm");
+                          $"erisim yuzunden feda {feda:0} cm");
             }
 #endif
             return shift;
