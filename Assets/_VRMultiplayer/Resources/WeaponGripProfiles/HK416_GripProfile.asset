@@ -21,7 +21,7 @@ MonoBehaviour:
   benchFrontLocal: {x: 0, y: 0, z: 0}
   combat: {fileID: 11400000, guid: e0376765f69e4d478596a0b49d0dbc90, type: 2}
   mainHand:
-    wristLocalPosition: {x: 0, y: 0, z: -0.0763}
+    wristLocalPosition: {x: 0.01281712, y: -0.0055149463, z: -0.07263304}
     wristLocalEuler: {x: 321.8392, y: 274.55762, z: 225.56097}
     fpWristLocalPosition: {x: 0.006, y: 0.019, z: -0.09}
     fpWristLocalEuler: {x: -31, y: -59, z: 27}

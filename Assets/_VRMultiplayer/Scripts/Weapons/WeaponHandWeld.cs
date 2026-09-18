@@ -67,8 +67,14 @@ namespace VRMultiplayer.Weapons
                  "Deger avatar mesh'inden OLCULDU (bkz. BodyVolume.Depth): 0.14 fazla kucuktu, " +
                  "elips montun icinde kaliyor ve karna dayali tufek hic itilmiyordu.")]
         public float bodyDepth = BodyVolume.Depth;
-        [Tooltip("Itmenin ust siniri (m). Kol erisimi (ArmReach) zaten ikinci bir sinir koyar.")]
-        public float maxBodyPush = 0.35f;
+        [Tooltip("Itmenin ust siniri (m). 0.35 idi ve cok yuksekti: oyun icinde " +
+                 "olculdu, silah gogse yakin tutulunca govde itmesi 23 cm'e ciktiyor " +
+                 "ve TUTUSUN TAMAMI (silah + iki el) oyuncunun gercek elinden o kadar " +
+                 "oteye dusuyordu. Weld kusursuz calisiyordu (bilek capaya 0.000 m " +
+                 "sapmayla oturuyor) ama capa yanlis yerdeydi. Kozmetik bir duzeltme " +
+                 "oyuncunun elini bu kadar oynatamaz: silahin govdeye biraz girmesi, " +
+                 "silahin elden 20 cm uzakta durmasindan iyi.")]
+        public float maxBodyPush = 0.06f;
         [Tooltip("Itmenin yumusama suresi (s). Sadece gorsel oldugu icin serbestce " +
                  "yumusatilabilir - izleyen oyuncu ani sicrama gormez.")]
         public float clearanceSmoothing = 0.08f;
